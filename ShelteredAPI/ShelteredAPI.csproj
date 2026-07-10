@@ -297,6 +297,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioPackagePlan.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPackageAuthoringPreferences.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPackageInstaller.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackageModRootResolver.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
     <Compile Include="Scenarios\Application\Authoring\Tutorial\ScenarioAuthoringTutorialService.cs" />

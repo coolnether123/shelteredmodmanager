@@ -503,7 +503,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _selectedScenarioOpenedDirectlyFromType = false;
 
             ScenarioCatalogEntry singleScenario;
-            if (type != ScenarioBookType.Draft && _dataSource.TryGetSingleScenarioForType(type, out singleScenario))
+            // A mode card may contain only its vanilla entry. Do not turn that
+            // card into an implicit vanilla launch/detail route: published
+            // packages must remain explicit, title-bearing rows in the book.
+            if (type != ScenarioBookType.Draft
+                && _dataSource.TryGetSingleScenarioForType(type, out singleScenario)
+                && singleScenario.Source == ScenarioCatalogSource.Modded)
             {
                 _selectedScenarioOpenedDirectlyFromType = true;
                 SelectScenario(singleScenario);

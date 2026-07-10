@@ -57,6 +57,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             return state != null
                 && state.IsActive
                 && !string.IsNullOrEmpty(state.ActiveDraftId)
+                && state.ActiveStage != ScenarioStageKind.Test
                 && progress != null
                 && !progress.Completed
                 && !progress.Skipped;

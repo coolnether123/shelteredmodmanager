@@ -58,11 +58,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 
         internal static string ResolveDefaultScenariosRoot()
         {
-            ModEntry owner = ModRegistry.GetMod("ShelteredAPI");
-            if (owner != null && !string.IsNullOrEmpty(owner.RootPath)) return Path.Combine(owner.RootPath, "Scenarios");
-            List<ModEntry> loaded = ModRegistry.GetLoadedMods();
-            for (int i = 0; loaded != null && i < loaded.Count; i++) if (loaded[i] != null && !string.IsNullOrEmpty(loaded[i].RootPath)) return Path.Combine(loaded[i].RootPath, "Scenarios");
-            throw new InvalidOperationException("No loaded mod root is available for local installation.");
+            return ScenarioPackageModRootResolver.ResolveScenariosRoot(typeof(ScenarioPackageInstaller).Assembly);
         }
 
         private static void CopyDirectory(string source, string destination)

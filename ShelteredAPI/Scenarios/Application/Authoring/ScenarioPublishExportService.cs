@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -12,7 +11,6 @@ using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioPublishExportService
     {
-        private const string ExportOwnerModId = "ShelteredAPI";
         private const string ExportRootFolder = "ScenarioAuthoringExports";
 
         private readonly IScenarioEditorService _editorService;
@@ -167,31 +165,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static string ResolveExportModRoot()
         {
-            ModEntry preferred = ModRegistry.GetMod(ExportOwnerModId);
-            if (preferred != null && !string.IsNullOrEmpty(preferred.RootPath))
-                return preferred.RootPath;
-
-            List<ModEntry> loaded = ModRegistry.GetLoadedMods();
-            for (int i = 0; loaded != null && i < loaded.Count; i++)
-            {
-                if (loaded[i] != null && !string.IsNullOrEmpty(loaded[i].RootPath))
-                    return loaded[i].RootPath;
-            }
-
-            string gameRoot;
-            try
-            {
-                string location = Assembly.GetExecutingAssembly().Location;
-                gameRoot = !string.IsNullOrEmpty(location)
-                    ? Path.GetFullPath(Path.Combine(Path.Combine(Path.GetDirectoryName(location), ".."), ".."))
-                    : Directory.GetCurrentDirectory();
-            }
-            catch
-            {
-                gameRoot = Directory.GetCurrentDirectory();
-            }
-
-            return Path.Combine(Path.Combine(gameRoot, "mods"), "ModAPI");
+            return ScenarioPackageModRootResolver.ResolveLoadedOwnerRoot(typeof(ScenarioPublishExportService).Assembly);
         }
 
         private static string BuildSafeFolderName(string value)
