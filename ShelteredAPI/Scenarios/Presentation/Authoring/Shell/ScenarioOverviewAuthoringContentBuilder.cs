@@ -100,7 +100,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             ScenarioAuthoringValidationSnapshot validation = GetCachedValidation(state, editorSession, definition);
-            string draftPath = state != null ? state.ActiveScenarioFilePath : null;
             string validationLabel = FormatValidationChip(validation);
             string playtestDisabledReason;
             string playtestLabel = FormatPlaytestReadiness(editorSession, validation, definition, out playtestDisabledReason);
