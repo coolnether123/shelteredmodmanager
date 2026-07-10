@@ -1070,6 +1070,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     _entryFlowService.Hide("Authoring session closed.");
                 ClearLaunchRedirects(previous, reason);
                 SaveRuntimeState.ClearActiveCustomSession();
+                ModRandomBridge.SetScenarioFixedSeedActive(false);
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Cleared authoring save routing for closed authoring session. reason="
                     + (reason ?? "unspecified") + ".");
             }
@@ -1124,6 +1125,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 _backend.ClearActiveSession(reason);
                 SaveRuntimeState.ClearActiveCustomSession();
+                ModRandomBridge.SetScenarioFixedSeedActive(false);
             }
 
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed authoring runtime from backend/editor state. Reason="
