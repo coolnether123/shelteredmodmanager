@@ -416,6 +416,9 @@ fixed seed as the root of eight isolated streams: `map`, `characters`, `encounte
 composition of `(scenarioFixedSeed, domainName)`. The manifest transpiler assigns a whole
 declaring-type batch to one domain and emits the domain name at each redirected call site.
 Draw-order changes in another domain therefore cannot perturb the current domain.
+Calls to vanilla's generic `ExtensionMethods.Shuffle<T>` inside a patched batch are also
+redirected to the same domain stream; with the gate inactive the bridge executes the
+original shuffle loop against Unity RNG, preserving its draw count and bounds.
 
 `ExpeditionMap.CreateMap` and `CreateStasisMap` still redirect their vanilla
 `Random.InitState(randomSeed)` calls through `InitScenarioState(int)`, but the active-gate
