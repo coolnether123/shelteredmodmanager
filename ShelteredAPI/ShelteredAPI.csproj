@@ -255,6 +255,7 @@
     <Compile Include="Scenarios\Domain\Validation\ValidationSummary.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDefinitionIndex.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDefinition.cs" />
+    <Compile Include="Scenarios\Definitions\ScenarioAuthorTestChecklist.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioMetadataDefaults.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioBackendWorldMaterializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioActorXmlSerializer.cs" />
@@ -265,6 +266,7 @@
     <Compile Include="Scenarios\Diagnostics\ScenarioStarterTemplateVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioMapUxVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioPackageUxVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioAuthorTestChecklistVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAssetInventoryVerification.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioLoader.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioPipelineSmokeTest.cs" />
@@ -272,6 +274,7 @@
     <Compile Include="Scenarios\Domain\Runtime\ScenarioRuntimeBinding.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioValidator.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\IScenarioSectionSerializer.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\AuthorTestChecklistScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\AssetReferenceScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\BunkerEditsScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\BunkerGridScenarioSectionSerializer.cs" />
@@ -296,6 +299,7 @@
     <Compile Include="Scenarios\Application\Assets\ScenarioAssetInventoryService.cs" />
     <Compile Include="Scenarios\Application\Assets\ScenarioAssetInventoryMutationService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPublishExportService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthorTestChecklistService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioContentSummary.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPackagePlan.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPackageAuthoringPreferences.cs" />
@@ -455,6 +459,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMetadataAuthoringContent.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthorTestChecklistSectionBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioTestConsoleAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Timeline\ScenarioTimelineCreatorText.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioTimelineUxVerification.cs" />
@@ -526,6 +531,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringInventoryProjectionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCommandService.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioDraftHistoryCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioAuthorTestChecklistCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringLocalActionIds.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBaseModeAuthoringActions.cs" />

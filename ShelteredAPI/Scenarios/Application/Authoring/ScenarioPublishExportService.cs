@@ -18,6 +18,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioDefinitionValidator _validator;
         private readonly ScenarioPackagePlanner _planner;
         private readonly ScenarioPackageInstaller _installer;
+        private readonly ScenarioAuthorTestChecklistService _testChecklistService;
         private readonly object _sync = new object();
         private ScenarioPublishExportResult _lastResult;
         private ScenarioPackageInstallResult _lastInstallResult;
@@ -26,12 +27,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             IScenarioEditorService editorService,
             IScenarioDefinitionSerializer serializer,
             IScenarioDefinitionValidator validator,
-            IScenarioDefinitionCatalogService catalog)
+            IScenarioDefinitionCatalogService catalog,
+            ScenarioAuthorTestChecklistService testChecklistService)
         {
             _editorService = editorService;
             _serializer = serializer;
             _validator = validator;
-            _planner = new ScenarioPackagePlanner(serializer);
+            _testChecklistService = testChecklistService;
+            _planner = new ScenarioPackagePlanner(serializer, testChecklistService);
             _installer = new ScenarioPackageInstaller(serializer, catalog);
         }
 
@@ -122,7 +125,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioPublishExportResult last = LastResult;
             if (last == null || !last.Success || string.IsNullOrEmpty(last.ArtifactRootPath))
                 return RememberInstall(new ScenarioPackageInstallResult { Message = "Create a validated export before installing it." });
-            return RememberInstall(_installer.Install(last.ArtifactRootPath, null, overwriteConfirmed));
+            ScenarioPackageInstallResult result = _installer.Install(last.ArtifactRootPath, null, overwriteConfirmed);
+            if (result != null && result.Success && _testChecklistService != null)
+                _testChecklistService.MarkExportReinstalled(_editorService != null ? _editorService.CurrentSession : null);
+            return RememberInstall(result);
         }
 
         private ScenarioPackageInstallResult RememberInstall(ScenarioPackageInstallResult result) { lock (_sync) { _lastInstallResult = result; return result; } }

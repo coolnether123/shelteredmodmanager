@@ -362,6 +362,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioAuthorTestChecklist> checklistSerializer = new AuthorTestChecklistScenarioSectionSerializer();
 
             XmlElement meta = Child(root, "Meta");
             definition.Id = ReadText(meta, "Id");
@@ -410,6 +411,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             gateSerializer.Read(Child(root, "Gates"), definition.Gates);
             scheduledSerializer.Read(Child(root, "ScheduledActions"), definition.ScheduledActions);
             definition.Journal = ReadJournal(Child(root, "Journal"));
+            definition.AuthorTestChecklist = checklistSerializer.Read(Child(root, "AuthorTestChecklist"));
             return definition;
         }
 
@@ -1215,6 +1217,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioAuthorTestChecklist> checklistSerializer = new AuthorTestChecklistScenarioSectionSerializer();
 
             writer.WriteStartElement("Meta");
             WriteElement(writer, "Id", definition.Id);
@@ -1276,6 +1279,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             gateSerializer.Write(writer, definition.Gates);
             scheduledSerializer.Write(writer, definition.ScheduledActions);
             WriteJournal(writer, definition.Journal);
+            checklistSerializer.Write(writer, definition.AuthorTestChecklist);
 
             writer.WriteEndElement();
             writer.WriteEndDocument();
