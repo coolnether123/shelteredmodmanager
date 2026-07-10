@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Textures.Generators;
@@ -7,35 +9,36 @@ namespace ShelteredAPI.UI.FieldManual.Textures
 {
     /// <summary>
     /// ITextureLibrary implementation that delegates to the per-kind generators and
-    /// caches results keyed by (kind, width, height, state). All textures are owned
-    /// by this instance; <see cref="Dispose"/> destroys them.
+    /// caches results for the process lifetime keyed by generator inputs and palette.
+    /// Instances are lightweight views over the shared cache and do not own textures.
     /// </summary>
     internal sealed class ProceduralTextureLibrary : ITextureLibrary
     {
         private readonly IThemePalette _palette;
-        private readonly Dictionary<string, Texture2D> _cache = new Dictionary<string, Texture2D>();
-        private Texture2D _white;
+        private readonly string _paletteFingerprint;
+        private static readonly Dictionary<string, Texture2D> SharedCache = new Dictionary<string, Texture2D>();
 
         public ProceduralTextureLibrary(IThemePalette palette)
         {
             _palette = palette;
+            _paletteFingerprint = BuildPaletteFingerprint(palette);
         }
 
         public Texture2D White
         {
             get
             {
-                if (_white == null)
+                return GetOrCreate("white:2x2", delegate
                 {
-                    _white = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+                    Texture2D white = new Texture2D(2, 2, TextureFormat.ARGB32, false);
                     Color[] px = new Color[4];
                     for (int i = 0; i < 4; i++) px[i] = Color.white;
-                    _white.SetPixels(px);
-                    _white.filterMode = FilterMode.Point;
-                    _white.wrapMode = TextureWrapMode.Clamp;
-                    _white.Apply(false, false);
-                }
-                return _white;
+                    white.SetPixels(px);
+                    white.filterMode = FilterMode.Point;
+                    white.wrapMode = TextureWrapMode.Clamp;
+                    white.Apply(false, false);
+                    return white;
+                });
             }
         }
 
@@ -83,23 +86,61 @@ namespace ShelteredAPI.UI.FieldManual.Textures
 
         public void Dispose()
         {
-            foreach (var kv in _cache)
-            {
-                if (kv.Value != null) Object.Destroy(kv.Value);
-            }
-            _cache.Clear();
-            if (_white != null) { Object.Destroy(_white); _white = null; }
+            // Shared textures intentionally live for the process lifetime. Unity may
+            // still destroy one externally; GetOrCreate detects fake-null and repairs it.
         }
 
         private delegate Texture2D Factory();
 
         private Texture2D GetOrCreate(string key, Factory factory)
         {
+            string sharedKey = _paletteFingerprint + ":" + key;
             Texture2D tex;
-            if (_cache.TryGetValue(key, out tex) && tex != null) return tex;
+            if (SharedCache.TryGetValue(sharedKey, out tex) && tex != null) return tex;
             tex = factory();
-            _cache[key] = tex;
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            SharedCache[sharedKey] = tex;
             return tex;
+        }
+
+        private static string BuildPaletteFingerprint(IThemePalette palette)
+        {
+            StringBuilder fingerprint = new StringBuilder(640);
+            AppendColor(fingerprint, palette.Gunmetal);
+            AppendColor(fingerprint, palette.GunmetalShadow);
+            AppendColor(fingerprint, palette.GunmetalHighlight);
+            AppendColor(fingerprint, palette.OliveBand);
+            AppendColor(fingerprint, palette.Brass);
+            AppendColor(fingerprint, palette.Paper);
+            AppendColor(fingerprint, palette.PaperShadow);
+            AppendColor(fingerprint, palette.PaperGrain);
+            AppendColor(fingerprint, palette.Ink);
+            AppendColor(fingerprint, palette.InkFaded);
+            AppendColor(fingerprint, palette.StampRed);
+            AppendColor(fingerprint, palette.GraphitePencil);
+            AppendColor(fingerprint, palette.KeycapFace);
+            AppendColor(fingerprint, palette.KeycapBevelLight);
+            AppendColor(fingerprint, palette.KeycapBevelDark);
+            AppendColor(fingerprint, palette.KeycapInk);
+            AppendColor(fingerprint, palette.KeycapPulse);
+            AppendColor(fingerprint, palette.MaskingTape);
+            AppendColor(fingerprint, palette.Vignette);
+            return fingerprint.ToString();
+        }
+
+        private static void AppendColor(StringBuilder fingerprint, Color color)
+        {
+            AppendFloat(fingerprint, color.r);
+            AppendFloat(fingerprint, color.g);
+            AppendFloat(fingerprint, color.b);
+            AppendFloat(fingerprint, color.a);
+        }
+
+        private static void AppendFloat(StringBuilder fingerprint, float value)
+        {
+            byte[] bytes = BitConverter.GetBytes(value);
+            for (int i = 0; i < bytes.Length; i++)
+                fingerprint.Append(bytes[i].ToString("X2"));
         }
     }
 }
