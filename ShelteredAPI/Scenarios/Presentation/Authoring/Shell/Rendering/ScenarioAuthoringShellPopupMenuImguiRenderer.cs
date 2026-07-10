@@ -172,9 +172,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 if (DrawPlainButton(visualRect, content, drawStyle, action.Enabled))
                 {
-                    _windowMenuOpen = !_windowMenuOpen;
-                    if (_snapshot != null && _snapshot.State != null)
-                        _snapshot.State.WindowMenuOpen = _windowMenuOpen;
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+                    _windowMenuOpen = _snapshot != null && _snapshot.State != null && _snapshot.State.WindowMenuOpen;
                     if (Event.current != null)
                         Event.current.Use();
                 }

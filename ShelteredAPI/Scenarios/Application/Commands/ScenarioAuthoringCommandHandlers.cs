@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
@@ -11,6 +12,7 @@ using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
+using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
@@ -28,6 +30,186 @@ using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Application.Commands{
+    internal sealed class RendererInteractionCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;
+        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacement;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
+
+        public RendererInteractionCommandHandler(
+            ScenarioBuildPlacementAuthoringService buildPlacement,
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacement,
+            ScenarioAuthoringLayoutService layoutService)
+        {
+            _buildPlacement = buildPlacement;
+            _sceneSpritePlacement = sceneSpritePlacement;
+            _layoutService = layoutService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith("shell.renderer.", StringComparison.Ordinal))
+                return false;
+
+            handled = true;
+            string token;
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererMapFilterTogglePrefix, StringComparison.Ordinal))
+            {
+                ScenarioMapAuthoringFilter filter;
+                token = actionId.Substring(ScenarioAuthoringActionIds.ActionRendererMapFilterTogglePrefix.Length);
+                try
+                {
+                    filter = (ScenarioMapAuthoringFilter)Enum.Parse(typeof(ScenarioMapAuthoringFilter), token, true);
+                }
+                catch
+                {
+                    return Invalid("Unknown map filter.", out message);
+                }
+                ScenarioMapAuthoringFilterState.Toggle(filter);
+                message = "Map filter toggled: " + filter + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, out token)
+                || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, out token))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.ToggleDisclosure(token);
+                message = "Disclosure toggled: " + token + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererAssetFavoriteTogglePrefix, out token))
+            {
+                ScenarioAssetBrowserUx.ToggleFavorite(state, token);
+                message = "Asset favorite toggled.";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererAssetCategorySelectPrefix, out token))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserCategory = token;
+                message = "Asset category selected: " + token + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererAssetInventoryFilterPrefix, out token))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.AssetInventoryFilter = token;
+                message = "Asset inventory filter selected: " + token + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, out token))
+            {
+                string key;
+                string value;
+                if (!TrySplitControlValue(token, out key, out value)) return Invalid("Candidate search action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetCandidateSearch(key, value);
+                message = "Candidate search updated: " + key + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererCandidateFilterPrefix, out token))
+            {
+                string key;
+                string value;
+                if (!TrySplitControlValue(token, out key, out value)) return Invalid("Candidate filter action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetCandidateFilter(key, value);
+                message = "Candidate filter updated: " + key + ".";
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererAssetSearchPrefix, StringComparison.Ordinal))
+            {
+                try
+                {
+                    token = Encoding.UTF8.GetString(Convert.FromBase64String(actionId.Substring(ScenarioAuthoringActionIds.ActionRendererAssetSearchPrefix.Length)));
+                }
+                catch
+                {
+                    return Invalid("Asset search value must be base64 UTF-8.", out message);
+                }
+                ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch = token;
+                message = "Asset search updated.";
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererGlobalSearchQueryPrefix, StringComparison.Ordinal))
+            {
+                try
+                {
+                    token = Encoding.UTF8.GetString(Convert.FromBase64String(actionId.Substring(ScenarioAuthoringActionIds.ActionRendererGlobalSearchQueryPrefix.Length)));
+                }
+                catch
+                {
+                    return Invalid("Global search query must be base64 UTF-8.", out message);
+                }
+                ScenarioAuthoringRendererInteractionState.Instance.GlobalSearchQuery = token;
+                message = "Global search query updated.";
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererAssetSearchClear, StringComparison.Ordinal))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch = string.Empty;
+                message = "Asset search cleared.";
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererTopBarMoreToggle, StringComparison.Ordinal))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen = !ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen;
+                message = ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen ? "Stage overflow opened." : "Stage overflow closed.";
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererPlacementBack, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererPlacementDone, StringComparison.Ordinal))
+            {
+                bool changed = CancelPlacement(state, out message);
+                if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererPlacementDone, StringComparison.Ordinal))
+                    changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.BuildTools, false);
+                if (string.IsNullOrEmpty(message)) message = changed ? "Placement closed." : "No placement was active.";
+                return changed;
+            }
+
+            handled = false;
+            return false;
+        }
+
+        private bool CancelPlacement(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            bool handled;
+            bool changed = false;
+            string nextMessage;
+            if (_buildPlacement != null && _buildPlacement.TryHandleAction(state, ScenarioAuthoringActionIds.ActionBuildPlacementCancel, out handled, out nextMessage))
+            {
+                changed = true;
+                message = nextMessage;
+            }
+            if (_sceneSpritePlacement != null && _sceneSpritePlacement.TryHandleAction(state, ScenarioAuthoringActionIds.ActionSceneSpritePlacementCancel, out handled, out nextMessage))
+            {
+                changed = true;
+                message = nextMessage;
+            }
+            return changed;
+        }
+
+        private static bool TryToken(string actionId, string prefix, out string token)
+        {
+            return ScenarioAuthoringRendererActionManifest.TryDecodeTokenAction(actionId, prefix, out token);
+        }
+
+        private static bool TrySplitControlValue(string token, out string key, out string value)
+        {
+            key = null;
+            value = null;
+            int separator = token != null ? token.IndexOf('\n') : -1;
+            if (separator <= 0) return false;
+            key = token.Substring(0, separator);
+            value = token.Substring(separator + 1);
+            return true;
+        }
+
+        private static bool Invalid(string reason, out string message)
+        {
+            message = reason;
+            return false;
+        }
+    }
+
     internal sealed class AssetBrowserCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;

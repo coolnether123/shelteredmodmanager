@@ -123,6 +123,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             return new IScenarioCommandHandler[]
             {
+                new RendererInteractionCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, layoutService),
                 new AssetBrowserCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, sectionHub.SpriteSwap, layoutService, weatherEffectSpriteCatalog, editorService, assetInventoryMutations),
                 new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService, layoutService, sectionHub.BuildPlacement),
                 new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, sectionHub.BuildPlacement, selectionScopeService),

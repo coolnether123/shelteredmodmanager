@@ -553,7 +553,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             if (command.StartsWith(ScenarioActorAuthoringFieldStore.FieldCommandPrefix, StringComparison.Ordinal))
-                return HandleModFieldCommand(session, config, command.Substring(ScenarioActorAuthoringFieldStore.FieldCommandPrefix.Length), label, out message);
+                return HandleModFieldCommand(session, state, config, command.Substring(ScenarioActorAuthoringFieldStore.FieldCommandPrefix.Length), label, out message);
 
             if (string.Equals(command, "copy_look", StringComparison.Ordinal))
                 return CopyLookFromSelected(session, state, config, label, out message);
@@ -954,6 +954,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private bool HandleModFieldCommand(
             ScenarioEditorSession session,
+            ScenarioAuthoringState state,
             FamilyMemberConfig config,
             string command,
             string label,
@@ -978,6 +979,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             string current = ScenarioActorAuthoringFieldStore.GetValue(config, field);
+            if (string.Equals(verb, "open_color", StringComparison.OrdinalIgnoreCase))
+            {
+                state.SurvivorColorPickerChannel = "mod:" + token;
+                state.SurvivorColorPickerRequestId++;
+                message = "Opened " + field.Label + " color picker.";
+                return true;
+            }
             string next = current;
             if (string.Equals(verb, "toggle", StringComparison.OrdinalIgnoreCase))
                 next = string.Equals(ScenarioActorAuthoringFieldStore.NormalizeValue(field, current), "true", StringComparison.OrdinalIgnoreCase) ? "false" : "true";

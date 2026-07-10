@@ -62,6 +62,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _globalSearchIndex = null;
             _globalSearchResults.Clear();
             _globalSearchText = string.Empty;
+            ScenarioAuthoringRendererInteractionState.Instance.GlobalSearchQuery = string.Empty;
             _globalSearchFocused = false;
             _globalSearchNeedsFocus = false;
             _globalSearchSelectedIndex = 0;
@@ -105,6 +106,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawGlobalSearchOverlayCore(Rect rect, ScenarioAuthoringInputCaptureService inputCapture)
         {
+            _globalSearchText = ScenarioAuthoringRendererInteractionState.Instance.GlobalSearchQuery;
             EnsureGlobalSearchIndex();
 
             // Dim the editor behind the palette so focus reads as modal.
@@ -138,7 +140,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string typed = GUI.TextField(fieldRect, _globalSearchText ?? string.Empty, fieldStyle);
             if (!string.Equals(typed, _globalSearchText, StringComparison.Ordinal))
             {
-                _globalSearchText = typed;
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererGlobalSearchQueryPrefix, typed));
+                _globalSearchText = ScenarioAuthoringRendererInteractionState.Instance.GlobalSearchQuery;
                 _globalSearchSelectedIndex = 0;
                 _globalSearchFirstVisible = 0;
             }

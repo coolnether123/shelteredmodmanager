@@ -765,10 +765,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
             if (DrawPlainButton(rect, new GUIContent(action.Label, action.Hint), expanded ? _activeButtonStyle : _buttonStyle, true))
             {
-                _pixelEditorGroupExpanded[key] = !expanded;
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, key));
                 if (Event.current != null)
                     Event.current.Use();
-                expanded = !expanded;
+                expanded = GetPixelEditorGroupExpanded(key, defaultExpanded);
             }
 
             DrawButtonAnimationOverlay(rect, key, true, IsInteractiveHoverAllowed(rect), IsInteractiveMouseDownAllowed(rect));
@@ -777,12 +778,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private bool GetPixelEditorGroupExpanded(string key, bool defaultExpanded)
         {
-            bool expanded;
-            if (_pixelEditorGroupExpanded.TryGetValue(key, out expanded))
-                return expanded;
-
-            _pixelEditorGroupExpanded[key] = defaultExpanded;
-            return defaultExpanded;
+            return ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
         }
 
         private void DrawAnimationToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
@@ -1553,6 +1549,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ref string candidateFilter,
             ref bool searchFocused)
         {
+            searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
+            candidateFilter = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateFilter(controlName, CandidateFilterAll);
             GUILayout.BeginArea(rect);
             GUILayout.BeginVertical();
 
@@ -1572,21 +1570,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.Box(searchRect, nextSearchText, _uiContext.Styles.SearchField);
             }
             if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
-                searchText = nextSearchText;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, controlName + "\n" + nextSearchText));
+                searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
+            }
             DrawSearchPlaceholder(searchRect, searchText, "Filter choices");
             if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
                 DrawFieldFocusBorder(searchRect);
 
             Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
-                searchText = string.Empty;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, controlName + "\n"));
+                searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            DrawCandidateFilterButton("All", CandidateFilterAll, ref candidateFilter);
-            DrawCandidateFilterButton("Active", CandidateFilterActive, ref candidateFilter);
-            DrawCandidateFilterButton("Vanilla", CandidateFilterVanilla, ref candidateFilter);
-            DrawCandidateFilterButton("Scenario", CandidateFilterScenario, ref candidateFilter);
+            DrawCandidateFilterButton(controlName, "All", CandidateFilterAll, ref candidateFilter);
+            DrawCandidateFilterButton(controlName, "Active", CandidateFilterActive, ref candidateFilter);
+            DrawCandidateFilterButton(controlName, "Vanilla", CandidateFilterVanilla, ref candidateFilter);
+            DrawCandidateFilterButton(controlName, "Scenario", CandidateFilterScenario, ref candidateFilter);
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
@@ -1601,6 +1605,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ref string searchText,
             ref bool searchFocused)
         {
+            searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(26f));
@@ -1618,25 +1623,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.Box(searchRect, nextSearchText, _uiContext.Styles.SearchField);
             }
             if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
-                searchText = nextSearchText;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, controlName + "\n" + nextSearchText));
+                searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
+            }
             DrawSearchPlaceholder(searchRect, searchText, "Filter choices");
             if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
                 DrawFieldFocusBorder(searchRect);
 
             Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
-                searchText = string.Empty;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, controlName + "\n"));
+                searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
+            }
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
             searchFocused = searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
         }
 
-        private void DrawCandidateFilterButton(string label, string value, ref string candidateFilter)
+        private void DrawCandidateFilterButton(string controlName, string label, string value, ref string candidateFilter)
         {
             bool active = string.Equals(candidateFilter, value, StringComparison.OrdinalIgnoreCase);
             Rect rect = GUILayoutUtility.GetRect(78f, 26f, GUILayout.Width(78f), GUILayout.Height(26f));
             if (DrawPlainButton(rect, new GUIContent(label), active ? _activeButtonStyle : _buttonStyle, true))
-                candidateFilter = value;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererCandidateFilterPrefix, controlName + "\n" + value));
+                candidateFilter = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateFilter(controlName, CandidateFilterAll);
+            }
         }
 
         private static bool IsHomeWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
@@ -1730,10 +1744,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string hint = expanded ? "Collapse " + title + "." : "Expand " + title + ".";
             if (DrawPlainButton(rect, new GUIContent(header, hint), expanded ? _activeButtonStyle : _buttonStyle, true))
             {
-                _homeGroupExpanded[key] = !expanded;
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, key));
                 if (Event.current != null)
                     Event.current.Use();
-                expanded = !expanded;
+                expanded = GetHomeGroupExpanded(key, defaultExpanded);
             }
             DrawButtonAnimationOverlay(rect, key, true, IsInteractiveHoverAllowed(rect), IsInteractiveMouseDownAllowed(rect));
             if (expanded && drawBody != null)
@@ -1746,12 +1761,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private bool GetHomeGroupExpanded(string key, bool defaultExpanded)
         {
-            bool expanded;
-            if (_homeGroupExpanded.TryGetValue(key, out expanded))
-                return expanded;
-
-            _homeGroupExpanded[key] = defaultExpanded;
-            return defaultExpanded;
+            return ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
         }
 
         // The "what next" callout: leads with the guidance line, then a quiet
@@ -1999,7 +2009,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawColorPreview(swatchRect, row.Color);
             RegisterTourTarget("action:" + row.OpenColorPickerActionId, swatchRect);
             if (DrawPlainButton(swatchRect, GUIContent.none, GUIStyle.none, true))
-                OpenSurvivorColorPicker(row);
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(row.OpenColorPickerActionId);
 
             float hexX = swatchRect.xMax + 8f;
             float hexWidth = Math.Max(42f, rect.xMax - hexX - stepWidth - 8f);
@@ -2321,7 +2331,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawColorPreview(swatchRect, row.ColorRow.Color);
                 RegisterTourTarget("action:" + row.ColorRow.OpenColorPickerActionId, swatchRect);
                 if (DrawPlainButton(swatchRect, GUIContent.none, GUIStyle.none, true))
-                    OpenSurvivorColorPicker(row.ColorRow);
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(row.ColorRow.OpenColorPickerActionId);
                 Rect valueRect = new Rect(swatchRect.xMax + 8f, rect.y + 7f, Math.Max(40f, rect.xMax - swatchRect.xMax - 8f), 20f);
                 GUI.Label(valueRect, ShortenToFit(row.ValueText ?? string.Empty, valueRect.width, _mutedTextStyle), _mutedTextStyle);
             }
@@ -3641,8 +3651,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || !IsInteractiveVisualTopmost(starRect))
                 return false;
 
-            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
-            ScenarioAssetBrowserUx.ToggleFavorite(state, sourceActionId);
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererAssetFavoriteTogglePrefix, sourceActionId));
             current.Use();
             return true;
         }

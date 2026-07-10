@@ -80,27 +80,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             x += actionWidth + actionGap;
 
             if (DrawPlacementHudButton(new Rect(x, rect.y + 18f, actionWidth, 28f), "Back", "Return to the full asset browser."))
-                CancelActivePlacement();
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionRendererPlacementBack);
             x += actionWidth + actionGap;
 
             if (DrawPlacementHudButton(new Rect(x, rect.y + 18f, actionWidth, 28f), "Done", "Stop placement and close the Tool Workspace."))
-            {
-                CancelActivePlacement();
-                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + ScenarioAuthoringWindowIds.BuildTools);
-            }
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionRendererPlacementDone);
         }
 
         private bool DrawPlacementHudButton(Rect rect, string label, string tooltip)
         {
             return DrawPlainButton(rect, new GUIContent(label, tooltip), _buttonStyle, true);
-        }
-
-        private void CancelActivePlacement()
-        {
-            if (IsBuildPlacementActive())
-                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionBuildPlacementCancel);
-            if (IsSceneSpritePlacementActive())
-                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionSceneSpritePlacementCancel);
         }
 
         private static Sprite ResolvePlacementPreviewSprite(ScenarioAuthoringShellWindowViewModel window)
