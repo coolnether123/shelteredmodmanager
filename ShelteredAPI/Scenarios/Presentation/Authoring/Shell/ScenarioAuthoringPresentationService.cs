@@ -111,7 +111,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (sampleBuildCost)
             {
                 double millisecondsPerTick = 1000d / Stopwatch.Frequency;
-                MMLog.WriteDebug(string.Format(
+                MMLog.WriteInfo(string.Format(
                     CultureInfo.InvariantCulture,
                     "[ScenarioAuthoringPresentation] Sampled document build cost (1/{0} frames): shellView={1:0.###}ms, shellDocument={2:0.###}ms, inspector={3:0.###}ms, hover={4:0.###}ms, total={5:0.###}ms.",
                     PresentationBuildLogSampleFrames,
