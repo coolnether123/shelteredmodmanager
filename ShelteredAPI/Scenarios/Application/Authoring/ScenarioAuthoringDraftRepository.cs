@@ -448,12 +448,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                             SaveEntry saveEntry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
                             if (saveEntry != null)
                             {
-                                if (saveEntry.absoluteSlot != slot
-                                    || !string.Equals(saveEntry.scenarioId, DraftStorageScenarioId, StringComparison.OrdinalIgnoreCase))
+                                if (saveEntry.absoluteSlot != slot)
                                 {
                                     MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused to delete mismatched virtual save for draft '"
                                         + draftId + "'. expectedSlot=" + slot + " actualSlot=" + saveEntry.absoluteSlot
-                                        + " actualScenarioId=" + (saveEntry.scenarioId ?? string.Empty) + ".");
+                                        + ".");
                                     return false;
                                 }
 
