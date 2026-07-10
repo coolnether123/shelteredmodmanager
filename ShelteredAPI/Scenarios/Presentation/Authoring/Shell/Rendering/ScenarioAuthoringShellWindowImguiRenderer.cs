@@ -2760,6 +2760,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawTimelineTrackSection(section);
             }
+            else if (IsStoryMapSection(section))
+            {
+                DrawStoryMapSection(section);
+            }
             else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip || section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip)
             {
                 bool renderAsTabs = section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip;
