@@ -125,7 +125,23 @@ namespace ModAPI.Harmony
             results.AddRange(RunRecipeExpansionHarnessCases());
             results.AddRange(RunIntentionalFailureDiagnosticCases());
             results.AddRange(RunRecipeSignatureSafetyHarnessCases());
+            results.Add(RngFacadeRedirectHarnessCase());
             return results.ToReadOnlyList();
+        }
+
+        /// <summary>Guards the fluent same-stack redirect shape used by the RNG facade.</summary>
+        private static string RngFacadeRedirectHarnessCase()
+        {
+            MethodInfo unityRange = AccessTools.Method(typeof(UnityEngine.Random), "Range", new Type[] { typeof(int), typeof(int) });
+            MethodInfo bridgeRange = AccessTools.Method(typeof(Core.ModRandomBridge), "Range", new Type[] { typeof(int), typeof(int) });
+            var transpiler = FromInstructions(
+                new CodeInstruction(OpCodes.Ldc_I4_0),
+                new CodeInstruction(OpCodes.Ldc_I4_5),
+                new CodeInstruction(OpCodes.Call, unityRange),
+                new CodeInstruction(OpCodes.Ret));
+            FluentReplacementResult result = transpiler.ReplaceCalls(unityRange).WithCall(bridgeRange, "RNG facade redirect");
+            bool redirected = result == FluentReplacementResult.PatternReplaced && transpiler.Instructions().Any(i => i.Calls(bridgeRange));
+            return redirected ? "PASS RNG facade fluent redirect" : "FAIL RNG facade fluent redirect";
         }
 
         /// <summary>
