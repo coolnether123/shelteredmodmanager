@@ -56,8 +56,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     : new Rect(primaryRowLeft, animatedRect.y + utilityRowY, actionRight - primaryRowLeft, utilityRowHeight),
                 shell);
 
+            Rect globalSearchButtonRect = DrawTopBarGlobalSearchButton(windowMenuButtonRect, animatedRect, compact);
+
             float saveWidth = MeasureTopBarActionsWidth(shell.ToolbarActions, compact);
-            float saveRight = windowMenuButtonRect.width > 0f ? windowMenuButtonRect.x - (compact ? 4f : 8f) : actionRight;
+            float saveRight = globalSearchButtonRect.width > 0f
+                ? globalSearchButtonRect.x - (compact ? 4f : 8f)
+                : (windowMenuButtonRect.width > 0f ? windowMenuButtonRect.x - (compact ? 4f : 8f) : actionRight);
             float saveX = Math.Max(primaryRowLeft, saveRight - saveWidth);
             Rect saveRect = new Rect(saveX, animatedRect.y + utilityRowY, Math.Max(0f, saveRight - saveX), utilityRowHeight);
             DrawTopBarToolbarActions(saveRect, shell, compact);

@@ -65,6 +65,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (state == null)
                 return null;
 
+            if (state.GlobalSearchOpen)
+                return Surface(ScenarioAuthoringSurfaceKind.Modal, "Search", ScenarioAuthoringActionIds.ActionShellCloseGlobalSearch, null);
             if (!string.IsNullOrEmpty(state.FocusedEditorKind))
                 return Surface(ScenarioAuthoringSurfaceKind.Modal, "Focused editor", ResolveFocusedEditorCancelAction(state.FocusedEditorKind), null);
             if (state.SpriteSwapPicker != null && state.SpriteSwapPicker.IsOpen)
