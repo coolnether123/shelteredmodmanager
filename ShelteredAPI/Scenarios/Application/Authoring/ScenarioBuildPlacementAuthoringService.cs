@@ -233,6 +233,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return CancelActivePlacement("Placement cancelled.", out message);
             }
 
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildPlacementCommitGridPrefix, StringComparison.Ordinal))
+            {
+                handled = true;
+                return CommitPlacementAtGridCell(
+                    actionId.Substring(ScenarioAuthoringActionIds.ActionBuildPlacementCommitGridPrefix.Length),
+                    out message);
+            }
+
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildStructureRoom, StringComparison.Ordinal))
             {
                 handled = true;
@@ -849,6 +857,43 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             LogPlacementInfo("Placement recorded to draft: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
             RestartPlacementForRepeat(PlacementSessionKind.Object, objectType, level, cloneSource, ref message);
             return true;
+        }
+
+        // Semantic route for headless authoring: arm a placement through the
+        // asset browser, then commit it against an explicit shelter-grid cell.
+        // This preserves the normal ghost validation and draft-recording path
+        // without depending on a foreground window or native mouse input.
+        private bool CommitPlacementAtGridCell(string payload, out string message)
+        {
+            message = null;
+            if (!HasActivePlacement || _activePlacement == null || _activePlacement.Ghost == null)
+            {
+                message = "No active placement preview is available for grid commit.";
+                return false;
+            }
+
+            string[] coordinates = (payload ?? string.Empty).Split('.');
+            int gridX;
+            int gridY;
+            if (coordinates.Length != 2
+                || !int.TryParse(coordinates[0], out gridX)
+                || !int.TryParse(coordinates[1], out gridY))
+            {
+                message = "Grid placement commit requires integer coordinates: build.place.commit.grid.<x>.<y>.";
+                return false;
+            }
+
+            ShelterRoomGrid grid;
+            string gridReason;
+            if (!TryGetReadyShelterGrid(out grid, out gridReason)
+                || gridX < 0 || gridY < 0 || gridX >= grid.grid_width || gridY >= grid.grid_height)
+            {
+                message = string.IsNullOrEmpty(gridReason) ? "Grid placement target is outside the shelter grid." : gridReason;
+                return false;
+            }
+
+            UpdateGhostPosition(ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY));
+            return TryCompletePlacement(ScenarioEditorController.Instance.CurrentSession, out message);
         }
 
         private bool CompleteRoomPlacement(ScenarioEditorSession session, Obj_GhostBase ghost, out string message)

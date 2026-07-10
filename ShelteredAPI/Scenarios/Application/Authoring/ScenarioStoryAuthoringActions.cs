@@ -380,12 +380,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public static string EncodeToken(string value)
         {
-            return Uri.EscapeDataString(value ?? string.Empty);
+            // Editable shell controls append their value through
+            // ScenarioAuthoringActionCodec.  Keep story actions on that same
+            // transport so an encoded route value is never persisted as text.
+            return ScenarioAuthoringActionCodec.EncodeToken(value);
         }
 
         public static string DecodeToken(string token)
         {
-            return string.IsNullOrEmpty(token) ? string.Empty : Uri.UnescapeDataString(token);
+            return ScenarioAuthoringActionCodec.DecodeToken(token) ?? string.Empty;
         }
 
         private static string EncodeTokenOrNone(string value)

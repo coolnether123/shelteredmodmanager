@@ -86,6 +86,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             AppliedDraftRevision = DraftRevision;
         }
 
+        // A stopped playtest must not keep claiming ownership of the live world.
+        // The next start reapplies the saved draft and creates a fresh completion
+        // carrier instead of being rejected as a stale continuation.
+        public void ResetStoppedPlaytestWorld()
+        {
+            HasAppliedToCurrentWorld = false;
+            AppliedDraftRevision = DraftRevision;
+            RequestedRestart = false;
+        }
+
         public void MarkChecklistChanged()
         {
             if (DirtyFlags == null)

@@ -410,6 +410,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSceneSpritePlacementApplyPrefix = "scene_sprite.apply.";
         public const string ActionWeatherEffectSpriteSelectPrefix = "weather_effect.select.";
         public const string ActionBuildPlacementCancel = "build.place.cancel";
+        public const string ActionBuildPlacementCommitGridPrefix = "build.place.commit.grid.";
         public const string ActionBuildObjectPlacePrefix = "build.place.object.";
         public const string ActionBuildStructureRoom = "build.place.room";
         public const string ActionBuildStructureLadder = "build.place.ladder";

@@ -154,7 +154,20 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         {
             _pauseService.EnsurePaused("Scenario authoring active.");
             if (session != null)
+            {
                 session.PlaytestState = ScenarioPlaytestState.Paused;
+                session.ResetStoppedPlaytestWorld();
+            }
+
+            // A quest carrier belongs to the just-stopped live world.  Leaving
+            // its id on the active binding makes a subsequent apply reuse it.
+            ScenarioRuntimeBinding binding = _runtimeBindingService.CurrentBinding;
+            if (binding != null)
+            {
+                binding.IsActive = false;
+                binding.ScenarioQuestInstanceId = null;
+                _runtimeBindingService.SetBinding(binding);
+            }
             MMLog.WriteInfo("[ScenarioPlaytestOrchestrator] Playtest ended; authoring pause restored.");
         }
 
