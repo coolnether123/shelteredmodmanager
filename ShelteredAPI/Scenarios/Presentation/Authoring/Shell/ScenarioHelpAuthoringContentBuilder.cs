@@ -6,6 +6,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         public ScenarioAuthoringHelpViewModel Build(ScenarioAuthoringState state)
         {
+            bool shortcutsView = state != null && state.HelpShortcutsView;
+            ScenarioAuthoringInspectorAction[] viewTabs = BuildViewTabs(shortcutsView);
+            ScenarioAuthoringInspectorAction[] headerActions = new[]
+            {
+                Item.Action(ScenarioAuthoringActionIds.ActionShellCloseHelp, "x", "Close help.", true, false, "CL")
+            };
+
+            if (shortcutsView)
+            {
+                ScenarioAuthoringShortcutOverlayViewModel shortcuts =
+                    ScenarioAuthoringShortcutOverlayBuilder.Build(ScenarioAuthoringShortcutCatalog.ResolveActiveContext(state));
+                return new ScenarioAuthoringHelpViewModel
+                {
+                    Title = "KEYBOARD SHORTCUTS",
+                    Subtitle = "Active context: " + shortcuts.ActiveContextTitle,
+                    PageTitle = "Keyboard Shortcuts",
+                    HeaderActions = headerActions,
+                    ViewTabs = viewTabs,
+                    TopicActions = new ScenarioAuthoringInspectorAction[0],
+                    Shortcuts = shortcuts
+                };
+            }
+
             ScenarioAuthoringHelpPage[] pages = TutorialContent.GetHelpPages();
             int pageCount = pages != null ? pages.Length : 0;
             int pageIndex = ClampPage(state != null && state.Settings != null ? state.Settings.GetInt(TutorialContent.HelpPageKey, 0) : 0, pageCount);
@@ -21,14 +44,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 PageTitle = page != null ? page.Title : "Help",
                 TopicId = topicId,
                 Body = page != null ? page.Body : "No help content is available.",
-                HeaderActions = new[]
-                {
-                    Item.Action(ScenarioAuthoringActionIds.ActionShellCloseHelp, "x", "Close help.", true, false, "CL")
-                },
+                HeaderActions = headerActions,
+                ViewTabs = viewTabs,
                 TopicActions = BuildTopicActions(page),
                 PreviousAction = Item.Action(ScenarioAuthoringActionIds.ActionHelpPagePrevious, "PREV", "Previous help page.", pageIndex > 0, false, "LT"),
                 NextAction = Item.Action(ScenarioAuthoringActionIds.ActionHelpPageNext, "NEXT", "Next help page.", pageIndex + 1 < pageCount, false, "RT"),
                 ReplayAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialReset, "Replay Tutorial", "Start the guided tour again.", true, true, "RP")
+            };
+        }
+
+        private static ScenarioAuthoringInspectorAction[] BuildViewTabs(bool shortcutsView)
+        {
+            return new[]
+            {
+                Item.Action(ScenarioAuthoringActionIds.ActionShellHelpShowPages, "Help", "Show the workshop help pages.", true, !shortcutsView, "HP"),
+                Item.Action(ScenarioAuthoringActionIds.ActionShellOpenShortcuts, "Shortcuts", "Show the keyboard shortcuts reference.", true, shortcutsView, "KB")
             };
         }
 

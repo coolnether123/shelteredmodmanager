@@ -106,7 +106,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AddWindowMenuGroup(actions, "Panels");
             AddWindowMenuDefinitions(actions, state, definitions, WindowMenuGroup.Panels);
             AddWindowMenuGroup(actions, "Help & Settings");
-            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, FormatWindowMenuLabel("Help", state != null && state.HelpWindowOpen), "HELP", true, state != null && state.HelpWindowOpen, "Open the workshop help pages."));
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, FormatWindowMenuLabel("Help", state != null && state.HelpWindowOpen && !state.HelpShortcutsView), "HELP", true, state != null && state.HelpWindowOpen && !state.HelpShortcutsView, "Open the workshop help pages."));
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenShortcuts, FormatWindowMenuLabel("Shortcuts", state != null && state.HelpWindowOpen && state.HelpShortcutsView), "?", true, state != null && state.HelpWindowOpen && state.HelpShortcutsView, "Open the keyboard shortcuts reference (F1)."));
             actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, FormatWindowMenuLabel("Settings", state != null && state.SettingsWindowOpen), "SET", true, state != null && state.SettingsWindowOpen, "Open authoring settings."));
 
             return actions.ToArray();

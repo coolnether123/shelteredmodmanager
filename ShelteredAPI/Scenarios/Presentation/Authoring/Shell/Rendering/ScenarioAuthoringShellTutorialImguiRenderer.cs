@@ -50,6 +50,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawHelpHeaderActions(regions.Header, help.HeaderActions);
             GUILayout.BeginArea(regions.Body);
             GUILayout.BeginVertical(_uiContext.Styles.Section);
+            DrawHelpViewTabs(help.ViewTabs);
+            if (help.Shortcuts != null)
+                DrawHelpShortcutsBody(help.Shortcuts);
+            else
+                DrawHelpPagesBody(help);
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
+        }
+
+        private void DrawHelpViewTabs(ScenarioAuthoringInspectorAction[] tabs)
+        {
+            if (tabs == null || tabs.Length == 0)
+                return;
+
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                if (tabs[i] == null)
+                    continue;
+                DrawButton(GUILayoutUtility.GetRect(120f, 26f, GUILayout.Width(120f), GUILayout.Height(26f)), tabs[i], true);
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.Space(8f);
+        }
+
+        private void DrawHelpPagesBody(ScenarioAuthoringHelpViewModel help)
+        {
             GUILayout.Label((help.PageTitle ?? "Help").ToUpperInvariant(), _sectionTitleStyle);
             GUILayout.Space(6f);
             GUILayout.Label(help.Body ?? string.Empty, _textStyle);
@@ -65,8 +93,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.EndHorizontal();
             GUILayout.Space(10f);
             DrawButton(GUILayoutUtility.GetRect(180f, 30f, GUILayout.Width(180f), GUILayout.Height(30f)), help.ReplayAction, false);
-            GUILayout.EndVertical();
-            GUILayout.EndArea();
         }
 
         private void DrawHelpTopicActions(ScenarioAuthoringInspectorAction[] actions)
