@@ -88,13 +88,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = panelColor;
             ScenarioUiAtlasSkin.DrawCornerCutBorder(viewport, _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderSubtleTexture);
 
-            Vector2 scroll = GetWindowScrollPosition("story.map");
-            GUILayout.BeginArea(viewport);
-            scroll = GUILayout.BeginScrollView(scroll, true, true, GUILayout.Width(viewport.width), GUILayout.Height(viewport.height));
-
-            float contentWidth = Math.Max(viewport.width, model.Width);
-            float contentHeight = Math.Max(viewport.height - 18f, model.Height);
-            Rect canvas = GUILayoutUtility.GetRect(contentWidth, contentHeight, GUILayout.Width(contentWidth), GUILayout.Height(contentHeight));
+            // The map is drawn in the same coordinate space as its viewport.  BeginArea
+            // shifts GUILayout coordinates but not the immediate-mode drawing calls below,
+            // which previously left every card above and outside the visible canvas.
+            Rect canvas = new Rect(
+                viewport.x,
+                viewport.y,
+                Math.Max(viewport.width, model.Width),
+                Math.Max(viewport.height, model.Height));
 
             Dictionary<string, ScenarioStoryGraphNode> byId = new Dictionary<string, ScenarioStoryGraphNode>(StringComparer.Ordinal);
             for (int i = 0; i < model.Nodes.Length; i++)
@@ -109,9 +110,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < model.Nodes.Length; i++)
                 DrawStoryMapNode(canvas, model.Nodes[i]);
 
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-            SetWindowScrollPosition("story.map", scroll);
         }
 
         private void DrawStoryMapEdge(Rect canvas, Dictionary<string, ScenarioStoryGraphNode> byId, ScenarioStoryGraphEdge edge)
