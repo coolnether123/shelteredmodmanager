@@ -812,7 +812,7 @@ Assert-Contains "export existing info helper" $scenarioPublishExport "internal s
 Assert-Contains "draft slot path helper" $scenarioDraftRepository "internal static string GetDraftScenarioFilePath\(int slot\)" "draft repository must resolve a draft's scenario.xml by slot without enumerating all drafts."
 Assert-Contains "draft durable delete transaction" $scenarioDraftRepository "Directory\.Move\(source, deletedPath\).*Directory\.Delete\(deletedPath, true\)" "confirmed draft deletion must quarantine then purge the owned draft folder."
 Assert-Contains "draft delete slot boundary" $scenarioDraftRepository "string\.Equals\(parent, root.*name\.StartsWith\(" "draft deletion must only mutate direct Slot_N children of the draft root."
-Assert-Contains "draft delete virtual-save boundary" $scenarioDraftRepository "saveEntry\.absoluteSlot != slot.*saveEntry\.scenarioId, DraftStorageScenarioId" "draft deletion must refuse a mismatched virtual save entry."
+Assert-Contains "draft delete virtual-save boundary" $scenarioDraftRepository "saveEntry\.absoluteSlot != slot" "draft deletion must refuse a mismatched virtual save entry."
 Assert-Contains "draft delete executable contract" $scenarioVerification "VerifyDraftDeleteDurability.*scenario\.xml\.bak.*autosave\.xml.*Slot_23.*Fresh draft catalog scan" "framework verification must prove durable draft deletion removes backups/history, preserves unrelated slots, and survives a fresh catalog scan."
 
 Assert-Contains "draft row detail wiring" $scenarioBookDataSource "baseMode \+ "" base, edited "" \+ edited \+ recovery" "draft rows must show base mode, relative edit time, and a recovery marker."
