@@ -669,6 +669,10 @@ namespace ModAPI.Harmony
             var cm = CodeMatch.Calls(method);
             cm.name = name;
             _matcher.MatchStartForward(cm);
+            if (!_matcher.IsValid)
+            {
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for call {FluentTranspilerFormatting.FormatMethod(method)}");
+            }
             return this;
         }
 
@@ -677,6 +681,10 @@ namespace ModAPI.Harmony
             var cm = CodeMatch.LoadsField(field);
             cm.name = name;
             _matcher.MatchStartForward(cm);
+            if (!_matcher.IsValid)
+            {
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for field load {FluentTranspilerFormatting.FormatField(field)}");
+            }
             return this;
         }
 
@@ -685,6 +693,10 @@ namespace ModAPI.Harmony
             var cm = CodeMatch.StoresField(field);
             cm.name = name;
             _matcher.MatchStartForward(cm);
+            if (!_matcher.IsValid)
+            {
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for field store {FluentTranspilerFormatting.FormatField(field)}");
+            }
             return this;
         }
 
@@ -739,6 +751,11 @@ namespace ModAPI.Harmony
         public FluentTranspiler MatchNewObject(ConstructorInfo ctor, string name = null)
         {
             _matcher.MatchStartForward(new CodeMatch(OpCodes.Newobj, ctor, name));
+            if (!_matcher.IsValid)
+            {
+                string ctorType = ctor != null && ctor.DeclaringType != null ? ctor.DeclaringType.FullName : "<null>";
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for newobj {ctorType}");
+            }
             return this;
         }
 

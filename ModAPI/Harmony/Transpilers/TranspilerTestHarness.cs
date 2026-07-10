@@ -129,6 +129,76 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
+        /// Runs every built-in harness case (pattern discovery, recipe expansion, intentional
+        /// failure diagnostics, signature safety, and anchor mapping) and returns their compact
+        /// pass/fail summaries. Each line begins with "PASS" or "FAIL".
+        /// </summary>
+        /// <remarks>
+        /// This is the single entry point a developer or agent should call to smoke-test the fluent
+        /// transpiler after touching the framework. Pair it with <see cref="AssertAllHarnessCasesPass"/>
+        /// to turn the results into a hard failure.
+        /// </remarks>
+        public static IReadOnlyList<string> RunAllHarnessCases()
+        {
+            var results = new List<string>();
+            results.AddRange(RunPatternDiscoveryHarnessCases());
+            results.AddRange(RunAnchorMapHarnessCases());
+            return results.ToReadOnlyList();
+        }
+
+        /// <summary>
+        /// Runs <see cref="RunAllHarnessCases"/> and throws if any case reports a failure.
+        /// Suitable for wiring into an automated smoke test.
+        /// </summary>
+        public static void AssertAllHarnessCasesPass()
+        {
+            var failures = RunAllHarnessCases()
+                .Where(line => line != null && line.StartsWith("FAIL", StringComparison.Ordinal))
+                .ToList();
+
+            if (failures.Count > 0)
+            {
+                throw new Exception(
+                    "TranspilerTestHarness reported " + failures.Count + " failing case(s):\n  " +
+                    string.Join("\n  ", failures.ToArray()));
+            }
+        }
+
+        /// <summary>
+        /// Verifies the Cartographer anchor mapper produces stable, de-duplicated anchor indices.
+        /// This guards the O(n) adjacency-scoring path used by MatchIntent/FindNextAnchor.
+        /// </summary>
+        public static IReadOnlyList<string> RunAnchorMapHarnessCases()
+        {
+            var results = new List<string>();
+
+            var transpiler = FromInstructions(
+                new CodeInstruction(OpCodes.Ldarg_0),
+                new CodeInstruction(OpCodes.Ldstr, "ANCHOR_ALPHA"),
+                new CodeInstruction(OpCodes.Ldstr, "ANCHOR_BETA"),
+                new CodeInstruction(OpCodes.Ret));
+
+            AnchorReport report = transpiler.MapAnchors();
+
+            var indices = report.SafeAnchors.Select(a => a.Index).ToList();
+            bool foundUniqueStrings = indices.Contains(1) && indices.Contains(2);
+            bool noDuplicateIndices = indices.Count == indices.Distinct().Count();
+            bool adjacencyBoosted = report.SafeAnchors.All(a => a.UniquenessScore >= 1.2f);
+
+            results.Add(foundUniqueStrings
+                ? "PASS anchor map finds unique string anchors: [" + string.Join(",", indices.Select(i => i.ToString()).ToArray()) + "]"
+                : "FAIL anchor map finds unique string anchors: expected indices 1 and 2, got [" + string.Join(",", indices.Select(i => i.ToString()).ToArray()) + "]");
+            results.Add(noDuplicateIndices
+                ? "PASS anchor map indices are unique"
+                : "FAIL anchor map indices are unique: got duplicates in [" + string.Join(",", indices.Select(i => i.ToString()).ToArray()) + "]");
+            results.Add(adjacencyBoosted
+                ? "PASS anchor map adjacency scoring applied"
+                : "FAIL anchor map adjacency scoring applied: an anchor scored below threshold");
+
+            return results.ToReadOnlyList();
+        }
+
+        /// <summary>
         /// Signature-safety cases for high-level recipes that should fail before mutating unsafe IL.
         /// </summary>
         public static IReadOnlyList<string> RunRecipeSignatureSafetyHarnessCases()

@@ -92,17 +92,24 @@ namespace ModAPI.Harmony
                     report.SafeAnchors.Add(new Anchor(i, instr, uniquenessScore));
             }
 
-            // Context scoring: unique pairs
-            for (int i = 0; i < instructions.Count - 1; i++)
+            // Context scoring: adjacent anchor pairs reinforce each other.
+            // Uses an index map to stay O(n); the previous FirstOrDefault-in-a-loop
+            // form was O(n^2) on large method bodies with no behavioral difference.
+            var anchorsByIndex = new Dictionary<int, Anchor>(report.SafeAnchors.Count);
+            for (int i = 0; i < report.SafeAnchors.Count; i++)
             {
-                var first = report.SafeAnchors.FirstOrDefault(a => a.Index == i);
-                var second = report.SafeAnchors.FirstOrDefault(a => a.Index == i + 1);
+                anchorsByIndex[report.SafeAnchors[i].Index] = report.SafeAnchors[i];
+            }
 
-                if (first != null && second != null)
+            for (int i = 0; i < report.SafeAnchors.Count; i++)
+            {
+                var current = report.SafeAnchors[i];
+                Anchor next;
+                if (anchorsByIndex.TryGetValue(current.Index + 1, out next))
                 {
                     // Boost both anchors
-                    first.UniquenessScore += 0.5f;
-                    second.UniquenessScore += 0.5f;
+                    current.UniquenessScore += 0.5f;
+                    next.UniquenessScore += 0.5f;
                 }
             }
             
