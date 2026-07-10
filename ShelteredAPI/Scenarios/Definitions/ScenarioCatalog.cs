@@ -7,6 +7,66 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Definitions{
+    internal sealed class ScenarioCatalogPathStamp
+    {
+        public bool Exists;
+        public long LastWriteTicks;
+        public long Length;
+    }
+
+    internal static class ScenarioCatalogDiskStamp
+    {
+        public static ScenarioCatalogPathStamp ReadDirectory(string path)
+        {
+            try
+            {
+                DirectoryInfo info = new DirectoryInfo(path);
+                return new ScenarioCatalogPathStamp
+                {
+                    Exists = info.Exists,
+                    LastWriteTicks = info.Exists ? info.LastWriteTimeUtc.Ticks : 0L
+                };
+            }
+            catch
+            {
+                return new ScenarioCatalogPathStamp();
+            }
+        }
+
+        public static ScenarioCatalogPathStamp ReadFile(string path)
+        {
+            try
+            {
+                FileInfo info = new FileInfo(path);
+                return new ScenarioCatalogPathStamp
+                {
+                    Exists = info.Exists,
+                    LastWriteTicks = info.Exists ? info.LastWriteTimeUtc.Ticks : 0L,
+                    Length = info.Exists ? info.Length : 0L
+                };
+            }
+            catch
+            {
+                return new ScenarioCatalogPathStamp();
+            }
+        }
+
+        public static bool Equal(ScenarioCatalogPathStamp left, ScenarioCatalogPathStamp right)
+        {
+            return left != null
+                && right != null
+                && left.Exists == right.Exists
+                && left.LastWriteTicks == right.LastWriteTicks
+                && left.Length == right.Length;
+        }
+
+        public static string NormalizePath(string path)
+        {
+            try { return Path.GetFullPath(path); }
+            catch { return path ?? string.Empty; }
+        }
+    }
+
     /// <summary>
     /// Indexes Sheltered scenario.xml files from each loaded mod's Scenarios folder.
     /// </summary>
@@ -16,6 +76,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
         private readonly ScenarioDefinitionSerializer _serializer;
         private readonly object _sync = new object();
         private Dictionary<string, ScenarioInfo> _byId = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, ScenarioCatalogPathStamp> _watchedDirectories = new Dictionary<string, ScenarioCatalogPathStamp>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, ScenarioCatalogPathStamp> _watchedFiles = new Dictionary<string, ScenarioCatalogPathStamp>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> _scenarioRoots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private bool _scanned;
 
         public ScenarioCatalog()
@@ -31,42 +94,61 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
         public void Refresh()
         {
-            Dictionary<string, ScenarioInfo> next = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
             ScenarioModFolder[] folders = _modFolderSource != null ? _modFolderSource.GetLoadedModFolders() : new ScenarioModFolder[0];
-
-            for (int i = 0; i < folders.Length; i++)
-            {
-                ScenarioModFolder folder = folders[i];
-                if (folder == null || string.IsNullOrEmpty(folder.RootPath))
-                    continue;
-
-                string scenariosRoot = Path.Combine(folder.RootPath, "Scenarios");
-                if (!Directory.Exists(scenariosRoot))
-                    continue;
-
-                string[] files;
-                try { files = Directory.GetFiles(scenariosRoot, ScenarioDefinitionSerializer.DefaultFileName, SearchOption.AllDirectories); }
-                catch (Exception ex)
-                {
-                    MMLog.WriteWarning("[ScenarioCatalog] Failed to scan '" + scenariosRoot + "': " + ex.Message);
-                    continue;
-                }
-
-                for (int j = 0; j < files.Length; j++)
-                {
-                    if (IsAuthoringDraftScenarioFile(files[j]))
-                    {
-                        MMLog.WriteInfo("[ScenarioCatalog] Skipping authoring draft scenario file outside playable catalog: " + files[j]);
-                        continue;
-                    }
-
-                    TryAddScenario(next, files[j], folder.ModId);
-                }
-            }
+            Dictionary<string, string> roots = BuildScenarioRoots(folders);
 
             lock (_sync)
             {
+                if (IsSnapshotCurrent(roots))
+                    return;
+
+                Dictionary<string, ScenarioInfo> next = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, ScenarioCatalogPathStamp> directories = new Dictionary<string, ScenarioCatalogPathStamp>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, ScenarioCatalogPathStamp> files = new Dictionary<string, ScenarioCatalogPathStamp>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (KeyValuePair<string, string> root in roots)
+                {
+                    string scenariosRoot = root.Key;
+                    directories[scenariosRoot] = ScenarioCatalogDiskStamp.ReadDirectory(scenariosRoot);
+                    if (!Directory.Exists(scenariosRoot))
+                        continue;
+
+                    string[] discoveredDirectories;
+                    string[] discoveredFiles;
+                    try
+                    {
+                        discoveredDirectories = Directory.GetDirectories(scenariosRoot, "*", SearchOption.AllDirectories);
+                        discoveredFiles = Directory.GetFiles(scenariosRoot, "*", SearchOption.AllDirectories);
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteWarning("[ScenarioCatalog] Failed to scan '" + scenariosRoot + "': " + ex.Message);
+                        continue;
+                    }
+
+                    for (int i = 0; i < discoveredDirectories.Length; i++)
+                        directories[ScenarioCatalogDiskStamp.NormalizePath(discoveredDirectories[i])] = ScenarioCatalogDiskStamp.ReadDirectory(discoveredDirectories[i]);
+
+                    for (int i = 0; i < discoveredFiles.Length; i++)
+                    {
+                        string filePath = ScenarioCatalogDiskStamp.NormalizePath(discoveredFiles[i]);
+                        files[filePath] = ScenarioCatalogDiskStamp.ReadFile(filePath);
+                        if (!string.Equals(Path.GetFileName(filePath), ScenarioDefinitionSerializer.DefaultFileName, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (IsAuthoringDraftScenarioFile(filePath))
+                        {
+                            MMLog.WriteInfo("[ScenarioCatalog] Skipping authoring draft scenario file outside playable catalog: " + filePath);
+                            continue;
+                        }
+
+                        TryAddScenario(next, filePath, root.Value);
+                    }
+                }
+
                 _byId = next;
+                _scenarioRoots = roots;
+                _watchedDirectories = directories;
+                _watchedFiles = files;
                 _scanned = true;
             }
         }
@@ -132,6 +214,53 @@ namespace ShelteredAPI.Scenarios.Definitions{
             }
 
             Refresh();
+        }
+
+        private bool IsSnapshotCurrent(Dictionary<string, string> roots)
+        {
+            if (!_scanned || roots == null || roots.Count != _scenarioRoots.Count)
+                return false;
+
+            foreach (KeyValuePair<string, string> root in roots)
+            {
+                string ownerModId;
+                if (!_scenarioRoots.TryGetValue(root.Key, out ownerModId)
+                    || !string.Equals(ownerModId, root.Value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            return StampsMatch(_watchedDirectories, true) && StampsMatch(_watchedFiles, false);
+        }
+
+        private static bool StampsMatch(Dictionary<string, ScenarioCatalogPathStamp> expected, bool directory)
+        {
+            foreach (KeyValuePair<string, ScenarioCatalogPathStamp> pair in expected)
+            {
+                ScenarioCatalogPathStamp current = directory
+                    ? ScenarioCatalogDiskStamp.ReadDirectory(pair.Key)
+                    : ScenarioCatalogDiskStamp.ReadFile(pair.Key);
+                if (!ScenarioCatalogDiskStamp.Equal(pair.Value, current))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static Dictionary<string, string> BuildScenarioRoots(ScenarioModFolder[] folders)
+        {
+            Dictionary<string, string> roots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; folders != null && i < folders.Length; i++)
+            {
+                ScenarioModFolder folder = folders[i];
+                if (folder == null || string.IsNullOrEmpty(folder.RootPath))
+                    continue;
+
+                roots[ScenarioCatalogDiskStamp.NormalizePath(Path.Combine(folder.RootPath, "Scenarios"))] = folder.ModId;
+            }
+
+            return roots;
         }
 
         private static int CompareInfo(ScenarioInfo left, ScenarioInfo right)

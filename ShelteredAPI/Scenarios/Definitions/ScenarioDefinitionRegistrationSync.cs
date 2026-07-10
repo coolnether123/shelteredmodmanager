@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -14,6 +15,10 @@ namespace ShelteredAPI.Scenarios.Definitions{
         private readonly ScenarioSaveDescriptorMirror _saveDescriptorMirror;
         private readonly IScenarioDefinitionDependencyReader _dependencyReader;
         private readonly IScenarioDefinitionFactory _definitionFactory;
+        private readonly object _refreshSync = new object();
+        private readonly Dictionary<string, ScenarioCatalogPathStamp> _publishedDefinitions = new Dictionary<string, ScenarioCatalogPathStamp>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ScenarioCatalogPathStamp> _draftFiles = new Dictionary<string, ScenarioCatalogPathStamp>(StringComparer.OrdinalIgnoreCase);
+        private ScenarioCatalogPathStamp _draftRootStamp;
         private int _catalogRevision;
 
         public ScenarioDefinitionRegistrationSync(
@@ -36,9 +41,20 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
         public void RefreshDefinitionCatalog()
         {
-            _definitionCatalog.Refresh();
-            SyncDefinitionRegistrations();
-            _catalogRevision++;
+            lock (_refreshSync)
+            {
+                _definitionCatalog.Refresh();
+                ScenarioInfo[] publishedDefinitions = _definitionCatalog.ListAll();
+                bool definitionsChanged = HavePublishedDefinitionsChanged(publishedDefinitions);
+                if (!definitionsChanged && !HaveDraftDefinitionsChanged())
+                    return;
+
+                ScenarioInfo[] definitions = _definitionReader.ListAll();
+                SyncDefinitionRegistrations(definitions);
+                CapturePublishedDefinitionSnapshot(publishedDefinitions);
+                CaptureDraftSnapshot(definitions);
+                _catalogRevision++;
+            }
         }
 
         public int CatalogRevision
@@ -61,9 +77,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
             return _definitionReader.TryLoad(scenarioId, out definition, out scenarioFilePath, out validation);
         }
 
-        private void SyncDefinitionRegistrations()
+        private void SyncDefinitionRegistrations(ScenarioInfo[] definitions)
         {
-            ScenarioInfo[] definitions = _definitionReader.ListAll();
             Dictionary<string, ScenarioInfo> current = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < definitions.Length; i++)
             {
@@ -103,6 +118,97 @@ namespace ShelteredAPI.Scenarios.Definitions{
                 _store.Upsert(record, out previous);
                 _saveDescriptorMirror.Mirror(record.Info);
             }
+        }
+
+        private bool HaveDraftDefinitionsChanged()
+        {
+            ScenarioCatalogPathStamp currentRoot = ScenarioCatalogDiskStamp.ReadDirectory(ResolveDraftsRootPath());
+            if (!ScenarioCatalogDiskStamp.Equal(_draftRootStamp, currentRoot))
+                return true;
+
+            foreach (KeyValuePair<string, ScenarioCatalogPathStamp> pair in _draftFiles)
+            {
+                if (!ScenarioCatalogDiskStamp.Equal(pair.Value, ScenarioCatalogDiskStamp.ReadFile(pair.Key)))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool HavePublishedDefinitionsChanged(ScenarioInfo[] definitions)
+        {
+            int definitionCount = definitions != null ? definitions.Length : 0;
+            if (definitionCount != _publishedDefinitions.Count)
+                return true;
+
+            for (int i = 0; definitions != null && i < definitions.Length; i++)
+            {
+                ScenarioInfo definition = definitions[i];
+                string key = BuildDefinitionSnapshotKey(definition);
+                ScenarioCatalogPathStamp previous;
+                if (string.IsNullOrEmpty(key)
+                    || !_publishedDefinitions.TryGetValue(key, out previous)
+                    || !ScenarioCatalogDiskStamp.Equal(previous, ScenarioCatalogDiskStamp.ReadFile(definition.FilePath)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void CapturePublishedDefinitionSnapshot(ScenarioInfo[] definitions)
+        {
+            _publishedDefinitions.Clear();
+            for (int i = 0; definitions != null && i < definitions.Length; i++)
+            {
+                ScenarioInfo definition = definitions[i];
+                string key = BuildDefinitionSnapshotKey(definition);
+                if (!string.IsNullOrEmpty(key))
+                    _publishedDefinitions[key] = ScenarioCatalogDiskStamp.ReadFile(definition.FilePath);
+            }
+        }
+
+        private static string BuildDefinitionSnapshotKey(ScenarioInfo definition)
+        {
+            if (definition == null || string.IsNullOrEmpty(definition.FilePath))
+                return null;
+
+            return ScenarioCatalogDiskStamp.NormalizePath(definition.FilePath)
+                + "|" + (definition.Id ?? string.Empty)
+                + "|" + (definition.OwnerModId ?? string.Empty);
+        }
+
+        private void CaptureDraftSnapshot(ScenarioInfo[] definitions)
+        {
+            _draftFiles.Clear();
+            for (int i = 0; definitions != null && i < definitions.Length; i++)
+            {
+                ScenarioInfo definition = definitions[i];
+                if (definition == null || !IsAuthoringDraftDefinition(definition) || string.IsNullOrEmpty(definition.FilePath))
+                    continue;
+
+                string path = ScenarioCatalogDiskStamp.NormalizePath(definition.FilePath);
+                _draftFiles[path] = ScenarioCatalogDiskStamp.ReadFile(path);
+            }
+
+            _draftRootStamp = ScenarioCatalogDiskStamp.ReadDirectory(ResolveDraftsRootPath());
+        }
+
+        private static string ResolveDraftsRootPath()
+        {
+            string gameRoot;
+            try { gameRoot = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..")); }
+            catch { gameRoot = Directory.GetCurrentDirectory(); }
+
+            string modsRoot = Path.Combine(gameRoot, "mods");
+            if (!Directory.Exists(modsRoot))
+            {
+                string legacyModsRoot = Path.Combine(gameRoot, "Mods");
+                modsRoot = Directory.Exists(legacyModsRoot) ? legacyModsRoot : modsRoot;
+            }
+
+            return Path.Combine(Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "User"), "Saves"), ScenarioAuthoringDraftRepository.DraftStorageScenarioId);
         }
 
         private ScenarioRecord CreateDefinitionRecord(ScenarioInfo definition)
