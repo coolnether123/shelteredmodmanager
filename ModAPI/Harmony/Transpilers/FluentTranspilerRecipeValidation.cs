@@ -113,6 +113,72 @@ namespace ModAPI.Harmony
             return ValidateReturnTypeAssignable(transpiler, replacementMethod.ReturnType, originalMethod.ReturnType, caller);
         }
 
+        /// <summary>
+        /// Validates a call redirect whose replacement takes one extra <b>trailing</b> argument beyond
+        /// the original call's stack inputs (e.g. a domain/tag literal pushed just before the call).
+        /// The replacement must be static, consume the original stack shape followed by
+        /// <paramref name="appendedType"/>, and return a compatible type.
+        /// </summary>
+        internal static bool ValidateReplacementCallSignatureWithAppended(
+            FluentTranspiler transpiler,
+            MethodInfo originalMethod,
+            MethodInfo replacementMethod,
+            Type appendedType,
+            string caller)
+        {
+            if (originalMethod == null)
+            {
+                Warn(transpiler, $"{caller} could not determine the original call being replaced.");
+                return false;
+            }
+
+            if (!ValidateStaticMethod(transpiler, replacementMethod, caller))
+            {
+                return false;
+            }
+
+            if (appendedType == null)
+            {
+                Warn(transpiler, $"{caller} could not determine the type of the appended argument for {FluentTranspilerFormatting.FormatMethod(replacementMethod)}.");
+                return false;
+            }
+
+            Type[] originalStackInputs = GetCallStackInputTypes(originalMethod);
+            ParameterInfo[] replacementParameters = replacementMethod.GetParameters();
+            int expectedCount = originalStackInputs.Length + 1;
+            if (replacementParameters.Length != expectedCount)
+            {
+                Warn(
+                    transpiler,
+                    $"{caller} replacement {FluentTranspilerFormatting.FormatMethod(replacementMethod)} takes {replacementParameters.Length} parameter(s), but redirecting {FluentTranspilerFormatting.FormatMethod(originalMethod)} with one appended argument needs {expectedCount} (its {originalStackInputs.Length} stack input(s) plus a trailing {FormatType(appendedType)}).");
+                return false;
+            }
+
+            for (int i = 0; i < originalStackInputs.Length; i++)
+            {
+                if (IsStackAssignable(originalStackInputs[i], replacementParameters[i].ParameterType))
+                {
+                    continue;
+                }
+
+                Warn(
+                    transpiler,
+                    $"{caller} parameter {i} mismatch for {FluentTranspilerFormatting.FormatMethod(replacementMethod)}: stack provides {FormatType(originalStackInputs[i])} from {FluentTranspilerFormatting.FormatMethod(originalMethod)}, hook expects {FormatType(replacementParameters[i].ParameterType)}.");
+                return false;
+            }
+
+            Type trailingParam = replacementParameters[expectedCount - 1].ParameterType;
+            if (!IsStackAssignable(appendedType, trailingParam))
+            {
+                Warn(
+                    transpiler,
+                    $"{caller} trailing parameter mismatch for {FluentTranspilerFormatting.FormatMethod(replacementMethod)}: appended argument is {FormatType(appendedType)}, hook expects {FormatType(trailingParam)}. Fix: make the replacement's last parameter accept {FormatType(appendedType)}.");
+                return false;
+            }
+
+            return ValidateReturnTypeAssignable(transpiler, replacementMethod.ReturnType, originalMethod.ReturnType, caller);
+        }
+
         internal static bool ValidateWrapperSignature(
             FluentTranspiler transpiler,
             MethodInfo wrapperMethod,
@@ -583,6 +649,58 @@ namespace ModAPI.Harmony
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Builds the IL instruction that pushes <paramref name="literal"/> onto the stack, along with
+        /// its CLR type (for signature validation). Supports the constant kinds a redirect tag needs:
+        /// string, bool, the integral types, char, float, double and long. Returns false for null or
+        /// an unsupported type.
+        /// </summary>
+        internal static bool TryCreateLiteralLoad(object literal, out CodeInstruction load, out Type literalType)
+        {
+            load = null;
+            literalType = null;
+            if (literal == null)
+            {
+                return false;
+            }
+
+            literalType = literal.GetType();
+
+            if (literal is string s)
+            {
+                load = new CodeInstruction(OpCodes.Ldstr, s);
+                return true;
+            }
+            if (literal is bool b)
+            {
+                load = new CodeInstruction(b ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                return true;
+            }
+            if (literal is float f)
+            {
+                load = new CodeInstruction(OpCodes.Ldc_R4, f);
+                return true;
+            }
+            if (literal is double d)
+            {
+                load = new CodeInstruction(OpCodes.Ldc_R8, d);
+                return true;
+            }
+            if (literal is long l)
+            {
+                load = new CodeInstruction(OpCodes.Ldc_I8, l);
+                return true;
+            }
+            if (literal is int || literal is short || literal is ushort ||
+                literal is byte || literal is sbyte || literal is char)
+            {
+                load = new CodeInstruction(OpCodes.Ldc_I4, Convert.ToInt32(literal));
+                return true;
+            }
+
+            return false;
         }
 
         internal static bool IsStaticParameterlessValueProvider(MethodInfo method)
