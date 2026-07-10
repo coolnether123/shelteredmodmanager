@@ -80,6 +80,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSettingDecreasePrefix = "shell.setting.decrease.";
         public const string ActionSettingSelectPrefix = "shell.setting.select.";
         public const string ActionInspectorPinTogglePrefix = "shell.inspector.pin.toggle.";
+        public const string ActionRendererMapFilterTogglePrefix = "shell.renderer.map_filter.toggle.";
+        public const string ActionRendererPixelGroupTogglePrefix = "shell.renderer.pixel_group.toggle.";
+        public const string ActionRendererHomeGroupTogglePrefix = "shell.renderer.home_group.toggle.";
+        public const string ActionRendererAssetFavoriteTogglePrefix = "shell.renderer.asset_favorite.toggle.";
+        public const string ActionRendererAssetCategorySelectPrefix = "shell.renderer.asset_category.select.";
+        public const string ActionRendererAssetSearchPrefix = "shell.renderer.asset_search.";
+        public const string ActionRendererAssetSearchClear = "shell.renderer.asset_search.clear";
+        public const string ActionRendererAssetInventoryFilterPrefix = "shell.renderer.asset_inventory_filter.select.";
+        public const string ActionRendererCandidateSearchPrefix = "shell.renderer.candidate_search.set.";
+        public const string ActionRendererCandidateFilterPrefix = "shell.renderer.candidate_filter.select.";
+        public const string ActionRendererGlobalSearchQueryPrefix = "shell.renderer.global_search.query.";
+        public const string ActionRendererTopBarMoreToggle = "shell.renderer.top_bar_more.toggle";
+        public const string ActionRendererPlacementBack = "shell.renderer.placement.back";
+        public const string ActionRendererPlacementDone = "shell.renderer.placement.done";
         public const string ActionInspectorTabPrefix = "inspector.tab.";
         public const string ActionStageSelectPrefix = "stage.select.";
         public const string ActionShellTabShelter = "shell.tab.shelter";
@@ -1156,6 +1170,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringInspectorAction[] WorldSubstageActions { get; set; }
         public ScenarioAuthoringToolButtonViewModel[] ToolButtons { get; set; }
         public ScenarioAuthoringInspectorAction[] WindowMenuActions { get; set; }
+        public ScenarioAuthoringInspectorAction[] RendererActions { get; set; }
         public ScenarioAuthoringShellWindowViewModel[] Windows { get; set; }
         public ScenarioAuthoringInspectorDocument SpritePickerDocument { get; set; }
         public ScenarioAuthoringInspectorDocument FocusedEditorDocument { get; set; }

@@ -32,11 +32,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawAssetBrowserWorkshopPage(Rect bodyRect, ScenarioAuthoringShellWindowViewModel window, bool armPlacementOnCardClick)
         {
+            _assetBrowserSearchText = ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch;
+            _assetBrowserCategoryFilter = ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserCategory;
             if (!_assetBrowserDefaultResolved)
             {
                 _assetBrowserCategoryFilter = ScenarioAssetBrowserUx.ResolveDefaultFilter(
                     _snapshot != null ? _snapshot.State : null,
                     window != null ? window.Sections : null);
+                ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserCategory = _assetBrowserCategoryFilter;
                 _assetBrowserDefaultResolved = true;
             }
 
@@ -79,7 +82,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.Box(searchRect, nextSearchText, _uiContext.Styles.SearchField);
             }
             if (!string.Equals(nextSearchText, _assetBrowserSearchText ?? string.Empty, StringComparison.Ordinal))
-                _assetBrowserSearchText = nextSearchText;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererAssetSearchPrefix, nextSearchText));
+                _assetBrowserSearchText = ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch;
+            }
             DrawSearchPlaceholder(searchRect, _assetBrowserSearchText, "Filter assets");
             Event current = Event.current;
             if (searchTopmost && ((current != null && searchRect.Contains(current.mousePosition)) || string.Equals(GUI.GetNameOfFocusedControl(), "asset_browser_search", StringComparison.Ordinal)))
@@ -88,7 +95,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float clearWidth = ScenarioUiMeasuredLabel.Width("Clear", _buttonStyle, 18f);
             Rect clearRect = GUILayoutUtility.GetRect(clearWidth, 30f, GUILayout.Width(clearWidth), GUILayout.Height(30f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
-                _assetBrowserSearchText = string.Empty;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionRendererAssetSearchClear);
+                _assetBrowserSearchText = ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch;
+            }
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
             _assetBrowserSearchFocused = searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), "asset_browser_search", StringComparison.Ordinal);
@@ -125,7 +135,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect rect = GUILayoutUtility.GetRect(0f, 32f, GUILayout.ExpandWidth(true), GUILayout.Height(32f));
             string tooltip = safeLabel + (string.IsNullOrEmpty(secondary) ? string.Empty : " — " + secondary);
             if (DrawPlainButton(rect, new GUIContent(display, tooltip), active ? _activeButtonStyle : _buttonStyle, true))
-                _assetBrowserCategoryFilter = filter;
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererAssetCategorySelectPrefix, filter));
+                _assetBrowserCategoryFilter = ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserCategory;
+            }
             GUILayout.Space(4f);
         }
 

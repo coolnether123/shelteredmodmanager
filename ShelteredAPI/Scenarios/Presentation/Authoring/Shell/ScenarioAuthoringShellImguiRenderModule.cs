@@ -84,8 +84,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private float _styleOpacity = -1f;
         private bool _windowMenuOpen;
         private readonly Dictionary<string, Vector2> _windowScrollPositions = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, bool> _pixelEditorGroupExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, bool> _homeGroupExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private Vector2 _settingsScrollPosition = Vector2.zero;
         private string _dragWindowId;
         private FloatingWindowDragMode _dragMode = FloatingWindowDragMode.None;
@@ -281,6 +279,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
             if (_snapshot.State != null)
                 _windowMenuOpen = _snapshot.State.WindowMenuOpen;
+            _topBarMoreMenuOpen = ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen;
             _rootAlpha = _animations.GetBinaryProgress(ShellRootAnimationKey, _visible, 0.18f, ScenarioUiEasing.EaseOut, true);
             if (!_visible && _rootAlpha <= 0.001f)
             {
@@ -542,9 +541,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && !windowMenuRect.Contains(Event.current.mousePosition)
                 && !windowMenuButtonRect.Contains(Event.current.mousePosition))
             {
-                _windowMenuOpen = false;
-                if (_snapshot.State != null)
-                    _snapshot.State.WindowMenuOpen = false;
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionShellToggleWindowMenu);
+                _windowMenuOpen = _snapshot.State != null && _snapshot.State.WindowMenuOpen;
                 Event.current.Use();
             }
 
@@ -554,7 +552,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && !_topBarMoreMenuRect.Contains(Event.current.mousePosition)
                 && !_topBarMoreButtonRect.Contains(Event.current.mousePosition))
             {
-                _topBarMoreMenuOpen = false;
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionRendererTopBarMoreToggle);
+                _topBarMoreMenuOpen = ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen;
                 Event.current.Use();
             }
 
@@ -621,6 +620,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         for (int rowIndex = 0; editor != null && editor.ColorRows != null && rowIndex < editor.ColorRows.Length; rowIndex++)
                         {
                             ScenarioSurvivorColorRowViewModel row = editor.ColorRows[rowIndex];
+                            if (row != null && string.Equals(row.Channel, requestedChannel, StringComparison.OrdinalIgnoreCase))
+                            {
+                                requestedRow = row;
+                                break;
+                            }
+                        }
+                        for (int rowIndex = 0; section != null && requestedRow == null && section.ModFieldRows != null && rowIndex < section.ModFieldRows.Length; rowIndex++)
+                        {
+                            ScenarioSurvivorColorRowViewModel row = section.ModFieldRows[rowIndex] != null ? section.ModFieldRows[rowIndex].ColorRow : null;
                             if (row != null && string.Equals(row.Channel, requestedChannel, StringComparison.OrdinalIgnoreCase))
                             {
                                 requestedRow = row;

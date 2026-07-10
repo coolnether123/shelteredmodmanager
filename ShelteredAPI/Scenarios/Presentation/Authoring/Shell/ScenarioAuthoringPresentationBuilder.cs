@@ -148,6 +148,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ContextMenu = contextMenu,
                 StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
+            viewModel.RendererActions = ScenarioAuthoringRendererActionManifest.Build(state, viewModel.Windows, viewModel.CustomSpriteEditor);
+            windows.Add(ScenarioAuthoringRendererActionManifest.BuildContractWindow(viewModel));
+            viewModel.Windows = windows.ToArray();
             _shellChromeBuilder.ApplyShellChrome(viewModel, state, editorSession, session);
             return viewModel;
         }

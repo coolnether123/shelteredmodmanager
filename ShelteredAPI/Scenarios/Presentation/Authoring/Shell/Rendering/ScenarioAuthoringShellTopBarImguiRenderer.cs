@@ -207,6 +207,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!overflow)
             {
                 _topBarMoreMenuOpen = false;
+                ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen = false;
                 return;
             }
 
@@ -218,7 +219,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _topBarMoreButtonRect = new Rect(rect.xMax - moreWidth, rect.y, moreWidth, rect.height);
             ScenarioAuthoringInspectorAction moreAction = new ScenarioAuthoringInspectorAction
             {
-                Id = "shell.stage.more",
+                Id = ScenarioAuthoringActionIds.ActionRendererTopBarMoreToggle,
                 Label = "More >",
                 Hint = "Show remaining stage tabs.",
                 Enabled = true,
@@ -306,7 +307,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (DrawPlainButton(rect, new GUIContent(action.Label, action.Hint), _topBarMoreMenuOpen ? _activeButtonStyle : _buttonStyle, true))
             {
-                _topBarMoreMenuOpen = !_topBarMoreMenuOpen;
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionRendererTopBarMoreToggle);
+                _topBarMoreMenuOpen = ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen;
                 if (Event.current != null)
                     Event.current.Use();
             }

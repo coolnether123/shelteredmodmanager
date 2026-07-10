@@ -1,0 +1,79 @@
+{
+  "interactiveMethods": [
+    { "key": "ScenarioAuthoringShellAssetBrowserImguiRenderer.cs::DrawAssetBrowserCategoryButton", "actionFamily": "shell.renderer.asset_category.select." },
+    { "key": "ScenarioAuthoringShellAssetBrowserImguiRenderer.cs::DrawAssetBrowserSearch", "actionFamily": "shell.renderer.asset_search." },
+    { "key": "ScenarioAuthoringShellGlobalSearchImguiRenderer.cs::DrawGlobalSearchRow", "actionFamily": "action.Id" },
+    { "key": "ScenarioAuthoringShellGlobalSearchImguiRenderer.cs::DrawGlobalSearchOverlayCore", "actionFamily": "shell.renderer.global_search.query." },
+    { "key": "ScenarioAuthoringShellGlobalSearchImguiRenderer.cs::DrawTopBarGlobalSearchButton", "actionFamily": "shell.search.toggle" },
+    { "key": "ScenarioAuthoringShellInventorySlotGridImguiRenderer.cs::DrawInventorySlotCell", "actionFamily": "slot actions" },
+    { "key": "ScenarioAuthoringShellMapUxImguiRenderer.cs::DrawMapFilterChip", "actionFamily": "shell.renderer.map_filter.toggle." },
+    { "key": "ScenarioAuthoringShellNewWindowsImguiRenderer.cs::DrawAssetInventoryFilters", "actionFamily": "shell.renderer.asset_inventory_filter.select." },
+    { "key": "ScenarioAuthoringShellNewWindowsImguiRenderer.cs::DrawNewWindowsEditableControl", "actionFamily": "editable item action prefix" },
+    { "key": "ScenarioAuthoringShellPlacementHudImguiRenderer.cs::DrawPlacementHudButton", "actionFamily": "delegates to placement HUD semantic actions" },
+    { "key": "ScenarioAuthoringShellPlacementHudImguiRenderer.cs::DrawPlacementHudCore", "actionFamily": "shell.renderer.placement." },
+    { "key": "ScenarioAuthoringShellPopupMenuImguiRenderer.cs::DrawButton", "actionFamily": "action.Id" },
+    { "key": "ScenarioAuthoringShellStoryMapImguiRenderer.cs::DrawStoryMapNode", "actionFamily": "node.NavActionId" },
+    { "key": "ScenarioAuthoringShellTimelineImguiRenderer.cs::DrawTimelineChip", "actionFamily": "chip.Action.Id" },
+    { "key": "ScenarioAuthoringShellToolRailImguiRenderer.cs::DrawToolRailButton", "actionFamily": "button.Action.Id" },
+    { "key": "ScenarioAuthoringShellTooltipImguiRenderer.cs::DrawRichHoverHelpActions", "actionFamily": "action.Id" },
+    { "key": "ScenarioAuthoringShellTopBarImguiRenderer.cs::DrawTopBarMoreButton", "actionFamily": "shell.renderer.top_bar_more.toggle" },
+    { "key": "ScenarioAuthoringShellTutorialImguiRenderer.cs::HandleSpotlightTargetClick", "actionFamily": "tutorial target action" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawAnimationSpeedSlider", "actionFamily": "sprite_swap.anim.speed." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawAnimationTimeline", "actionFamily": "sprite_swap.anim.frame." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawBrushSwatch", "actionFamily": "sprite_swap.custom.preset." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateCard", "actionFamily": "action.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateFilterButton", "actionFamily": "shell.renderer.candidate_filter.select." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateFilterControls", "actionFamily": "shell.renderer.candidate_search.set." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateSearchControl", "actionFamily": "shell.renderer.candidate_search.set." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCastCard", "actionFamily": "card.PrimaryAction.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCastReferenceCard", "actionFamily": "card.PrimaryAction.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawChecklistItem", "actionFamily": "action.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawColorSlider", "actionFamily": "sprite_swap.custom.color." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCompactActionRow", "actionFamily": "action.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawEditableProperty", "actionFamily": "editable item action prefix" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeCollapsibleGroup", "actionFamily": "shell.renderer.home_group.toggle." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeHeadlineField", "actionFamily": "editable item action prefix" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeQuestionCard", "actionFamily": "item.Action.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeStatusChip", "actionFamily": "action.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawInlineEditableField", "actionFamily": "editable item action prefix" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawModFieldRow", "actionFamily": "mod-field row actions" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelCanvas", "actionFamily": "sprite_swap.custom." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelEditorGroupHeader", "actionFamily": "shell.renderer.pixel_group.toggle." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorColorRow", "actionFamily": "row.OpenColorPickerActionId" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorTraitPickerPopup", "actionFamily": "option.SelectAction.Id" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorTraitRow", "actionFamily": "row trait actions" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::HandleAssetFavoriteStarInput", "actionFamily": "shell.renderer.asset_favorite.toggle." }
+  ],
+  "exemptions": [
+    {
+      "key": "ScenarioAuthoringShellTooltipImguiRenderer.cs::ConsumeRichHoverInput",
+      "reason": "Consumes pointer events inside a transient help popup; it does not mutate editor or popup state.",
+      "osClickFallback": "Use OS click/scroll inside the popup when pointer-event consumption itself must be exercised."
+    },
+    {
+      "key": "ScenarioAuthoringShellTutorialImguiRenderer.cs::ResolveTutorialCardRect",
+      "reason": "Continuous drag changes only the ephemeral tutorial-card screen position and has no authored semantic value.",
+      "osClickFallback": "Use OS drag on the tutorial-card title bar."
+    },
+    {
+      "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelCanvasViewport",
+      "reason": "Continuous middle/right-button canvas panning changes viewport position only; paint, pick, select, and zoom remain semantic actions.",
+      "osClickFallback": "Use OS drag inside the pixel canvas to pan the viewport."
+    },
+    {
+      "key": "ScenarioAuthoringShellImguiRenderModule.cs::HandleWindowDrag",
+      "reason": "Continuous floating-window positioning is presentation-only and already persists through the layout service on mouse release.",
+      "osClickFallback": "Use OS drag on a floating window title bar."
+    },
+    {
+      "key": "ScenarioAuthoringShellImguiRenderModule.cs::HandleWindowResize",
+      "reason": "Continuous floating-window resize is presentation-only and already persists through the layout service on mouse release.",
+      "osClickFallback": "Use OS drag on a floating window resize grip."
+    },
+    {
+      "key": "ModAPI/UI/ColorPicker/ColorPickerImguiControl.cs::continuous color surfaces",
+      "reason": "Hue, saturation, value, and alpha surfaces are continuous-only; Apply/OK commits through the exposed RRGGBBAA action prefix.",
+      "osClickFallback": "Use OS click/drag in the color picker, then invoke Apply or OK."
+    }
+  ]
+}

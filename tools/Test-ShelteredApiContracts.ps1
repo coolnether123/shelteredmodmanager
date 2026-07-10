@@ -148,6 +148,7 @@ $seamGuard = Read-RepoFile "ShelteredAPI\Infrastructure\SeamGuard.cs"
 $scenarioPlayStartReadiness = Read-RepoFile "ShelteredAPI\Scenarios\Application\Runtime\ScenarioPlayStartReadiness.cs"
 $scenarioAuthoringPresentationBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationBuilder.cs"
 $scenarioAuthoringWindowRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs"
+$scenarioAuthoringShellRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringShellImguiRenderModule.cs"
 $scenarioAuthoringTutorialRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTutorialImguiRenderer.cs"
 $scenarioAssetBrowserUx = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs"
 $scenarioAssetBrowserRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellAssetBrowserImguiRenderer.cs"
@@ -483,7 +484,7 @@ Assert-Contains "actor authoring payload round-trip" $scenarioActorAuthoringStor
 Assert-Contains "actor authoring deterministic payload" $scenarioActorAuthoringStore "keys\.Sort\(StringComparer\.Ordinal\).*ManualJson\.Serialize\(next,\s*false\)" "G6 key/value payload JSON must be deterministic."
 Assert-Contains "actor authoring editor UI" $scenarioAuthoringContracts "ModFieldList.*ScenarioSurvivorModFieldControlKind.*Toggle.*Stepper.*Text.*Enum.*Color" "Survivor editor contracts must expose the expected mod-field control kinds."
 Assert-Contains "actor authoring editor UI" $scenarioAuthoringPresentationBuilder "BuildSurvivorModFieldsSection\(member,\s*actionPrefix,\s*index\).*Title = ""Mod Fields"".*ScenarioAuthoringInspectorSectionLayout\.ModFieldList" "Focused survivor editor must add a Mod Fields section only when provider fields or gated payload notices exist."
-Assert-Contains "actor authoring editor UI" $scenarioAuthoringWindowRenderer "DrawModFieldRow.*DrawEditableProperty.*DrawColorPreview.*OpenSurvivorColorPicker" "Mod fields must render text controls and color swatches that open the ModAPI color picker."
+Assert-Contains "actor authoring editor UI" ($scenarioAuthoringWindowRenderer + $scenarioAuthoringShellRenderer) "DrawModFieldRow.*DrawEditableProperty.*DrawColorPreview.*ExecuteAction\(row\.ColorRow\.OpenColorPickerActionId\).*SurvivorColorPickerRequestId.*OpenSurvivorColorPicker" "Mod fields must render text controls and route color swatches through the semantic action path before opening the ModAPI color picker."
 Assert-Contains "actor authoring commands" $scenarioCharacterEditorAuthoringService "ScenarioActorAuthoringFieldStore\.FieldCommandPrefix.*HandleModFieldCommand.*ScenarioActorAuthoringFieldStore\.SetValue" "Mod field controls must mutate actor component payloads through the shared field store."
 Assert-Contains "actor authoring missing provider gate" $scenarioAuthoringPresentationBuilder "Missing provider:.*Payload for.*is preserved but hidden until that mod/API is registered" "Missing provider payloads must be preserved and shown as gated notices instead of editable fields."
 Assert-Contains "actor authoring dependency detection" $scenarioModReferenceReason "ActorAuthoringComponent" "Dependency reports must have a reason for mod-owned actor authoring components."
@@ -542,7 +543,7 @@ Assert-Contains "supplies verification" $scenarioVerification "VerifySuppliesAut
 Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "SerializeList\(IList<string> values\).*Uri\.EscapeDataString.*DeserializeList\(string value\).*Uri\.UnescapeDataString" "Favorites and recents must use a reversible encoding for arbitrary asset action ids."
 Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "FavoritesKey = ""asset_browser\.favorites"".*RecentKey = ""asset_browser\.recent"".*RecentLimit = 20.*settings\.Save\(state\.Settings\)" "Favorites and capped recents must round-trip through the editor settings store."
 Assert-Contains "asset browser contextual defaults" $scenarioAssetBrowserUx "FindSectionForAction\(sections, selectedActionId\).*ScenarioAuthoringTargetKind\.SceneSprite.*ScenarioAuthoringTargetKind\.Wall.*ScenarioAuthoringTargetKind\.PlaceableObject.*ScenarioStageKind\.BunkerBackground.*return RecentFilter" "Browser defaults must prefer the selected asset/target, then stage context, and finally Recent instead of All."
-Assert-Contains "asset browser card favorite star" $scenarioAuthoringWindowRenderer "HandleAssetFavoriteStarInput.*ToggleFavorite\(state, sourceActionId\).*current\.Use\(\).*BuildAssetFavoriteStarRect.*cardRect\.x \+ 5f.*cardRect\.yMax - 29f" "Every browser card must expose a bottom-left favorite star whose click is consumed before card selection or placement."
+Assert-Contains "asset browser card favorite star" $scenarioAuthoringWindowRenderer "HandleAssetFavoriteStarInput.*ExecuteAction\(.*ActionRendererAssetFavoriteTogglePrefix.*current\.Use\(\).*BuildAssetFavoriteStarRect.*cardRect\.x \+ 5f.*cardRect\.yMax - 29f" "Every browser card must expose a bottom-left favorite star routed through the semantic action path and consumed before card selection or placement."
 Assert-NotContains "asset browser card favorite star" $scenarioAssetBrowserRenderer "Add Favorite|Favorited" "The detail-pane favorite button must stay retired so the card star is the only favorite affordance."
 Assert-Contains "weather effect preview tint" $scenarioWeatherEffectCatalog "PreviewTint = previewTint.*TryResolveParticleTint.*particles\.startColor.*TryResolveSpriteTint.*renderer\.color.*TryResolveMaterialTint.*_TintColor.*_Color" "Weather previews must derive tint from material color, particle start color, and sprite-renderer color."
 Assert-Contains "weather effect preview tint" ($scenarioAssetAuthoringContent + $scenarioAuthoringWindowRenderer) "PreviewTint = target\.PreviewTint.*HasPreviewTint = target\.HasPreviewTint.*DrawSpritePreview\(previewRect, action\.PreviewSprite, action\.Emphasized, action\.HasPreviewTint" "Weather tint metadata must reach asset cards and the shared preview renderer."
@@ -862,6 +863,80 @@ Assert-Contains "test checklist Test UI" $scenarioAuthorTestChecklistSection 'VE
 Assert-Contains "test checklist Export UI" $scenarioAuthorTestChecklistSection 'of 5 test steps done.*Export is still allowed; completing the author test checklist is encouraged' "the export summary must report progress and encourage completion without blocking."
 Assert-Contains "test checklist README honesty" $scenarioPackagePlan 'BuildReadmeHonestyLine\(definition\).*if \(!string\.IsNullOrEmpty\(honestyLine\)\).*AppendLine\(honestyLine\)' "PACKAGEUX README output must add the honesty line only when the checklist supplies one."
 Assert-Contains "test checklist executable contracts" $scenarioAuthorTestChecklistVerification 'XML without AuthorTestChecklist.*MarkPlaytestStarted.*MarkExportReinstalled.*README omitted the conditional author-verification line.*README included an honesty line for an empty checklist' "framework verification must cover backward compatibility, round-trip/auto-check behavior, and conditional README output."
+
+# ACTIONCOVER: every direct IMGUI event surface is either mapped to a registered
+# semantic action family or carries a documented OS-input exemption.
+$coveragePath = Join-Path $RepoRoot "tools\ScenarioAuthoringRendererActionCoverage.json"
+$coverage = Get-Content -LiteralPath $coveragePath -Raw | ConvertFrom-Json
+$coverageByKey = @{}
+foreach ($entry in $coverage.interactiveMethods) {
+    if ([string]::IsNullOrWhiteSpace([string]$entry.key) -or [string]::IsNullOrWhiteSpace([string]$entry.actionFamily)) {
+        $failures.Add("renderer action coverage manifest: interactive entries require key and actionFamily")
+        continue
+    }
+    if ($coverageByKey.ContainsKey([string]$entry.key)) {
+        $failures.Add("renderer action coverage manifest: duplicate key $($entry.key)")
+    }
+    $coverageByKey[[string]$entry.key] = $entry
+}
+$exemptionsByKey = @{}
+foreach ($entry in $coverage.exemptions) {
+    if ([string]::IsNullOrWhiteSpace([string]$entry.key) -or [string]::IsNullOrWhiteSpace([string]$entry.reason) -or [string]::IsNullOrWhiteSpace([string]$entry.osClickFallback)) {
+        $failures.Add("renderer action coverage manifest: exemptions require file/method key, reason, and OS-click fallback")
+        continue
+    }
+    if ($coverageByKey.ContainsKey([string]$entry.key) -or $exemptionsByKey.ContainsKey([string]$entry.key)) {
+        $failures.Add("renderer action coverage manifest: duplicate action/exemption key $($entry.key)")
+    }
+    $exemptionsByKey[[string]$entry.key] = $entry
+}
+
+$rendererRoot = Join-Path $RepoRoot "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering"
+$interactionPattern = '(?:GUI|GUILayout)\.(?:Button|Toggle|HorizontalSlider|VerticalSlider|SelectionGrid|TextField|TextArea)|DrawPlainButton\(|EventType\.MouseDown'
+$methodPattern = '^\s*private\s+(?:static\s+)?[\w<>\[\],]+\s+(\w+)\s*\('
+$discovered = @{}
+foreach ($file in Get-ChildItem -LiteralPath $rendererRoot -Filter 'ScenarioAuthoringShell*ImguiRenderer.cs') {
+    $method = $null
+    foreach ($line in Get-Content -LiteralPath $file.FullName) {
+        if ($line -match $methodPattern) { $method = $matches[1] }
+        if ($line -match $interactionPattern) {
+            if ([string]::IsNullOrEmpty($method)) {
+                $failures.Add("renderer action coverage scan: could not resolve method for $($file.Name)")
+                continue
+            }
+            $key = "$($file.Name)::$method"
+            $discovered[$key] = $true
+            if (-not $coverageByKey.ContainsKey($key) -and -not $exemptionsByKey.ContainsKey($key)) {
+                $failures.Add("renderer action coverage scan: uncovered interactive method $key")
+            }
+        }
+    }
+}
+foreach ($key in $coverageByKey.Keys) {
+    if (-not $discovered.ContainsKey($key)) {
+        $failures.Add("renderer action coverage manifest: stale interactive method $key")
+    }
+}
+foreach ($key in $exemptionsByKey.Keys) {
+    if ($key -like 'ScenarioAuthoringShell*ImguiRenderer.cs::*' -and -not $discovered.ContainsKey($key)) {
+        $failures.Add("renderer action coverage manifest: stale renderer exemption $key")
+    }
+}
+
+$rendererManifestSource = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringRendererActionManifest.cs"
+$rendererContractsSource = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs"
+$rendererCoverageSource = $rendererManifestSource + $rendererContractsSource
+foreach ($entry in $coverage.interactiveMethods) {
+    $family = [string]$entry.actionFamily
+    if (($family.StartsWith('shell.') -or $family.StartsWith('sprite_')) -and $rendererCoverageSource.IndexOf($family, [StringComparison]::Ordinal) -lt 0) {
+        $failures.Add("renderer action coverage manifest: action family '$family' is not registered by the product manifest/contracts")
+    }
+}
+
+$actionCoverageVerification = Read-RepoFile "ShelteredAPI\Scenarios\Diagnostics\ScenarioAuthoringActionCoverageVerification.cs"
+Assert-Contains "renderer action runtime fixture" $actionCoverageVerification 'ScenarioAuthoringRendererActionManifest\.Build\(.*BuildContractWindow\(shell\).*RequireFamily\(ids, ScenarioAuthoringActionIds\.ActionRendererMapFilterTogglePrefix.*Require\(ids, ScenarioAuthoringActionIds\.ActionRendererPlacementDone.*visuals\.snap_to_grid.*visuals\.show_grid' "runtime verification must build the serialized semantic-action window and assert the known action families."
+Assert-Contains "recursive shell action projection" $rendererManifestSource 'CollectWindows\(actions.*CollectDocument\(actions.*CollectHelp\(actions.*CollectTutorial\(actions.*CollectTour\(actions.*CollectSettings\(actions' "the shell contract projection must recursively include windows, focused documents, popups/help/tutorial/tour, and settings."
+Assert-Contains "semantic contract serializer window" $rendererManifestSource 'Id = "contract\.semantic_actions".*Visible = false.*Items = items' "the existing shell serializer must receive a non-rendered window containing the exhaustive action/field projection."
 
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)

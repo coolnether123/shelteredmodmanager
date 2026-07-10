@@ -416,6 +416,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private void DrawAssetInventoryFilters(ScenarioAuthoringInspectorSection section)
         {
+            _newWindowsAssetFilter = ScenarioAuthoringRendererInteractionState.Instance.AssetInventoryFilter;
             GUILayout.BeginVertical(_uiContext.Styles.Section);
             GUILayout.Label(section.Title ?? "Filter", _sectionTitleStyle);
             GUILayout.BeginHorizontal();
@@ -428,7 +429,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 RegisterInteractiveRegion(rect);
                 if (DrawPlainButton(rect, new GUIContent(label), active ? _activeButtonStyle : _buttonStyle, true))
                 {
-                    _newWindowsAssetFilter = filter;
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                        ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererAssetInventoryFilterPrefix, filter));
+                    _newWindowsAssetFilter = ScenarioAuthoringRendererInteractionState.Instance.AssetInventoryFilter;
                     Event.current.Use();
                 }
                 if (i < section.Items.Length - 1) GUILayout.Space(4f);

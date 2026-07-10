@@ -262,6 +262,7 @@
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionMetadataCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioFrameworkVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringActionCoverageVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringShortcutHelpVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioStarterTemplateVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioMapUxVerification.cs" />
@@ -565,6 +566,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSession.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSettingsService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringShellImguiRenderModule.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringRendererActionManifest.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellActionImguiSupport.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellCommandDockImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellGlobalSearchImguiRenderer.cs" />

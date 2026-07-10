@@ -37,7 +37,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             Rect rect = new Rect(inner.x, y, inner.width, 27f);
             GUIStyle style = visible ? _activeButtonStyle : _buttonStyle;
             if (GUI.Button(rect, new GUIContent(glyph + "  " + label, "Toggle " + label + " markers."), style))
-                ScenarioMapAuthoringFilterState.Toggle(filter);
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionRendererMapFilterTogglePrefix + filter);
             return y + 31f;
         }
 
