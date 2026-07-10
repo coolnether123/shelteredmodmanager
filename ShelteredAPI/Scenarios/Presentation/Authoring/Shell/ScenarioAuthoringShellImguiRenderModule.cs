@@ -373,6 +373,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     animatedStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
                 if (chromeProgress > ChromeInteractionThreshold && windowMenuButtonRect.width > 0f && windowMenuButtonRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(windowMenuButtonRect);
+                if (chromeProgress > ChromeInteractionThreshold && _globalSearchButtonRect.width > 0f && _globalSearchButtonRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(_globalSearchButtonRect);
                 if (chromeProgress > ChromeInteractionThreshold && animatedStatusRect.width > 0f && animatedStatusRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(animatedStatusRect);
 
@@ -398,6 +400,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 RegisterVisualSurface("modal.help", new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight));
             if (shell.Help == null && ((shell.Tutorial != null && shell.Tutorial.Visible) || (shell.Tour != null && shell.Tour.Visible)))
                 RegisterVisualSurface("modal.tutorial", new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight));
+            if (_snapshot.State != null && _snapshot.State.GlobalSearchOpen)
+                RegisterVisualSurface("modal.global-search", BuildGlobalSearchRect(scaledWidth, scaledHeight, hudReserveRect));
             if (IsRichHoverHelpActive() && _activeRichHoverPopupRect.width > 0f && _activeRichHoverPopupRect.height > 0f)
                 RegisterVisualSurface("popup.rich-help", _activeRichHoverPopupRect);
             Rect placementHudRect = RuntimeCompat.ZeroRect();
@@ -424,6 +428,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         inputCapture.RegisterInteractiveRect(pageRect);
                     if (chromeProgress > ChromeInteractionThreshold && windowMenuButtonRect.width > 0f && windowMenuButtonRect.height > 0f)
                         inputCapture.RegisterInteractiveRect(windowMenuButtonRect);
+                    if (chromeProgress > ChromeInteractionThreshold && _globalSearchButtonRect.width > 0f && _globalSearchButtonRect.height > 0f)
+                        inputCapture.RegisterInteractiveRect(_globalSearchButtonRect);
                     if (chromeProgress > ChromeInteractionThreshold && animatedStatusRect.width > 0f && animatedStatusRect.height > 0f)
                         inputCapture.RegisterInteractiveRect(animatedStatusRect);
                 }
@@ -645,15 +651,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
             }
 
+            bool globalSearchOpen = _snapshot.State != null && _snapshot.State.GlobalSearchOpen;
+            if (globalSearchOpen)
+            {
+                Rect globalSearchRect = BuildGlobalSearchRect(scaledWidth, scaledHeight, hudReserveRect);
+                using (EnterVisualSurface("modal.global-search"))
+                    DrawGlobalSearchOverlayCore(globalSearchRect, inputCapture);
+                inputCapture.RegisterInteractiveRect(globalSearchRect);
+                inputCapture.SetPopupOpen(true);
+            }
+            else
+            {
+                ResetGlobalSearchIndex();
+            }
+
             bool textFieldFocused = _buildPaletteSearchFocused
                 || _spritePickerSearchFocused
                 || _assetBrowserSearchFocused
-                || _editableFieldFocused;
+                || _editableFieldFocused
+                || (globalSearchOpen && _globalSearchFocused);
             inputCapture.SetTextFieldFocused(textFieldFocused);
             inputCapture.SetKeyboardCaptured(
                 modalDocument != null
                 || _survivorColorPicker != null
                 || shell.Help != null
+                || globalSearchOpen
                 || IsRichHoverHelpActive()
                 || textFieldFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));

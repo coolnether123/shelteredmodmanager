@@ -499,6 +499,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutRouter.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioGlobalSearchService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSurfaceResolver.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBaseModeReloadService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringEntryFlowService.cs" />
@@ -551,6 +552,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringShellImguiRenderModule.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellActionImguiSupport.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellCommandDockImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellGlobalSearchImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellPopupMenuImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellStatusBarImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellVanillaInteractionAssistImguiRenderer.cs" />

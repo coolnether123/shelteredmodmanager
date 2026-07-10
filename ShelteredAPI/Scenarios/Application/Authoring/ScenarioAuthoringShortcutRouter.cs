@@ -52,6 +52,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            // Global command palette is context-free: Ctrl+K toggles it from any non-text
+            // surface so creators can jump to commands, elements, and help from anywhere.
+            if (chord.Kind == ShortcutChordKind.GlobalSearch)
+            {
+                string searchMessage;
+                bool searchChanged;
+                Execute(state, ScenarioAuthoringActionIds.ActionShellToggleGlobalSearch, out searchChanged, out searchMessage);
+                changed = searchChanged;
+                MarkHandled(state, searchMessage, ref changed);
+                return true;
+            }
+
             if (chord.Kind == ShortcutChordKind.Escape)
                 return TryRouteEscape(state, surface, pixelEditor, out changed);
 
@@ -368,6 +380,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return new ShortcutChord { Kind = ShortcutChordKind.Duplicate };
                 if (UnityEngine.Input.GetKeyDown(KeyCode.R))
                     return new ShortcutChord { Kind = ShortcutChordKind.Revert };
+                if (UnityEngine.Input.GetKeyDown(KeyCode.K))
+                    return new ShortcutChord { Kind = ShortcutChordKind.GlobalSearch };
             }
 
             if (UnityEngine.Input.GetKeyDown(KeyCode.Delete))
@@ -391,7 +405,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             Duplicate = 8,
             Delete = 9,
             Revert = 10,
-            Escape = 11
+            Escape = 11,
+            GlobalSearch = 12
         }
 
         private struct ShortcutChord

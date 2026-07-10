@@ -28,6 +28,28 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (state == null || string.IsNullOrEmpty(actionId))
                 return false;
 
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionShellToggleGlobalSearch, StringComparison.Ordinal))
+            {
+                handled = true;
+                state.GlobalSearchOpen = !state.GlobalSearchOpen;
+                message = state.GlobalSearchOpen
+                    ? "Search opened. Type to find commands and scenario elements."
+                    : "Search closed.";
+                return true;
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionShellCloseGlobalSearch, StringComparison.Ordinal))
+            {
+                handled = true;
+                if (state.GlobalSearchOpen)
+                {
+                    state.GlobalSearchOpen = false;
+                    message = "Search closed.";
+                }
+
+                return true;
+            }
+
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix, StringComparison.Ordinal))
             {
                 handled = true;
