@@ -407,3 +407,21 @@ Assert(t.Instructions().Any(i => i.Calls(BridgeII)));           // bridge is now
 Wire these into `TranspilerTestHarness.RunAllHarnessCases()` (extend it the same way the
 built-in cases are) and call `AssertAllHarnessCasesPass()` from your test entry so a
 signature regression fails loudly rather than silently corrupting RNG.
+
+### Determinism contract for fixed custom scenarios
+
+When `ModRandomBridge.ScenarioFixedSeedActive` is true, redirected Unity RNG calls draw
+from the scenario-owned `ModRandom` stream. `ExpeditionMap.CreateMap` and
+`CreateStasisMap` reset that stream through `InitScenarioState(seed)`. Consequently, a
+fresh generation run whose patched call order is the same produces the same generated
+map fields for the same seed; a different seed produces a different stream. Compare only
+generation-immutable map fields (grid coordinate, generated region/topography/category),
+not visibility, discovery, encounter chance, or item counts: those fields are gameplay
+state and can change after generation.
+
+This is deliberately not a promise that every possible game outcome is order-independent.
+The retained `ProceduralTile.rnd` System.Random field and initializer rows outside the
+catalogued redirect scope remain vanilla-owned. A restart is a regeneration proof only
+when the route actually invokes map creation; a shell transition alone does not establish
+that fact. With the gate inactive, every bridge member delegates to Unity unchanged,
+including `InitState`, so normal vanilla games retain Unity's global RNG behavior.
