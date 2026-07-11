@@ -135,13 +135,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (string.IsNullOrEmpty(draftId))
                 return null;
 
-            ScenarioInfo draftInfo;
-            if (!_draftRepository.TryGet(draftId, out draftInfo) || draftInfo == null)
+            ScenarioAuthoringDraftRepository.DraftRecord draft;
+            string lookupError;
+            if (!_draftRepository.TryGetDraftRecord(draftId, out draft, out lookupError) || draft == null
+                || draft.Info == null || draft.StartupSave == null)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Could not resolve draft '" + draftId
+                    + "' without a full draft scan: " + (lookupError ?? "indexed metadata was unavailable") + ".");
                 return null;
+            }
 
-            SaveEntry startupSave;
-            if (!_draftRepository.TryGetDraftSaveEntry(draftId, out startupSave) || startupSave == null)
-                return null;
+            ScenarioInfo draftInfo = draft.Info;
+            SaveEntry startupSave = draft.StartupSave;
 
             // Map construction occurs during the scene load, before the authoring session and
             // runtime binding are restored. Prime the fixed-seed gate at the queue boundary so

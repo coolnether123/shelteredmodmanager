@@ -43,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyScenarioSaveIdGuards(result);
                 VerifyAtomicScenarioWrites(root, result);
                 VerifyDraftDeleteDurability(root, result);
+                VerifyDraftMetadataCachePersistence(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
                 VerifyCompletionCarrierContract(result);
                 VerifyScenarioSaveDiscoveryExcludesSoftDeletedFolders(root, result);
@@ -603,6 +604,63 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 || afterFailureXml.IndexOf("Updated Atomic Scenario", StringComparison.Ordinal) >= 0,
                 "Failed atomic scenario save did not leave the previous scenario.xml intact.", result);
             Assert(originalXml.IndexOf("Original Atomic Scenario", StringComparison.Ordinal) >= 0, "Verification setup failed to capture the original XML.", result);
+        }
+
+        private static void VerifyDraftMetadataCachePersistence(string root, ScenarioValidationResult result)
+        {
+            string originalPath;
+            string originalOwner;
+            ScenarioDefinitionMetadataCache.GetPersistentStoreConfiguration(out originalPath, out originalOwner);
+            string owner = "verification.drafts";
+            string cachePath = Path.Combine(root, "draft-metadata-cache.json");
+            string scenarioPath = Path.Combine(root, "cached-scenario.xml");
+            ScenarioDefinition definition = new ScenarioDefinition();
+            definition.Id = "Verification.PersistentDraft";
+            definition.DisplayName = "Persistent Draft";
+            definition.Author = "Contract";
+            definition.Version = "1.0";
+            definition.Description = "Metadata sidecar contract.";
+            definition.BaseGameMode = ScenarioBaseGameMode.Stasis;
+            ScenarioDefinitionSerializer serializer = new ScenarioDefinitionSerializer();
+            serializer.Save(definition, scenarioPath);
+
+            try
+            {
+                ScenarioDefinitionMetadataCache.ConfigurePersistentStore(cachePath, owner);
+                CountingDefinitionSerializer firstLoader = new CountingDefinitionSerializer(serializer);
+                ScenarioDefinitionMetadata metadata;
+                Assert(ScenarioDefinitionMetadataCache.TryLoad(firstLoader, scenarioPath, owner, out metadata)
+                    && firstLoader.LoadCount == 1, "Draft metadata cache did not populate from the source XML.", result);
+                ScenarioDefinitionMetadataCache.FlushPersistentStoreForVerification();
+
+                ScenarioDefinitionMetadataCache.ConfigurePersistentStore(null, null);
+                ScenarioDefinitionMetadataCache.ConfigurePersistentStore(cachePath, owner);
+                CountingDefinitionSerializer persistedLoader = new CountingDefinitionSerializer(serializer);
+                Assert(ScenarioDefinitionMetadataCache.TryLoad(persistedLoader, scenarioPath, owner, out metadata)
+                    && persistedLoader.LoadCount == 0
+                    && metadata != null && metadata.Info != null
+                    && metadata.BaseGameMode == ScenarioBaseGameMode.Stasis
+                    && string.Equals(metadata.Description, definition.Description, StringComparison.Ordinal),
+                    "Unchanged draft metadata did not load from the persistent sidecar without parsing XML.", result);
+
+                File.SetLastWriteTimeUtc(scenarioPath, File.GetLastWriteTimeUtc(scenarioPath).AddSeconds(2));
+                Assert(ScenarioDefinitionMetadataCache.TryLoad(persistedLoader, scenarioPath, owner, out metadata)
+                    && persistedLoader.LoadCount == 1,
+                    "Draft metadata cache accepted an entry whose exact file stamp changed.", result);
+
+                string corruptCachePath = Path.Combine(root, "corrupt-draft-metadata-cache.json");
+                ScenarioDefinitionMetadataCache.ConfigurePersistentStore(null, null);
+                File.WriteAllText(corruptCachePath, "{ corrupt sidecar");
+                ScenarioDefinitionMetadataCache.ConfigurePersistentStore(corruptCachePath, owner);
+                CountingDefinitionSerializer corruptFallbackLoader = new CountingDefinitionSerializer(serializer);
+                Assert(ScenarioDefinitionMetadataCache.TryLoad(corruptFallbackLoader, scenarioPath, owner, out metadata)
+                    && corruptFallbackLoader.LoadCount == 1,
+                    "A corrupt draft metadata sidecar did not fall back silently to rebuilding from XML.", result);
+            }
+            finally
+            {
+                ScenarioDefinitionMetadataCache.ConfigurePersistentStore(originalPath, originalOwner);
+            }
         }
 
         private static void VerifyCompletionCarrierContract(ScenarioValidationResult result)
@@ -1203,6 +1261,35 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 errorMessage = definition == null ? "No verification definition." : null;
                 return definition != null;
             }
+        }
+
+        private sealed class CountingDefinitionSerializer : IScenarioDefinitionSerializer
+        {
+            private readonly ScenarioDefinitionSerializer _inner;
+
+            public CountingDefinitionSerializer(ScenarioDefinitionSerializer inner)
+            {
+                _inner = inner;
+            }
+
+            public int LoadCount { get; private set; }
+
+            public ScenarioDefinition Load(string filePath)
+            {
+                LoadCount++;
+                return _inner.Load(filePath);
+            }
+
+            public bool TryLoadWithRecovery(string filePath, out ScenarioDefinition definition, out string recoveryMessage, out bool recovered)
+            {
+                LoadCount++;
+                return _inner.TryLoadWithRecovery(filePath, out definition, out recoveryMessage, out recovered);
+            }
+
+            public ScenarioDefinition FromXml(string xml) { return _inner.FromXml(xml); }
+            public void Save(ScenarioDefinition definition, string filePath) { _inner.Save(definition, filePath); }
+            public string ToXml(ScenarioDefinition definition) { return _inner.ToXml(definition); }
+            public ScenarioInfo LoadInfo(string filePath, string ownerModId) { return _inner.LoadInfo(filePath, ownerModId); }
         }
     }
 }

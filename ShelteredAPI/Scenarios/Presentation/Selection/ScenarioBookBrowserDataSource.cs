@@ -35,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private readonly object _importRefreshSync = new object();
         private ScenarioCatalogEntry[] _entries = new ScenarioCatalogEntry[0];
         private int _appliedVersion;
+        private int _appliedDraftListProgressVersion;
         private string _lastRefreshError;
         private bool _saveRefreshRunning;
         private string _saveRefreshScenarioId;
@@ -145,9 +146,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public void Refresh()
         {
-            CatalogSnapshot snapshot = BuildSnapshot(_catalog);
-            PublishSnapshot(snapshot);
-            ApplySnapshot(snapshot);
+            ApplyLatestSnapshot();
+            BeginRefreshAsync();
         }
 
         public void BeginRefreshAsync()
@@ -369,11 +369,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 snapshot = _sharedSnapshot;
             }
 
+            bool progressChanged = ApplyLatestDraftListProgress();
             if (snapshot == null || snapshot.Version == _appliedVersion)
-                return false;
+                return progressChanged;
 
             ApplySnapshot(snapshot);
             return true;
+        }
+
+        private bool ApplyLatestDraftListProgress()
+        {
+            try
+            {
+                int completed;
+                int total;
+                int version;
+                bool running;
+                if (!ScenarioAuthoringDraftRepository.Instance.TryGetListProgress(out completed, out total, out version, out running)
+                    || version == _appliedDraftListProgressVersion)
+                    return false;
+
+                _appliedDraftListProgressVersion = version;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public bool IsCatalogRefreshRunning
@@ -748,6 +770,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 rows.Add(BuildScenarioRow(selectedType, entry));
             }
 
+            if (selectedType == ScenarioBookType.Draft)
+                AddDraftLoadingProgressRow(rows);
+
             // Interrupted redirects remain reachable from the authoring workshop,
             // without interrupting the playable library's fixed tools/scenarios IA.
             if (selectedType == ScenarioBookType.Draft)
@@ -766,6 +791,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             return rows;
+        }
+
+        private static void AddDraftLoadingProgressRow(List<ScenarioBookRowModel> rows)
+        {
+            try
+            {
+                int completed;
+                int total;
+                int version;
+                bool running;
+                if (!ScenarioAuthoringDraftRepository.Instance.TryGetListProgress(out completed, out total, out version, out running)
+                    || !running || total <= 0)
+                    return;
+
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.Empty,
+                    Type = ScenarioBookType.Draft,
+                    Title = "Loading " + completed.ToString(CultureInfo.InvariantCulture)
+                        + " of " + total.ToString(CultureInfo.InvariantCulture) + " drafts...",
+                    Detail = "New or changed draft metadata is being read in the background.",
+                    Badge = "Loading"
+                });
+            }
+            catch
+            {
+            }
         }
 
         private ScenarioBookRowModel BuildScenarioRow(ScenarioBookType selectedType, ScenarioCatalogEntry entry)

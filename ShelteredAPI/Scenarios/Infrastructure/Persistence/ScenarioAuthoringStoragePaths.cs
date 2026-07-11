@@ -42,6 +42,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             return Path.Combine(GetShellRootPath(true), "settings.xml");
         }
 
+        public static string GetDraftMetadataCacheFilePath()
+        {
+            return Path.Combine(GetShellRootPath(true), "draft-metadata-cache.json");
+        }
+
         public static string GetAssetsRootPath()
         {
             string gameRoot;
