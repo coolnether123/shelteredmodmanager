@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserPanel : MonoBehaviour
     {
         internal const int RowsPerPage = 5;
+        internal const int LibraryRowsPerPage = 6;
         internal const int SaveRowsPerPage = 4;
         private const int OverlayDepth = 50200;
         private const string OverlayName = "ShelteredAPI_ScenarioBookBrowser";
@@ -183,6 +184,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void ChangePage(int delta)
         {
+            if (_view == ScenarioBookBrowserViewKind.Types)
+            {
+                if (!CanChangePage(delta))
+                    return;
+
+                CommitPageChange(delta);
+                RenderCurrentPageWithoutAnimation();
+                return;
+            }
+
             int targetPage = ResolveTargetPageIndex(delta);
             PreparePage(targetPage);
 
@@ -320,7 +331,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 if (_deletePromptActive)
                     return;
 
-                if (row == null || row.IsLocked)
+                if (row == null)
+                    return;
+
+                // A locked package can still be inspected. Only its play/load
+                // actions are refused; selecting it remains useful and honest.
+                if (row.IsLocked && row.Kind != ScenarioBookRowKind.Scenario)
                 {
                     SetStatus("Scenario is locked by missing or mismatched dependencies.");
                     return;
@@ -343,6 +359,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         break;
                     case ScenarioBookRowKind.StartScenario:
                         RunLaunchAction(delegate(out string status) { return _actions.StartScenario(row.Scenario, out status); });
+                        break;
+                    case ScenarioBookRowKind.OpenScenarioSaves:
+                        OpenSelectedScenarioSaves(row.Scenario);
                         break;
                     case ScenarioBookRowKind.OpenDraft:
                         RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(row.Scenario, out status); });
@@ -666,6 +685,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             _selectedScenario = scenario;
             InvalidateDraftFactsCache();
+            if (_view == ScenarioBookBrowserViewKind.Types)
+            {
+                _dataSource.BeginSaveRowsRefreshAsync(scenario);
+                SetStatus("Loading saves...");
+                ClearPreparedPages();
+                RenderCurrentView(false);
+                return;
+            }
+
             _view = scenario.Source == ScenarioCatalogSource.Draft
                 ? ScenarioBookBrowserViewKind.DraftDetails
                 : ScenarioBookBrowserViewKind.Saves;
@@ -680,6 +708,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             {
                 SetStatus(null);
             }
+            RenderCurrentView(true);
+        }
+
+        private void OpenSelectedScenarioSaves(ScenarioCatalogEntry scenario)
+        {
+            if (scenario == null)
+                return;
+
+            _selectedScenario = scenario;
+            _view = ScenarioBookBrowserViewKind.Saves;
+            _pageIndex = 0;
+            ClearPreparedPages();
+            _dataSource.BeginSaveRowsRefreshAsync(scenario);
+            SetStatus("Loading saves...");
             RenderCurrentView(true);
         }
 
@@ -856,10 +898,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_view == ScenarioBookBrowserViewKind.Saves || _view == ScenarioBookBrowserViewKind.DraftDetails)
             {
                 InvalidateDraftFactsCache();
-                _selectedScenario = null;
-                _view = _selectedType == ScenarioBookType.Published || _selectedScenarioOpenedDirectlyFromType
-                    ? ScenarioBookBrowserViewKind.Types
-                    : ScenarioBookBrowserViewKind.Scenarios;
+                bool returnToLibrary = _selectedType == ScenarioBookType.Published || _selectedScenarioOpenedDirectlyFromType;
+                if (_view == ScenarioBookBrowserViewKind.DraftDetails)
+                    _selectedScenario = null;
+                _view = returnToLibrary ? ScenarioBookBrowserViewKind.Types : ScenarioBookBrowserViewKind.Scenarios;
                 _selectedScenarioOpenedDirectlyFromType = false;
                 _pageIndex = 0;
                 ClearPreparedPages();
@@ -871,6 +913,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_view == ScenarioBookBrowserViewKind.Scenarios || _view == ScenarioBookBrowserViewKind.InstallScenarios)
             {
                 _view = ScenarioBookBrowserViewKind.Types;
+                _selectedScenario = null;
                 _pageIndex = 0;
                 ClearPreparedPages();
                 SetStatus(null);
@@ -971,6 +1014,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return 1;
 
             int rowCount = Math.Max(1, _rows != null ? _rows.Count : 0);
+            if (_view == ScenarioBookBrowserViewKind.Types)
+            {
+                int libraryRows = CountLibraryRows(_rows);
+                return Math.Max(1, (Math.Max(1, libraryRows) + LibraryRowsPerPage - 1) / LibraryRowsPerPage);
+            }
             if (_view == ScenarioBookBrowserViewKind.Saves)
                 return Math.Max(1, (rowCount + SaveRowsPerPage - 1) / SaveRowsPerPage);
 
@@ -980,7 +1028,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void PrepareAdjacentPages()
         {
             int pageCount = GetPageCount();
-            if (_renderer == null || pageCount <= 1 || _view == ScenarioBookBrowserViewKind.DraftDetails)
+            if (_renderer == null || pageCount <= 1
+                || _view == ScenarioBookBrowserViewKind.DraftDetails
+                || _view == ScenarioBookBrowserViewKind.Types)
                 return;
 
             if (CanChangePage(1))
@@ -1084,14 +1134,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private ScenarioBookPlayStatsModel BuildCurrentPlayStats()
         {
-            if (_view != ScenarioBookBrowserViewKind.Saves || _dataSource == null)
+            if ((_view != ScenarioBookBrowserViewKind.Saves && _view != ScenarioBookBrowserViewKind.Types)
+                || _selectedScenario == null
+                || _dataSource == null)
                 return null;
 
-            IList<ScenarioBookRowModel> statRows = _rows;
-            if (!string.IsNullOrEmpty(GetSearchFilter()))
-                statRows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario, null);
+            IList<ScenarioBookRowModel> statRows = _dataSource.BuildRows(
+                ScenarioBookBrowserViewKind.Saves,
+                _selectedType,
+                _selectedScenario,
+                null);
 
             return ScenarioBookPlayStatsBuilder.Build(_selectedScenario, statRows);
+        }
+
+        private static int CountLibraryRows(IList<ScenarioBookRowModel> rows)
+        {
+            int count = 0;
+            for (int i = 0; rows != null && i < rows.Count; i++)
+            {
+                ScenarioBookRowModel row = rows[i];
+                if (row != null && row.Kind != ScenarioBookRowKind.Type && row.Kind != ScenarioBookRowKind.OpenInstallScenarios)
+                    count++;
+            }
+            return count;
         }
 
         private string BuildPageCacheKey(int pageIndex)

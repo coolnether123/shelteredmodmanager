@@ -496,7 +496,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             switch (view)
             {
                 case ScenarioBookBrowserViewKind.Types:
-                    rows = BuildTypeRows();
+                    rows = BuildLibraryRows();
                     break;
                 case ScenarioBookBrowserViewKind.Scenarios:
                     rows = BuildScenarioRows(selectedType);
@@ -537,7 +537,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string GetHeaderDetail(ScenarioBookBrowserViewKind view, ScenarioBookType selectedType, ScenarioCatalogEntry selectedScenario)
         {
             if (view == ScenarioBookBrowserViewKind.Types)
-                return "Choose published play, draft authoring, or downloaded installs.";
+                return "Choose a scenario from the library, or open your workshop and downloads.";
             if (view == ScenarioBookBrowserViewKind.Scenarios)
                 return selectedType == ScenarioBookType.Draft
                     ? "Drafts are authoring work. Open one to edit details or continue building it."
@@ -574,45 +574,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return entry != null;
         }
 
-        private List<ScenarioBookRowModel> BuildTypeRows()
+        private List<ScenarioBookRowModel> BuildLibraryRows()
         {
             List<ScenarioBookRowModel> rows = new List<ScenarioBookRowModel>();
-            ScenarioBookRowModel surrounded = BuildTypeRow(
-                ScenarioBookType.Surrounded,
-                "Surrounded",
-                "Scenario saves and custom content built on the Surrounded rule set.");
-            surrounded.SectionLabel = "PLAY PUBLISHED SCENARIOS";
-            rows.Add(surrounded);
-            rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis", "Scenario saves and custom content built on the Stasis rule set."));
-
             if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
             {
                 ScenarioBookRowModel drafts = BuildTypeRow(
                     ScenarioBookType.Draft,
                     "Draft Scenarios",
-                    "Authoring workspace for unfinished scenarios, not normal play content.");
-                drafts.SectionLabel = "WORK ON DRAFTS";
+                    "Your workshop for building and exporting scenarios.");
+                drafts.Badge = "(" + CountEntries(ScenarioBookType.Draft).ToString(CultureInfo.InvariantCulture) + ")";
+                drafts.SectionLabel = "TOOLS";
                 rows.Add(drafts);
             }
 
             rows.Add(new ScenarioBookRowModel
             {
                 Kind = ScenarioBookRowKind.OpenInstallScenarios,
-                Title = "Install Scenarios",
-                Detail = "Make a downloaded scenario playable in one click.",
-                Badge = "Downloads",
-                SectionLabel = "INSTALL DOWNLOADED SCENARIOS"
+                Title = "Install Downloads",
+                Detail = "Bring downloaded scenario folders into your library.",
+                Badge = "Open",
             });
 
-            // Keep persistent root navigation ahead of catalog-sized content. The book
-            // displays five rows per page, so appending these controls after published
-            // entries allowed a catalog refresh to push them onto a later page.
-            AddPublishedScenarioRows(rows);
-
-            // Interrupted launches and leftover redirects are exceptional, so they trail
-            // the normal type cards under their own labelled "Needs attention" section
-            // instead of sitting between real scenarios.
-            AddRecoveryRows(rows);
+            AddLibraryScenarioRows(rows);
             return rows;
         }
 
@@ -714,6 +698,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
                 rows.Add(BuildScenarioRow(selectedType, entry));
             }
+
+            // Interrupted redirects remain reachable from the authoring workshop,
+            // without interrupting the playable library's fixed tools/scenarios IA.
+            if (selectedType == ScenarioBookType.Draft)
+                AddRecoveryRows(rows);
 
             if (entries.Length == 0 && IsCatalogLoading())
             {
@@ -998,7 +987,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return entries.ToArray();
         }
 
-        private void AddPublishedScenarioRows(List<ScenarioBookRowModel> rows)
+        private void AddLibraryScenarioRows(List<ScenarioBookRowModel> rows)
         {
             ScenarioCatalogEntry[] all = _entries ?? new ScenarioCatalogEntry[0];
             for (int i = 0; i < all.Length; i++)
@@ -1007,23 +996,43 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 if (entry == null || entry.Source != ScenarioCatalogSource.Modded)
                     continue;
 
-                if (entry.BaseGameMode == ScenarioBaseGameMode.Surrounded
-                    || entry.BaseGameMode == ScenarioBaseGameMode.Stasis)
-                {
-                    continue;
-                }
-
                 rows.Add(new ScenarioBookRowModel
                 {
                     Kind = ScenarioBookRowKind.Scenario,
                     Type = ScenarioBookType.Published,
                     Scenario = entry,
-                    Title = BuildScenarioTitle(entry),
-                    Detail = Safe(entry.Description, string.Empty) + "\n" + BuildScenarioDetail(entry),
-                    Badge = BuildScenarioBadge(entry),
+                    Title = Safe(entry.DisplayName, entry.ScenarioId),
+                    Detail = BuildLibraryScenarioDetail(entry),
+                    Badge = entry.CanStart ? "Ready" : "Locked",
+                    SectionLabel = rows.Count <= 2 ? "SCENARIOS" : null,
                     IsLocked = !entry.CanStart
                 });
             }
+
+            if (rows.Count == (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled() ? 2 : 1))
+            {
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.Empty,
+                    Title = IsCatalogLoading() ? "Gathering scenarios" : "No custom scenarios installed",
+                    Detail = IsCatalogLoading()
+                        ? "Reading the scenario library in the background."
+                        : "Use Install Downloads to add a scenario to this book.",
+                    Badge = IsCatalogLoading() ? "Loading" : string.Empty,
+                    SectionLabel = "SCENARIOS"
+                });
+            }
+        }
+
+        private static string BuildLibraryScenarioDetail(ScenarioCatalogEntry entry)
+        {
+            if (entry == null)
+                return string.Empty;
+
+            string author = Safe(entry.Author, !string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "unknown author");
+            int saves = entry.SaveCount;
+            return "by " + author + "  -  " + entry.BaseGameMode.ToString()
+                + "  -  " + saves.ToString(CultureInfo.InvariantCulture) + (saves == 1 ? " save" : " saves");
         }
 
         private static bool IsPlayableScenarioMode(ScenarioCatalogEntry entry, ScenarioBaseGameMode mode)

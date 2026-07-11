@@ -32,6 +32,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         RecoveryResume,
         RecoveryCleanup,
         LoadSave,
+        OpenScenarioSaves,
         OpenInstallScenarios,
         OpenScenarioDownloadsFolder,
         InstallPackage
