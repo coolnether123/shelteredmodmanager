@@ -41,13 +41,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         }
 
         private readonly Action _back;
-        private readonly Action _close;
         private readonly Action<int> _changePage;
         private readonly Dictionary<string, PreparedPage> _preparedPages = new Dictionary<string, PreparedPage>();
         private FieldManualWindowChrome _chrome;
         private UIPrimitiveFactory _ui;
         private PaperPagedList _pagedList;
         private BookPageNavigatorWidget _navigator;
+        private GameObject _footerBackRoot;
         private GameObject _footerNavigatorRoot;
         private BookSearchBarWidget _searchBar;
         private GameObject _searchBarRoot;
@@ -56,10 +56,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private UIInput _draftDescriptionInput;
         private UILabel _statusLabel;
 
-        public ScenarioBookBrowserRenderer(Action back, Action close, Action<int> changePage)
+        public ScenarioBookBrowserRenderer(Action back, Action<int> changePage)
         {
             _back = back;
-            _close = close;
             _changePage = changePage;
         }
 
@@ -303,10 +302,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void BuildFooter(VanillaPageTurnAssets assets)
         {
             float bottomY = -400f;
-            _chrome.Buttons.Build(_chrome.Regions.FooterRoot, "ScenarioBookBack", "Back",
-                new Vector3(-460f, bottomY, 0f), 180, 58, 23, _back);
-            _chrome.Buttons.Build(_chrome.Regions.FooterRoot, "ScenarioBookClose", "Close",
-                new Vector3(450f, bottomY, 0f), 180, 58, 23, _close);
+            _footerBackRoot = _chrome.Buttons.Build(_chrome.Regions.FooterRoot, "ScenarioBookBack", "Back",
+                new Vector3(0f, bottomY, 0f), 180, 58, 23, _back);
 
             _footerNavigatorRoot = _ui.CreateChild(_chrome.Regions.FooterRoot, "ScenarioBookFooterNavigator", Vector3.zero);
             _navigator = new BookPageNavigatorWidget(_chrome.Palette, _chrome.Textures, _ui, assets);
@@ -636,12 +633,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             description.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             float y = 12f;
+            int factLineHeight = Math.Max(23, Math.Max(LibraryFont(12), LibraryFont(16)));
+            int factLineSpacing = factLineHeight + LibraryMetric(8);
             BuildLibraryDetailFact(parent, "Author", scenario.Source == ScenarioCatalogSource.Vanilla ? "Source" : "Author",
-                scenario.Source == ScenarioCatalogSource.Vanilla ? "Vanilla" : Safe(scenario.Author, Safe(scenario.OwnerModId, "Unknown")), y); y -= 31f;
-            BuildLibraryDetailFact(parent, "Version", "Version", Safe(scenario.Version, "Unknown"), y); y -= 31f;
-            BuildLibraryDetailFact(parent, "BaseMode", "Base mode", scenario.BaseGameMode.ToString(), y); y -= 31f;
+                scenario.Source == ScenarioCatalogSource.Vanilla ? "Vanilla" : Safe(scenario.Author, Safe(scenario.OwnerModId, "Unknown")), y); y -= factLineSpacing;
+            BuildLibraryDetailFact(parent, "Version", "Version", Safe(scenario.Version, "Unknown"), y); y -= factLineSpacing;
+            BuildLibraryDetailFact(parent, "BaseMode", "Base mode", scenario.BaseGameMode.ToString(), y); y -= factLineSpacing;
             int saveCount = playStats != null ? playStats.SaveCount : scenario.SaveCount;
             BuildLibraryDetailFact(parent, "Saves", "Saves", saveCount.ToString() + (saveCount == 1 ? " run" : " runs"), y);
+
+            int playHeight = 64;
+            int savesHeight = 58;
+            float actionGap = LibraryMetric(10);
+            float playY = y - (factLineHeight * 0.5f) - actionGap - (playHeight * 0.5f);
+            float savesY = playY - (playHeight * 0.5f) - LibraryMetric(8) - (savesHeight * 0.5f);
 
             ScenarioBookRowModel play = new ScenarioBookRowModel
             {
@@ -656,7 +661,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Badge = scenario.CanStart ? "SELECT" : "LOCKED",
                 IsLocked = !scenario.CanStart
             };
-            BuildLibraryAction(parent, "Play", play, -116f, true, select);
+            BuildLibraryAction(parent, "Play", play, playY, true, select);
 
             ScenarioBookRowModel saves = new ScenarioBookRowModel
             {
@@ -670,7 +675,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         : "View, continue, or remove this scenario's saved runs."),
                 Badge = saveCount.ToString()
             };
-            BuildLibraryAction(parent, "Saves", saves, -184f, false, select);
+            BuildLibraryAction(parent, "Saves", saves, savesY, false, select);
         }
 
         private void BuildLibraryDetailFact(GameObject parent, string key, string label, string value, float y)
@@ -839,6 +844,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             bool library = view == ScenarioBookBrowserViewKind.Types;
             if (_footerNavigatorRoot != null)
                 _footerNavigatorRoot.SetActive(!library);
+            if (_footerBackRoot != null)
+                _footerBackRoot.transform.localPosition = new Vector3(library ? 0f : -460f, -400f, 0f);
         }
 
         private static string BuildSourceLabel(ScenarioCatalogEntry scenario)

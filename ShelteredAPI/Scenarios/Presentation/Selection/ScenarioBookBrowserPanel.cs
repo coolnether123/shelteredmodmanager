@@ -151,7 +151,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService, _importService);
 
             VanillaPageTurnAssets pageTurnAssets = new VanillaPageTurnAssets();
-            _renderer = new ScenarioBookBrowserRenderer(BackOrClose, Close, ChangePage);
+            _renderer = new ScenarioBookBrowserRenderer(BackOrClose, ChangePage);
             _renderer.Build(root, OverlayDepth, pageTurnAssets);
             _pageTurn = FieldManualBookPageTurn.Attach(root, _renderer.Chrome, pageTurnAssets);
             _pageFlipRoot = _renderer.Chrome.Ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
