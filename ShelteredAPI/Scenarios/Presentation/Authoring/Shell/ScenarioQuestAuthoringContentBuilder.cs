@@ -376,6 +376,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddConversationTriggerActions(List<ScenarioAuthoringInspectorItem> items, ScenarioConversationTriggerDefinition trigger, string indexText)
         {
+            if (trigger != null && trigger.Source == ScenarioConversationTriggerSource.Timeline)
+                items.Add(ScenarioInspectorItemFactory.Text("Timeline fires at the date below. Required speakers must use actor-backed starting-cast slots; Initiator and Partner only resolve during Random idle chatter."));
+            else if (trigger != null && trigger.Source == ScenarioConversationTriggerSource.Random)
+                items.Add(ScenarioInspectorItemFactory.Text("Random fires only when vanilla idle chatter selects it. The date below is ignored; choose Timeline to schedule this conversation."));
+
             AddTriggerSource(items, trigger, indexText, ScenarioConversationTriggerSource.Random);
             AddTriggerSource(items, trigger, indexText, ScenarioConversationTriggerSource.Event);
             AddTriggerSource(items, trigger, indexText, ScenarioConversationTriggerSource.Timeline);
@@ -397,7 +402,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static void AddTriggerSource(List<ScenarioAuthoringInspectorItem> items, ScenarioConversationTriggerDefinition trigger, string indexText, ScenarioConversationTriggerSource source)
         {
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
-                ScenarioAuthoringActionIds.ActionStoryConversationTriggerSourcePrefix + indexText + "." + source,
+                ScenarioAuthoringActionIds.ActionStoryConversationTriggerSourcePrefix + indexText + "." + ScenarioStoryAuthoringActions.EncodeToken(source.ToString()),
                 source.ToString(),
                 "Use " + source + " as the conversation trigger source.",
                 true,

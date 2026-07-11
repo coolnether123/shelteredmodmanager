@@ -52,7 +52,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation
                 ids.Add(conversation.Id);
 
             ValidateTrigger(definition, summary, conversation, label);
-            HashSet<string> slots = ValidateParticipants(summary, storyCharacters, conversation, label);
+            HashSet<string> slots = ValidateParticipants(definition, summary, storyCharacters, conversation, label);
             ValidateLines(summary, conversation, label, slots);
         }
 
@@ -68,6 +68,11 @@ namespace ShelteredAPI.Scenarios.Domain.Validation
             if (trigger.Source == ScenarioConversationTriggerSource.Random && trigger.Weight <= 0f)
                 summary.AddError("conversation.trigger.weight", label + " random trigger weight must be greater than zero.");
 
+            if (trigger.Source == ScenarioConversationTriggerSource.Random
+                && trigger.Time != null
+                && (trigger.Time.Day > 1 || trigger.Time.Hour > 0 || trigger.Time.Minute > 0))
+                summary.AddError("conversation.trigger.random_scheduled", label + " has a timeline date but uses Random. Random conversations only run from idle chatter; choose Timeline to run on its authored date.");
+
             if (trigger.Source == ScenarioConversationTriggerSource.Event)
             {
                 if (string.IsNullOrEmpty(trigger.TriggerId))
@@ -78,6 +83,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation
         }
 
         private static HashSet<string> ValidateParticipants(
+            ScenarioDefinition definition,
             ValidationSummary summary,
             HashSet<string> storyCharacters,
             ScenarioConversationDefinition conversation,
@@ -109,9 +115,31 @@ namespace ShelteredAPI.Scenarios.Domain.Validation
 
                 if (!string.IsNullOrEmpty(participant.StoryCharacterId) && !storyCharacters.Contains(participant.StoryCharacterId))
                     summary.AddError("conversation.participant.story_missing", participantLabel + " references missing story character '" + participant.StoryCharacterId + "'.");
+
+                if (conversation.Trigger != null
+                    && conversation.Trigger.Source == ScenarioConversationTriggerSource.Timeline
+                    && participant.Required
+                    && !HasActorBackedBinding(definition, participant))
+                    summary.AddError("conversation.participant.timeline_unbound", participantLabel + " is required by a Timeline conversation but has no actor-backed cast binding. Select a starting cast member; Initiator and Partner are available only to Random conversations.");
             }
 
             return slots;
+        }
+
+        private static bool HasActorBackedBinding(ScenarioDefinition definition, ScenarioConversationParticipantDefinition participant)
+        {
+            if (participant != null && participant.ActorRef != null)
+                return true;
+
+            for (int i = 0; participant != null && definition != null && definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
+            {
+                ScenarioNpcDefinition character = definition.ScenarioCharacters[i];
+                if (character != null
+                    && string.Equals(character.CharacterId, participant.StoryCharacterId, StringComparison.OrdinalIgnoreCase)
+                    && character.ActorRef != null)
+                    return true;
+            }
+            return false;
         }
 
         private static void ValidateLines(ValidationSummary summary, ScenarioConversationDefinition conversation, string label, HashSet<string> slots)
