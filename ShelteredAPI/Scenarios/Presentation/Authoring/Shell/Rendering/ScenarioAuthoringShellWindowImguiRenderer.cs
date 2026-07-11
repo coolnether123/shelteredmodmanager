@@ -168,10 +168,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else
             {
-                GUI.Label(new Rect(pageRect.x, pageRect.y, pageRect.width, 34f), window.Title ?? string.Empty, _smallTitleStyle);
-                if (!string.IsNullOrEmpty(window.Subtitle))
-                    GUI.Label(new Rect(pageRect.x, pageRect.y + 30f, pageRect.width, 20f), window.Subtitle, _mutedTextStyle);
-                bodyRect = new Rect(pageRect.x, pageRect.y + 58f, pageRect.width, Math.Max(120f, pageRect.height - 58f));
+                Rect ribbonRect = new Rect(pageRect.x, pageRect.y, pageRect.width, ScenarioAuthoringShellLayout.WorkshopTimelineRibbonHeight);
+                DrawWorkshopTimelineRibbon(ribbonRect, window);
+                bodyRect = new Rect(
+                    pageRect.x,
+                    ribbonRect.yMax,
+                    pageRect.width,
+                    Math.Max(120f, pageRect.yMax - ribbonRect.yMax));
             }
             if (IsAssetBrowserWorkshopPage(window))
                 return DrawAssetBrowserWorkshopPage(bodyRect, window);

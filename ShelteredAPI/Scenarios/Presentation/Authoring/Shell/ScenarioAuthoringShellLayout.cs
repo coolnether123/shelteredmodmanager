@@ -36,7 +36,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float FloatingWindowCascade = 24f;
         public const float CommandDockBottomOffset = 22f;
         public const float WorkshopPageInset = 8f;
-        public const float WorkshopPageTopInset = 18f;
+        public const float WorkshopPageTopInset = 12f;
+        public const float WorkshopTimelineRibbonHeight = 64f;
         public const float HomeWorkshopPageTopInset = 4f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and

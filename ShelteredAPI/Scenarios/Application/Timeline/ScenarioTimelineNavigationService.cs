@@ -76,7 +76,22 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
 
         private static void ApplyFocusedEditorLink(ScenarioAuthoringState state, ScenarioTimelineEntry entry)
         {
-            if (state == null || entry == null || string.IsNullOrEmpty(entry.FocusActionId))
+            if (state == null || entry == null)
+                return;
+
+            if (entry.Kind == ScenarioTimelineEntryKind.Story)
+            {
+                int storyStageIndex = ResolveStoryStageIndex(entry);
+                if (storyStageIndex >= 0)
+                {
+                    state.FocusedEditorKind = ScenarioStoryFocusedEditorActions.FocusedEditorKind;
+                    state.FocusedEditorIndex = storyStageIndex;
+                    state.FocusedEditorIsNew = false;
+                    return;
+                }
+            }
+
+            if (string.IsNullOrEmpty(entry.FocusActionId))
                 return;
 
             string prefix = ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix;
@@ -101,6 +116,33 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 : "scheduled_action";
             state.FocusedEditorIndex = entry.SourceIndex;
             state.FocusedEditorIsNew = false;
+        }
+
+        private static int ResolveStoryStageIndex(ScenarioTimelineEntry entry)
+        {
+            if (entry == null)
+                return -1;
+            string focusPrefix = ScenarioStoryFocusedEditorActions.ActionStageOpenPrefix;
+            int focusedIndex;
+            if (!string.IsNullOrEmpty(entry.FocusActionId)
+                && entry.FocusActionId.StartsWith(focusPrefix, System.StringComparison.Ordinal)
+                && int.TryParse(entry.FocusActionId.Substring(focusPrefix.Length), out focusedIndex))
+            {
+                return focusedIndex;
+            }
+            if (string.Equals(entry.SourceCollection, "ScenarioFlow.Stages", System.StringComparison.Ordinal))
+                return entry.SourceIndex;
+
+            const string prefix = "ScenarioFlow.Stages[";
+            string collection = entry.SourceCollection;
+            if (string.IsNullOrEmpty(collection) || !collection.StartsWith(prefix, System.StringComparison.Ordinal))
+                return -1;
+            int close = collection.IndexOf(']', prefix.Length);
+            int parsed;
+            return close > prefix.Length
+                && int.TryParse(collection.Substring(prefix.Length, close - prefix.Length), out parsed)
+                    ? parsed
+                    : -1;
         }
 
         private static ScenarioStageKind ResolveBunkerStage(ScenarioTimelineEntry entry)

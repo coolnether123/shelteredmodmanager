@@ -14,6 +14,7 @@
     { "key": "ScenarioAuthoringShellPopupMenuImguiRenderer.cs::DrawButton", "actionFamily": "action.Id" },
     { "key": "ScenarioAuthoringShellStoryMapImguiRenderer.cs::DrawStoryMapNode", "actionFamily": "node.NavActionId" },
     { "key": "ScenarioAuthoringShellTimelineImguiRenderer.cs::DrawTimelineChip", "actionFamily": "chip.Action.Id" },
+    { "key": "ScenarioAuthoringShellTimelineRibbonImguiRenderer.cs::DrawTimelineRibbonMarker", "actionFamily": "marker.Action.Id" },
     { "key": "ScenarioAuthoringShellToolRailImguiRenderer.cs::DrawToolRailButton", "actionFamily": "button.Action.Id" },
     { "key": "ScenarioAuthoringShellTooltipImguiRenderer.cs::DrawRichHoverHelpActions", "actionFamily": "action.Id" },
     { "key": "ScenarioAuthoringShellTopBarImguiRenderer.cs::DrawTopBarMoreButton", "actionFamily": "shell.renderer.top_bar_more.toggle" },
@@ -45,6 +46,11 @@
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::HandleAssetFavoriteStarInput", "actionFamily": "shell.renderer.asset_favorite.toggle." }
   ],
   "exemptions": [
+    {
+      "key": "ScenarioAuthoringShellTimelineRibbonImguiRenderer.cs::HandleTimelineRibbonInput",
+      "reason": "Mouse-wheel zoom and continuous drag pan change only the session-local ribbon viewport; marker clicks remain semantic timeline actions.",
+      "osClickFallback": "Use OS wheel or left-drag inside the day-timeline ribbon to exercise its continuous viewport controls."
+    },
     {
       "key": "ScenarioAuthoringShellTooltipImguiRenderer.cs::ConsumeRichHoverInput",
       "reason": "Consumes pointer events inside a transient help popup; it does not mutate editor or popup state.",

@@ -219,6 +219,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _disposeWhenHidden = true;
             CloseSurvivorColorPicker();
             ClearFloatingDrag();
+            ResetTimelineRibbonInteraction();
             if (_runtime != null)
                 _runtime.enabled = true;
         }
