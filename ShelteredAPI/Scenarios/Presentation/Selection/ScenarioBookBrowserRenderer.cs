@@ -21,8 +21,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private const int SaveListRowHeight = 68;
         private const int SaveCardHeight = 60;
         private const int DraftInputWidth = 430;
-        private const int LibraryToolRowHeight = 48;
-        private const int LibraryScenarioRowHeight = 45;
+        private const float ReferenceContentWidth = 1080f;
+        private const float ReferenceContentHeight = 490f;
+        private const int LibraryToolRowHeight = 52;
+        private const int LibraryScenarioRowHeight = 49;
         private const float SearchBarX = -310f;
         private const float SearchBarY = 232f;
         private const float SearchReservedHeight = 68f;
@@ -419,6 +421,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return _chrome != null ? Mathf.Max(1f, _chrome.Regions.ContentRectLocal.height) : 470f;
         }
 
+        private int LibraryMetric(int referenceValue)
+        {
+            if (_chrome == null)
+                return referenceValue;
+
+            Rect content = _chrome.Regions.ContentRectLocal;
+            float widthScale = content.width / ReferenceContentWidth;
+            float heightScale = content.height / ReferenceContentHeight;
+            float scale = Mathf.Max(0.75f, Mathf.Min(widthScale, heightScale));
+            return Mathf.Max(1, Mathf.RoundToInt(referenceValue * scale));
+        }
+
+        private int LibraryFont(int referenceSize)
+        {
+            return LibraryMetric(referenceSize);
+        }
+
         private void RenderLibrary(
             ScenarioCatalogEntry selectedScenario,
             ScenarioBookPlayStatsModel playStats,
@@ -430,7 +449,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             GameObject spread = _ui.CreateChild(_pagedList.ContentRoot, "ScenarioLibrarySpread", Vector3.zero);
             BuildLibrarySpread(spread, selectedScenario, playStats, rows, pageIndex, select);
             BuildLibraryPageControls(spread, pageIndex, pageCount);
-            _pagedList.AddRow(spread, 470);
+            float viewportHeight = _chrome != null
+                ? Mathf.Max(1f, _chrome.Regions.ContentRectLocal.height - SearchReservedHeight)
+                : ReferenceContentHeight - SearchReservedHeight;
+            _pagedList.AddRow(spread, Mathf.RoundToInt(viewportHeight));
         }
 
         private void BuildLibrarySpread(
@@ -454,15 +476,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     scenarios.Add(row);
             }
 
-            BuildSectionLabel(spread, "LibraryToolsLabel", "TOOLS", -520f, 188f, LeftPageWidth - 18);
+            BuildSectionLabel(spread, "LibraryToolsLabel", "TOOLS", -520f, 230f, LeftPageWidth - 18, LibraryFont(13));
             for (int i = 0; i < tools.Count; i++)
-                BuildLibraryToolRow(spread, tools[i], i, 154f - (i * 50f), select);
+                BuildLibraryToolRow(spread, tools[i], i, 194f - (i * LibraryMetric(54)), select);
 
-            BuildSectionLabel(spread, "LibraryScenariosLabel", "SCENARIOS", -520f, 72f, LeftPageWidth - 18);
+            BuildSectionLabel(spread, "LibraryScenariosLabel", "SCENARIOS", -520f, 103f, LeftPageWidth - 18, LibraryFont(13));
             int start = Math.Max(0, pageIndex) * ScenarioBookBrowserPanel.LibraryRowsPerPage;
             int end = Math.Min(scenarios.Count, start + ScenarioBookBrowserPanel.LibraryRowsPerPage);
             for (int i = start; i < end; i++)
-                BuildLibraryScenarioRow(spread, scenarios[i], i, 36f - ((i - start) * LibraryScenarioRowHeight), selectedScenario, select);
+                BuildLibraryScenarioRow(spread, scenarios[i], i, 58f - ((i - start) * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
 
             if (scenarios.Count == 0)
             {
@@ -473,7 +495,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     Detail = string.IsNullOrEmpty(SearchFilter)
                         ? "Use Install Downloads to add one to this library."
                         : "Try a title, author, or base-mode search."
-                }, 0, 36f, selectedScenario, select);
+                }, 0, 58f, selectedScenario, select);
             }
 
             if (selectedScenario == null)
@@ -491,15 +513,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (pageIndex > 0)
             {
                 _chrome.Buttons.Build(root, "PreviousScenarios", "<",
-                    new Vector3(-250f, 72f, 0f), 34, 26, 15, delegate { _changePage(-1); });
+                    new Vector3(-250f, 103f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(-1); });
             }
             _ui.CreateLabel(root, "PageLabel", (pageIndex + 1).ToString() + "/" + pageCount.ToString(),
-                new Vector3(-205f, 72f, 0f), 11, _chrome.Palette.InkFaded,
-                48, 20, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+                new Vector3(-205f, 103f, 0f), LibraryFont(13), _chrome.Palette.InkFaded,
+                48, 22, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
             if (pageIndex + 1 < pageCount)
             {
                 _chrome.Buttons.Build(root, "NextScenarios", ">",
-                    new Vector3(-160f, 72f, 0f), 34, 26, 15, delegate { _changePage(1); });
+                    new Vector3(-160f, 103f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(1); });
             }
         }
 
@@ -508,22 +530,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             GameObject root = _ui.CreateChild(parent, "ScenarioBookRow_Tool_" + index.ToString(), new Vector3(LeftPageX, y, 0f));
             Color rest = new Color(0.42f, 0.34f, 0.22f, 0.28f);
             UITexture background = _ui.CreateQuad(root, "Background", _chrome.Textures.White, Vector3.zero,
-                LeftPageWidth, LibraryToolRowHeight - 4, rest, _ui.NextDepth());
+                LeftPageWidth, LibraryMetric(LibraryToolRowHeight) - LibraryMetric(4), rest, _ui.NextDepth());
             _ui.CreateQuad(root, "Edge", _chrome.Textures.White, new Vector3(-232f, 0f, 0f),
-                5, LibraryToolRowHeight - 4, _chrome.Palette.StampRed, _ui.NextDepth());
+                LibraryMetric(5), LibraryMetric(LibraryToolRowHeight) - LibraryMetric(4), _chrome.Palette.StampRed, _ui.NextDepth());
             UILabel title = _ui.CreateLabel(root, "Title", row.Title,
-                new Vector3(-214f, 8f, 0f), 17, _chrome.Palette.Ink,
-                280, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(-214f, 9f, 0f), LibraryFont(19), _chrome.Palette.Ink,
+                280, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel badge = _ui.CreateLabel(root, "Badge", row.Badge,
-                new Vector3(210f, 8f, 0f), 14, _chrome.Palette.StampRed,
-                90, 22, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
+                new Vector3(210f, 9f, 0f), LibraryFont(15), _chrome.Palette.StampRed,
+                90, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
             UILabel detail = _ui.CreateLabel(root, "Detail", row.Detail,
-                new Vector3(-214f, -12f, 0f), 11, _chrome.Palette.InkFaded,
-                400, 18, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(-214f, -14f, 0f), LibraryFont(13), _chrome.Palette.InkFaded,
+                400, 20, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             detail.overflowMethod = UILabel.Overflow.ShrinkContent;
             if (select != null)
-                _ui.AddClickCollider(root, LeftPageWidth, LibraryToolRowHeight - 4, delegate { select(row); });
+                _ui.AddClickCollider(root, LeftPageWidth, LibraryMetric(LibraryToolRowHeight) - LibraryMetric(4), delegate { select(row); });
             AttachCompactHover(root, background, title, detail, badge, rest, row.IsLocked);
         }
 
@@ -539,23 +561,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             bool selected = row != null && row.Scenario != null && ReferenceEquals(row.Scenario, selectedScenario);
             Color rest = selected ? new Color(0.38f, 0.29f, 0.18f, 0.34f) : BookSelectionRowStyle.Background(row != null && row.IsLocked);
             UITexture background = _ui.CreateQuad(root, "Background", _chrome.Textures.White, Vector3.zero,
-                LeftPageWidth, LibraryScenarioRowHeight - 3, rest, _ui.NextDepth());
+                LeftPageWidth, LibraryMetric(LibraryScenarioRowHeight) - LibraryMetric(3), rest, _ui.NextDepth());
             _ui.CreateQuad(root, "Edge", _chrome.Textures.White, new Vector3(-232f, 0f, 0f),
-                selected ? 7 : 4, LibraryScenarioRowHeight - 3,
+                selected ? LibraryMetric(7) : LibraryMetric(4), LibraryMetric(LibraryScenarioRowHeight) - LibraryMetric(3),
                 selected ? _chrome.Palette.StampRed : _chrome.Palette.OliveBand, _ui.NextDepth());
             UILabel title = _ui.CreateLabel(root, "Title", row != null ? row.Title : string.Empty,
-                new Vector3(-214f, 8f, 0f), 16, BookSelectionRowStyle.TitleColor(_chrome.Palette, row != null && row.IsLocked),
-                405, 21, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(-214f, 9f, 0f), LibraryFont(18), BookSelectionRowStyle.TitleColor(_chrome.Palette, row != null && row.IsLocked),
+                405, 23, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel detail = _ui.CreateLabel(root, "Detail", row != null ? row.Detail : string.Empty,
-                new Vector3(-214f, -11f, 0f), 10, _chrome.Palette.InkFaded,
-                405, 17, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(-214f, -13f, 0f), LibraryFont(12), _chrome.Palette.InkFaded,
+                405, 19, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             detail.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel badge = _ui.CreateLabel(root, "Badge", row != null ? row.Badge : string.Empty,
-                new Vector3(216f, 8f, 0f), 9, _chrome.Palette.InkFaded,
-                60, 18, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
+                new Vector3(216f, 9f, 0f), LibraryFont(11), _chrome.Palette.InkFaded,
+                60, 20, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
             if (select != null && row != null && row.Kind != ScenarioBookRowKind.Empty)
-                _ui.AddClickCollider(root, LeftPageWidth, LibraryScenarioRowHeight - 3, delegate { select(row); });
+                _ui.AddClickCollider(root, LeftPageWidth, LibraryMetric(LibraryScenarioRowHeight) - LibraryMetric(3), delegate { select(row); });
             if (row != null && row.Kind != ScenarioBookRowKind.Empty)
                 AttachCompactHover(root, background, title, detail, badge, rest, row.IsLocked);
         }
@@ -579,15 +601,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void BuildLibraryWelcome(GameObject parent)
         {
-            BuildSectionLabel(parent, "LibraryWelcomeLabel", "CUSTOM SCENARIOS", 82f, 188f, RightPageWidth);
+            BuildSectionLabel(parent, "LibraryWelcomeLabel", "CUSTOM SCENARIOS", 82f, 230f, RightPageWidth, LibraryFont(13));
             UILabel title = _ui.CreateLabel(parent, "LibraryWelcomeTitle", "Stories beyond the shelter",
-                new Vector3(82f, 145f, 0f), 27, _chrome.Palette.Ink,
-                RightPageWidth, 38, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(82f, 185f, 0f), LibraryFont(32), _chrome.Palette.Ink,
+                RightPageWidth, 44, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel blurb = _ui.CreateLabel(parent, "LibraryWelcomeBlurb",
                 "Pick a scenario on the left to read its field notes and begin.\n\nDrafts are your workshop for stories still being built.\n\nDrop downloaded scenarios in Install Downloads.",
-                new Vector3(82f, 92f, 0f), 17, _chrome.Palette.InkFaded,
-                RightPageWidth, 190, NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
+                new Vector3(82f, 130f, 0f), LibraryFont(20), _chrome.Palette.InkFaded,
+                RightPageWidth, 280, NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
             blurb.multiLine = true;
             blurb.overflowMethod = UILabel.Overflow.ShrinkContent;
         }
@@ -598,26 +620,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             ScenarioBookPlayStatsModel playStats,
             Action<ScenarioBookRowModel> select)
         {
-            BuildSectionLabel(parent, "LibraryDetailLabel", "SCENARIO", 82f, 188f, RightPageWidth);
+            BuildSectionLabel(parent, "LibraryDetailLabel", "SCENARIO", 82f, 230f, RightPageWidth, LibraryFont(13));
             string titleText = Safe(scenario.DisplayName, scenario.ScenarioId);
             GameObject titleRoot = _ui.CreateChild(parent, "ScenarioBookRow_Detail_Title", Vector3.zero);
             UILabel title = _ui.CreateLabel(titleRoot, "Title", titleText,
-                new Vector3(82f, 151f, 0f), 27, _chrome.Palette.Ink,
-                RightPageWidth, 36, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(82f, 185f, 0f), LibraryFont(32), _chrome.Palette.Ink,
+                RightPageWidth, 42, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             UILabel description = _ui.CreateLabel(titleRoot, "Detail",
                 Safe(scenario.Description, "No description was left with this scenario."),
-                new Vector3(82f, 112f, 0f), 14, _chrome.Palette.InkFaded,
-                RightPageWidth, 66, NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
+                new Vector3(82f, 140f, 0f), LibraryFont(17), _chrome.Palette.InkFaded,
+                RightPageWidth, 100, NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
             description.multiLine = true;
             description.overflowMethod = UILabel.Overflow.ShrinkContent;
 
-            float y = 47f;
+            float y = 18f;
             BuildLibraryDetailFact(parent, "Author", scenario.Source == ScenarioCatalogSource.Vanilla ? "Source" : "Author",
-                scenario.Source == ScenarioCatalogSource.Vanilla ? "Vanilla" : Safe(scenario.Author, Safe(scenario.OwnerModId, "Unknown")), y); y -= 25f;
-            BuildLibraryDetailFact(parent, "Version", "Version", Safe(scenario.Version, "Unknown"), y); y -= 25f;
-            BuildLibraryDetailFact(parent, "BaseMode", "Base mode", scenario.BaseGameMode.ToString(), y); y -= 25f;
+                scenario.Source == ScenarioCatalogSource.Vanilla ? "Vanilla" : Safe(scenario.Author, Safe(scenario.OwnerModId, "Unknown")), y); y -= 31f;
+            BuildLibraryDetailFact(parent, "Version", "Version", Safe(scenario.Version, "Unknown"), y); y -= 31f;
+            BuildLibraryDetailFact(parent, "BaseMode", "Base mode", scenario.BaseGameMode.ToString(), y); y -= 31f;
             int saveCount = playStats != null ? playStats.SaveCount : scenario.SaveCount;
             BuildLibraryDetailFact(parent, "Saves", "Saves", saveCount.ToString() + (saveCount == 1 ? " run" : " runs"), y);
 
@@ -634,7 +656,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Badge = scenario.CanStart ? "SELECT" : "LOCKED",
                 IsLocked = !scenario.CanStart
             };
-            BuildLibraryAction(parent, "Play", play, -82f, true, select);
+            BuildLibraryAction(parent, "Play", play, -112f, true, select);
 
             ScenarioBookRowModel saves = new ScenarioBookRowModel
             {
@@ -648,18 +670,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         : "View, continue, or remove this scenario's saved runs."),
                 Badge = saveCount.ToString()
             };
-            BuildLibraryAction(parent, "Saves", saves, -145f, false, select);
+            BuildLibraryAction(parent, "Saves", saves, -178f, false, select);
         }
 
         private void BuildLibraryDetailFact(GameObject parent, string key, string label, string value, float y)
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookRow_Detail_" + key, Vector3.zero);
             _ui.CreateLabel(root, "Title", label.ToUpperInvariant(),
-                new Vector3(82f, y, 0f), 10, _chrome.Palette.InkFaded,
-                105, 20, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(82f, y, 0f), LibraryFont(12), _chrome.Palette.InkFaded,
+                105, 23, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             UILabel detail = _ui.CreateLabel(root, "Detail", value,
-                new Vector3(195f, y, 0f), 13, _chrome.Palette.Ink,
-                315, 20, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(195f, y, 0f), LibraryFont(16), _chrome.Palette.Ink,
+                315, 23, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             detail.overflowMethod = UILabel.Overflow.ShrinkContent;
         }
 
@@ -673,27 +695,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookRow_Detail_" + key, new Vector3(RightPageX, y, 0f));
             Color rest = prominent ? StartCard : BookSelectionRowStyle.Background(row.IsLocked);
+            int actionHeight = prominent ? 64 : 58;
             UITexture background = _ui.CreateQuad(root, "Background", _chrome.Textures.White, Vector3.zero,
-                RightPageWidth, prominent ? 56 : 50, rest, _ui.NextDepth());
-            _ui.CreateQuad(root, "Edge", _chrome.Textures.White, new Vector3(-212f, 0f, 0f),
-                prominent ? 7 : 4, prominent ? 56 : 50, _chrome.Palette.StampRed, _ui.NextDepth());
+                RightPageWidth, actionHeight, rest, _ui.NextDepth());
+            UITexture edge = _ui.CreateQuad(root, "Edge", _chrome.Textures.White, new Vector3(-212f, 0f, 0f),
+                prominent ? 7 : 4, actionHeight, _chrome.Palette.StampRed, _ui.NextDepth());
             UILabel title = _ui.CreateLabel(root, "Title", row.Title,
-                new Vector3(-194f, 9f, 0f), prominent ? 17 : 15,
+                new Vector3(-194f, 11f, 0f), prominent ? LibraryFont(20) : LibraryFont(18),
                 prominent ? _chrome.Palette.KeycapInk : _chrome.Palette.Ink,
                 250, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             UILabel detail = _ui.CreateLabel(root, "Detail", row.Detail,
-                new Vector3(-194f, -12f, 0f), 10,
+                new Vector3(-194f, -15f, 0f), prominent ? LibraryFont(13) : LibraryFont(12),
                 prominent ? new Color(0.88f, 0.81f, 0.69f, 0.88f) : _chrome.Palette.InkFaded,
-                305, 18, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                305, 21, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             detail.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel badge = _ui.CreateLabel(root, "Badge", row.Badge,
-                new Vector3(195f, 0f, 0f), 12,
+                new Vector3(195f, 0f, 0f), LibraryFont(14),
                 prominent ? _chrome.Palette.KeycapInk : _chrome.Palette.StampRed,
                 92, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
             if (select != null && !row.IsLocked)
-                _ui.AddClickCollider(root, RightPageWidth, prominent ? 56 : 50, delegate { select(row); });
+                _ui.AddClickCollider(root, RightPageWidth, actionHeight, delegate { select(row); });
             if (!row.IsLocked)
-                AttachCompactHover(root, background, title, detail, badge, rest, false);
+                AttachLibraryActionHover(root, background, edge, title, detail, badge, rest, prominent);
+        }
+
+        private void AttachLibraryActionHover(
+            GameObject root,
+            UITexture background,
+            UITexture edge,
+            UILabel title,
+            UILabel detail,
+            UILabel badge,
+            Color rest,
+            bool prominent)
+        {
+            Color hoverBackground = prominent ? StartCardHover : BookSelectionRowStyle.HoverBackground(false);
+            Color hoverTitle = prominent ? _chrome.Palette.KeycapInk : _chrome.Palette.Ink;
+            Color hoverDetail = prominent ? Color.white : _chrome.Palette.Ink;
+            Color hoverBadge = prominent ? _chrome.Palette.KeycapInk : _chrome.Palette.StampRed;
+            HoverVisualState hover = root.AddComponent<HoverVisualState>();
+            hover.Widgets = new UIWidget[] { background, edge, title, detail, badge };
+            hover.RestColors = new Color[] { rest, _chrome.Palette.StampRed, title.color, detail.color, badge.color };
+            hover.HoverColors = new Color[] { hoverBackground, _chrome.Palette.Brass, hoverTitle, hoverDetail, hoverBadge };
+            hover.ScaleTarget = root.transform;
+            hover.RestScale = 1f;
+            hover.HoverScale = 1.01f;
         }
 
         private void RenderScenarioDetail(
@@ -1037,8 +1083,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void BuildSectionLabel(GameObject parent, string name, string text, float x, float y, int width)
         {
+            BuildSectionLabel(parent, name, text, x, y, width, 11);
+        }
+
+        private void BuildSectionLabel(GameObject parent, string name, string text, float x, float y, int width, int fontSize)
+        {
             _ui.CreateLabel(parent, name, text,
-                new Vector3(x, y, 0f), 11, _chrome.Palette.StampRed,
+                new Vector3(x, y, 0f), fontSize, _chrome.Palette.StampRed,
                 width, 18, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             _ui.CreateQuad(parent, name + "Rule", _chrome.Textures.White,
                 new Vector3(x + (width * 0.5f), y - 14f, 0f), width, 1, PaperRule, _ui.NextDepth());
