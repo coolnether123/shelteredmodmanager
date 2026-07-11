@@ -6,8 +6,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
 {
     internal static class ScenarioLoadingTransitionGuard
     {
+        private static string _ownedDirectLaunchScene;
+        private static string _ownedDirectLaunchTarget;
+
         public static void PrepareForManagedTransition(string targetLabel)
         {
+            ClearDirectLaunchOwnership();
+
             if (LoadingScreen.Instance != null)
             {
                 if (LoadingScreen.Instance.isShowing)
@@ -28,11 +33,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
             }
         }
 
+        public static void OwnDirectLaunchTransition(string expectedSceneName, string targetLabel)
+        {
+            _ownedDirectLaunchScene = expectedSceneName ?? string.Empty;
+            _ownedDirectLaunchTarget = targetLabel ?? string.Empty;
+            MMLog.WriteInfo("[ScenarioLoadingTransitionGuard] Direct launch owns fade handoff. target="
+                + (_ownedDirectLaunchTarget.Length > 0 ? _ownedDirectLaunchTarget : "<unknown>")
+                + " scene=" + (_ownedDirectLaunchScene.Length > 0 ? _ownedDirectLaunchScene : "<unknown>") + ".");
+        }
+
         public static bool TryCompleteManagedTransition(string expectedSceneName, string targetLabel)
         {
-            if (LoadingScreen.Instance == null || !LoadingScreen.Instance.isShowing)
-                return false;
-
             if (!ScenarioWorldReady.IsShelterSceneActive())
                 return false;
 
@@ -49,10 +60,49 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
             if (SaveManager.instance != null && (SaveManager.instance.isLoading || SaveManager.instance.isSaving))
                 return false;
 
-            LoadingScreen.Instance.HideLoadingScreen();
-            MMLog.WriteInfo("[ScenarioLoadingTransitionGuard] Completed managed shelter transition. target="
-                + (targetLabel ?? "<unknown>") + " scene=" + activeSceneName + ".");
+            bool completed = false;
+            if (LoadingScreen.Instance != null && LoadingScreen.Instance.isShowing)
+            {
+                LoadingScreen.Instance.HideLoadingScreen();
+                MMLog.WriteInfo("[ScenarioLoadingTransitionGuard] Completed managed shelter loading screen. target="
+                    + (targetLabel ?? "<unknown>") + " scene=" + activeSceneName + ".");
+                completed = true;
+            }
+
+            if (TryCompleteOwnedDirectLaunchFade(activeSceneName))
+                completed = true;
+
+            return completed;
+        }
+
+        internal static bool OwnsDirectLaunchFadeForScene(string activeSceneName)
+        {
+            return !string.IsNullOrEmpty(_ownedDirectLaunchScene)
+                && string.Equals(_ownedDirectLaunchScene, activeSceneName, StringComparison.Ordinal);
+        }
+
+        private static bool TryCompleteOwnedDirectLaunchFade(string activeSceneName)
+        {
+            if (!OwnsDirectLaunchFadeForScene(activeSceneName))
+                return false;
+
+            FadeManager fade = FadeManager.Instance;
+            if (fade == null || UIPanelManager.instance == null)
+                return false;
+
+            string targetLabel = _ownedDirectLaunchTarget;
+            ClearDirectLaunchOwnership();
+            fade.FadeFromBlack(true);
+            MMLog.WriteInfo("[ScenarioLoadingTransitionGuard] Started vanilla direct-launch fade-in handoff. target="
+                + (!string.IsNullOrEmpty(targetLabel) ? targetLabel : "<unknown>")
+                + " scene=" + activeSceneName + ".");
             return true;
+        }
+
+        private static void ClearDirectLaunchOwnership()
+        {
+            _ownedDirectLaunchScene = null;
+            _ownedDirectLaunchTarget = null;
         }
     }
 }

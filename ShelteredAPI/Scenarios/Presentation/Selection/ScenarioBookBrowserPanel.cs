@@ -456,7 +456,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
                 SetStatus(status);
                 if (deleted)
+                {
+                    _dataSource.InvalidateSaveRows(row.Scenario.StorageScenarioId);
+                    _dataSource.BeginSaveRowsRefreshAsync(row.Scenario);
                     StartDataRefresh("Refreshing scenarios...");
+                }
             });
         }
 

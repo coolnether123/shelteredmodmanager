@@ -157,6 +157,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _lastRefreshError = null;
         }
 
+        public void InvalidateSaveRows(string storageScenarioId)
+        {
+            lock (_saveRefreshSync)
+            {
+                _saveRefreshRequestVersion++;
+                _saveRefreshRunning = false;
+                _saveRefreshScenarioId = storageScenarioId;
+                _saveRefreshRows = null;
+                _saveRefreshError = null;
+                _saveRefreshVersion++;
+            }
+        }
+
         public void BeginSaveRowsRefreshAsync(ScenarioCatalogEntry entry)
         {
             if (entry == null || entry.Source == ScenarioCatalogSource.Draft || string.IsNullOrEmpty(entry.StorageScenarioId))
