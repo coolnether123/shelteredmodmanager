@@ -27,7 +27,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private const int LibraryScenarioRowHeight = 49;
         private const float SearchBarX = -310f;
         private const float SearchBarY = 232f;
-        private const float SearchReservedHeight = 68f;
+        private const float SearchReservedHeight = 39f;
         private const float StatStartY = 38f;
         private const float StatLineSpacing = 25f;
         private static readonly Color PaperRule = new Color(0.35f, 0.25f, 0.16f, 0.30f);
@@ -476,15 +476,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     scenarios.Add(row);
             }
 
-            BuildSectionLabel(spread, "LibraryToolsLabel", "TOOLS", -520f, 230f, LeftPageWidth - 18, LibraryFont(13));
+            BuildSectionLabel(spread, "LibraryToolsLabel", "TOOLS", -520f, 217f, LeftPageWidth - 18, LibraryFont(13));
             for (int i = 0; i < tools.Count; i++)
-                BuildLibraryToolRow(spread, tools[i], i, 194f - (i * LibraryMetric(54)), select);
+                BuildLibraryToolRow(spread, tools[i], i, 181f - (i * LibraryMetric(54)), select);
 
-            BuildSectionLabel(spread, "LibraryScenariosLabel", "SCENARIOS", -520f, 103f, LeftPageWidth - 18, LibraryFont(13));
+            BuildSectionLabel(spread, "LibraryScenariosLabel", "SCENARIOS", -520f, 90f, LeftPageWidth - 18, LibraryFont(13));
             int start = Math.Max(0, pageIndex) * ScenarioBookBrowserPanel.LibraryRowsPerPage;
             int end = Math.Min(scenarios.Count, start + ScenarioBookBrowserPanel.LibraryRowsPerPage);
             for (int i = start; i < end; i++)
-                BuildLibraryScenarioRow(spread, scenarios[i], i, 58f - ((i - start) * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
+                BuildLibraryScenarioRow(spread, scenarios[i], i, 45f - ((i - start) * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
 
             if (scenarios.Count == 0)
             {
@@ -495,7 +495,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     Detail = string.IsNullOrEmpty(SearchFilter)
                         ? "Use Install Downloads to add one to this library."
                         : "Try a title, author, or base-mode search."
-                }, 0, 58f, selectedScenario, select);
+                }, 0, 45f, selectedScenario, select);
             }
 
             if (selectedScenario == null)
@@ -513,15 +513,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (pageIndex > 0)
             {
                 _chrome.Buttons.Build(root, "PreviousScenarios", "<",
-                    new Vector3(-250f, 103f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(-1); });
+                    new Vector3(-250f, 90f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(-1); });
             }
             _ui.CreateLabel(root, "PageLabel", (pageIndex + 1).ToString() + "/" + pageCount.ToString(),
-                new Vector3(-205f, 103f, 0f), LibraryFont(13), _chrome.Palette.InkFaded,
+                new Vector3(-205f, 90f, 0f), LibraryFont(13), _chrome.Palette.InkFaded,
                 48, 22, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
             if (pageIndex + 1 < pageCount)
             {
                 _chrome.Buttons.Build(root, "NextScenarios", ">",
-                    new Vector3(-160f, 103f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(1); });
+                    new Vector3(-160f, 90f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(1); });
             }
         }
 
@@ -601,14 +601,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void BuildLibraryWelcome(GameObject parent)
         {
-            BuildSectionLabel(parent, "LibraryWelcomeLabel", "CUSTOM SCENARIOS", 82f, 230f, RightPageWidth, LibraryFont(13));
+            BuildSectionLabel(parent, "LibraryWelcomeLabel", "CUSTOM SCENARIOS", 82f, 217f, RightPageWidth, LibraryFont(13));
             UILabel title = _ui.CreateLabel(parent, "LibraryWelcomeTitle", "Stories beyond the shelter",
-                new Vector3(82f, 185f, 0f), LibraryFont(32), _chrome.Palette.Ink,
+                new Vector3(82f, 172f, 0f), LibraryFont(32), _chrome.Palette.Ink,
                 RightPageWidth, 44, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel blurb = _ui.CreateLabel(parent, "LibraryWelcomeBlurb",
                 "Pick a scenario on the left to read its field notes and begin.\n\nDrafts are your workshop for stories still being built.\n\nDrop downloaded scenarios in Install Downloads.",
-                new Vector3(82f, 130f, 0f), LibraryFont(20), _chrome.Palette.InkFaded,
+                new Vector3(82f, 117f, 0f), LibraryFont(20), _chrome.Palette.InkFaded,
                 RightPageWidth, 280, NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
             blurb.multiLine = true;
             blurb.overflowMethod = UILabel.Overflow.ShrinkContent;
@@ -620,22 +620,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             ScenarioBookPlayStatsModel playStats,
             Action<ScenarioBookRowModel> select)
         {
-            BuildSectionLabel(parent, "LibraryDetailLabel", "SCENARIO", 82f, 230f, RightPageWidth, LibraryFont(13));
+            BuildSectionLabel(parent, "LibraryDetailLabel", "SCENARIO", 82f, 217f, RightPageWidth, LibraryFont(13));
             string titleText = Safe(scenario.DisplayName, scenario.ScenarioId);
             GameObject titleRoot = _ui.CreateChild(parent, "ScenarioBookRow_Detail_Title", Vector3.zero);
             UILabel title = _ui.CreateLabel(titleRoot, "Title", titleText,
-                new Vector3(82f, 185f, 0f), LibraryFont(32), _chrome.Palette.Ink,
+                new Vector3(82f, 172f, 0f), LibraryFont(32), _chrome.Palette.Ink,
                 RightPageWidth, 42, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             UILabel description = _ui.CreateLabel(titleRoot, "Detail",
                 Safe(scenario.Description, "No description was left with this scenario."),
-                new Vector3(82f, 140f, 0f), LibraryFont(17), _chrome.Palette.InkFaded,
+                new Vector3(82f, 127f, 0f), LibraryFont(17), _chrome.Palette.InkFaded,
                 RightPageWidth, 100, NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
             description.multiLine = true;
             description.overflowMethod = UILabel.Overflow.ShrinkContent;
 
-            float y = 18f;
+            float y = 12f;
             BuildLibraryDetailFact(parent, "Author", scenario.Source == ScenarioCatalogSource.Vanilla ? "Source" : "Author",
                 scenario.Source == ScenarioCatalogSource.Vanilla ? "Vanilla" : Safe(scenario.Author, Safe(scenario.OwnerModId, "Unknown")), y); y -= 31f;
             BuildLibraryDetailFact(parent, "Version", "Version", Safe(scenario.Version, "Unknown"), y); y -= 31f;
@@ -656,7 +656,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Badge = scenario.CanStart ? "SELECT" : "LOCKED",
                 IsLocked = !scenario.CanStart
             };
-            BuildLibraryAction(parent, "Play", play, -112f, true, select);
+            BuildLibraryAction(parent, "Play", play, -116f, true, select);
 
             ScenarioBookRowModel saves = new ScenarioBookRowModel
             {
@@ -670,7 +670,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         : "View, continue, or remove this scenario's saved runs."),
                 Badge = saveCount.ToString()
             };
-            BuildLibraryAction(parent, "Saves", saves, -178f, false, select);
+            BuildLibraryAction(parent, "Saves", saves, -184f, false, select);
         }
 
         private void BuildLibraryDetailFact(GameObject parent, string key, string label, string value, float y)
