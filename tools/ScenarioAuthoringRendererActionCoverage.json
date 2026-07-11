@@ -5,6 +5,7 @@
     { "key": "ScenarioAuthoringShellGlobalSearchImguiRenderer.cs::DrawGlobalSearchRow", "actionFamily": "action.Id" },
     { "key": "ScenarioAuthoringShellGlobalSearchImguiRenderer.cs::DrawGlobalSearchOverlayCore", "actionFamily": "shell.renderer.global_search.query." },
     { "key": "ScenarioAuthoringShellGlobalSearchImguiRenderer.cs::DrawTopBarGlobalSearchButton", "actionFamily": "shell.search.toggle" },
+    { "key": "ScenarioAuthoringShellShortcutsImguiRenderer.cs::DrawHelpShortcutsBody", "actionFamily": "shell.renderer.workshop_group.toggle." },
     { "key": "ScenarioAuthoringShellInventorySlotGridImguiRenderer.cs::DrawInventorySlotCell", "actionFamily": "slot actions" },
     { "key": "ScenarioAuthoringShellMapUxImguiRenderer.cs::DrawMapFilterChip", "actionFamily": "shell.renderer.map_filter.toggle." },
     { "key": "ScenarioAuthoringShellNewWindowsImguiRenderer.cs::DrawAssetInventoryFilters", "actionFamily": "shell.renderer.asset_inventory_filter.select." },
@@ -32,7 +33,7 @@
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawColorSlider", "actionFamily": "sprite_swap.custom.color." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCompactActionRow", "actionFamily": "action.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawEditableProperty", "actionFamily": "editable item action prefix" },
-    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCollapsibleGroup", "actionFamily": "actionPrefix (home_group/timeline_group toggle)" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCollapsibleGroup", "actionFamily": "actionPrefix (home_group/timeline_group/workshop_group toggle)" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeHeadlineField", "actionFamily": "editable item action prefix" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeQuestionCard", "actionFamily": "item.Action.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeStatusChip", "actionFamily": "action.Id" },
@@ -41,9 +42,11 @@
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelCanvas", "actionFamily": "sprite_swap.custom." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelEditorGroupHeader", "actionFamily": "shell.renderer.pixel_group.toggle." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorColorRow", "actionFamily": "row.OpenColorPickerActionId" },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorAppearanceZone", "actionFamily": "shell.renderer.workshop_group.toggle." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorTraitPickerPopup", "actionFamily": "option.SelectAction.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorTraitRow", "actionFamily": "row trait actions" },
-    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::HandleAssetFavoriteStarInput", "actionFamily": "shell.renderer.asset_favorite.toggle." }
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::HandleAssetFavoriteStarInput", "actionFamily": "shell.renderer.asset_favorite.toggle." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSettingsWindow", "actionFamily": "shell.renderer.workshop_group.toggle." }
   ],
   "exemptions": [
     {

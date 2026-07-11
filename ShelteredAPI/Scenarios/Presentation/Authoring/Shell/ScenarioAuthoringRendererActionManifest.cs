@@ -37,19 +37,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             "timeline.group.logic"
         };
 
+        private static readonly string[] SurvivorAppearanceGroups =
+        {
+            "survivor.appearance.textures",
+            "survivor.appearance.colors"
+        };
+
         private static readonly string[] AssetInventoryFilters = { "all", "unused", "used", "large" };
         private static readonly float[] AnimationSpeedPresets = { 0.25f, 0.5f, 1f, 1.5f, 2f };
 
         public static ScenarioAuthoringInspectorAction[] Build(
             ScenarioAuthoringState state,
             ScenarioAuthoringShellWindowViewModel[] windows,
-            ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+            ScenarioSpriteSwapAuthoringService.CustomEditorModel editor,
+            ScenarioAuthoringSettingsViewModel settings,
+            ScenarioAuthoringHelpViewModel help)
         {
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
             AddMapFilters(actions);
             AddGroupActions(actions, PixelGroups, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, "Toggle pixel-editor group");
             AddGroupActions(actions, HomeGroups, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "Toggle Home group");
             AddGroupActions(actions, TimelineGroups, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "Toggle Timeline group");
+            AddGroupActions(actions, SurvivorAppearanceGroups, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Toggle survivor appearance group");
+            AddWorkshopGroupActions(actions, windows);
+            AddSettingsGroupActions(actions, settings);
+            AddShortcutGroupActions(actions, help != null ? help.Shortcuts : null);
             Add(actions, ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.snap_to_grid", "Toggle placement snap", true);
             Add(actions, ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.show_grid", "Toggle placement grid", true);
             Add(actions, ScenarioAuthoringActionIds.ActionRendererPlacementBack, "Placement Back", true);
@@ -319,6 +331,49 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             for (int i = 0; keys != null && i < keys.Length; i++)
                 Add(actions, prefix + ScenarioAuthoringActionCodec.EncodeToken(keys[i]), label + ": " + keys[i], ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(keys[i], ScenarioAuthoringRendererInteractionState.DefaultDisclosureExpanded(keys[i])));
+        }
+
+        private static void AddWorkshopGroupActions(
+            List<ScenarioAuthoringInspectorAction> actions,
+            ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            for (int windowIndex = 0; windows != null && windowIndex < windows.Length; windowIndex++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[windowIndex];
+                for (int sectionIndex = 0; window != null && window.Sections != null && sectionIndex < window.Sections.Length; sectionIndex++)
+                {
+                    ScenarioAuthoringInspectorSection section = window.Sections[sectionIndex];
+                    if (section == null || string.IsNullOrEmpty(section.Id))
+                        continue;
+                    string key = BuildWorkshopGroupKey(window.Id, section.Id);
+                    AddGroupActions(actions, new[] { key }, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Toggle workshop group");
+                }
+            }
+        }
+
+        internal static string BuildWorkshopGroupKey(string windowId, string sectionId)
+        {
+            return "workshop." + (windowId ?? "page") + "." + (sectionId ?? "section");
+        }
+
+        private static void AddSettingsGroupActions(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringSettingsViewModel settings)
+        {
+            for (int i = 0; settings != null && settings.Sections != null && i < settings.Sections.Length; i++)
+            {
+                ScenarioAuthoringSettingsSectionViewModel section = settings.Sections[i];
+                if (section == null) continue;
+                AddGroupActions(actions, new[] { "settings.group." + (section.Id ?? i.ToString()) }, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Toggle settings group");
+            }
+        }
+
+        private static void AddShortcutGroupActions(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringShortcutOverlayViewModel shortcuts)
+        {
+            for (int i = 0; shortcuts != null && shortcuts.Groups != null && i < shortcuts.Groups.Length; i++)
+            {
+                ScenarioAuthoringShortcutGroupViewModel group = shortcuts.Groups[i];
+                if (group == null) continue;
+                AddGroupActions(actions, new[] { "shortcuts.group." + (group.Title ?? i.ToString()).ToLowerInvariant() }, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Toggle shortcut group");
+            }
         }
 
         private static void AddAssetInventoryFilters(List<ScenarioAuthoringInspectorAction> actions)
