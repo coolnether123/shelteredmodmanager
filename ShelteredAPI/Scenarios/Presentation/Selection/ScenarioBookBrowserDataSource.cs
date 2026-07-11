@@ -29,6 +29,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly ScenarioPackageImportService _importService;
+        private readonly ScenarioLibraryPreferenceStore _libraryPreferences;
         private readonly object _saveRefreshSync = new object();
         private readonly object _draftFactsRefreshSync = new object();
         private readonly object _importRefreshSync = new object();
@@ -60,15 +61,43 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             IScenarioSelectionCatalogService catalog,
             IScenarioSaveLibrary saveLibrary,
             ScenarioPackageImportService importService)
+            : this(catalog, saveLibrary, importService, new ScenarioLibraryPreferenceStore())
+        {
+        }
+
+        internal ScenarioBookBrowserDataSource(
+            IScenarioSelectionCatalogService catalog,
+            IScenarioSaveLibrary saveLibrary,
+            ScenarioPackageImportService importService,
+            ScenarioLibraryPreferenceStore libraryPreferences)
         {
             if (catalog == null) throw new ArgumentNullException("catalog");
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
             if (importService == null) throw new ArgumentNullException("importService");
+            if (libraryPreferences == null) throw new ArgumentNullException("libraryPreferences");
 
             _catalog = catalog;
             _saveLibrary = saveLibrary;
             _importService = importService;
+            _libraryPreferences = libraryPreferences;
             ApplyLatestSnapshot();
+        }
+
+        public ScenarioLibrarySortMode LibrarySortMode
+        {
+            get { return _libraryPreferences.SortMode; }
+        }
+
+        public ScenarioLibrarySortMode CycleLibrarySortMode()
+        {
+            ScenarioLibrarySortMode next = ScenarioLibraryOrganizer.Next(LibrarySortMode);
+            _libraryPreferences.SetSortMode(next);
+            return next;
+        }
+
+        public bool ToggleLibraryPin(string scenarioId)
+        {
+            return _libraryPreferences.TogglePinned(scenarioId);
         }
 
         public void BeginImportRefreshAsync()
@@ -528,7 +557,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     break;
             }
 
-            return FilterRows(view, rows, searchFilter);
+            rows = FilterRows(view, rows, searchFilter);
+            return view == ScenarioBookBrowserViewKind.Types
+                ? ScenarioLibraryOrganizer.Order(rows, LibrarySortMode, _libraryPreferences)
+                : rows;
         }
 
         public string GetHeaderTitle(ScenarioBookBrowserViewKind view, ScenarioBookType selectedType, ScenarioCatalogEntry selectedScenario)
@@ -1047,7 +1079,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
         }
 
-        private static void AddLibraryScenarioRow(List<ScenarioBookRowModel> rows, ScenarioCatalogEntry entry)
+        private void AddLibraryScenarioRow(List<ScenarioBookRowModel> rows, ScenarioCatalogEntry entry)
         {
             rows.Add(new ScenarioBookRowModel
             {
@@ -1060,7 +1092,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     ? "Vanilla"
                     : (entry.CanStart ? "Ready" : "Locked"),
                 SectionLabel = rows.Count <= 2 ? "SCENARIOS" : null,
-                IsLocked = !entry.CanStart
+                IsLocked = !entry.CanStart,
+                IsPinned = _libraryPreferences.IsPinned(entry.ScenarioId),
+                LibrarySortMode = LibrarySortMode
             });
         }
 
@@ -1072,15 +1106,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (entry.Source == ScenarioCatalogSource.Vanilla)
             {
                 int vanillaSaves = entry.SaveCount;
-                return "Vanilla  -  " + entry.BaseGameMode.ToString()
+                string vanillaDetail = "Vanilla  -  " + entry.BaseGameMode.ToString()
                     + "  -  " + vanillaSaves.ToString(CultureInfo.InvariantCulture)
                     + (vanillaSaves == 1 ? " save" : " saves");
+                return AppendPlayed(vanillaDetail, entry.LastPlayedUtc);
             }
 
             string author = Safe(entry.Author, !string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "unknown author");
             int saves = entry.SaveCount;
-            return "by " + author + "  -  " + entry.BaseGameMode.ToString()
+            string detail = "by " + author + "  -  " + entry.BaseGameMode.ToString()
                 + "  -  " + saves.ToString(CultureInfo.InvariantCulture) + (saves == 1 ? " save" : " saves");
+            return AppendPlayed(detail, entry.LastPlayedUtc);
+        }
+
+        private static string AppendPlayed(string detail, DateTime? playedUtc)
+        {
+            // Preserve BOOKPOLISH density: long author/owner strings keep the
+            // full-width detail line instead of shrinking further for recency.
+            return playedUtc.HasValue && !string.IsNullOrEmpty(detail) && detail.Length <= 64
+                ? detail + "  -  " + ScenarioLibraryOrganizer.RelativePlayed(playedUtc.Value, DateTime.UtcNow)
+                : detail;
         }
 
         private static bool IsPlayableScenarioMode(ScenarioCatalogEntry entry, ScenarioBaseGameMode mode)

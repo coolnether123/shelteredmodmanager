@@ -264,6 +264,7 @@
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionMetadataCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioFrameworkVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioLibraryOrganizationVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioRuntimeOutcomeVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringActionCoverageVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringShortcutHelpVerification.cs" />
@@ -435,6 +436,7 @@
     <Compile Include="Scenarios\Application\Selection\ScenarioBrowserPanelAdapter.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioBrowserState.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioCatalogEntry.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioLibraryMetadata.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioLaunchCoordinator.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioLaunchSetupPolicy.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSaveLibrary.cs" />
@@ -676,6 +678,8 @@
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserDataSource.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPrewarmService.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserModels.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookLibraryHarnessPayload.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioLibraryOrganization.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserPanel.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPlayStatsBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookScoreDisplayReader.cs" />
