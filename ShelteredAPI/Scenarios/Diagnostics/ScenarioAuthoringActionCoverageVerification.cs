@@ -36,6 +36,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererMapFilterTogglePrefix, "map filter", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, "pixel group", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "Home group", result);
+            RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "Timeline group", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererAssetCategorySelectPrefix, "asset category", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, "candidate search", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererCandidateFilterPrefix, "candidate filter", result);

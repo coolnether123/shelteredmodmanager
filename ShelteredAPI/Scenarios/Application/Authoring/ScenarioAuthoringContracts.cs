@@ -83,6 +83,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionRendererMapFilterTogglePrefix = "shell.renderer.map_filter.toggle.";
         public const string ActionRendererPixelGroupTogglePrefix = "shell.renderer.pixel_group.toggle.";
         public const string ActionRendererHomeGroupTogglePrefix = "shell.renderer.home_group.toggle.";
+        public const string ActionRendererTimelineGroupTogglePrefix = "shell.renderer.timeline_group.toggle.";
         public const string ActionRendererAssetFavoriteTogglePrefix = "shell.renderer.asset_favorite.toggle.";
         public const string ActionRendererAssetCategorySelectPrefix = "shell.renderer.asset_category.select.";
         public const string ActionRendererAssetSearchPrefix = "shell.renderer.asset_search.";

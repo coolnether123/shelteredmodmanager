@@ -26,7 +26,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             "home.group.base",
             "home.group.details",
-            "home.group.status"
+            "home.group.status",
+            "home.group.advanced"
+        };
+
+        private static readonly string[] TimelineGroups =
+        {
+            "timeline.group.entries",
+            "timeline.group.pacing",
+            "timeline.group.logic"
         };
 
         private static readonly string[] AssetInventoryFilters = { "all", "unused", "used", "large" };
@@ -41,6 +49,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             AddMapFilters(actions);
             AddGroupActions(actions, PixelGroups, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, "Toggle pixel-editor group");
             AddGroupActions(actions, HomeGroups, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "Toggle Home group");
+            AddGroupActions(actions, TimelineGroups, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "Toggle Timeline group");
             Add(actions, ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.snap_to_grid", "Toggle placement snap", true);
             Add(actions, ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.show_grid", "Toggle placement grid", true);
             Add(actions, ScenarioAuthoringActionIds.ActionRendererPlacementBack, "Placement Back", true);

@@ -195,6 +195,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawHomeWorkshopPage(window);
             }
+            else if (IsTimelineWorkshopPage(window))
+            {
+                DrawTimelineWorkshopPage(window);
+            }
             else
             {
                 for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
@@ -541,7 +545,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return GUILayout.BeginScrollView(
                 scrollPosition,
                 false,
-                true,
+                false,
                 GUILayout.Width(Math.Max(1f, viewportRect.width)),
                 GUILayout.Height(Math.Max(1f, viewportRect.height)));
         }
@@ -1663,12 +1667,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && !string.Equals(window.Title, "Test", StringComparison.OrdinalIgnoreCase);
         }
 
-        // Softened Home landing: one calm reading order of orient -> create ->
-        // refine -> share. Orientation (title, save state, one "what next"
-        // element) leads; the question cards read as a lighter table of
-        // contents grouped into bands; every secondary panel (base, details,
-        // status) collapses to a one-line summary that expands on click so the
-        // first screenful never slams the reader with everything at once.
+        private static bool IsTimelineWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
+        {
+            return window != null
+                && string.Equals(window.Id, ScenarioAuthoringWindowIds.Triggers, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Home is a two-column dashboard: orientation and setup stay together
+        // on the left, while the creator journey remains visible on the right.
+        // Both columns participate in one layout row, removing the large gap
+        // that the former single-column card bands left above the fold.
         private void DrawHomeWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
         {
             ScenarioAuthoringInspectorSection identity = FindSection(window, "home_identity");
@@ -1680,57 +1688,60 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorSection quickActions = FindSection(window, "home_quick_actions");
             ScenarioAuthoringInspectorSection advanced = FindSection(window, "home_advanced");
 
-            // ORIENT.
+            float fullWidth = GetSectionContentWidth();
+            float gap = 10f;
+            float leftWidth = Mathf.Clamp(fullWidth * 0.38f, 390f, 560f);
+            float rightWidth = Math.Max(320f, fullWidth - leftWidth - gap);
+            GUILayout.BeginHorizontal();
+            GUILayout.BeginVertical(GUILayout.Width(leftWidth));
+            _activeContentWidth = Math.Max(120f, leftWidth - 12f);
+
             if (identity != null)
             {
                 DrawHomeIdentityHeader(identity);
-                GUILayout.Space(10f);
+                GUILayout.Space(6f);
             }
 
-            // ORIENT: exactly one primary "what next" element. While the setup
-            // checklist is present (draft incomplete) it is the guidance; once
-            // it auto-hides on completion the "what next" callout takes over.
+            // The setup checklist and next-issue callout retain their existing
+            // mutual-exclusion and tour/action anchors.
             if (setup != null)
             {
                 DrawHomeSetupChecklist(setup);
-                GUILayout.Space(14f);
+                GUILayout.Space(8f);
             }
             else if (next != null)
             {
                 DrawHomeNextCallout(next);
-                GUILayout.Space(14f);
+                GUILayout.Space(8f);
             }
 
-            // CREATE -> REFINE -> SHARE bands of question cards.
-            DrawHomeQuestionBands(window);
-
-            // Progressive disclosure of secondary panels, collapsed at rest.
-            GUILayout.Space(14f);
             if (baseMode != null)
-                DrawHomeCollapsibleGroup("home.group.base", "Scenario base", BuildBaseModeSummary(baseMode), false, baseMode, DrawHomeBaseSelectorBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.base", "Scenario base", BuildBaseModeSummary(baseMode), false, baseMode, DrawHomeBaseSelectorBody);
             if (details != null)
-                DrawHomeCollapsibleGroup("home.group.details", "Scenario details", BuildDetailsSummary(details), false, details, DrawHomeDetailsBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.details", "Scenario details", BuildDetailsSummary(details), false, details, DrawHomeDetailsBody);
             if (status != null)
-                DrawHomeCollapsibleGroup("home.group.status", "Save & export status", BuildStatusSummary(status), false, status, DrawHomeStatusBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.status", "Save & export status", BuildStatusSummary(status), false, status, DrawHomeStatusBody);
 
             if (quickActions != null)
-            {
-                GUILayout.Space(10f);
                 DrawSection(quickActions);
-            }
-
             if (advanced != null)
             {
-                GUILayout.Space(8f);
-                DrawSection(advanced);
+                GUILayout.Space(6f);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.advanced", "Advanced diagnostics", "Debug details", false, advanced, DrawHomeAdvancedGroupBody);
             }
+            GUILayout.EndVertical();
+
+            GUILayout.Space(gap);
+            GUILayout.BeginVertical(GUILayout.Width(rightWidth));
+            _activeContentWidth = Math.Max(120f, rightWidth - 12f);
+            DrawHomeQuestionBands(window);
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+            _activeContentWidth = fullWidth;
         }
 
-        // Renders a collapsible Home panel: a full-width toggle bar showing the
-        // group title and, while collapsed, a one-line summary. Modeled on the
-        // pixel editor's group-header pattern so the collapse behaviour stays
-        // consistent with the rest of the editor.
-        private void DrawHomeCollapsibleGroup(
+        private void DrawCollapsibleGroup(
+            string actionPrefix,
             string key,
             string title,
             string summary,
@@ -1738,7 +1749,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorSection section,
             Action<ScenarioAuthoringInspectorSection> drawBody)
         {
-            bool expanded = GetHomeGroupExpanded(key, defaultExpanded);
+            bool expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
             Rect rect = GUILayoutUtility.GetRect(120f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
             string glyph = expanded ? "v " : "> ";
             string header = string.IsNullOrEmpty(summary) || expanded
@@ -1748,10 +1759,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (DrawPlainButton(rect, new GUIContent(header, hint), expanded ? _activeButtonStyle : _buttonStyle, true))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(
-                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, key));
+                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(actionPrefix, key));
                 if (Event.current != null)
                     Event.current.Use();
-                expanded = GetHomeGroupExpanded(key, defaultExpanded);
+                expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
             }
             DrawButtonAnimationOverlay(rect, key, true, IsInteractiveHoverAllowed(rect), IsInteractiveMouseDownAllowed(rect));
             if (expanded && drawBody != null)
@@ -1762,9 +1773,102 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Space(8f);
         }
 
-        private bool GetHomeGroupExpanded(string key, bool defaultExpanded)
+        private void DrawTimelineWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
         {
-            return ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
+            ScenarioAuthoringInspectorSection track = FindSection(window, TimelineTrackSectionId);
+            ScenarioAuthoringInspectorSection pacing = FindSection(window, ScenarioPacingAuthoringSectionBuilder.SectionId);
+            ScenarioAuthoringInspectorSection logic = FindSection(window, "timeline_logic");
+            bool roomy = _chromeViewportRect.height >= 820f;
+            float fullWidth = GetSectionContentWidth();
+            float gap = 10f;
+            float leftWidth = Math.Max(360f, (fullWidth - gap) * 0.58f);
+            float rightWidth = Math.Max(300f, fullWidth - leftWidth - gap);
+
+            GUILayout.BeginHorizontal();
+            GUILayout.BeginVertical(GUILayout.Width(leftWidth));
+            _activeContentWidth = Math.Max(120f, leftWidth - 12f);
+            if (track != null)
+                DrawSection(track);
+            if (pacing != null)
+            {
+                GUILayout.Space(8f);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.pacing", "Pacing", BuildTimelinePacingSummary(pacing), roomy, pacing, DrawTimelinePacingGroupBody);
+            }
+            GUILayout.EndVertical();
+
+            GUILayout.Space(gap);
+            GUILayout.BeginVertical(GUILayout.Width(rightWidth));
+            _activeContentWidth = Math.Max(120f, rightWidth - 12f);
+            if (track != null)
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.entries", "Entries", BuildTimelineEntriesSummary(track), roomy, track, DrawTimelineEntriesGroupBody);
+            if (logic != null)
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.logic", "Logic", BuildTimelineLogicSummary(logic), roomy, logic, DrawTimelineLogicGroupBody);
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+            _activeContentWidth = fullWidth;
+        }
+
+        private static string BuildTimelinePacingSummary(ScenarioAuthoringInspectorSection section)
+        {
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item != null && string.Equals(item.Label, "Reading", StringComparison.OrdinalIgnoreCase))
+                    return item.Value ?? string.Empty;
+            }
+            return "Open pacing guidance";
+        }
+
+        private string BuildTimelineEntriesSummary(ScenarioAuthoringInspectorSection section)
+        {
+            int count = BuildTimelineChipInfos(section).Length;
+            return count == 1 ? "1 scheduled entry" : count.ToString() + " scheduled entries";
+        }
+
+        private static string BuildTimelineLogicSummary(ScenarioAuthoringInspectorSection section)
+        {
+            int actionCount = 0;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+                if (section.Items[i] != null && section.Items[i].Action != null)
+                    actionCount++;
+            return actionCount.ToString() + " creation actions";
+        }
+
+        private void DrawTimelinePacingGroupBody(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            DrawPacingSection(section);
+            GUILayout.EndVertical();
+        }
+
+        private void DrawHomeAdvancedGroupBody(ScenarioAuthoringInspectorSection section)
+        {
+            DrawSection(section);
+        }
+
+        private void DrawTimelineEntriesGroupBody(ScenarioAuthoringInspectorSection section)
+        {
+            TimelineChipInfo[] chips = BuildTimelineChipInfos(section);
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            if (chips.Length == 0)
+            {
+                GUILayout.Label("Nothing scheduled yet. Use the creation actions on the day track.", _mutedTextStyle);
+            }
+            for (int i = 0; i < chips.Length; i++)
+            {
+                Rect rect = GUILayoutUtility.GetRect(120f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
+                DrawTimelineChip(rect, chips[i]);
+                if (i < chips.Length - 1)
+                    GUILayout.Space(4f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void DrawTimelineLogicGroupBody(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            DrawFactGrid(section, false);
+            GUILayout.EndVertical();
         }
 
         // The "what next" callout: leads with the guidance line, then a quiet
@@ -2861,12 +2965,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (questions.Count == 0)
                 return false;
 
+            bool compactHeight = _chromeViewportRect.height < 820f;
             if (precededByBand)
-                GUILayout.Space(12f);
+                GUILayout.Space(compactHeight ? 6f : 8f);
             if (!string.IsNullOrEmpty(bandLabel))
             {
                 GUILayout.Label(bandLabel, _mutedTextStyle);
-                GUILayout.Space(4f);
+                GUILayout.Space(compactHeight ? 2f : 4f);
             }
             DrawHomeQuestionCards(questions);
             return true;
@@ -2879,7 +2984,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float availableWidth = GetSectionContentWidth();
             float gap = 10f;
-            int columns = availableWidth >= 760f ? 2 : 1;
+            float cardHeight = _chromeViewportRect.height < 820f ? 90f : 104f;
+            int columns = availableWidth >= 700f ? 2 : 1;
             float cardWidth = columns == 2 ? (availableWidth - gap) * 0.5f : availableWidth;
             for (int i = 0; i < questions.Count; i += columns)
             {
@@ -2891,7 +2997,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int column = 0; column < rowCount; column++)
                 {
                     int index = i + column;
-                    Rect rect = GUILayoutUtility.GetRect(rowCardWidth, 124f, GUILayout.Width(rowCardWidth), GUILayout.Height(124f));
+                    Rect rect = GUILayoutUtility.GetRect(rowCardWidth, cardHeight, GUILayout.Width(rowCardWidth), GUILayout.Height(cardHeight));
                     DrawHomeQuestionCard(rect, questions[index]);
 
                     if (column < rowCount - 1)
@@ -2899,7 +3005,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
                 GUILayout.EndHorizontal();
                 if (i + columns < questions.Count)
-                    GUILayout.Space(8f);
+                    GUILayout.Space(_chromeViewportRect.height < 820f ? 5f : 7f);
             }
         }
 

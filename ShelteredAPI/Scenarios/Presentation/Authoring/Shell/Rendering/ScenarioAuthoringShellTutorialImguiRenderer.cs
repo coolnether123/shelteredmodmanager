@@ -514,7 +514,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (tab == null || IsChildStageTab(tab))
                     continue;
 
-                float width = ResolvePrimaryStageTabWidth(tab, compact);
+                ScenarioAuthoringInspectorAction displayTab = compact ? BuildCompactStageTabAction(tab) : tab;
+                float width = ResolvePrimaryStageTabWidth(displayTab, compact);
                 Rect rect = new Rect(x, topRect.y + primaryRowY, width, primaryRowHeight);
                 if (rect.xMax > right)
                     break;
