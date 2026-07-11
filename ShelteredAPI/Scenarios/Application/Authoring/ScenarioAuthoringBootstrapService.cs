@@ -371,7 +371,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     if (response != 1)
                     {
-                        MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Close-to-menu canceled by unsaved-changes prompt.");
+                        if (closeableRuntimeState)
+                            CloseRuntimeState(reason ?? "Discarded unsaved authoring changes from shell.");
+                        else
+                            CloseActiveSession(reason ?? "Discarded unsaved authoring changes from shell.", false);
+
+                        ReturnToMainMenu();
+                        MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed to menu without saving after unsaved-changes prompt.");
                         return;
                     }
 
