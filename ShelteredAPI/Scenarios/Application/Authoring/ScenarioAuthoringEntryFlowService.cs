@@ -940,7 +940,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             private void EnsureLoadingCanvas()
             {
                 if (_loadingCanvas != null)
+                {
+                    // HideLoadingCanvas deactivates the retained root so an
+                    // inactive loading overlay is unambiguous to both Unity
+                    // and live diagnostics. Reactivate it only for a new
+                    // loading snapshot.
+                    if (!_loadingCanvas.gameObject.activeSelf)
+                        _loadingCanvas.gameObject.SetActive(true);
                     return;
+                }
 
                 GameObject root = new GameObject("ShelteredAPI.ScenarioAuthoring.EntryFlow.LoadingCanvas");
                 root.transform.SetParent(transform, false);
@@ -1028,7 +1036,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             private void HideLoadingCanvas()
             {
                 if (_loadingCanvas != null)
+                {
                     _loadingCanvas.enabled = false;
+                    _loadingCanvas.gameObject.SetActive(false);
+                }
             }
 
             private void DrawLoading(ScenarioAuthoringEntryFlowSnapshot snapshot)
