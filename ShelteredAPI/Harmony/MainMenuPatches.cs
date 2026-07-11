@@ -54,6 +54,7 @@ namespace ShelteredAPI.Harmony
 
                 MMLog.WriteDebug("Postfix triggered.");
                 ModManagerPanelScaffolding.WarmScenarioBookVisualCache();
+                ShelteredAPI.Scenarios.Presentation.Selection.ScenarioBookPrewarmService.TryStart(__instance);
 
                 TryShowStartupCondensePrompt(managerDrivenLaunch);
 

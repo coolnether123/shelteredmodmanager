@@ -20,6 +20,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private static GameObject _instance;
 
+        internal static bool IsShowing
+        {
+            get { return _instance != null && _instance.activeInHierarchy; }
+        }
+
         private ScenarioBrowserPanelAdapter _adapter;
         private ScenarioBookBrowserDataSource _dataSource;
         private ScenarioBookBrowserActionService _actions;
@@ -148,7 +153,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _pageTurn = FieldManualBookPageTurn.Attach(root, _renderer.Chrome, pageTurnAssets);
             _pageFlipRoot = _renderer.Chrome.Ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
 
-            StartDataRefresh("Loading scenarios...");
+            StartDataRefresh("Loading scenarios...", false);
         }
 
         private void Update()
@@ -1026,13 +1031,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void StartDataRefresh(string status)
         {
+            StartDataRefresh(status, true);
+        }
+
+        private void StartDataRefresh(string status, bool invalidateSharedSnapshot)
+        {
             if (_dataSource == null)
                 return;
 
             ClearPreparedPages();
-            SetStatus(status);
-            _dataSource.InvalidateCatalogSnapshot();
-            _dataSource.BeginRefreshAsync();
+            bool hasWarmSnapshot = !invalidateSharedSnapshot && _dataSource.HasAppliedCatalogSnapshot;
+            SetStatus(hasWarmSnapshot ? null : status);
+            if (invalidateSharedSnapshot)
+                _dataSource.InvalidateCatalogSnapshot();
+            _dataSource.BeginRefreshAsync(!invalidateSharedSnapshot);
             if (_renderer != null)
                 RenderCurrentView(false);
         }

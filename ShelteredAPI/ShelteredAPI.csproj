@@ -662,6 +662,7 @@
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserActionService.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookDraftFacts.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserDataSource.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPrewarmService.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserModels.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserPanel.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPlayStatsBuilder.cs" />
