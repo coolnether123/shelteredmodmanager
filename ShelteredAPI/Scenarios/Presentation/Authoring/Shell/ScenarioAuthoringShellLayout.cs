@@ -38,6 +38,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float WorkshopPageInset = 8f;
         public const float WorkshopPageTopInset = 12f;
         public const float WorkshopTimelineRibbonHeight = 64f;
+        public const float WorkshopTimelineRibbonBodyGutter = 8f;
         public const float HomeWorkshopPageTopInset = 4f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and

@@ -396,7 +396,9 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
         private static ScenarioScheduleTime DaysFromNow(int days)
         {
             ScenarioScheduleTime result = new ScenarioScheduleTime();
-            result.Day = Math.Max(1, days);
+            // Story-flow delays are zero-based offsets from scenario day one:
+            // delay 0 is day 1, delay 1 is day 2, and so on.
+            result.Day = Math.Max(1, days + 1);
             result.Hour = 6;
             result.Minute = 0;
             return result;

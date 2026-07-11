@@ -1447,6 +1447,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _disabledTabContentStyle = null;
             _sectionTitleStyle = null;
             _statusStyle = null;
+            _timelineRibbonCaptionStyle = null;
+            _timelineRibbonDayStyle = null;
+            _timelineRibbonOverflowStyle = null;
+            _timelineRibbonEmptyStyle = null;
             _styleOpacity = -1f;
         }
 

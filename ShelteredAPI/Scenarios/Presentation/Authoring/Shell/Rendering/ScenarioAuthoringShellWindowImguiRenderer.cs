@@ -172,9 +172,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawWorkshopTimelineRibbon(ribbonRect, window);
                 bodyRect = new Rect(
                     pageRect.x,
-                    ribbonRect.yMax,
+                    ribbonRect.yMax + ScenarioAuthoringShellLayout.WorkshopTimelineRibbonBodyGutter,
                     pageRect.width,
-                    Math.Max(120f, pageRect.yMax - ribbonRect.yMax));
+                    Math.Max(120f, pageRect.yMax - ribbonRect.yMax - ScenarioAuthoringShellLayout.WorkshopTimelineRibbonBodyGutter));
             }
             if (IsAssetBrowserWorkshopPage(window))
                 return DrawAssetBrowserWorkshopPage(bodyRect, window);
