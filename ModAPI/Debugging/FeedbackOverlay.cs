@@ -81,6 +81,7 @@ namespace ModAPI.Debugging
             EnsureConfigured();
             _visible = true;
             _focusScratch = true;
+            NotifyVisibilityChanged();
         }
 
         /// <summary>Persists the scratch text and hides the overlay.</summary>
@@ -91,6 +92,7 @@ namespace ModAPI.Debugging
 
             SaveScratchNow();
             _visible = false;
+            NotifyVisibilityChanged();
         }
 
         /// <summary>Toggles visibility, persisting scratch text when closing.</summary>
@@ -109,15 +111,8 @@ namespace ModAPI.Debugging
 
         private void Update()
         {
-            if (Input.GetKeyDown(ToggleKey))
-                Toggle();
-
             if (!_visible)
                 return;
-
-            // Clear polled key/button transitions before normal gameplay Update handlers run.
-            // IMGUI events are also consumed in OnGUI for event-driven input paths.
-            Input.ResetInputAxes();
 
             if (!string.Equals(_scratch, _persistedScratch, StringComparison.Ordinal)
                 && Time.realtimeSinceStartup - _scratchChangedAt >= ScratchSaveDelaySeconds)
@@ -128,6 +123,13 @@ namespace ModAPI.Debugging
 
         private void OnGUI()
         {
+            Event current = Event.current;
+            if (IsToggleKeyDown(current))
+            {
+                Toggle();
+                current.Use();
+            }
+
             if (!_visible || _storage == null)
                 return;
 
@@ -137,7 +139,6 @@ namespace ModAPI.Debugging
             string title = string.IsNullOrEmpty(_config.WindowTitle) ? "Developer Feedback" : _config.WindowTitle;
             _windowRect = GUI.Window(GetInstanceID(), _windowRect, DrawWindow, title, _windowStyle);
 
-            Event current = Event.current;
             if (current != null && IsKeyboardEvent(current))
                 current.Use();
         }
@@ -281,6 +282,21 @@ namespace ModAPI.Debugging
             _statusExpiresAt = Time.realtimeSinceStartup + ConfirmationSeconds;
         }
 
+        private void NotifyVisibilityChanged()
+        {
+            if (_config == null || _config.OverlayVisibilityChanged == null)
+                return;
+
+            try
+            {
+                _config.OverlayVisibilityChanged(_visible);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("FeedbackOverlay.VisibilityChanged", "Feedback input gate failed: " + ex.Message);
+            }
+        }
+
         private void EnsureStyles()
         {
             if (_windowStyle != null)
@@ -336,6 +352,13 @@ namespace ModAPI.Debugging
         private static bool IsKeyboardEvent(Event current)
         {
             return current.type == EventType.KeyDown || current.type == EventType.KeyUp;
+        }
+
+        private bool IsToggleKeyDown(Event current)
+        {
+            return current != null
+                && current.type == EventType.KeyDown
+                && current.keyCode == ToggleKey;
         }
 
         private static bool IsConsumablePointerEvent(Event current)

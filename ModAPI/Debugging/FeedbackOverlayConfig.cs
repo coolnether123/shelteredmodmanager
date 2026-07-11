@@ -24,5 +24,11 @@ namespace ModAPI.Debugging
 
         /// <summary>Title shown by the IMGUI window.</summary>
         public string WindowTitle { get; set; }
+
+        /// <summary>
+        /// Optional host-owned input gate notified when the overlay changes visibility.
+        /// ModAPI only reports its state; the host decides how to suppress game-specific input.
+        /// </summary>
+        public Action<bool> OverlayVisibilityChanged { get; set; }
     }
 }
