@@ -1859,10 +1859,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (section == null)
                 return false;
-            return section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid
+            int itemCount = section.Items != null ? section.Items.Length : 0;
+            return itemCount <= 6
+                && section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid
                 && section.Layout != ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid
                 && section.Layout != ScenarioAuthoringInspectorSectionLayout.SurvivorEditor
                 && section.Layout != ScenarioAuthoringInspectorSectionLayout.CastCardGrid
+                && section.Layout != ScenarioAuthoringInspectorSectionLayout.ModFieldList
                 && !IsStoryMapSection(section);
         }
 
