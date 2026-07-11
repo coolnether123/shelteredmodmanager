@@ -990,23 +990,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void AddLibraryScenarioRows(List<ScenarioBookRowModel> rows)
         {
             ScenarioCatalogEntry[] all = _entries ?? new ScenarioCatalogEntry[0];
+            // Installed scenarios remain the primary library collection. The two
+            // vanilla modes follow them as clearly-labelled archive entries so
+            // their expanded save libraries stay reachable without looking like
+            // authored packages.
             for (int i = 0; i < all.Length; i++)
             {
                 ScenarioCatalogEntry entry = all[i];
                 if (entry == null || entry.Source != ScenarioCatalogSource.Modded)
                     continue;
 
-                rows.Add(new ScenarioBookRowModel
-                {
-                    Kind = ScenarioBookRowKind.Scenario,
-                    Type = ScenarioBookType.Published,
-                    Scenario = entry,
-                    Title = Safe(entry.DisplayName, entry.ScenarioId),
-                    Detail = BuildLibraryScenarioDetail(entry),
-                    Badge = entry.CanStart ? "Ready" : "Locked",
-                    SectionLabel = rows.Count <= 2 ? "SCENARIOS" : null,
-                    IsLocked = !entry.CanStart
-                });
+                AddLibraryScenarioRow(rows, entry);
+            }
+
+            for (int i = 0; i < all.Length; i++)
+            {
+                ScenarioCatalogEntry entry = all[i];
+                if (entry == null
+                    || entry.Source != ScenarioCatalogSource.Vanilla
+                    || (entry.BaseGameMode != ScenarioBaseGameMode.Surrounded
+                        && entry.BaseGameMode != ScenarioBaseGameMode.Stasis))
+                    continue;
+
+                AddLibraryScenarioRow(rows, entry);
             }
 
             if (rows.Count == (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled() ? 2 : 1))
@@ -1024,10 +1030,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
         }
 
+        private static void AddLibraryScenarioRow(List<ScenarioBookRowModel> rows, ScenarioCatalogEntry entry)
+        {
+            rows.Add(new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.Scenario,
+                Type = ScenarioBookType.Published,
+                Scenario = entry,
+                Title = Safe(entry.DisplayName, entry.ScenarioId),
+                Detail = BuildLibraryScenarioDetail(entry),
+                Badge = entry.Source == ScenarioCatalogSource.Vanilla
+                    ? "Vanilla"
+                    : (entry.CanStart ? "Ready" : "Locked"),
+                SectionLabel = rows.Count <= 2 ? "SCENARIOS" : null,
+                IsLocked = !entry.CanStart
+            });
+        }
+
         private static string BuildLibraryScenarioDetail(ScenarioCatalogEntry entry)
         {
             if (entry == null)
                 return string.Empty;
+
+            if (entry.Source == ScenarioCatalogSource.Vanilla)
+            {
+                int vanillaSaves = entry.SaveCount;
+                return "Vanilla  -  " + entry.BaseGameMode.ToString()
+                    + "  -  " + vanillaSaves.ToString(CultureInfo.InvariantCulture)
+                    + (vanillaSaves == 1 ? " save" : " saves");
+            }
 
             string author = Safe(entry.Author, !string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "unknown author");
             int saves = entry.SaveCount;

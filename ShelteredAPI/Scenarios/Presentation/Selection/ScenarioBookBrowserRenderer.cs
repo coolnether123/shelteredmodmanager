@@ -614,7 +614,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             description.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             float y = 47f;
-            BuildLibraryDetailFact(parent, "Author", "Author", Safe(scenario.Author, Safe(scenario.OwnerModId, "Unknown")), y); y -= 25f;
+            BuildLibraryDetailFact(parent, "Author", scenario.Source == ScenarioCatalogSource.Vanilla ? "Source" : "Author",
+                scenario.Source == ScenarioCatalogSource.Vanilla ? "Vanilla" : Safe(scenario.Author, Safe(scenario.OwnerModId, "Unknown")), y); y -= 25f;
             BuildLibraryDetailFact(parent, "Version", "Version", Safe(scenario.Version, "Unknown"), y); y -= 25f;
             BuildLibraryDetailFact(parent, "BaseMode", "Base mode", scenario.BaseGameMode.ToString(), y); y -= 25f;
             int saveCount = playStats != null ? playStats.SaveCount : scenario.SaveCount;
@@ -625,7 +626,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Kind = ScenarioBookRowKind.StartScenario,
                 Scenario = scenario,
                 Title = scenario.CanStart ? "PLAY SCENARIO" : "SCENARIO LOCKED",
-                Detail = scenario.CanStart ? "Begin a new run with this scenario." : "Required content is missing or mismatched.",
+                Detail = scenario.CanStart
+                    ? (scenario.Source == ScenarioCatalogSource.Vanilla
+                        ? "Begin a new run in the expanded save archive."
+                        : "Begin a new run with this scenario.")
+                    : "Required content is missing or mismatched.",
                 Badge = scenario.CanStart ? "SELECT" : "LOCKED",
                 IsLocked = !scenario.CanStart
             };
@@ -636,7 +641,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Kind = ScenarioBookRowKind.OpenScenarioSaves,
                 Scenario = scenario,
                 Title = "OPEN SAVES",
-                Detail = saveCount == 0 ? "No saved runs yet. Start one above." : "View, continue, or remove this scenario's saved runs.",
+                Detail = saveCount == 0
+                    ? "No saved runs yet. Start one above."
+                    : (scenario.Source == ScenarioCatalogSource.Vanilla
+                        ? "View or continue this mode's expanded save archive."
+                        : "View, continue, or remove this scenario's saved runs."),
                 Badge = saveCount.ToString()
             };
             BuildLibraryAction(parent, "Saves", saves, -145f, false, select);

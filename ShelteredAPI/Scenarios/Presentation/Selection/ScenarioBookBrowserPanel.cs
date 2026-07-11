@@ -142,8 +142,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void Initialise(GameObject root)
         {
+            // Block vanilla interaction immediately, but keep its chrome visible
+            // underneath the higher-depth book until the overlay has completed a
+            // render. This avoids exposing the raw menu background during the swap.
             _adapter.SetInputEnabled(false);
-            _underlyingSuppression = _adapter.SuppressUnderlyingChrome();
             _importService = new ScenarioPackageImportService(DefinitionSerializer, DefinitionValidator, DefinitionCatalog);
             _dataSource = new ScenarioBookBrowserDataSource(Catalog, SaveLibrary, _importService);
             _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService, _importService);
@@ -155,6 +157,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _pageFlipRoot = _renderer.Chrome.Ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
 
             StartDataRefresh("Loading scenarios...", false);
+            StartCoroutine(SuppressUnderlyingAfterFirstRender());
+        }
+
+        private IEnumerator SuppressUnderlyingAfterFirstRender()
+        {
+            // NGUI submits newly-created widgets later in the current frame. Wait
+            // until that render has happened; the vanilla book remains beneath the
+            // overlay at depth 50200 for this first frame instead of disappearing.
+            yield return new WaitForEndOfFrame();
+
+            if (_isClosing || _adapter == null || _renderer == null)
+                yield break;
+
+            _underlyingSuppression = _adapter.SuppressUnderlyingChrome();
         }
 
         private void Update()
