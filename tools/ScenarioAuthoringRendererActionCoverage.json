@@ -32,7 +32,7 @@
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawColorSlider", "actionFamily": "sprite_swap.custom.color." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCompactActionRow", "actionFamily": "action.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawEditableProperty", "actionFamily": "editable item action prefix" },
-    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeCollapsibleGroup", "actionFamily": "shell.renderer.home_group.toggle." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCollapsibleGroup", "actionFamily": "actionPrefix (home_group/timeline_group toggle)" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeHeadlineField", "actionFamily": "editable item action prefix" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeQuestionCard", "actionFamily": "item.Action.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawHomeStatusChip", "actionFamily": "action.Id" },

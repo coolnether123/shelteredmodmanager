@@ -175,6 +175,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (tabs.Count == 0)
                 return;
 
+            if (Screen.width >= 1280)
+                FitAllStageTabs(tabs, rect.width);
+
             float moreWidth = Mathf.Clamp(ScenarioUiMeasuredLabel.Width("More >", _buttonStyle, 28f), 82f, 112f);
             List<StageTabLayout> visibleTabs;
             List<StageTabLayout> overflowLayouts;
@@ -230,6 +233,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawTopBarMoreMenu(_topBarMoreButtonRect, _topBarOverflowTabs);
         }
 
+        private static void FitAllStageTabs(List<StageTabLayout> tabs, float availableWidth)
+        {
+            if (tabs == null || tabs.Count == 0 || MeasureStageTabRunWidth(tabs, null) <= availableWidth)
+                return;
+
+            float decorationWidth = (Math.Max(0, tabs.Count - 1) * 2f) + 10f;
+            float widthCap = Math.Max(42f, (availableWidth - decorationWidth) / tabs.Count);
+            for (int i = 0; i < tabs.Count; i++)
+                tabs[i].Width = Math.Min(tabs[i].Width, widthCap);
+        }
+
         private List<StageTabLayout> BuildMeasuredStageTabList(ScenarioAuthoringInspectorAction[] actions, bool compact)
         {
             List<StageTabLayout> result = new List<StageTabLayout>();
@@ -238,12 +252,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringInspectorAction action = actions[i];
                 if (IsChildStageTab(action))
                     continue;
+                ScenarioAuthoringInspectorAction displayAction = compact ? BuildCompactStageTabAction(action) : action;
 
                 result.Add(new StageTabLayout
                 {
-                    Action = action,
+                    Action = displayAction,
                     Finish = IsFinishStageTab(action),
-                    Width = ResolvePrimaryStageTabWidth(action, compact)
+                    Width = ResolvePrimaryStageTabWidth(displayAction, compact)
                 });
             }
 
@@ -391,8 +406,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private float ResolvePrimaryStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
-            float minimum = compact ? 66f : 80f;
-            return Mathf.Max(minimum, MeasureButtonWidth(action, true, compact ? 28f : 30f));
+            float minimum = compact ? 52f : 80f;
+            return Mathf.Max(minimum, MeasureButtonWidth(action, true, compact ? 14f : 30f));
+        }
+
+        private static ScenarioAuthoringInspectorAction BuildCompactStageTabAction(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return null;
+
+            string label = action.Label;
+            if (string.Equals(label, "Supplies", StringComparison.OrdinalIgnoreCase))
+                label = "Supply";
+            else if (string.Equals(label, "Timeline", StringComparison.OrdinalIgnoreCase))
+                label = "Time";
+
+            return string.Equals(label, action.Label, StringComparison.Ordinal)
+                ? action
+                : CloneWithLabel(action, label);
         }
 
         private float ResolveChildStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)

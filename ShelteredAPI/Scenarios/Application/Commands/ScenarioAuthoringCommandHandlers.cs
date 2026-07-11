@@ -72,7 +72,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
             if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, out token)
-                || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, out token))
+                || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, out token)
+                || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, out token))
             {
                 ScenarioAuthoringRendererInteractionState.Instance.ToggleDisclosure(token);
                 message = "Disclosure toggled: " + token + ".";
