@@ -213,11 +213,19 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
         private ScenarioRecord CreateDefinitionRecord(ScenarioInfo definition)
         {
+            ScenarioDefinition scenarioDefinition;
+            string scenarioFilePath;
+            string loadError;
+            string description = null;
+            if (_definitionReader.TryLoadUnchecked(definition.Id, out scenarioDefinition, out scenarioFilePath, out loadError)
+                && scenarioDefinition != null)
+                description = TrimToNull(scenarioDefinition.Description);
+
             CustomScenarioRegistration registration = new CustomScenarioRegistration
             {
                 Id = definition.Id,
                 DisplayName = TrimToNull(definition.DisplayName) ?? definition.Id,
-                Description = "XML scenario pack from " + (TrimToNull(definition.OwnerModId) ?? "loaded mod") + ".",
+                Description = description ?? "A custom scenario for Sheltered.",
                 Version = TrimToNull(definition.Version) ?? "1.0",
                 OwnerModId = TrimToNull(definition.OwnerModId),
                 RequiredMods = ScenarioDependencyManifest.CloneRequiredMods(_dependencyReader.LoadDefinitionDependencies(definition.Id)),
