@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Timeline;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 
 namespace ShelteredAPI.Scenarios.Diagnostics
 {
@@ -50,6 +52,54 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             Assert(collisionFound, "Timeline collision analysis did not warn about same-time add/remove ordering.", result);
 
             VerifyPacingAnalysis(result);
+            VerifyRibbonDayAndCacheContract(result);
+        }
+
+        private static void VerifyRibbonDayAndCacheContract(ScenarioValidationResult result)
+        {
+            ScenarioDefinition definition = new ScenarioDefinition();
+            definition.ScenarioFlow.Stages.Add(new ScenarioFlowStageDefinition
+            {
+                Id = "opening",
+                UnansweredNextStage = "middle",
+                UnansweredNextDays = 0
+            });
+            definition.ScenarioFlow.Stages.Add(new ScenarioFlowStageDefinition
+            {
+                Id = "middle",
+                UnansweredNextStage = "ending",
+                UnansweredNextDays = 1
+            });
+            definition.ScenarioFlow.Stages.Add(new ScenarioFlowStageDefinition { Id = "ending" });
+            AddFixtureAction(definition, "day_two_change", 2);
+
+            ScenarioTimelineBuilder timelineBuilder = new ScenarioTimelineBuilder();
+            ScenarioDayTimelineRibbonViewModelBuilder ribbonBuilder = new ScenarioDayTimelineRibbonViewModelBuilder(timelineBuilder);
+            ScenarioEditorSession session = new ScenarioEditorSession { WorkingDefinition = definition };
+            ScenarioDayTimelineRibbonViewModel ribbon = ribbonBuilder.Build(session);
+            ScenarioDayTimelineRibbonViewModel cachedRibbon = ribbonBuilder.Build(session);
+            Assert(object.ReferenceEquals(ribbon, cachedRibbon),
+                "Timeline ribbon rebuilt without a definition or draft-revision change.", result);
+
+            List<ScenarioTimelineDay> timelineDays = timelineBuilder.BuildDays(definition, null);
+            for (int i = 0; i < timelineDays.Count; i++)
+            {
+                ScenarioTimelineDay timelineDay = timelineDays[i];
+                if (timelineDay == null || timelineDay.Day < ribbon.FirstDay || timelineDay.Day > ribbon.LastDay)
+                    continue;
+                ScenarioDayTimelineRibbonDayViewModel ribbonDay = ribbon.Days[timelineDay.Day - ribbon.FirstDay];
+                Assert(ribbonDay != null && ribbonDay.MarkerCount == timelineDay.Entries.Count,
+                    "Timeline ribbon day counts drifted from ScenarioTimelineBuilder.BuildDays for day " + timelineDay.Day + ".", result);
+            }
+
+            Assert(ribbon.Days[0].ChapterCount == 1 && ribbon.Days[1].ChapterCount == 1,
+                "Zero-based story delays did not map to scenario days 1 and 2.", result);
+
+            AddFixtureAction(definition, "day_three_change", 3);
+            session.MarkDraftChanged(ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            ScenarioDayTimelineRibbonViewModel refreshedRibbon = ribbonBuilder.Build(session);
+            Assert(!object.ReferenceEquals(ribbon, refreshedRibbon) && refreshedRibbon.Days[2].MarkerCount == 1,
+                "Timeline ribbon cache did not refresh after DraftRevision advanced.", result);
         }
 
         private static void VerifyPacingAnalysis(ScenarioValidationResult result)

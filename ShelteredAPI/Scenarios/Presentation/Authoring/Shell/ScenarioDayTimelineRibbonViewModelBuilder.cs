@@ -17,6 +17,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
     /// </summary>
     internal sealed class ScenarioDayTimelineRibbonViewModelBuilder
     {
+        internal const int MaxVisibleMarkersPerDay = 4;
         private readonly ScenarioTimelineBuilder _timelineBuilder;
         private ScenarioDefinition _cachedDefinition;
         private int _cachedRevision = -1;
@@ -77,15 +78,54 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     chapters++;
             }
 
+            ScenarioDayTimelineRibbonDayViewModel[] days = BuildDays(markers, lastDay);
+
             return new ScenarioDayTimelineRibbonViewModel
             {
                 FirstDay = 1,
                 LastDay = lastDay,
                 EntryCount = markers.Count,
                 ChapterCount = chapters,
+                Zoom = 0f,
+                ZoomState = "overview",
+                FirstVisibleDay = 1f,
+                LastVisibleDay = lastDay,
                 EmptyMessage = markers.Count == 0 ? "No scheduled events yet - add some in Timeline or Story" : null,
+                Days = days,
                 Markers = markers.ToArray()
             };
+        }
+
+        private static ScenarioDayTimelineRibbonDayViewModel[] BuildDays(
+            List<ScenarioDayTimelineRibbonMarkerViewModel> markers,
+            int lastDay)
+        {
+            ScenarioDayTimelineRibbonDayViewModel[] days = new ScenarioDayTimelineRibbonDayViewModel[Math.Max(1, lastDay)];
+            for (int day = 1; day <= days.Length; day++)
+            {
+                int markerCount = 0;
+                int chapterCount = 0;
+                for (int markerIndex = 0; markers != null && markerIndex < markers.Count; markerIndex++)
+                {
+                    ScenarioDayTimelineRibbonMarkerViewModel marker = markers[markerIndex];
+                    if (marker == null || marker.Day != day)
+                        continue;
+                    markerCount++;
+                    if (marker.IsChapter)
+                        chapterCount++;
+                }
+
+                int overflow = Math.Max(0, markerCount - MaxVisibleMarkersPerDay);
+                days[day - 1] = new ScenarioDayTimelineRibbonDayViewModel
+                {
+                    Day = day,
+                    MarkerCount = markerCount,
+                    ChapterCount = chapterCount,
+                    Label = day.ToString(CultureInfo.InvariantCulture),
+                    OverflowLabel = overflow > 0 ? "+" + overflow.ToString(CultureInfo.InvariantCulture) : string.Empty
+                };
+            }
+            return days;
         }
 
         private static ScenarioAuthoringInspectorAction BuildAction(

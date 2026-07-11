@@ -1196,8 +1196,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int LastDay { get; set; }
         public int EntryCount { get; set; }
         public int ChapterCount { get; set; }
+        public float Zoom { get; set; }
+        public string ZoomState { get; set; }
+        public float FirstVisibleDay { get; set; }
+        public float LastVisibleDay { get; set; }
         public string EmptyMessage { get; set; }
+        public ScenarioDayTimelineRibbonDayViewModel[] Days { get; set; }
         public ScenarioDayTimelineRibbonMarkerViewModel[] Markers { get; set; }
+    }
+
+    internal sealed class ScenarioDayTimelineRibbonDayViewModel
+    {
+        public int Day { get; set; }
+        public int MarkerCount { get; set; }
+        public int ChapterCount { get; set; }
+        public string Label { get; set; }
+        public string OverflowLabel { get; set; }
     }
 
     internal sealed class ScenarioDayTimelineRibbonMarkerViewModel

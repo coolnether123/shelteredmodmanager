@@ -75,7 +75,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             CollectTutorial(actions, shell != null ? shell.Tutorial : null);
             CollectTour(actions, shell != null ? shell.Tour : null);
             CollectSettings(actions, shell != null ? shell.Settings : null);
-            CollectTimelineRibbon(actions, shell != null ? shell.TimelineRibbon : null);
+
+            // Ribbon markers use the same scenario.timeline.entry.* actions already
+            // collected from the Timeline window. Re-adding them here makes the
+            // linear duplicate check scan the full action manifest once per marker
+            // on every presentation build.
 
             ScenarioAuthoringInspectorItem[] items = new ScenarioAuthoringInspectorItem[actions.Count];
             for (int i = 0; i < actions.Count; i++)
@@ -277,12 +281,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     }
                 }
             }
-        }
-
-        private static void CollectTimelineRibbon(List<ScenarioAuthoringInspectorAction> actions, ScenarioDayTimelineRibbonViewModel ribbon)
-        {
-            for (int i = 0; ribbon != null && ribbon.Markers != null && i < ribbon.Markers.Length; i++)
-                AddExisting(actions, ribbon.Markers[i] != null ? ribbon.Markers[i].Action : null);
         }
 
         private static void AddRange(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringInspectorAction[] values)
