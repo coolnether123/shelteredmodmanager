@@ -45,6 +45,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyDraftDeleteDurability(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
                 VerifyCompletionCarrierContract(result);
+                VerifyScenarioSaveDiscoveryExcludesSoftDeletedFolders(root, result);
                 VerifyInventoryProjectionReconciliation(result);
                 VerifySuppliesAuthoring(result);
                 VerifyMapLootProjectionContracts(result);
@@ -615,6 +616,18 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 "Completion carrier projected an authored stage into vanilla visitor flow.", result);
             Assert(carrier != null && string.Equals(carrier.id, definition.Id, StringComparison.Ordinal),
                 "Completion carrier did not preserve the authored scenario id used by outcome resolution.", result);
+        }
+
+        private static void VerifyScenarioSaveDiscoveryExcludesSoftDeletedFolders(string root, ScenarioValidationResult result)
+        {
+            string scenarioRoot = Path.Combine(root, "save-discovery");
+            int slot;
+            Assert(SaveRegistryCore.TryGetActiveSlotNumber(scenarioRoot, Path.Combine(scenarioRoot, "Slot_1"), out slot) && slot == 1,
+                "Top-level scenario Slot_* folders must remain discoverable.", result);
+            Assert(!SaveRegistryCore.TryGetActiveSlotNumber(scenarioRoot, Path.Combine(Path.Combine(scenarioRoot, "_trash"), "Slot_1_deleted"), out slot),
+                "Scenario save discovery must exclude nested _trash entries.", result);
+            Assert(!SaveRegistryCore.TryGetActiveSlotNumber(scenarioRoot, Path.Combine(Path.Combine(scenarioRoot, "_corrupt"), "Slot_2"), out slot),
+                "Scenario save discovery must exclude nested soft-deleted/quarantine entries.", result);
         }
 
         private static void VerifyDraftDeleteDurability(string root, ScenarioValidationResult result)

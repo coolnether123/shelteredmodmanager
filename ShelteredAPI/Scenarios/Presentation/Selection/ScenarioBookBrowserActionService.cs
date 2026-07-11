@@ -420,6 +420,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return false;
             }
 
+            if (entry != null && !string.IsNullOrEmpty(entry.StorageScenarioId))
+            {
+                try
+                {
+                    entry.SaveCount = _saveLibrary.CountSaves(entry.StorageScenarioId);
+                }
+                catch (Exception ex)
+                {
+                    entry.SaveCount = Math.Max(0, entry.SaveCount - 1);
+                    MMLog.WriteWarning("[ScenarioBookBrowser] Deleted save but count refresh failed for "
+                        + entry.StorageScenarioId + ": " + ex.Message);
+                }
+            }
+
             status = save != null ? "Deleted slot " + save.absoluteSlot + "." : "Deleted save.";
             return true;
         }

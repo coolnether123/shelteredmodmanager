@@ -534,7 +534,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 if (!adapter.GetInputEnabled())
                     adapter.SetInputEnabled(true);
 
-                return BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType, definition);
+                return BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType, definition, true);
             }
             catch (Exception ex)
             {
@@ -639,7 +639,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             string sceneName,
             string launchTargetLabel,
             SaveManager.SaveType virtualSaveType,
-            ScenarioDefinition definition = null)
+            ScenarioDefinition definition = null,
+            bool ownsDirectLaunchFadeHandoff = false)
         {
             if (string.IsNullOrEmpty(sceneName))
                 return false;
@@ -668,6 +669,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             else
                 DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
             LoadingScreen.Instance.ShowLoadingScreen(sceneName);
+            if (ownsDirectLaunchFadeHandoff)
+                ScenarioLoadingTransitionGuard.OwnDirectLaunchTransition(sceneName, launchTargetLabel);
             MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scene launch started. target="
                 + (launchTargetLabel ?? "<unknown>") + " scene=" + sceneName
                 + " virtualSaveType=" + virtualSaveType + ".");
