@@ -160,7 +160,16 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
     internal interface IScenarioEndGamePresenter
     {
-        bool TryPresent(bool success, out string reason);
+        bool TryPresent(ScenarioEndGamePresentation presentation, out string reason);
+    }
+
+    internal sealed class ScenarioEndGamePresentation
+    {
+        public bool Success { get; set; }
+        public ScenarioBaseGameMode BaseGameMode { get; set; }
+        public string ScenarioDisplayName { get; set; }
+        public int DaysSurvived { get; set; }
+        public string FulfilledConditionText { get; set; }
     }
 
     internal interface IScenarioAuthoringSessionContext

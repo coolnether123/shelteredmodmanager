@@ -10,7 +10,9 @@ using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Scheduling{
     internal sealed class ScenarioScheduleRuntimeCoordinator
     {
@@ -66,6 +68,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
             if (_definition == null)
                 return;
 
+            RefreshAuthoredVisitorPriority();
             for (int i = 0; i < _actions.Count; i++)
             {
                 ScenarioScheduledActionDefinition action = _actions[i];
@@ -110,6 +113,11 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
 
                 ExecuteAction(action, false);
             }
+
+            // Recompute after dispatch so successful visitor actions relinquish the
+            // transient suppression immediately. Retryable visitor collisions remain
+            // due and keep priority until the naturally departing visitor frees the slot.
+            RefreshAuthoredVisitorPriority();
 
             if (_winLossOutcomeService != null)
                 _winLossOutcomeService.Tick(_journal.State);
@@ -233,6 +241,46 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
         internal static bool ShouldJournalEffectFailure(bool retryableFailure)
         {
             return !retryableFailure;
+        }
+
+        private void RefreshAuthoredVisitorPriority()
+        {
+            bool shouldPrioritize = false;
+            for (int i = 0; i < _actions.Count && !shouldPrioritize; i++)
+            {
+                ScenarioScheduledActionDefinition action = _actions[i];
+                if (!ContainsAuthoredVisitorEffect(action)
+                    || action == null
+                    || string.IsNullOrEmpty(action.Id)
+                    || _executingActions.Contains(action.Id)
+                    || (!IsRepeatable(action)
+                        && (_journal.HasExecuted(action.Id) || _journal.HasRecord(action.Id, ScenarioExecutedActionStatus.Skipped))))
+                    continue;
+
+                string reason;
+                if (EvaluateSchedule(action, out reason) != ScenarioSchedulePolicyDecision.Due)
+                    continue;
+                if (!_conditions.IsGateSatisfied(_definition, action.GateId, _journal.State, out reason)
+                    || !_conditions.AreConditionsSatisfied(_definition, action.ConditionRefs, _journal.State, out reason))
+                    continue;
+
+                shouldPrioritize = true;
+            }
+
+            ScenarioWorldEventRuntimeState.SetAuthoredVisitorPriority(shouldPrioritize);
+        }
+
+        internal static bool ContainsAuthoredVisitorEffect(ScenarioScheduledActionDefinition action)
+        {
+            for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
+            {
+                ScenarioEffectDefinition effect = action.Effects[i];
+                if (effect != null
+                    && effect.Kind == ScenarioEffectKind.WorldEvent
+                    && string.Equals(ScenarioPropertyBag.GetString(effect.Properties, "eventType", null), "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         private bool ShouldLogRetryableFailure(string actionId)

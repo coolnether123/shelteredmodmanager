@@ -4,10 +4,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     {
         private static ScenarioDefinition _definition;
         private static int _authoredRadioBroadcastDispatches;
+        private static bool _authoredVisitorPriority;
 
         public static void Bind(ScenarioDefinition definition)
         {
             _definition = definition;
+            _authoredVisitorPriority = false;
         }
 
         public static ScenarioVanillaSuppressionDefinition Suppression
@@ -17,7 +19,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         public static bool SuppressRandomVisitors
         {
-            get { return Suppression != null && Suppression.RandomVisitors; }
+            get { return _authoredVisitorPriority || (Suppression != null && Suppression.RandomVisitors); }
+        }
+
+        public static bool HasAuthoredVisitorPriority
+        {
+            get { return _authoredVisitorPriority; }
+        }
+
+        public static void SetAuthoredVisitorPriority(bool value)
+        {
+            _authoredVisitorPriority = value;
         }
 
         public static bool SuppressBinman

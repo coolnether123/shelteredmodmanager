@@ -3,13 +3,15 @@ using HarmonyLib;
 using ModAPI.Core;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Presentation.Runtime;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 {
     internal interface IScenarioEndGamePresentationTarget
     {
-        bool TryPresent(bool success, out string reason);
+        bool TryPresent(ScenarioEndGamePresentation presentation, out string reason);
     }
 
     internal sealed class ScenarioAuthoringSessionContext : IScenarioAuthoringSessionContext
@@ -40,17 +42,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             _installedPresenter = installedPresenter;
         }
 
-        public bool TryPresent(bool success, out string reason)
+        public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
         {
             return _context != null && _context.HasActiveSession
-                ? _playtestPresenter.TryPresent(success, out reason)
-                : _installedPresenter.TryPresent(success, out reason);
+                ? _playtestPresenter.TryPresent(presentation, out reason)
+                : _installedPresenter.TryPresent(presentation, out reason);
         }
     }
 
     internal sealed class ScenarioPlaytestEndGamePresenter : IScenarioEndGamePresentationTarget
     {
-        public bool TryPresent(bool success, out string reason)
+        public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
         {
             try
             {
@@ -75,10 +77,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 
     internal sealed class ScenarioInstalledEndGamePresenter : IScenarioEndGamePresentationTarget
     {
-        public bool TryPresent(bool success, out string reason)
+        public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
         {
             try
             {
+                if (presentation == null)
+                {
+                    reason = "Scenario end-game presentation details were not supplied.";
+                    return false;
+                }
+
+                if (UsesScenarioVictoryPanel(presentation.Success, presentation.BaseGameMode))
+                {
+                    if (GameModeManager.instance != null)
+                        GameModeManager.instance.UpdateModeResult(GameModeManager.ModeResult.Success);
+                    if (!ScenarioVictoryPanel.TryShow(presentation, out reason))
+                        return false;
+
+                    MMLog.WriteInfo("[ScenarioWinLoss] Presented ShelteredAPI scenario victory panel for Survival-based scenario '"
+                        + (presentation.ScenarioDisplayName ?? string.Empty) + "'.");
+                    return true;
+                }
+
                 FamilyManager family = FamilyManager.Instance;
                 GameModeManager mode = GameModeManager.instance;
                 if (family == null || mode == null)
@@ -89,7 +109,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                     return false;
                 }
 
-                GameModeManager.ModeResult result = success
+                GameModeManager.ModeResult result = presentation.Success
                     ? GameModeManager.ModeResult.Success
                     : GameModeManager.ModeResult.Failure;
                 mode.UpdateModeResult(result);
@@ -129,6 +149,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 reason = "Vanilla end-game flow could not be armed: " + ex.Message;
                 return false;
             }
+        }
+
+        internal static bool UsesScenarioVictoryPanel(bool success, ScenarioBaseGameMode baseGameMode)
+        {
+            return success
+                && baseGameMode != ScenarioBaseGameMode.Surrounded
+                && baseGameMode != ScenarioBaseGameMode.Stasis;
         }
     }
 }
