@@ -7,7 +7,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         Types,
         Scenarios,
         Saves,
-        DraftDetails
+        DraftDetails,
+        InstallScenarios
     }
 
     internal enum ScenarioBookType
@@ -30,7 +31,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         DeleteDraft,
         RecoveryResume,
         RecoveryCleanup,
-        LoadSave
+        LoadSave,
+        OpenInstallScenarios,
+        OpenScenarioDownloadsFolder,
+        InstallPackage
     }
 
     internal sealed class ScenarioBookRowModel
@@ -48,6 +52,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string RecoveryScenarioId;
         public string RecoverySaveId;
         public SaveManager.SaveType RecoverySaveType;
+        public ScenarioPackageImportCandidate ImportCandidate;
     }
 
     internal sealed class ScenarioBookDraftEditorModel

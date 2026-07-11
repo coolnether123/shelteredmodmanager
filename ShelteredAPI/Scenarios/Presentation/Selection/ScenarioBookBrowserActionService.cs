@@ -14,22 +14,43 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private readonly ScenarioLaunchCoordinator _launchCoordinator;
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly ScenarioDraftMetadataEditService _draftMetadataEditService;
+        private readonly ScenarioPackageImportService _importService;
 
         public ScenarioBookBrowserActionService(
             ScenarioBrowserPanelAdapter adapter,
             ScenarioLaunchCoordinator launchCoordinator,
             IScenarioSaveLibrary saveLibrary,
-            ScenarioDraftMetadataEditService draftMetadataEditService)
+            ScenarioDraftMetadataEditService draftMetadataEditService,
+            ScenarioPackageImportService importService)
         {
             if (adapter == null) throw new ArgumentNullException("adapter");
             if (launchCoordinator == null) throw new ArgumentNullException("launchCoordinator");
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
             if (draftMetadataEditService == null) throw new ArgumentNullException("draftMetadataEditService");
+            if (importService == null) throw new ArgumentNullException("importService");
 
             _adapter = adapter;
             _launchCoordinator = launchCoordinator;
             _saveLibrary = saveLibrary;
             _draftMetadataEditService = draftMetadataEditService;
+            _importService = importService;
+        }
+
+        public bool OpenScenarioDownloadsFolder(out string status)
+        {
+            return _importService.OpenFolder(_importService.StagingRoot, out status);
+        }
+
+        public bool OpenExportFolder(string path, out string status)
+        {
+            return _importService.OpenFolder(path, out status);
+        }
+
+        public bool InstallPackage(ScenarioPackageImportCandidate candidate, out string status)
+        {
+            ScenarioPackageImportResult result = _importService.Install(candidate);
+            status = result != null ? result.Message : "Install service is unavailable.";
+            return result != null && result.Success;
         }
 
         internal static string CreateInteractiveDraftForLiveVerification()

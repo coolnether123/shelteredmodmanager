@@ -7,6 +7,7 @@ using ShelteredAPI.UI.FieldManual.Animations;
 using ShelteredAPI.UI.FieldManual.Panels;
 using UnityEngine;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
@@ -38,6 +39,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private ScenarioBrowserPanelAdapter.ScenarioBrowserSuppressionHandle _underlyingSuppression;
         private ScenarioBookDraftFactsModel _draftFactsCache;
         private ScenarioCatalogEntry _draftFactsCacheScenario;
+        private ScenarioPackageImportService _importService;
+        private string _statusText;
 
         private IScenarioSelectionCatalogService Catalog
         {
@@ -57,6 +60,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private ScenarioDraftMetadataEditService DraftMetadataEditService
         {
             get { return ScenarioCompositionRoot.Resolve<ScenarioDraftMetadataEditService>(); }
+        }
+
+        private IScenarioDefinitionSerializer DefinitionSerializer
+        {
+            get { return ScenarioCompositionRoot.Resolve<IScenarioDefinitionSerializer>(); }
+        }
+
+        private IScenarioDefinitionValidator DefinitionValidator
+        {
+            get { return ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>(); }
+        }
+
+        private IScenarioDefinitionCatalogService DefinitionCatalog
+        {
+            get { return ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>(); }
         }
 
         public static void Show(ScenarioSelectionPanel panel)
@@ -104,8 +122,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             _adapter.SetInputEnabled(false);
             _underlyingSuppression = _adapter.SuppressUnderlyingChrome();
-            _dataSource = new ScenarioBookBrowserDataSource(Catalog, SaveLibrary);
-            _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService);
+            _importService = new ScenarioPackageImportService(DefinitionSerializer, DefinitionValidator, DefinitionCatalog);
+            _dataSource = new ScenarioBookBrowserDataSource(Catalog, SaveLibrary, _importService);
+            _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService, _importService);
 
             VanillaPageTurnAssets pageTurnAssets = new VanillaPageTurnAssets();
             _renderer = new ScenarioBookBrowserRenderer(BackOrClose, Close, ChangePage);
@@ -229,6 +248,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
                         HandleDraftDetailsSaved,
                         HandleDraftOpenRequested,
+                        HandleExportFolderRequested,
                         HandleDraftDeleteRequested);
                 }
                 else
@@ -323,6 +343,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         break;
                     case ScenarioBookRowKind.LoadSave:
                         RunLaunchAction(delegate(out string status) { return _actions.LoadSave(row.Scenario, row.Save, out status); });
+                        break;
+                    case ScenarioBookRowKind.OpenInstallScenarios:
+                        OpenInstallScenarios();
+                        break;
+                    case ScenarioBookRowKind.OpenScenarioDownloadsFolder:
+                        OpenDownloadsFolder();
+                        break;
+                    case ScenarioBookRowKind.InstallPackage:
+                        InstallPackage(row.ImportCandidate);
                         break;
                 }
             }
@@ -576,6 +605,39 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             RenderCurrentView(true);
         }
 
+        private void OpenInstallScenarios()
+        {
+            _selectedScenario = null;
+            _view = ScenarioBookBrowserViewKind.InstallScenarios;
+            _pageIndex = 0;
+            ClearPreparedPages();
+            SetStatus("Looking for downloaded scenarios...");
+            _dataSource.BeginImportRefreshAsync();
+            RenderCurrentView(true);
+        }
+
+        private void OpenDownloadsFolder()
+        {
+            string status;
+            _actions.OpenScenarioDownloadsFolder(out status);
+            SetStatus(status);
+        }
+
+        private void InstallPackage(ScenarioPackageImportCandidate candidate)
+        {
+            string status;
+            bool installed = _actions.InstallPackage(candidate, out status);
+            SetStatus(status);
+            if (!installed)
+                return;
+
+            _dataSource.InvalidateCatalogSnapshot();
+            _dataSource.BeginRefreshAsync();
+            _dataSource.BeginImportRefreshAsync();
+            ClearPreparedPages();
+            RenderCurrentView(false);
+        }
+
         private void SelectScenario(ScenarioCatalogEntry scenario)
         {
             if (scenario == null)
@@ -694,6 +756,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(_selectedScenario, out status); });
         }
 
+        private void HandleExportFolderRequested()
+        {
+            ScenarioBookDraftFactsModel facts = GetSelectedDraftFacts();
+            string status;
+            _actions.OpenExportFolder(facts != null ? facts.LastExportRoot : null, out status);
+            SetStatus(status);
+        }
+
         private void HandleDraftDeleteRequested()
         {
             BeginDraftDeleteConfirmation(_selectedScenario);
@@ -777,7 +847,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
             }
 
-            if (_view == ScenarioBookBrowserViewKind.Scenarios)
+            if (_view == ScenarioBookBrowserViewKind.Scenarios || _view == ScenarioBookBrowserViewKind.InstallScenarios)
             {
                 _view = ScenarioBookBrowserViewKind.Types;
                 _pageIndex = 0;
@@ -958,6 +1028,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             bool changed = _dataSource.ApplyLatestSnapshot();
             changed = _dataSource.ApplyLatestSaveRows() || changed;
+            string importError;
+            bool importChanged = _dataSource.ApplyLatestImportScan(out importError);
+            changed = importChanged || changed;
             ScenarioCatalogEntry factsScenario;
             ScenarioBookDraftFactsModel facts;
             if (_dataSource.ApplyLatestDraftFacts(out factsScenario, out facts))
@@ -973,8 +1046,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             ClearPreparedPages();
-            string error = _dataSource.LastRefreshError;
-            SetStatus(string.IsNullOrEmpty(error) ? null : "Scenario refresh failed: " + error);
+            string error = !string.IsNullOrEmpty(importError) ? importError : _dataSource.LastRefreshError;
+            if (!string.IsNullOrEmpty(error))
+                SetStatus("Scenario refresh failed: " + error);
+            else if (IsTransientStatus(_statusText))
+                SetStatus(null);
             RenderCurrentView(false);
         }
 
@@ -1013,10 +1089,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void SetStatus(string value)
         {
+            _statusText = value;
             if (!string.IsNullOrEmpty(value))
                 MMLog.WriteInfo("[ScenarioBookBrowser] Status: " + value);
             if (_renderer != null)
                 _renderer.SetStatus(value);
+        }
+
+        private static bool IsTransientStatus(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+            return value.StartsWith("Loading ", StringComparison.Ordinal)
+                || value.StartsWith("Looking ", StringComparison.Ordinal)
+                || value.StartsWith("Refreshing ", StringComparison.Ordinal);
         }
 
         private static string Safe(string value, string fallback)

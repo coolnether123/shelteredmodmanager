@@ -22,6 +22,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         public bool HasHistory;
         public bool HasExport;
         public string LastExportText;
+        public string LastExportRoot;
         public bool DetailComputed;
         public bool ValidationComputed;
         public bool ValidationAvailable;
@@ -256,6 +257,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
                 {
                     facts.HasExport = true;
                     facts.LastExportText = RelativeTime(lastExportUtc);
+                    facts.LastExportRoot = exportRoot;
                 }
             }
             catch
