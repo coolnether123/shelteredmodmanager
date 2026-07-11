@@ -410,6 +410,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Cleanup. panel=" + instanceId
                 + " customButtons=" + state.CustomButtons.Count + ".");
+            // The book can be destroyed after the vanilla panel during a synchronous
+            // launch transition. Discard its suppression state now so its OnDestroy
+            // cannot reactivate objects that this panel is already destroying.
+            ScenarioBookBrowserPanel.NotifyUnderlyingPanelTeardown(panel);
             state.IsCustomMode = false;
             ShelteredCustomScenarioRuntimeState.SetCustomModeActive(false);
             UIFlowGuard.BlockSlotClicksToggle(false);
