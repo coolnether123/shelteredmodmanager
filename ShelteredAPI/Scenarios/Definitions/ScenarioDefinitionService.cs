@@ -103,11 +103,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
         // Shared by installed-scenario launch and authoring playtest so both paths
         // produce the same vanilla ScenarioDef carrier for completion handling.
         //
-        // This definition is deliberately an inert carrier, not a projection of
-        // ScenarioFlow.  The authored scheduler owns flow, conversations, and
-        // end conditions.  Giving the vanilla QuestInstance authored intercom
-        // stages lets QuestManager complete and remove that instance on its own,
-        // leaving the scheduled end condition with a stale carrier id.
+        // This definition is deliberately a zero-stage carrier, not a projection
+        // of ScenarioFlow. QuestManager starts every first ScenarioStage by calling
+        // NpcVisitManager.AddNewScenario; even an empty stage creates a random
+        // scenario visitor. The authored scheduler therefore owns all story flow,
+        // while ScenarioRuntimeOrchestrator completes the guarded loading handoff
+        // independently after the world has been applied.
         internal static ScenarioDef BuildScenarioDef(ScenarioDefinition definition)
         {
             if (definition == null)

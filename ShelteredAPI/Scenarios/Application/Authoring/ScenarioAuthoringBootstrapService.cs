@@ -501,7 +501,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string blockingReason;
             if (!warmupStarted)
             {
-                HideCompletedShelterLoadingScreen(pending.ExpectedSceneName);
+                ScenarioLoadingTransitionGuard.TryCompleteManagedTransition(
+                    pending.ExpectedSceneName,
+                    "authoring draft '" + (pending.DraftId ?? string.Empty) + "'");
                 if (!IsExpectedSceneActive(pending.ExpectedSceneName, out blockingReason))
                 {
                     if (!string.Equals(_lastPendingBlockingReason, blockingReason, StringComparison.Ordinal))
@@ -842,29 +844,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             blockingReason = null;
             return true;
-        }
-
-        private void HideCompletedShelterLoadingScreen(string expectedSceneName)
-        {
-            if (LoadingScreen.Instance == null || !LoadingScreen.Instance.isShowing)
-                return;
-
-            if (!ScenarioWorldReady.IsShelterSceneActive())
-                return;
-
-            if (!string.IsNullOrEmpty(expectedSceneName)
-                && !string.Equals(SceneManager.GetActiveScene().name, expectedSceneName, StringComparison.Ordinal))
-                return;
-
-            if (!string.IsNullOrEmpty(LoadingScreen.nextLevel))
-                return;
-
-            if (SaveManager.instance != null && (SaveManager.instance.isLoading || SaveManager.instance.isSaving))
-                return;
-
-            LoadingScreen.Instance.HideLoadingScreen();
-            MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Hid completed authoring reload loading screen for scene "
-                + SceneManager.GetActiveScene().name + ".");
         }
 
         private void FailPlaytestRestartBackToEditor(string message)
