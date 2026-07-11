@@ -138,6 +138,7 @@
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
     <Compile Include="Debugging\ShelteredSupportBundle.cs" />
+    <Compile Include="Debugging\ShelteredFeedbackBootstrap.cs" />
     <Compile Include="Harmony\AutoLoadFlow.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\LoadingTransitionRecoveryPatches.cs" />

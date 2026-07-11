@@ -8,6 +8,7 @@ using ModAPI.InputServices;
 using ModAPI.Scenarios;
 using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
+using ShelteredAPI.Debugging;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
 using ShelteredAPI.Storage;
@@ -85,6 +86,8 @@ namespace ShelteredAPI.Core
                 runtimeRoot.AddComponent<ShelteredKeybindPersistenceGuard>();
 
             LoadingTransitionRecoveryService.EnsureInstalled(runtimeRoot);
+
+            ShelteredFeedbackBootstrap.EnsureInstalled(runtimeRoot);
 
             if (runtimeRoot.GetComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>() == null)
                 runtimeRoot.AddComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>();
