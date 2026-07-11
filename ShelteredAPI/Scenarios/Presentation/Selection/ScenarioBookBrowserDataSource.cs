@@ -490,7 +490,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string GetHeaderDetail(ScenarioBookBrowserViewKind view, ScenarioBookType selectedType, ScenarioCatalogEntry selectedScenario)
         {
             if (view == ScenarioBookBrowserViewKind.Types)
-                return "Drafts, scenario modes, and published custom scenarios.";
+                return "Choose published play, draft authoring, or downloaded installs.";
             if (view == ScenarioBookBrowserViewKind.Scenarios)
                 return selectedType == ScenarioBookType.Draft
                     ? "Drafts are authoring work. Open one to edit details or continue building it."
@@ -530,19 +530,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private List<ScenarioBookRowModel> BuildTypeRows()
         {
             List<ScenarioBookRowModel> rows = new List<ScenarioBookRowModel>();
+            ScenarioBookRowModel surrounded = BuildTypeRow(
+                ScenarioBookType.Surrounded,
+                "Surrounded",
+                "Scenario saves and custom content built on the Surrounded rule set.");
+            surrounded.SectionLabel = "PLAY PUBLISHED SCENARIOS";
+            rows.Add(surrounded);
+            rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis", "Scenario saves and custom content built on the Stasis rule set."));
+            AddPublishedScenarioRows(rows);
+
+            if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
+            {
+                ScenarioBookRowModel drafts = BuildTypeRow(
+                    ScenarioBookType.Draft,
+                    "Draft Scenarios",
+                    "Authoring workspace for unfinished scenarios, not normal play content.");
+                drafts.SectionLabel = "WORK ON DRAFTS";
+                rows.Add(drafts);
+            }
+
             rows.Add(new ScenarioBookRowModel
             {
                 Kind = ScenarioBookRowKind.OpenInstallScenarios,
                 Title = "Install Scenarios",
                 Detail = "Make a downloaded scenario playable in one click.",
-                Badge = "Downloads"
+                Badge = "Downloads",
+                SectionLabel = "INSTALL DOWNLOADED SCENARIOS"
             });
-            if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
-                rows.Add(BuildTypeRow(ScenarioBookType.Draft, "Draft Scenarios", "Authoring workspace for unfinished scenarios, not normal play content."));
-
-            rows.Add(BuildTypeRow(ScenarioBookType.Surrounded, "Surrounded", "Scenario saves and custom content built on the Surrounded rule set."));
-            rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis", "Scenario saves and custom content built on the Stasis rule set."));
-            AddPublishedScenarioRows(rows);
 
             // Interrupted launches and leftover redirects are exceptional, so they trail
             // the normal type cards under their own labelled "Needs attention" section
@@ -837,7 +851,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Kind = ScenarioBookRowKind.Empty,
                 Title = "Needs attention",
                 Detail = "A previous scenario launch was interrupted. Clear or resume these leftover redirects; no save or draft files are deleted.",
-                Badge = string.Empty
+                Badge = string.Empty,
+                SectionLabel = "NEEDS ATTENTION"
             });
             rows.AddRange(recoveryRows);
         }
@@ -1215,6 +1230,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return ContainsSearch(row.Title, searchFilter)
                 || ContainsSearch(row.Detail, searchFilter)
                 || ContainsSearch(row.Badge, searchFilter)
+                || ContainsSearch(row.SectionLabel, searchFilter)
                 || ContainsSearch(row.Type.ToString(), searchFilter)
                 || (row.Scenario != null && MatchesScenario(row.Scenario, searchFilter))
                 || (row.Save != null && MatchesSave(row.Save, searchFilter))

@@ -59,9 +59,15 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
         public GameObject Build(GameObject parent, string name, Vector3 localPosition, string placeholder)
         {
+            return Build(parent, name, localPosition, "SEARCH:", placeholder);
+        }
+
+        public GameObject Build(GameObject parent, string name, Vector3 localPosition, string scopeLabel, string placeholder)
+        {
             GameObject root = _ui.CreateChild(parent, name, localPosition);
 
-            UILabel searchLabel = _ui.CreateLabel(root, "SearchLabel", "SEARCH:",
+            UILabel searchLabel = _ui.CreateLabel(root, "SearchLabel",
+                string.IsNullOrEmpty(scopeLabel) ? "SEARCH:" : scopeLabel,
                 new Vector3(-110f, 0f, 0f), 14, _palette.InkFaded,
                 100, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
             searchLabel.overflowMethod = UILabel.Overflow.ShrinkContent;

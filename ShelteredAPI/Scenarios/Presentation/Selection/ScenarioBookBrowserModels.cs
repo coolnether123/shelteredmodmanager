@@ -43,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string Title;
         public string Detail;
         public string Badge;
+        public string SectionLabel;
         public bool IsLocked;
         public bool CanDelete;
         public ScenarioBookType Type;

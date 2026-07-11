@@ -118,6 +118,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return true;
         }
 
+        internal static void NotifyUnderlyingPanelTeardown(ScenarioSelectionPanel panel)
+        {
+            if (panel == null || _instance == null)
+                return;
+
+            ScenarioBookBrowserPanel browser = _instance.GetComponent<ScenarioBookBrowserPanel>();
+            if (browser == null || browser._adapter == null || browser._adapter.Panel != panel)
+                return;
+
+            // ScenarioSelectionPanel.OnDestroy means there is nothing valid to
+            // restore. Retaining either object would let this book's later
+            // OnDestroy call SetActive(true) on the outgoing scene hierarchy.
+            browser._underlyingSuppression = null;
+            browser._adapter = null;
+        }
+
         private void Initialise(GameObject root)
         {
             _adapter.SetInputEnabled(false);
@@ -1079,9 +1095,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private string GetSearchFilter()
         {
-            // Detail spreads intentionally hide search; keep the list filter intact
-            // for Back navigation without silently applying it to save rows.
-            if (_view == ScenarioBookBrowserViewKind.Saves || _view == ScenarioBookBrowserViewKind.DraftDetails)
+            // The draft editor is a form rather than a list. Every list view,
+            // including a scenario's save archive, uses the same visible filter.
+            if (_view == ScenarioBookBrowserViewKind.DraftDetails)
                 return string.Empty;
 
             return _renderer != null ? _renderer.SearchFilter : string.Empty;
