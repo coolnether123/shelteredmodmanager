@@ -55,6 +55,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 ScenarioRuntimeOutcomeVerification.Verify(result);
                 ScenarioStarterTemplateVerification.Verify(result);
                 ScenarioTimelineUxVerification.Verify(result);
+                ScenarioStoryGraphUxVerification.Verify(result);
                 ScenarioAssetInventoryVerification.Verify(root, result);
                 ScenarioAuthoringShortcutHelpVerification.Verify(result);
                 ScenarioAuthorTestChecklistVerification.Verify(root, result);

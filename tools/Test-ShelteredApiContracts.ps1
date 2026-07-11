@@ -810,6 +810,21 @@ Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapLege
 Assert-Contains "story map renderer" $scenarioStoryMapRenderer "!N = validation issues" "the issue badge count must be explained in the legend."
 Assert-Contains "story map renderer" $scenarioStoryMapRenderer "ScenarioAuthoringBackendService\.Instance\.ExecuteAction\(node\.NavActionId\)" "clicking a node must execute its navigation action."
 
+# === TIMELINE VISUALS: revision-cached rich day tracks and interaction-only zoom tween ===
+$timelineRibbonRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTimelineRibbonImguiRenderer.cs"
+$timelineTrackRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTimelineImguiRenderer.cs"
+$timelineRibbonBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioDayTimelineRibbonViewModelBuilder.cs"
+Assert-Contains "timeline ribbon visuals" $timelineRibbonRenderer "TimelineRibbonZoomDuration = 0\.15f" "ribbon wheel zoom must interpolate over 150 ms."
+Assert-Contains "timeline ribbon visuals" $timelineRibbonRenderer "DrawTimelineRibbonDensity" "ribbon days must encode authored event density."
+Assert-Contains "timeline ribbon visuals" $timelineRibbonRenderer "DrawTimelineRibbonMarkerGlyph.*ResolveTimelineIconRole" "ribbon markers must use the shared timeline domain icon mapping."
+Assert-Contains "timeline ribbon visuals" $timelineRibbonRenderer "_timelineRibbonChapterStyle" "chapter flags must expose their stage label at close zoom."
+Assert-Contains "timeline ribbon hover" $timelineRibbonBuilder "BuildDayHoverAction" "ribbon day cells must publish cached rich-hover summaries."
+Assert-Contains "timeline page cache" $timelineTrackRenderer "_timelineTrackCachedRevisionToken" "Timeline page geometry must share the ribbon's definition/revision cache token."
+Assert-Contains "timeline page cache" $timelineTrackRenderer "RebindTimelineTrackActions" "cached Timeline geometry must rebind current semantic actions without reparsing layout metadata."
+Assert-Contains "timeline page visuals" $timelineTrackRenderer "TimelineTrackZoomDuration = 0\.15f" "Timeline page wheel zoom must interpolate over 150 ms."
+Assert-Contains "timeline page visuals" $timelineTrackRenderer "ResolveTimelineIconRole" "Timeline page chips must use shared domain iconography."
+Assert-Contains "timeline page hover" $timelineTrackRenderer "RegisterRichHoverHelpSource\(rect, day\.Action\)" "Timeline page day cells must provide rich hover previews."
+
 # STORYUX: humane story-character labels replace the 'Display name 1' debug steppers.
 Assert-Contains "story character labels" $scenarioCharacterLinks "EditableProperty\(""Display name"","  "the display-name field must use plain creator language, not a numbered stepper."
 Assert-Contains "story character labels" $scenarioCharacterLinks "Vanilla preset \(optional\)" "optional vanilla preset must be labelled as optional."

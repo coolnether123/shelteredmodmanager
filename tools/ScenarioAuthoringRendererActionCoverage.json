@@ -47,6 +47,11 @@
   ],
   "exemptions": [
     {
+      "key": "ScenarioAuthoringShellTimelineImguiRenderer.cs::HandleTimelineTrackInput",
+      "reason": "Mouse-wheel zoom and continuous drag pan change only the session-local Timeline page viewport; day and entry clicks remain semantic timeline actions.",
+      "osClickFallback": "Use OS wheel or left-drag inside the Timeline page day track to exercise its continuous viewport controls."
+    },
+    {
       "key": "ScenarioAuthoringShellTimelineRibbonImguiRenderer.cs::HandleTimelineRibbonInput",
       "reason": "Mouse-wheel zoom and continuous drag pan change only the session-local ribbon viewport; marker clicks remain semantic timeline actions.",
       "osClickFallback": "Use OS wheel or left-drag inside the day-timeline ribbon to exercise its continuous viewport controls."

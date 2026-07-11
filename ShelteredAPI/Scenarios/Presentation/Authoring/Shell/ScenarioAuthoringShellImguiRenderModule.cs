@@ -1451,6 +1451,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineRibbonDayStyle = null;
             _timelineRibbonOverflowStyle = null;
             _timelineRibbonEmptyStyle = null;
+            _timelineRibbonGlyphStyle = null;
+            _timelineRibbonChapterStyle = null;
+            _timelineTrackLabelStyle = null;
+            _timelineTrackGlyphStyle = null;
+            _timelineTrackCachedRevisionToken = null;
+            _timelineTrackCachedDays = null;
+            _timelineTrackCachedChips = null;
+            _timelineTrackMeasuredDayWidth = 0f;
+            _timelineTrackMaxLanes = 0;
             _styleOpacity = -1f;
         }
 
