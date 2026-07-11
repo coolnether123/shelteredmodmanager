@@ -17,6 +17,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             bool isActive = false;
             bool isConverted = false;
             int dayCreated = 0;
+            string runId = string.Empty;
             int lastEditorTick = 0;
             bool hasLastEditorTick = false;
             int scenarioQuestInstanceId = -1;
@@ -27,6 +28,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             data.SaveLoad("IsActive", ref isActive);
             data.SaveLoad("IsConverted", ref isConverted);
             data.SaveLoad("DayCreated", ref dayCreated);
+            data.SaveLoad("RunId", ref runId);
             data.SaveLoad(HasLastEditorTickName, ref hasLastEditorTick);
             data.SaveLoad("LastEditorSaveTick", ref lastEditorTick);
             data.SaveLoad(HasScenarioQuestInstanceIdName, ref hasScenarioQuestInstanceId);
@@ -41,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             binding.IsActive = isActive;
             binding.IsConvertedToNormalSave = isConverted;
             binding.DayCreated = dayCreated;
+            binding.RunId = runId;
             binding.LastEditorSaveTick = hasLastEditorTick ? new int?(lastEditorTick) : null;
             binding.ScenarioQuestInstanceId = hasScenarioQuestInstanceId ? new int?(scenarioQuestInstanceId) : null;
             return binding;
@@ -54,6 +57,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             bool isActive = binding.IsActive;
             bool isConverted = binding.IsConvertedToNormalSave;
             int dayCreated = binding.DayCreated;
+            string runId = binding.RunId ?? string.Empty;
             bool hasLastEditorTick = binding.LastEditorSaveTick.HasValue;
             int lastEditorTick = binding.LastEditorSaveTick.HasValue ? binding.LastEditorSaveTick.Value : 0;
             bool hasScenarioQuestInstanceId = binding.ScenarioQuestInstanceId.HasValue;
@@ -64,6 +68,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             data.SaveLoad("IsActive", ref isActive);
             data.SaveLoad("IsConverted", ref isConverted);
             data.SaveLoad("DayCreated", ref dayCreated);
+            data.SaveLoad("RunId", ref runId);
             data.SaveLoad(HasLastEditorTickName, ref hasLastEditorTick);
             data.SaveLoad("LastEditorSaveTick", ref lastEditorTick);
             data.SaveLoad(HasScenarioQuestInstanceIdName, ref hasScenarioQuestInstanceId);

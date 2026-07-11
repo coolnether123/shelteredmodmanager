@@ -11,6 +11,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 {
     internal interface IScenarioEndGamePresentationTarget
     {
+        void ResetForNewRun();
         bool TryPresent(ScenarioEndGamePresentation presentation, out string reason);
     }
 
@@ -48,10 +49,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 ? _playtestPresenter.TryPresent(presentation, out reason)
                 : _installedPresenter.TryPresent(presentation, out reason);
         }
+
+        public void ResetForNewRun()
+        {
+            if (_playtestPresenter != null)
+                _playtestPresenter.ResetForNewRun();
+            if (_installedPresenter != null)
+                _installedPresenter.ResetForNewRun();
+        }
     }
 
     internal sealed class ScenarioPlaytestEndGamePresenter : IScenarioEndGamePresentationTarget
     {
+        public void ResetForNewRun() { }
+
         public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
         {
             try
@@ -77,6 +88,32 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 
     internal sealed class ScenarioInstalledEndGamePresenter : IScenarioEndGamePresentationTarget
     {
+        public void ResetForNewRun()
+        {
+            bool panelWasActive = ScenarioVictoryPanel.HasActivePanel;
+            ScenarioVictoryPanel.ResetForNewRun();
+
+            bool gameOverWasArmed = false;
+            FamilyManager family = FamilyManager.Instance;
+            if (family != null)
+            {
+                Traverse gameOverField = Traverse.Create(family).Field("game_over");
+                if (gameOverField.FieldExists())
+                {
+                    gameOverWasArmed = gameOverField.GetValue<bool>();
+                    gameOverField.SetValue(false);
+                }
+            }
+
+            if (GameModeManager.instance != null)
+                GameModeManager.instance.UpdateModeResult(GameModeManager.ModeResult.Unresolved);
+            if ((panelWasActive || gameOverWasArmed) && Time.timeScale == 0f && !PauseManager.isPaused)
+                Time.timeScale = 1f;
+
+            if (panelWasActive || gameOverWasArmed)
+                MMLog.WriteInfo("[ScenarioWinLoss] Cleared stale installed outcome presentation before the new run.");
+        }
+
         public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
         {
             try

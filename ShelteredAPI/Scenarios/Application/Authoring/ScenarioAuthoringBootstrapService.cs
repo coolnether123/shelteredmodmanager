@@ -939,7 +939,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     : session.Version,
                 IsActive = true,
                 IsConvertedToNormalSave = false,
-                DayCreated = GameTime.Day
+                DayCreated = GameTime.Day,
+                RunId = Guid.NewGuid().ToString("N")
             });
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Runtime binding activated. ScenarioId=" + session.DraftId
                 + ", Version=" + (editorSession != null && editorSession.WorkingDefinition != null

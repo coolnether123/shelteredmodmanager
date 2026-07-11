@@ -154,12 +154,16 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
     internal interface IScenarioWinLossOutcomeService
     {
+        bool IsOutcomeArmed { get; }
+        bool IsPresentationPending { get; }
+        void ResetForNewRun();
         void Initialize(ScenarioDefinition definition, ScenarioRuntimeBinding binding);
         void Tick(ScenarioRuntimeState state);
     }
 
     internal interface IScenarioEndGamePresenter
     {
+        void ResetForNewRun();
         bool TryPresent(ScenarioEndGamePresentation presentation, out string reason);
     }
 

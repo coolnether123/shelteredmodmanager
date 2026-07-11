@@ -25,6 +25,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private bool _presentationPending;
         private ScenarioEndGamePresentation _pendingPresentation;
         private string _lastPresentationFailure;
+        private bool _outcomeArmed;
+
+        public bool IsOutcomeArmed { get { return _outcomeArmed; } }
+        public bool IsPresentationPending { get { return _presentationPending; } }
 
         public ScenarioWinLossOutcomeService(
             IScenarioQuestInstanceResolver questInstanceResolver,
@@ -44,12 +48,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         public void Initialize(ScenarioDefinition definition, ScenarioRuntimeBinding binding)
         {
+            ResetForNewRun();
             _definition = definition;
             _binding = binding;
+        }
+
+        public void ResetForNewRun()
+        {
+            if (_endGamePresenter != null)
+                _endGamePresenter.ResetForNewRun();
+            _definition = null;
+            _binding = null;
             _lastBlockedReason = null;
             _presentationPending = false;
             _pendingPresentation = null;
             _lastPresentationFailure = null;
+            _outcomeArmed = false;
         }
 
         public void Tick(ScenarioRuntimeState state)
@@ -59,6 +73,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             if (!string.IsNullOrEmpty(state.ScenarioOutcome))
             {
+                _outcomeArmed = true;
                 if (_presentationPending)
                     PresentOutcome(_pendingPresentation);
                 return;
@@ -152,6 +167,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 + " as " + state.ScenarioOutcome
                 + " via condition '" + (state.ScenarioOutcomeConditionId ?? string.Empty) + "'.");
             _presentationPending = true;
+            _outcomeArmed = true;
             _pendingPresentation = BuildPresentation(_definition, condition, success);
             PresentOutcome(_pendingPresentation);
         }

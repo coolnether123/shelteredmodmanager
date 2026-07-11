@@ -105,7 +105,8 @@ namespace ShelteredAPI.Scenarios.Lifecycle{
                 VersionApplied = info != null ? info.Version : null,
                 IsActive = true,
                 IsConvertedToNormalSave = false,
-                DayCreated = GetCurrentDay()
+                DayCreated = GetCurrentDay(),
+                RunId = Guid.NewGuid().ToString("N")
             };
         }
 
