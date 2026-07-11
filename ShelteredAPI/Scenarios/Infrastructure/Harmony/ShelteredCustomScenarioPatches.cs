@@ -15,6 +15,7 @@ using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -378,6 +379,131 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
             try { return panelManager.IsPanelOnStack(panel); }
             catch { return false; }
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ShelteredCustomScenarioGuidedSetup",
+        TargetBehavior = "Guided custom scenarios pre-set and lock author-fixed vanilla difficulty controls.",
+        FailureMode = "Guided launches fall back to interactive vanilla difficulty controls.",
+        RollbackStrategy = "Disable the Scenarios patch domain or choose Full Setup for the scenario.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    internal static class ShelteredCustomScenarioGuidedSetupPatches
+    {
+        [HarmonyPatch(typeof(DifficultyCustomisation), "OnShowPage")]
+        [HarmonyPostfix]
+        private static void OnShowPagePostfix(DifficultyCustomisation __instance)
+        {
+            ScenarioDefinition definition;
+            if (__instance == null || !ScenarioLaunchSetupPolicy.TryGetPendingGuidedDefinition(out definition))
+                return;
+
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Rain, "m_currentRain", "UpdateRainLabel", "RainText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Resources, "m_currentResources", "UpdateResourcesLabel", "ResourcesText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Breach, "m_currentBreach", "UpdateBreachLabel", "BreachText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Faction, "m_currentFaction", "UpdateFactionLabel", "FactionText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Mood, "m_currentMood", "UpdateMoodLabel", "MoodText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.MapSize, "m_currentMapSize", "UpdateMapSizeLabel", "MapSizeText");
+            ApplyFixedFog(__instance, definition);
+        }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextPresetPrefix() { return !HasAnyFixedCategory(); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousPresetPrefix() { return !HasAnyFixedCategory(); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextRainDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextRainPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Rain); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevRainDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousRainPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Rain); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextResourceDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextResourcesPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Resources); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevResourceDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousResourcesPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Resources); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextBreachDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextBreachPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Breach); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevBreachDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousBreachPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Breach); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextFactionDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextFactionPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Faction); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevFactionDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousFactionPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Faction); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextMoodDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextMoodPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Mood); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevMoodDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousMoodPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Mood); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextMapSize")]
+        [HarmonyPrefix]
+        private static bool NextMapSizePrefix() { return CanChange(ScenarioDifficultyCategoryIds.MapSize); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevMapSize")]
+        [HarmonyPrefix]
+        private static bool PreviousMapSizePrefix() { return CanChange(ScenarioDifficultyCategoryIds.MapSize); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextFogDifficulty")]
+        [HarmonyPrefix]
+        private static bool FogPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Fog); }
+
+        private static bool CanChange(string categoryId)
+        {
+            ScenarioDefinition definition;
+            return !ScenarioLaunchSetupPolicy.TryGetPendingGuidedDefinition(out definition)
+                || ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, categoryId);
+        }
+
+        private static bool HasAnyFixedCategory()
+        {
+            ScenarioDefinition definition;
+            if (!ScenarioLaunchSetupPolicy.TryGetPendingGuidedDefinition(out definition))
+                return false;
+            string[] ids = { ScenarioDifficultyCategoryIds.Rain, ScenarioDifficultyCategoryIds.Resources,
+                ScenarioDifficultyCategoryIds.Breach, ScenarioDifficultyCategoryIds.Faction,
+                ScenarioDifficultyCategoryIds.Mood, ScenarioDifficultyCategoryIds.MapSize, ScenarioDifficultyCategoryIds.Fog };
+            for (int i = 0; i < ids.Length; i++)
+                if (!ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, ids[i])) return true;
+            return false;
+        }
+
+        private static void ApplyFixed(DifficultyCustomisation page, ScenarioDefinition definition, string id, string field, string updateMethod, string labelField)
+        {
+            if (ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, id))
+                return;
+            Traverse traverse = Traverse.Create(page);
+            traverse.Field(field).SetValue(ScenarioLaunchSetupPolicy.GetValue(definition, id, 1));
+            traverse.Method(updateMethod).GetValue();
+            AppendAuthoredNote(traverse.Field(labelField).GetValue<UILabel>());
+        }
+
+        private static void ApplyFixedFog(DifficultyCustomisation page, ScenarioDefinition definition)
+        {
+            if (ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, ScenarioDifficultyCategoryIds.Fog))
+                return;
+            Traverse traverse = Traverse.Create(page);
+            traverse.Field("m_currentFog").SetValue(ScenarioLaunchSetupPolicy.GetValue(definition, ScenarioDifficultyCategoryIds.Fog, 0) != 0);
+            traverse.Method("UpdateFogLabel").GetValue();
+            AppendAuthoredNote(traverse.Field("FogText").GetValue<UILabel>());
+        }
+
+        private static void AppendAuthoredNote(UILabel label)
+        {
+            const string note = " [808080](authored)[-]";
+            if (label != null && !string.IsNullOrEmpty(label.text) && label.text.IndexOf("(authored)", StringComparison.Ordinal) < 0)
+                label.text += note;
         }
     }
 

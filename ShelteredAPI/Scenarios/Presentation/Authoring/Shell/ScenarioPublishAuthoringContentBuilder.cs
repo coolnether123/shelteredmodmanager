@@ -73,6 +73,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                     Items = BuildReadinessSummary(editorSession, definition, validation, compatibilityReport).ToArray()
                 },
+                ScenarioLaunchSetupAuthoringSectionBuilder.Build(definition),
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "publish_metadata",

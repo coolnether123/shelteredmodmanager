@@ -353,6 +353,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             XmlElement root = document.DocumentElement;
             ScenarioDefinition definition = new ScenarioDefinition();
             IScenarioSectionSerializer<FamilySetupDefinition> familySerializer = new FamilyScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioLaunchSetupDefinition> launchSetupSerializer = new LaunchSetupScenarioSectionSerializer();
             IScenarioSectionSerializer<StartingInventoryDefinition> inventorySerializer = new InventoryScenarioSectionSerializer();
             IScenarioSectionSerializer<BunkerEditsDefinition> bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
             IScenarioSectionSerializer<TriggersAndEventsDefinition> triggerSerializer = new TriggerEventScenarioSectionSerializer();
@@ -393,6 +394,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             definition.Conversations = ReadConversations(Child(root, "Conversations"));
             definition.VanillaSuppression = ReadVanillaSuppression(Child(root, "VanillaSuppression"));
             definition.FamilySetup = familySerializer.Read(Child(root, "FamilySetup"));
+            definition.LaunchSetup = launchSetupSerializer.Read(Child(root, "LaunchSetup"));
             definition.StartingInventory = inventorySerializer.Read(Child(root, "StartingInventory"));
             definition.BunkerEdits = bunkerEditsSerializer.Read(Child(root, "BunkerEdits"));
             definition.TriggersAndEvents = triggerSerializer.Read(Child(root, "TriggersAndEvents"));
@@ -1208,6 +1210,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteStartDocument();
             writer.WriteStartElement("Scenario");
             IScenarioSectionSerializer<FamilySetupDefinition> familySerializer = new FamilyScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioLaunchSetupDefinition> launchSetupSerializer = new LaunchSetupScenarioSectionSerializer();
             IScenarioSectionSerializer<StartingInventoryDefinition> inventorySerializer = new InventoryScenarioSectionSerializer();
             IScenarioSectionSerializer<BunkerEditsDefinition> bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
             IScenarioSectionSerializer<TriggersAndEventsDefinition> triggerSerializer = new TriggerEventScenarioSectionSerializer();
@@ -1266,6 +1269,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             WriteVanillaSuppression(writer, definition.VanillaSuppression);
 
             familySerializer.Write(writer, definition.FamilySetup);
+            launchSetupSerializer.Write(writer, definition.LaunchSetup);
             inventorySerializer.Write(writer, definition.StartingInventory);
             bunkerEditsSerializer.Write(writer, definition.BunkerEdits);
             triggerSerializer.Write(writer, definition.TriggersAndEvents);

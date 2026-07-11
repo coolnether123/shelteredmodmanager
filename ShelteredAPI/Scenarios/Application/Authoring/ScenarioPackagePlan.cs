@@ -243,6 +243,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             if (!string.IsNullOrEmpty(honestyLine))
                 text.AppendLine(honestyLine);
             text.AppendLine("VERSION"); text.AppendLine(Safe(definition.Version));
+            text.AppendLine("PLAY EXPERIENCE");
+            text.AppendLine(definition.LaunchSetup != null ? definition.LaunchSetup.Mode.ToString() : ScenarioLaunchSetupMode.FullSetup.ToString());
             text.AppendLine("CREDITS"); text.AppendLine(Safe(definition.Credits)); text.AppendLine();
             text.AppendLine("INSTALLATION");
             text.AppendLine("Copy this scenario folder into <Sheltered game>\\mods\\<a loaded mod>\\Scenarios, then reopen the scenario book. Restart the game if the catalog was already cached.");

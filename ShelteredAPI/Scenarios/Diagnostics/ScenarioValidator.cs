@@ -68,6 +68,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 new DependencyValidationRule(this),
                 new AssetValidationRule(),
                 new FamilyValidationRule(),
+                new LaunchSetupValidationRule(),
                 new InventoryValidationRule(),
                 new BunkerValidationRule(),
                 new QuestMapValidationRule(),

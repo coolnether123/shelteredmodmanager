@@ -194,6 +194,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 session.MarkDraftChanged(ScenarioDirtySection.WinLoss);
                 session.MarkDraftChanged(ScenarioDirtySection.Assets);
                 session.MarkDraftChanged(ScenarioDirtySection.Map);
+                session.MarkDraftChanged(ScenarioDirtySection.LaunchSetup);
                 return true;
             }
             catch (Exception ex)
@@ -269,8 +270,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 // This is intentionally section-level: concise, cheap, and never pretends to be a visual diff.
                 XmlDocument snapshot = new XmlDocument(); snapshot.Load(snapshotPath);
                 XmlDocument now = new XmlDocument(); now.LoadXml(_serializer.ToXml(current));
-                string[] sections = { "Meta", "FamilySetup", "StartingInventory", "BunkerEdits", "ScenarioFlow", "TriggersAndEvents", "AssetReferences", "Map" };
-                string[] labels = { "Details", "Family", "Supplies", "Shelter", "Story", "Events", "Art", "Map" };
+                string[] sections = { "Meta", "LaunchSetup", "FamilySetup", "StartingInventory", "BunkerEdits", "ScenarioFlow", "TriggersAndEvents", "AssetReferences", "Map" };
+                string[] labels = { "Details", "Play Experience", "Family", "Supplies", "Shelter", "Story", "Events", "Art", "Map" };
                 List<string> changes = new List<string>();
                 for (int i = 0; i < sections.Length; i++)
                 {

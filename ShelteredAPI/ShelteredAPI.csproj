@@ -250,6 +250,7 @@
     <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioConversationValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioValidationPipeline.cs" />
+    <Compile Include="Scenarios\Domain\Validation\LaunchSetupValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioMetadataValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\SchedulingValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ValidationIssue.cs" />
@@ -281,6 +282,7 @@
     <Compile Include="Scenarios\Infrastructure\Serialization\BunkerEditsScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\BunkerGridScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\FamilyScenarioSectionSerializer.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\LaunchSetupScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\GateConditionScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\InventoryScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\QuestMapScenarioSectionSerializer.cs" />
@@ -338,6 +340,7 @@
     <Compile Include="Scenarios\Application\Commands\ScenarioStoryFocusedEditorCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioPublishCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioWinLossCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioLaunchSetupCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />
@@ -430,6 +433,7 @@
     <Compile Include="Scenarios\Application\Selection\ScenarioBrowserState.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioCatalogEntry.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioLaunchCoordinator.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioLaunchSetupPolicy.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSaveLibrary.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionCatalogService.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionIds.cs" />
@@ -464,6 +468,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMetadataAuthoringContent.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioLaunchSetupAuthoringSectionBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPacingAuthoringSectionBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthorTestChecklistSectionBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioTestConsoleAuthoringContentBuilder.cs" />

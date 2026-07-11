@@ -144,6 +144,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new ScenarioWinLossCommandHandler(editorService),
+                new ScenarioLaunchSetupCommandHandler(editorService, snapshotService),
                 new ScenarioAuthorTestChecklistCommandHandler(editorService, testChecklistService),
                 new ScenarioPublishCommandHandler(publishExportService),
                 new ScenarioDraftHistoryCommandHandler(snapshotService),

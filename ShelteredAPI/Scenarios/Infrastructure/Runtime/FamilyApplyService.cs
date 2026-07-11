@@ -40,8 +40,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             List<FamilyMember> members = FamilyManager.Instance.GetAllFamilyMembers();
             if (members == null)
                 members = new List<FamilyMember>();
+            bool authoredStartRequired = definition.FamilySetup.OverrideVanillaFamily
+                || (definition.LaunchSetup != null && definition.LaunchSetup.Mode == ScenarioLaunchSetupMode.Direct);
 
-            if (members.Count == 0 && definition.FamilySetup.OverrideVanillaFamily)
+            if (members.Count == 0 && authoredStartRequired)
             {
                 int spawnedCount = SpawnMissingMembers(definition, scenarioFilePath, result, 0);
                 if (spawnedCount > 0)
@@ -64,7 +66,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                     continue;
 
                 FamilyMember member = ResolveAuthoredMember(definition, config, i, members);
-                if (member == null && definition.FamilySetup.OverrideVanillaFamily)
+                if (member == null && authoredStartRequired)
                 {
                     SpawnConfiguredMember(definition, scenarioFilePath, result, config);
                     continue;

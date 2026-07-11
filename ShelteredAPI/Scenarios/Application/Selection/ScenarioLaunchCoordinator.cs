@@ -20,19 +20,23 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly ICustomScenarioLifecycleService _scenarioLifecycle;
+        private readonly IScenarioDefinitionCatalogService _definitions;
 
         public ScenarioLaunchCoordinator(
             IScenarioSaveLibrary saveLibrary,
             IScenarioSelectionCatalogService catalog,
-            ICustomScenarioLifecycleService scenarioLifecycle)
+            ICustomScenarioLifecycleService scenarioLifecycle,
+            IScenarioDefinitionCatalogService definitions)
         {
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
             if (catalog == null) throw new ArgumentNullException("catalog");
             if (scenarioLifecycle == null) throw new ArgumentNullException("scenarioLifecycle");
+            if (definitions == null) throw new ArgumentNullException("definitions");
 
             _saveLibrary = saveLibrary;
             _catalog = catalog;
             _scenarioLifecycle = scenarioLifecycle;
+            _definitions = definitions;
         }
 
         public SaveManager.SaveType GetVirtualSaveType(ScenarioCatalogEntry entry)
@@ -63,6 +67,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             public CustomScenarioInfo Scenario;
             public SaveEntry StartupSave;
             public SaveManager.SaveType VirtualSaveType;
+            public ScenarioDefinition Definition;
         }
 
         /// <summary>
@@ -139,7 +144,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 Entry = entry,
                 Scenario = scenario,
                 StartupSave = startupSave,
-                VirtualSaveType = GetVirtualSaveType(entry)
+                VirtualSaveType = GetVirtualSaveType(entry),
+                Definition = LoadLaunchDefinition(entry)
             };
 
             MMLog.WriteInfo("[ScenarioLaunchCoordinator] PrepareNewGame ready. scenarioId="
@@ -185,9 +191,11 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             string launchTargetLabel = BuildLaunchTargetLabel(preparation);
-            if (ShouldLaunchWithoutStartup(preparation.Entry))
+            ScenarioLaunchSetupMode launchMode = ScenarioLaunchSetupPolicy.GetMode(preparation.Definition);
+            if (launchMode == ScenarioLaunchSetupMode.Direct || ShouldLaunchWithoutStartup(preparation.Entry, launchMode))
             {
-                if (!BeginDirectScenarioTransition(adapter, launchTargetLabel, virtualSaveType, preparation.Entry.BaseGameMode))
+                ScenarioDefinition directDefinition = launchMode == ScenarioLaunchSetupMode.Direct ? preparation.Definition : null;
+                if (!BeginDirectScenarioTransition(adapter, launchTargetLabel, virtualSaveType, preparation.Entry.BaseGameMode, directDefinition))
                 {
                     error = "Could not launch the scenario scene.";
                     _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
@@ -511,13 +519,14 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             ScenarioBrowserPanelAdapter adapter,
             string launchTargetLabel,
             SaveManager.SaveType virtualSaveType,
-            ScenarioBaseGameMode baseGameMode)
+            ScenarioBaseGameMode baseGameMode,
+            ScenarioDefinition definition)
         {
             if (adapter == null)
                 return false;
 
             string sceneName;
-            if (!TryGetDirectLaunchScene(baseGameMode, out sceneName))
+            if (!TryGetAuthoringLaunchScene(baseGameMode, out sceneName))
                 return false;
 
             try
@@ -525,7 +534,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 if (!adapter.GetInputEnabled())
                     adapter.SetInputEnabled(true);
 
-                return BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType);
+                return BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType, definition);
             }
             catch (Exception ex)
             {
@@ -591,10 +600,11 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
         }
 
-        private static bool ShouldLaunchWithoutStartup(ScenarioCatalogEntry entry)
+        private static bool ShouldLaunchWithoutStartup(ScenarioCatalogEntry entry, ScenarioLaunchSetupMode launchMode)
         {
             return entry != null
                 && entry.Source != ScenarioCatalogSource.Draft
+                && launchMode == ScenarioLaunchSetupMode.FullSetup
                 && entry.BaseGameMode != ScenarioBaseGameMode.Survival;
         }
 
@@ -628,7 +638,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private static bool BeginDirectSceneTransition(
             string sceneName,
             string launchTargetLabel,
-            SaveManager.SaveType virtualSaveType)
+            SaveManager.SaveType virtualSaveType,
+            ScenarioDefinition definition = null)
         {
             if (string.IsNullOrEmpty(sceneName))
                 return false;
@@ -652,12 +663,25 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             ShelteredAPI.Harmony.ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("ScenarioLaunchCoordinator.BeginDirectSceneTransition");
             ScenarioLoadingTransitionGuard.PrepareForManagedTransition(launchTargetLabel);
             saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
-            DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
+            if (definition != null)
+                ScenarioLaunchSetupPolicy.ApplyDifficulty(definition);
+            else
+                DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
             LoadingScreen.Instance.ShowLoadingScreen(sceneName);
             MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scene launch started. target="
                 + (launchTargetLabel ?? "<unknown>") + " scene=" + sceneName
                 + " virtualSaveType=" + virtualSaveType + ".");
             return true;
+        }
+
+        private ScenarioDefinition LoadLaunchDefinition(ScenarioCatalogEntry entry)
+        {
+            if (entry == null || entry.IsVanilla || string.IsNullOrEmpty(entry.ScenarioId))
+                return null;
+            ScenarioDefinition definition;
+            string path;
+            ScenarioValidationResult validation;
+            return _definitions.TryLoadDefinition(entry.ScenarioId, out definition, out path, out validation) ? definition : null;
         }
 
         private static int GetSlotNumber(SaveManager.SaveType saveType)

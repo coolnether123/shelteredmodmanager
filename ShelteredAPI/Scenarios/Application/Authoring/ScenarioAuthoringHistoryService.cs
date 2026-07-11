@@ -287,6 +287,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     destination.ModDependencies.Add(restored.ModDependencies[i]);
             }
             destination.FamilySetup = restored.FamilySetup;
+            destination.LaunchSetup = restored.LaunchSetup;
             destination.StartingInventory = restored.StartingInventory;
             destination.BunkerEdits = restored.BunkerEdits;
             destination.BunkerGrid = restored.BunkerGrid;
