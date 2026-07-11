@@ -5,6 +5,7 @@ using ModAPI.Core;
 using ModAPI.Debugging;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using UnityEngine;
 
 namespace ShelteredAPI.Debugging
@@ -27,7 +28,8 @@ namespace ShelteredAPI.Debugging
                 FeedbackOverlayConfig config = new FeedbackOverlayConfig(storageRoot)
                 {
                     ToggleKey = KeyCode.F4,
-                    WindowTitle = "Sheltered Developer Feedback"
+                    WindowTitle = "Sheltered Developer Feedback",
+                    OverlayVisibilityChanged = ShelteredFeedbackInputEnabler.SetOverlayVisible
                 };
 
                 overlay = runtimeRoot.AddComponent<FeedbackOverlay>();
@@ -42,6 +44,35 @@ namespace ShelteredAPI.Debugging
                 MMLog.WarnOnce(
                     "ShelteredFeedbackBootstrap.Install",
                     "Sheltered feedback overlay could not be installed: " + ex.Message);
+            }
+        }
+    }
+
+    /// <summary>Bridges the reusable overlay's visibility to the Sheltered authoring input gate.</summary>
+    internal static class ShelteredFeedbackInputEnabler
+    {
+        private static bool _overlayVisible;
+
+        public static void SetOverlayVisible(bool visible)
+        {
+            _overlayVisible = visible;
+            ApplyAuthoringCapture();
+        }
+
+        internal static void ApplyAuthoringCapture()
+        {
+            if (!_overlayVisible)
+                return;
+
+            try
+            {
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                if (inputCapture != null)
+                    inputCapture.SetKeyboardCaptured(true);
+            }
+            catch
+            {
+                // The feedback surface must remain available outside authoring.
             }
         }
     }
