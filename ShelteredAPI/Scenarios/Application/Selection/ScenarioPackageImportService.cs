@@ -82,6 +82,29 @@ namespace ShelteredAPI.Scenarios.Application.Selection
                 for (int i = 0; i < roots.Count; i++)
                     candidates.Add(ReadCandidate(roots[i]));
 
+                List<string> installedRoots = new List<string>();
+                Dictionary<string, bool> installedSeen = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                AddScenarioFilesUnder(InstalledScenariosRoot, installedRoots, installedSeen, SearchOption.AllDirectories);
+                for (int i = 0; i < installedRoots.Count; i++)
+                {
+                    ScenarioPackageImportCandidate installed = ReadCandidate(installedRoots[i]);
+                    bool alreadyRepresented = false;
+                    for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
+                    {
+                        ScenarioPackageImportCandidate existing = candidates[candidateIndex];
+                        if (existing != null
+                            && !string.IsNullOrEmpty(existing.ScenarioId)
+                            && string.Equals(existing.ScenarioId, installed.ScenarioId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            alreadyRepresented = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyRepresented)
+                        candidates.Add(installed);
+                }
+
                 candidates.Sort(CompareCandidates);
                 result.Candidates = candidates.ToArray();
             }
@@ -145,6 +168,56 @@ namespace ShelteredAPI.Scenarios.Application.Selection
             {
                 TryDeleteTemporary(temporary);
                 return Failed("Install failed: " + PlayerMessage(ex));
+            }
+        }
+
+        public ScenarioPackageImportResult Uninstall(ScenarioPackageImportCandidate candidate)
+        {
+            if (candidate == null || string.IsNullOrEmpty(candidate.ScenarioId) || string.IsNullOrEmpty(candidate.InstallPath))
+                return Failed("Choose an installed scenario package to uninstall.");
+
+            string installedRoot = Normalize(InstalledScenariosRoot);
+            string installPath;
+            try { installPath = Normalize(candidate.InstallPath); }
+            catch (Exception ex) { return Failed("Uninstall refused an invalid package path: " + PlayerMessage(ex)); }
+
+            if (string.IsNullOrEmpty(installPath)
+                || string.IsNullOrEmpty(installedRoot)
+                || !string.Equals(Path.GetDirectoryName(installPath), installedRoot, StringComparison.OrdinalIgnoreCase)
+                || !Directory.Exists(installPath))
+            {
+                return Failed("Uninstall refused a package outside the installed Scenarios folder.", installPath);
+            }
+
+            ScenarioPackageImportCandidate installed;
+            try { installed = ReadCandidate(installPath); }
+            catch (Exception ex) { return Failed("Could not verify the installed package: " + PlayerMessage(ex), installPath); }
+            if (installed == null
+                || !installed.IsAlreadyInstalled
+                || !string.Equals(installed.ScenarioId, candidate.ScenarioId, StringComparison.OrdinalIgnoreCase))
+            {
+                return Failed("Uninstall refused because the installed package identity did not match the selected scenario.", installPath);
+            }
+
+            try
+            {
+                ScenarioDefinitionMetadataCache.InvalidateUnder(installPath);
+                Directory.Delete(installPath, true);
+                _catalog.RefreshDefinitionCatalog();
+                return new ScenarioPackageImportResult
+                {
+                    Success = true,
+                    InstallPath = installPath,
+                    Message = "Uninstalled " + DisplayName(installed) + ". Saved runs and authoring drafts were retained."
+                };
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Failed("Uninstall failed because the installed package folder is read-only.", installPath);
+            }
+            catch (Exception ex)
+            {
+                return Failed("Uninstall failed while deleting the installed package: " + PlayerMessage(ex), installPath);
             }
         }
 

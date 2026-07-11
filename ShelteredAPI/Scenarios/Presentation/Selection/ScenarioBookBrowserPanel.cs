@@ -409,6 +409,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     case ScenarioBookRowKind.InstallPackage:
                         InstallPackage(row.ImportCandidate);
                         break;
+                    case ScenarioBookRowKind.UninstallPackage:
+                        UninstallPackage(row.ImportCandidate);
+                        break;
                 }
             }
             catch (Exception ex)
@@ -532,7 +535,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             {
                 MessageBox.Show(MessageBoxButtons.YesNo_Buttons, message, new MessageBoxResponse(delegate(int response)
                 {
-                    StartCoroutine(ResolveConfirmationAfterClickRelease(onConfirmed, response));
+                    ResolveConfirmation(onConfirmed, response);
                 }), null, null, localize);
             }
             catch
@@ -542,18 +545,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
         }
 
-        private IEnumerator ResolveConfirmationAfterClickRelease(Action onConfirmed, int response)
+        private void ResolveConfirmation(Action onConfirmed, int response)
         {
             UIFlowGuard.BlockSlotClicksToggle(true);
             UIFlowGuard.BlockSlotClicksForFrames(2);
-
-            yield return null;
-            while (UnityEngine.Input.GetMouseButton(0)
-                || UnityEngine.Input.GetMouseButton(1)
-                || UnityEngine.Input.GetMouseButton(2))
-            {
-                yield return null;
-            }
 
             try
             {
@@ -566,10 +561,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 SetStatus("Action failed: " + ex.Message);
                 MMLog.WriteWarning("[ScenarioBookBrowser] Confirmation resolution failed: " + ex.Message);
             }
-
-            yield return null;
-            UIFlowGuard.BlockSlotClicksForFrames(1);
-            ReleaseDeletePromptGuard();
+            finally
+            {
+                UIFlowGuard.BlockSlotClicksForFrames(1);
+                ReleaseDeletePromptGuard();
+            }
         }
 
         private void ReleaseDeletePromptGuard()
@@ -696,6 +692,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _dataSource.BeginImportRefreshAsync();
             ClearPreparedPages();
             RenderCurrentView(false);
+        }
+
+        private void UninstallPackage(ScenarioPackageImportCandidate candidate)
+        {
+            if (candidate == null || !candidate.IsAlreadyInstalled)
+                return;
+
+            BeginConfirmation(_actions.BuildUninstallConfirmation(candidate), false, delegate
+            {
+                string status;
+                bool uninstalled = _actions.UninstallPackage(candidate, out status);
+                SetStatus(status);
+                if (!uninstalled)
+                    return;
+
+                _dataSource.InvalidateCatalogSnapshot();
+                _dataSource.BeginRefreshAsync();
+                _dataSource.BeginImportRefreshAsync();
+                ClearPreparedPages();
+                RenderCurrentView(false);
+            });
         }
 
         private void SelectScenario(ScenarioCatalogEntry scenario)

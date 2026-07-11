@@ -444,11 +444,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         public string RandomTextureId(string meshId, ScenarioCharacterTexturePart part)
         {
             CharacterMeshOptions.CharacterMeshType meshType = ResolveMeshType(meshId);
-            if (meshType == null)
+            List<CharacterMeshOptions.CharacterTexture> textures = GetTextureList(meshType, part);
+            if (textures == null || textures.Count == 0)
                 return "default";
 
-            string id = meshType.GetRandomTexture(ToMeshTexturePart(part));
-            return string.IsNullOrEmpty(id) ? "default" : id;
+            int start = UnityEngine.Random.Range(0, textures.Count);
+            for (int offset = 0; offset < textures.Count; offset++)
+            {
+                CharacterMeshOptions.CharacterTexture texture = textures[(start + offset) % textures.Count];
+                if (IsCustomizationTexture(texture))
+                    return texture.m_id;
+            }
+
+            return "default";
         }
 
         public string CycleColorHex(ScenarioCharacterColorPart part, string currentHex, int delta)
@@ -480,9 +488,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
         public string RandomColorHex(ScenarioCharacterColorPart part)
         {
-            NpcVisitManager manager = NpcVisitManager.Instance;
-            if ((UnityEngine.Object)manager != (UnityEngine.Object)null)
-                return ToColorHex(manager.GetRandomNpcColor(ToMeshColorPart(part)));
+            List<Color> colors = GetVanillaColorList(part);
+            if (colors != null && colors.Count > 0)
+                return ToColorHex(colors[UnityEngine.Random.Range(0, colors.Count)]);
 
             string[] fallback = GetFallbackColors(part);
             if (fallback == null || fallback.Length == 0)

@@ -21,6 +21,8 @@ Authoring checklist:
 
 Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. The hub is always available from the scenario book, even when there are no existing custom scenarios, so authors can use `Add New Scenario`.
 
+Downloaded and exported XML packages can be managed from `Install Downloads`. An installed package has an `Uninstall` action with confirmation. Uninstall deletes only that package's direct child folder under the manager-owned `Scenarios` directory and refreshes the scenario catalog immediately. It does not delete authoring drafts, exports, or saved-run archives. If saved runs exist, they remain archived while the package is absent and reconnect when a package with the same stable scenario id is installed again.
+
 `ModAPI.Scenarios` is the neutral registration and lifecycle surface: custom scenario registrations, opaque definition factories, lifecycle state/events, portable catalog metadata, dependency manifest conversion, and validation result containers. `ShelteredAPI.Scenarios` is the Sheltered scenario authoring/runtime pack: Sheltered XML definitions, family/survivor/bunker/inventory/quest/weather sections, the `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` facades, plus the `ShelteredScenarioDefBuilder` escape hatch. Serializers, validators, runtime binding, browser controllers, and apply services are implementation details.
 
 ## Code-Driven Registration

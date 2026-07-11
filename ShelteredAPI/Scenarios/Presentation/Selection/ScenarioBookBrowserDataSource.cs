@@ -642,13 +642,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     continue;
                 rows.Add(new ScenarioBookRowModel
                 {
-                    Kind = candidate.CanInstall ? ScenarioBookRowKind.InstallPackage : ScenarioBookRowKind.Empty,
+                    Kind = candidate.CanInstall
+                        ? ScenarioBookRowKind.InstallPackage
+                        : candidate.IsAlreadyInstalled ? ScenarioBookRowKind.UninstallPackage : ScenarioBookRowKind.Empty,
                     ImportCandidate = candidate,
                     Title = BuildImportTitle(candidate),
                     Detail = candidate.CanInstall
                         ? "Validated and ready to make playable."
-                        : Safe(candidate.FailureReason, "This package cannot be installed."),
-                    Badge = candidate.CanInstall ? "Install" : (candidate.IsAlreadyInstalled ? "Installed" : "Needs Fix")
+                        : candidate.IsAlreadyInstalled
+                            ? "Installed package. Uninstall removes only the package; saved runs and drafts are retained."
+                            : Safe(candidate.FailureReason, "This package cannot be installed."),
+                    Badge = candidate.CanInstall ? "Install" : (candidate.IsAlreadyInstalled ? "Uninstall" : "Needs Fix")
                 });
             }
 

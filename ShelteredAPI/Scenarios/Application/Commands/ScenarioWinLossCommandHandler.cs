@@ -25,6 +25,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         public const string MinuteLossPrefix = "win_loss.loss.minute.";
         public const string QuantityWinPrefix = "win_loss.win.quantity.";
         public const string QuantityLossPrefix = "win_loss.loss.quantity.";
+        public const string TargetWinPrefix = "win_loss.win.target.";
+        public const string TargetLossPrefix = "win_loss.loss.target.";
     }
 
     internal sealed class ScenarioWinLossCommandHandler : IScenarioCommandHandler
@@ -82,10 +84,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
-            if (TryApplyToCondition(winLoss.WinConditions, actionId, ScenarioWinLossAuthoringActionIds.DeleteWinPrefix, ScenarioWinLossAuthoringActionIds.TypeWinPrefix, ScenarioWinLossAuthoringActionIds.DayWinPrefix, ScenarioWinLossAuthoringActionIds.HourWinPrefix, ScenarioWinLossAuthoringActionIds.MinuteWinPrefix, ScenarioWinLossAuthoringActionIds.QuantityWinPrefix, "victory", out message))
+            if (TryApplyToCondition(winLoss.WinConditions, actionId, ScenarioWinLossAuthoringActionIds.DeleteWinPrefix, ScenarioWinLossAuthoringActionIds.TypeWinPrefix, ScenarioWinLossAuthoringActionIds.DayWinPrefix, ScenarioWinLossAuthoringActionIds.HourWinPrefix, ScenarioWinLossAuthoringActionIds.MinuteWinPrefix, ScenarioWinLossAuthoringActionIds.QuantityWinPrefix, ScenarioWinLossAuthoringActionIds.TargetWinPrefix, "victory", out message))
                 return true;
 
-            if (TryApplyToCondition(winLoss.LossConditions, actionId, ScenarioWinLossAuthoringActionIds.DeleteLossPrefix, ScenarioWinLossAuthoringActionIds.TypeLossPrefix, ScenarioWinLossAuthoringActionIds.DayLossPrefix, ScenarioWinLossAuthoringActionIds.HourLossPrefix, ScenarioWinLossAuthoringActionIds.MinuteLossPrefix, ScenarioWinLossAuthoringActionIds.QuantityLossPrefix, "failure", out message))
+            if (TryApplyToCondition(winLoss.LossConditions, actionId, ScenarioWinLossAuthoringActionIds.DeleteLossPrefix, ScenarioWinLossAuthoringActionIds.TypeLossPrefix, ScenarioWinLossAuthoringActionIds.DayLossPrefix, ScenarioWinLossAuthoringActionIds.HourLossPrefix, ScenarioWinLossAuthoringActionIds.MinuteLossPrefix, ScenarioWinLossAuthoringActionIds.QuantityLossPrefix, ScenarioWinLossAuthoringActionIds.TargetLossPrefix, "failure", out message))
                 return true;
 
             message = "Win/loss action was not recognized.";
@@ -113,6 +115,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             string hourPrefix,
             string minutePrefix,
             string quantityPrefix,
+            string targetPrefix,
             string label,
             out string message)
         {
@@ -159,6 +162,24 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             int deltaQuantity;
             if (TryParseDelta(actionId, quantityPrefix, out index, out deltaQuantity))
                 return AdjustIntProperty(conditions, index, "quantity", deltaQuantity, 1, 9999, label, out message);
+
+            string targetId;
+            if (TryParseToken(actionId, targetPrefix, out index, out targetId))
+            {
+                ConditionDef condition = Get(conditions, index);
+                if (condition == null || string.IsNullOrEmpty(targetId))
+                {
+                    message = condition == null
+                        ? "That " + label + " condition no longer exists."
+                        : "Choose a valid authored quest.";
+                    return false;
+                }
+
+                ScenarioPropertyBag.Set(condition.Properties, "questId", targetId);
+                ScenarioPropertyBag.Set(condition.Properties, "targetId", targetId);
+                message = "Updated " + label + " condition quest target to " + targetId + ".";
+                return true;
+            }
 
             return false;
         }
@@ -258,6 +279,22 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             return int.TryParse(payload.Substring(0, separator), NumberStyles.Integer, CultureInfo.InvariantCulture, out index)
                 && int.TryParse(payload.Substring(separator + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out delta);
+        }
+
+        private static bool TryParseToken(string actionId, string prefix, out int index, out string value)
+        {
+            index = -1;
+            value = null;
+            if (string.IsNullOrEmpty(actionId) || string.IsNullOrEmpty(prefix) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            string payload = actionId.Substring(prefix.Length);
+            int separator = payload.IndexOf('.');
+            if (separator <= 0 || !int.TryParse(payload.Substring(0, separator), NumberStyles.Integer, CultureInfo.InvariantCulture, out index))
+                return false;
+
+            value = ScenarioAuthoringActionCodec.DecodeToken(payload.Substring(separator + 1));
+            return value != null;
         }
 
         private static bool IsValidIndex(List<ConditionDef> conditions, int index)

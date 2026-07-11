@@ -35,7 +35,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         OpenScenarioSaves,
         OpenInstallScenarios,
         OpenScenarioDownloadsFolder,
-        InstallPackage
+        InstallPackage,
+        UninstallPackage
     }
 
     internal sealed class ScenarioBookRowModel
