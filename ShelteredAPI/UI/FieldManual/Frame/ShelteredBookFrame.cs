@@ -38,7 +38,11 @@ namespace ShelteredAPI.UI.FieldManual.Frame
         {
             UITexture vignette = _ui.CreateQuad(parent, "BookBackdrop", _textures.GetBookChromeTexture(BookChromeTexture.Vignette), Vector3.zero,
                 (int)ScreenSpan, (int)ScreenSpan, Color.white, _ui.NextDepth());
-            _ui.AddClickCollider(vignette.gameObject, (int)ScreenSpan, (int)ScreenSpan, null);
+            BoxCollider backdropCollider = _ui.AddClickCollider(vignette.gameObject, (int)ScreenSpan, (int)ScreenSpan, null);
+            // Keep the input shield behind interactive book content. All Field Manual UI is
+            // constructed at z=0, so an unshifted full-screen collider can win NGUI's
+            // physics raycast before a search field, row, or button collider.
+            backdropCollider.center = new Vector3(0f, 0f, 100f);
 
             int maxBookVisualDepth;
             int bookVisualDepth = _ui.NextDepth();
