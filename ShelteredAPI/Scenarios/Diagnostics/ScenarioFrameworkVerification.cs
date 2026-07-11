@@ -59,6 +59,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 ScenarioAssetInventoryVerification.Verify(root, result);
                 ScenarioAuthoringShortcutHelpVerification.Verify(result);
                 ScenarioAuthorTestChecklistVerification.Verify(root, result);
+                ScenarioLibraryOrganizationVerification.Verify(root, result);
                 ScenarioAuthoringActionCoverageVerification.Verify(result);
             }
             catch (Exception ex)

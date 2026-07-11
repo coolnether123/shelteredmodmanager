@@ -139,6 +139,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             string description,
             int order)
         {
+            SaveEntry[] saves = _saveLibrary.ListSaves(storageScenarioId);
             return new ScenarioCatalogEntry
             {
                 ScenarioId = scenarioId,
@@ -151,7 +152,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 Description = description,
                 Version = "1.0",
                 Order = order,
-                SaveCount = _saveLibrary.CountSaves(storageScenarioId),
+                SaveCount = saves != null ? saves.Length : 0,
+                LastPlayedUtc = ScenarioLibraryMetadata.ReadLastPlayedUtc(saves),
                 CanStart = true,
                 DependencyState = ScenarioDependencyVerificationState.Match
             };
@@ -180,6 +182,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 {
                     author = loadedDefinition.Author;
                 }
+                SaveEntry[] saves = _saveLibrary.ListSaves(scenario.Id);
                 entries.Add(new ScenarioCatalogEntry
                 {
                     ScenarioId = scenario.Id,
@@ -194,7 +197,10 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                     Author = author,
                     OwnerModId = scenario.OwnerModId,
                     Order = scenario.Order,
-                    SaveCount = _saveLibrary.CountSaves(scenario.Id),
+                    SaveCount = saves != null ? saves.Length : 0,
+                    InstalledUtc = ScenarioLibraryMetadata.ReadInstalledUtc(loadedScenarioPath),
+                    CreatedUtc = ScenarioLibraryMetadata.ReadScenarioCreatedUtc(loadedScenarioPath),
+                    LastPlayedUtc = ScenarioLibraryMetadata.ReadLastPlayedUtc(saves),
                     CanStart = dependencyState == ScenarioDependencyVerificationState.Match,
                     DependencyState = dependencyState,
                     DependencyManifest = manifest,

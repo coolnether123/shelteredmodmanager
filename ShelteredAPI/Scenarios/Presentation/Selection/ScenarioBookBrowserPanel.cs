@@ -151,7 +151,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService, _importService);
 
             VanillaPageTurnAssets pageTurnAssets = new VanillaPageTurnAssets();
-            _renderer = new ScenarioBookBrowserRenderer(BackOrClose, ChangePage);
+            _renderer = new ScenarioBookBrowserRenderer(
+                BackOrClose,
+                ChangePage,
+                HandleLibrarySortChanged,
+                HandleLibraryPinToggled);
             _renderer.Build(root, OverlayDepth, pageTurnAssets);
             _pageTurn = FieldManualBookPageTurn.Attach(root, _renderer.Chrome, pageTurnAssets);
             _pageFlipRoot = _renderer.Chrome.Ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
@@ -320,6 +324,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         pageCount,
                         _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
                         _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
+                        _dataSource.LibrarySortMode,
                         HandleRowSelected,
                         HandleDeleteSelected);
                 }
@@ -691,6 +696,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _dataSource.InvalidateCatalogSnapshot();
             _dataSource.BeginRefreshAsync();
             _dataSource.BeginImportRefreshAsync();
+            ClearPreparedPages();
+            RenderCurrentView(false);
+        }
+
+        private void HandleLibrarySortChanged()
+        {
+            if (_view != ScenarioBookBrowserViewKind.Types || _dataSource == null)
+                return;
+
+            _dataSource.CycleLibrarySortMode();
+            _pageIndex = 0;
+            ClearPreparedPages();
+            RenderCurrentView(false);
+        }
+
+        private void HandleLibraryPinToggled(ScenarioBookRowModel row)
+        {
+            if (_view != ScenarioBookBrowserViewKind.Types
+                || _dataSource == null
+                || row == null
+                || row.Scenario == null)
+                return;
+
+            bool pinned = _dataSource.ToggleLibraryPin(row.Scenario.ScenarioId);
+            SetStatus(pinned ? "Pinned to the top of the library." : "Removed from pinned scenarios.");
+            _pageIndex = 0;
             ClearPreparedPages();
             RenderCurrentView(false);
         }
@@ -1263,7 +1294,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private string BuildRenderScopeKey()
         {
             string scenarioId = _selectedScenario != null ? _selectedScenario.ScenarioId : string.Empty;
-            return _view + "|" + _selectedType + "|" + scenarioId + "|search=" + GetSearchFilter() + "|rows=" + (_rows != null ? _rows.Count : 0);
+            return _view + "|" + _selectedType + "|" + scenarioId
+                + "|search=" + GetSearchFilter()
+                + "|sort=" + (_dataSource != null ? _dataSource.LibrarySortMode.ToString() : string.Empty)
+                + "|rows=" + (_rows != null ? _rows.Count : 0);
         }
 
         private string GetSearchFilter()

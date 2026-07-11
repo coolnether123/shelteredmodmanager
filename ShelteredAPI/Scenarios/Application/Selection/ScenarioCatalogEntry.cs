@@ -1,3 +1,4 @@
+using System;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -38,6 +39,9 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         public ScenarioDependencyVerificationState DependencyState { get; set; }
         public SlotManifest DependencyManifest { get; set; }
         public CustomScenarioInfo CustomScenario { get; set; }
+        public DateTime? InstalledUtc { get; set; }
+        public DateTime? CreatedUtc { get; set; }
+        public DateTime? LastPlayedUtc { get; set; }
 
         public bool IsVanilla
         {

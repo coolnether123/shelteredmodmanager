@@ -5,6 +5,7 @@ using ShelteredAPI.UI.FieldManual.Layout;
 using ShelteredAPI.UI.FieldManual.Panels;
 using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Widgets;
+using ShelteredAPI.UI.Internal.Spine;
 using UnityEngine;
 using ShelteredAPI.Scenarios.Application.Selection;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
@@ -42,6 +43,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private readonly Action _back;
         private readonly Action<int> _changePage;
+        private readonly Action _cycleLibrarySort;
+        private readonly Action<ScenarioBookRowModel> _toggleLibraryPin;
         private readonly Dictionary<string, PreparedPage> _preparedPages = new Dictionary<string, PreparedPage>();
         private FieldManualWindowChrome _chrome;
         private UIPrimitiveFactory _ui;
@@ -51,15 +54,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private GameObject _footerNavigatorRoot;
         private BookSearchBarWidget _searchBar;
         private GameObject _searchBarRoot;
+        private GameObject _sortRoot;
+        private UILabel _sortLabel;
         private UIInput _draftIdInput;
         private UIInput _draftNameInput;
         private UIInput _draftDescriptionInput;
         private UILabel _statusLabel;
 
-        public ScenarioBookBrowserRenderer(Action back, Action<int> changePage)
+        public ScenarioBookBrowserRenderer(
+            Action back,
+            Action<int> changePage,
+            Action cycleLibrarySort,
+            Action<ScenarioBookRowModel> toggleLibraryPin)
         {
             _back = back;
             _changePage = changePage;
+            _cycleLibrarySort = cycleLibrarySort;
+            _toggleLibraryPin = toggleLibraryPin;
         }
 
         public FieldManualWindowChrome Chrome { get { return _chrome; } }
@@ -101,6 +112,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             int pageCount,
             string headerTitle,
             string headerDetail,
+            ScenarioLibrarySortMode librarySortMode,
             Action<ScenarioBookRowModel> select,
             Action<ScenarioBookRowModel> delete)
         {
@@ -108,6 +120,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             SetSearchVisible(true);
+            SetSortVisible(view == ScenarioBookBrowserViewKind.Types, librarySortMode);
             if (_searchBar != null)
             {
                 _searchBar.SetPresentation(
@@ -242,6 +255,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             SetSearchVisible(false);
+            SetSortVisible(false, ScenarioLibrarySortMode.PinnedFirst);
             SetNavigatorMode(ScenarioBookBrowserViewKind.DraftDetails);
             _pagedList.Clear();
             _draftIdInput = null;
@@ -292,12 +306,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 new Vector3(SearchBarX, SearchBarY, 0f),
                 "SEARCH THIS LIST:",
                 "Titles, details, and saves...");
+
+            _sortRoot = _chrome.Buttons.Build(
+                _chrome.Regions.ContentRoot,
+                "ScenarioLibrarySort",
+                "Pinned first",
+                new Vector3(2f, SearchBarY, 0f),
+                136,
+                35,
+                11,
+                _cycleLibrarySort);
+            _sortLabel = FindLabel(_sortRoot);
+            ScenarioBookLibraryHarnessPayload sortPayload = _sortRoot.AddComponent<ScenarioBookLibraryHarnessPayload>();
+            sortPayload.SortMode = ScenarioLibrarySortMode.PinnedFirst.ToString();
+            SpineWidgetRuntime.SetTooltip(_sortRoot, "Change scenario sort order");
+            _sortRoot.SetActive(false);
         }
 
         private void SetSearchVisible(bool visible)
         {
             if (_searchBar != null)
                 _searchBar.SetVisible(visible);
+        }
+
+        private void SetSortVisible(bool visible, ScenarioLibrarySortMode mode)
+        {
+            if (_sortRoot == null)
+                return;
+
+            _sortRoot.SetActive(visible);
+            if (_sortLabel != null)
+                _sortLabel.text = ScenarioLibraryOrganizer.Label(mode);
+            ScenarioBookLibraryHarnessPayload payload = _sortRoot.GetComponent<ScenarioBookLibraryHarnessPayload>();
+            if (payload != null)
+                payload.SortMode = mode.ToString();
+            _sortRoot.name = "ScenarioLibrarySort_" + mode.ToString();
         }
 
         private void BuildFooter(VanillaPageTurnAssets assets)
@@ -556,6 +599,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             Action<ScenarioBookRowModel> select)
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookRow_Library_" + index.ToString(), new Vector3(LeftPageX, y, 0f));
+            ScenarioBookLibraryHarnessPayload rowPayload = root.AddComponent<ScenarioBookLibraryHarnessPayload>();
+            rowPayload.ScenarioId = row != null && row.Scenario != null ? row.Scenario.ScenarioId : string.Empty;
+            rowPayload.SortMode = row != null ? row.LibrarySortMode.ToString() : ScenarioLibrarySortMode.PinnedFirst.ToString();
+            rowPayload.Pinned = row != null && row.IsPinned;
             bool selected = row != null && row.Scenario != null && ReferenceEquals(row.Scenario, selectedScenario);
             Color rest = selected ? new Color(0.38f, 0.29f, 0.18f, 0.34f) : BookSelectionRowStyle.Background(row != null && row.IsLocked);
             UITexture background = _ui.CreateQuad(root, "Background", _chrome.Textures.White, Vector3.zero,
@@ -565,15 +612,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 selected ? _chrome.Palette.StampRed : _chrome.Palette.OliveBand, _ui.NextDepth());
             UILabel title = _ui.CreateLabel(root, "Title", row != null ? row.Title : string.Empty,
                 new Vector3(-214f, 9f, 0f), LibraryFont(18), BookSelectionRowStyle.TitleColor(_chrome.Palette, row != null && row.IsLocked),
-                405, 23, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                300, 23, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel detail = _ui.CreateLabel(root, "Detail", row != null ? row.Detail : string.Empty,
                 new Vector3(-214f, -13f, 0f), LibraryFont(12), _chrome.Palette.InkFaded,
-                405, 19, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                380, 19, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             detail.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel badge = _ui.CreateLabel(root, "Badge", row != null ? row.Badge : string.Empty,
-                new Vector3(216f, 9f, 0f), LibraryFont(11), _chrome.Palette.InkFaded,
-                60, 20, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
+                new Vector3(168f, 9f, 0f), LibraryFont(11), _chrome.Palette.InkFaded,
+                62, 20, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
+            if (row != null && row.Kind == ScenarioBookRowKind.Scenario && row.Scenario != null)
+            {
+                GameObject pin = _chrome.Buttons.Build(
+                    root,
+                    "Pin_" + (row.IsPinned ? "true" : "false"),
+                    row.IsPinned ? "^" : "·",
+                    new Vector3(216f, 0f, 0f),
+                    LibraryMetric(31),
+                    LibraryMetric(31),
+                    LibraryFont(15),
+                    delegate { if (_toggleLibraryPin != null) _toggleLibraryPin(row); });
+                UILabel pinLabel = FindLabel(pin);
+                if (pinLabel != null)
+                    pinLabel.color = row.IsPinned ? _chrome.Palette.StampRed : _chrome.Palette.InkFaded;
+                SpineWidgetRuntime.SetTooltip(pin, row.IsPinned ? "Unpin from top" : "Pin to top");
+            }
             if (select != null && row != null && row.Kind != ScenarioBookRowKind.Empty)
                 _ui.AddClickCollider(root, LeftPageWidth, LibraryMetric(LibraryScenarioRowHeight) - LibraryMetric(3), delegate { select(row); });
             if (row != null && row.Kind != ScenarioBookRowKind.Empty)
@@ -595,6 +658,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             hover.ScaleTarget = root.transform;
             hover.RestScale = 1f;
             hover.HoverScale = 1.01f;
+        }
+
+        private static UILabel FindLabel(GameObject root)
+        {
+            return root != null ? root.GetComponentInChildren<UILabel>(true) : null;
         }
 
         private void BuildLibraryWelcome(GameObject parent)

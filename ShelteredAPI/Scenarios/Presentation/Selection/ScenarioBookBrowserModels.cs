@@ -2,6 +2,15 @@ using System.Collections.Generic;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Selection;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
+    internal enum ScenarioLibrarySortMode
+    {
+        PinnedFirst,
+        RecentlyPlayed,
+        RecentlyDownloaded,
+        CreationDate,
+        Name
+    }
+
     internal enum ScenarioBookBrowserViewKind
     {
         Types,
@@ -56,6 +65,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string RecoverySaveId;
         public SaveManager.SaveType RecoverySaveType;
         public ScenarioPackageImportCandidate ImportCandidate;
+        public bool IsPinned;
+        public ScenarioLibrarySortMode LibrarySortMode;
     }
 
     internal sealed class ScenarioBookDraftEditorModel
