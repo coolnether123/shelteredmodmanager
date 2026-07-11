@@ -264,6 +264,7 @@
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionMetadataCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioFrameworkVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioRuntimeOutcomeVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringActionCoverageVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringShortcutHelpVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioStarterTemplateVerification.cs" />
@@ -418,6 +419,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioTriggerRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossConditionAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossOutcomeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioEndGamePresenter.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledBunkerRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledInventoryRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledObjectRuntimeService.cs" />

@@ -25,6 +25,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
         private List<ScenarioScheduledActionDefinition> _actions = new List<ScenarioScheduledActionDefinition>();
         private readonly HashSet<string> _executingActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _onceConsumptionLogged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _retryableFailureLoggedDay = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         public ScenarioScheduleRuntimeCoordinator(
             ScenarioRuntimeStateService stateService,
@@ -55,6 +56,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
             _actions = BuildActions(definition);
             _executingActions.Clear();
             _onceConsumptionLogged.Clear();
+            _retryableFailureLoggedDay.Clear();
             for (int i = 0; i < _actions.Count; i++)
                 Record(_actions[i], ScenarioRuntimeExecutionLogOutcome.Scheduled, null, "Awaiting its authored schedule.");
         }
@@ -77,7 +79,10 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
                     && (_journal.HasExecuted(action.Id) || _journal.HasRecord(action.Id, ScenarioExecutedActionStatus.Skipped)))
                 {
                     if (_onceConsumptionLogged.Add(action.Id))
+                    {
                         Record(action, ScenarioRuntimeExecutionLogOutcome.OnceAlreadyConsumed, null, "Once-only action was already consumed.");
+                        MMLog.WriteDebug("[ScenarioScheduleRuntime] Skipping once-only action already present in the in-memory execution journal: " + action.Id + ".");
+                    }
                     continue;
                 }
 
@@ -170,6 +175,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
             _executingActions.Add(action.Id);
             string message = null;
             bool ok = true;
+            bool retryableFailure = false;
             try
             {
                 if (action.Effects == null || action.Effects.Count == 0)
@@ -183,9 +189,11 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
                 for (int i = 0; i < action.Effects.Count; i++)
                 {
                     string effectMessage;
-                    if (!_effects.Dispatch(_definition, action.Effects[i], _journal.State, out effectMessage))
+                    bool effectRetryable;
+                    if (!_effects.Dispatch(_definition, action.Effects[i], _journal.State, out effectMessage, out effectRetryable))
                     {
                         ok = false;
+                        retryableFailure = effectRetryable;
                         message = effectMessage;
                         break;
                     }
@@ -193,17 +201,48 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
                         message = string.IsNullOrEmpty(message) ? effectMessage : message + " " + effectMessage;
                 }
 
-                _journal.Record(action, ok ? ScenarioExecutedActionStatus.Succeeded : ScenarioExecutedActionStatus.Failed, message);
-                Record(action, ok ? (manuallyFired ? ScenarioRuntimeExecutionLogOutcome.ManuallyFired : ScenarioRuntimeExecutionLogOutcome.Fired) : ScenarioRuntimeExecutionLogOutcome.FailedWithError, null, message);
+                if (ok || ShouldJournalEffectFailure(retryableFailure))
+                    _journal.Record(action, ok ? ScenarioExecutedActionStatus.Succeeded : ScenarioExecutedActionStatus.Failed, message);
+                if (ok)
+                {
+                    _retryableFailureLoggedDay.Remove(action.Id);
+                    Record(action, manuallyFired ? ScenarioRuntimeExecutionLogOutcome.ManuallyFired : ScenarioRuntimeExecutionLogOutcome.Fired, null, message);
+                }
+                else if (!retryableFailure)
+                {
+                    Record(action, ScenarioRuntimeExecutionLogOutcome.FailedWithError, null, message);
+                }
                 if (!ok)
-                    MMLog.WriteWarning("[ScenarioScheduleRuntime] Scheduled action failed: " + action.Id + " " + (message ?? string.Empty));
-                finalMessage = message ?? (ok ? "Action applied." : "Action failed.");
+                {
+                    if (!retryableFailure || ShouldLogRetryableFailure(action.Id))
+                    {
+                        MMLog.WriteWarning("[ScenarioScheduleRuntime] Scheduled action "
+                            + (retryableFailure ? "deferred for retry: " : "failed: ")
+                            + action.Id + " " + (message ?? "No failure detail was supplied."));
+                    }
+                }
+                finalMessage = message ?? (ok ? "Action applied." : retryableFailure ? "Action is waiting to retry." : "Action failed.");
                 return ok;
             }
             finally
             {
                 _executingActions.Remove(action.Id);
             }
+        }
+
+        internal static bool ShouldJournalEffectFailure(bool retryableFailure)
+        {
+            return !retryableFailure;
+        }
+
+        private bool ShouldLogRetryableFailure(string actionId)
+        {
+            int loggedDay;
+            if (_retryableFailureLoggedDay.TryGetValue(actionId, out loggedDay) && loggedDay == GameTime.Day)
+                return false;
+
+            _retryableFailureLoggedDay[actionId] = GameTime.Day;
+            return true;
         }
 
         private ScenarioScheduledActionDefinition FindAction(string actionId)

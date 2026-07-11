@@ -177,6 +177,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             if (outcome == ScenarioRuntimeExecutionLogOutcome.FailedWithError) return "!";
             if (outcome == ScenarioRuntimeExecutionLogOutcome.SkippedConditionFalse || outcome == ScenarioRuntimeExecutionLogOutcome.OnceAlreadyConsumed) return "-";
+            if (outcome == ScenarioRuntimeExecutionLogOutcome.RetryPending) return "~";
             if (outcome == ScenarioRuntimeExecutionLogOutcome.Scheduled) return ">";
             return "+";
         }
@@ -186,6 +187,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (outcome == ScenarioRuntimeExecutionLogOutcome.FailedWithError) return "FAILED";
             if (outcome == ScenarioRuntimeExecutionLogOutcome.SkippedConditionFalse) return "SKIPPED";
             if (outcome == ScenarioRuntimeExecutionLogOutcome.OnceAlreadyConsumed) return "CONSUMED";
+            if (outcome == ScenarioRuntimeExecutionLogOutcome.RetryPending) return "RETRYING";
             if (outcome == ScenarioRuntimeExecutionLogOutcome.Scheduled) return "QUEUED";
             if (outcome == ScenarioRuntimeExecutionLogOutcome.ManuallyFired) return "MANUAL";
             return "FIRED";

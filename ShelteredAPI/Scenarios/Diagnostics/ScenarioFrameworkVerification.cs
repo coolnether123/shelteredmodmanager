@@ -50,6 +50,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifySchedulePolicyWindows(result);
                 VerifySeamGuardContracts(result);
                 VerifyWizInfoContent(result);
+                ScenarioRuntimeOutcomeVerification.Verify(result);
                 ScenarioStarterTemplateVerification.Verify(result);
                 ScenarioTimelineUxVerification.Verify(result);
                 ScenarioAssetInventoryVerification.Verify(root, result);

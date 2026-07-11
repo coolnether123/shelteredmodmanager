@@ -11,7 +11,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime
         SkippedConditionFalse = 2,
         FailedWithError = 3,
         OnceAlreadyConsumed = 4,
-        ManuallyFired = 5
+        ManuallyFired = 5,
+        RetryPending = 6
     }
 
     internal sealed class ScenarioRuntimeExecutionLogEntry
@@ -34,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime
                 : Outcome == ScenarioRuntimeExecutionLogOutcome.ManuallyFired ? "manually fired"
                 : Outcome == ScenarioRuntimeExecutionLogOutcome.SkippedConditionFalse ? "skipped (condition false)"
                 : Outcome == ScenarioRuntimeExecutionLogOutcome.OnceAlreadyConsumed ? "skipped (already consumed)"
+                : Outcome == ScenarioRuntimeExecutionLogOutcome.RetryPending ? "waiting to retry"
                 : "failed";
             return "Day " + Day + " " + Hour.ToString("D2") + ":" + Minute.ToString("D2")
                 + " - " + (Kind ?? "Element") + " '" + name + "' " + verb

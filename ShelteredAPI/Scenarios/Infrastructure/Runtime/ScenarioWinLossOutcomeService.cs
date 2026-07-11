@@ -16,22 +16,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private readonly ScenarioConditionEvaluatorRegistry _conditionEvaluator;
         private readonly IVanillaScenarioRuntime _vanillaRuntime;
         private readonly ScenarioRuntimeExecutionLog _executionLog;
+        private readonly IScenarioEndGamePresenter _endGamePresenter;
         private ScenarioDefinition _definition;
         private ScenarioRuntimeBinding _binding;
         private string _lastBlockedReason;
+        private bool _presentationPending;
+        private bool _pendingPresentationSuccess;
+        private string _lastPresentationFailure;
 
         public ScenarioWinLossOutcomeService(
             IScenarioQuestInstanceResolver questInstanceResolver,
             IScenarioWinLossConditionAdapter conditionAdapter,
             ScenarioConditionEvaluatorRegistry conditionEvaluator,
             IVanillaScenarioRuntime vanillaRuntime,
-            ScenarioRuntimeExecutionLog executionLog)
+            ScenarioRuntimeExecutionLog executionLog,
+            IScenarioEndGamePresenter endGamePresenter)
         {
             _questInstanceResolver = questInstanceResolver;
             _conditionAdapter = conditionAdapter;
             _conditionEvaluator = conditionEvaluator;
             _vanillaRuntime = vanillaRuntime;
             _executionLog = executionLog;
+            _endGamePresenter = endGamePresenter;
         }
 
         public void Initialize(ScenarioDefinition definition, ScenarioRuntimeBinding binding)
@@ -39,6 +45,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             _definition = definition;
             _binding = binding;
             _lastBlockedReason = null;
+            _presentationPending = false;
+            _lastPresentationFailure = null;
         }
 
         public void Tick(ScenarioRuntimeState state)
@@ -47,7 +55,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return;
 
             if (!string.IsNullOrEmpty(state.ScenarioOutcome))
+            {
+                if (_presentationPending)
+                    PresentOutcome(_pendingPresentationSuccess);
                 return;
+            }
 
             ConditionDef condition;
             string reason;
@@ -136,7 +148,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             MMLog.WriteInfo("[ScenarioWinLoss] Resolved scenario QuestInstance " + instance.id.ToString()
                 + " as " + state.ScenarioOutcome
                 + " via condition '" + (state.ScenarioOutcomeConditionId ?? string.Empty) + "'.");
-            ReturnAuthoringPlaytestToEditor();
+            _presentationPending = true;
+            _pendingPresentationSuccess = success;
+            PresentOutcome(success);
+        }
+
+        private void PresentOutcome(bool success)
+        {
+            string reason = null;
+            if (_endGamePresenter != null && _endGamePresenter.TryPresent(success, out reason))
+            {
+                _presentationPending = false;
+                _lastPresentationFailure = null;
+                return;
+            }
+
+            reason = reason ?? "No scenario end-game presenter was registered.";
+            if (!string.Equals(_lastPresentationFailure, reason, StringComparison.OrdinalIgnoreCase))
+            {
+                _lastPresentationFailure = reason;
+                MMLog.WriteWarning("[ScenarioWinLoss] Outcome resolved; presentation remains pending: " + reason);
+            }
         }
 
         private static void ReturnAuthoringPlaytestToEditor()

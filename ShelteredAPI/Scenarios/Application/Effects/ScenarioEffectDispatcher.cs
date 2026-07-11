@@ -27,7 +27,14 @@ namespace ShelteredAPI.Scenarios.Application.Effects{
 
         public bool Dispatch(ScenarioDefinition definition, ScenarioEffectDefinition effect, ScenarioRuntimeState state, out string message)
         {
+            bool retryable;
+            return Dispatch(definition, effect, state, out message, out retryable);
+        }
+
+        public bool Dispatch(ScenarioDefinition definition, ScenarioEffectDefinition effect, ScenarioRuntimeState state, out string message, out bool retryable)
+        {
             message = null;
+            retryable = false;
             if (effect == null)
                 return true;
 
@@ -35,7 +42,12 @@ namespace ShelteredAPI.Scenarios.Application.Effects{
             {
                 IScenarioEffectHandler handler = _handlers[i];
                 if (handler != null && handler.CanHandle(effect.Kind))
-                    return handler.Handle(definition, effect, state, out message);
+                {
+                    IScenarioRetryableEffectHandler retryableHandler = handler as IScenarioRetryableEffectHandler;
+                    return retryableHandler != null
+                        ? retryableHandler.Handle(definition, effect, state, out message, out retryable)
+                        : handler.Handle(definition, effect, state, out message);
+                }
             }
 
             message = "No effect handler registered for " + effect.Kind + ".";
