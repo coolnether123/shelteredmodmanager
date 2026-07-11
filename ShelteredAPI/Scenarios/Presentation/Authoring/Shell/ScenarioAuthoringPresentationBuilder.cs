@@ -62,6 +62,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioSelectionStackAuthoringContentBuilder _selectionStackAuthoringContentBuilder;
         private readonly ScenarioPublishAuthoringContentBuilder _publishAuthoringContentBuilder;
         private readonly ScenarioTimelineAuthoringContentBuilder _timelineAuthoringContentBuilder;
+        private readonly ScenarioDayTimelineRibbonViewModelBuilder _timelineRibbonViewModelBuilder;
         private readonly ScenarioAuthoringTutorialService _tutorialService;
         private readonly ScenarioHelpAuthoringContentBuilder _helpAuthoringContentBuilder;
         private readonly Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> _windowSectionBuilders;
@@ -113,6 +114,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _selectionStackAuthoringContentBuilder = new ScenarioSelectionStackAuthoringContentBuilder();
             _publishAuthoringContentBuilder = new ScenarioPublishAuthoringContentBuilder(timelineBuilder, modDependencyDetector, modCompatibilityViewModelBuilder);
             _timelineAuthoringContentBuilder = new ScenarioTimelineAuthoringContentBuilder(timelineBuilder, timelineViewModelBuilder);
+            _timelineRibbonViewModelBuilder = new ScenarioDayTimelineRibbonViewModelBuilder(timelineBuilder);
             _windowSectionBuilders = CreateWindowSectionBuilders();
         }
 
@@ -146,6 +148,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Tour = BuildTourViewModel(),
                 Tutorial = state != null && (state.HelpWindowOpen || (_tutorialService != null && _tutorialService.CurrentTour() != null)) ? null : BuildTutorialViewModel(state, editorSession),
                 ContextMenu = contextMenu,
+                TimelineRibbon = _timelineRibbonViewModelBuilder.Build(editorSession),
                 StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
             viewModel.RendererActions = ScenarioAuthoringRendererActionManifest.Build(state, viewModel.Windows, viewModel.CustomSpriteEditor);

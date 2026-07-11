@@ -1181,7 +1181,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringTutorialViewModel Tutorial { get; set; }
         public ScenarioAuthoringTourViewModel Tour { get; set; }
         public ScenarioAuthoringContextMenuModel ContextMenu { get; set; }
+        public ScenarioDayTimelineRibbonViewModel TimelineRibbon { get; set; }
         public string[] StatusEntries { get; set; }
+    }
+
+    /// <summary>
+    /// Cached, presentation-only projection for the persistent workshop day ribbon.
+    /// It deliberately contains semantic actions so renderers and automation use the
+    /// same navigation routes as the full timeline page.
+    /// </summary>
+    internal sealed class ScenarioDayTimelineRibbonViewModel
+    {
+        public int FirstDay { get; set; }
+        public int LastDay { get; set; }
+        public int EntryCount { get; set; }
+        public int ChapterCount { get; set; }
+        public string EmptyMessage { get; set; }
+        public ScenarioDayTimelineRibbonMarkerViewModel[] Markers { get; set; }
+    }
+
+    internal sealed class ScenarioDayTimelineRibbonMarkerViewModel
+    {
+        public int Day { get; set; }
+        public string Domain { get; set; }
+        public string Title { get; set; }
+        public string Summary { get; set; }
+        public bool IsChapter { get; set; }
+        public ScenarioAuthoringInspectorAction Action { get; set; }
     }
 
     internal sealed class ScenarioAuthoringHelpViewModel

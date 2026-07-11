@@ -445,6 +445,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetInventoryContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationUtilities.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioDayTimelineRibbonViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringInspectorItemFacade.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHierarchyAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHelpAuthoringContentBuilder.cs" />
@@ -583,6 +584,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellToolRailImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellStoryMapImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTimelineImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTimelineRibbonImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTooltipImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTopBarImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellShortcutsImguiRenderer.cs" />

@@ -114,7 +114,8 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                     continue;
                 if (!string.IsNullOrEmpty(stage.UnansweredNextStage))
                 {
-                    entries.Add(NewEntry("flow.stage." + BuildId(stage.Id, i) + ".unanswered", ScenarioTimelineEntryKind.Story, DaysFromNow(stage.UnansweredNextDays), "Story unanswered -> " + Safe(stage.UnansweredNextStage), "StoryStage", "Story", stage.Id, runtimeState, "flow", "story_stage_unanswered", "ScenarioFlow.Stages", i, stage.Id, ScenarioAuthoringWindowIds.Quests, ScenarioAuthoringActionIds.ActionStoryStageUnansweredDelayPrefix + i.ToString()));
+                    int targetStageIndex = ResolveStoryStageIndex(definition, stage.UnansweredNextStage, i);
+                    entries.Add(NewEntry("flow.stage." + BuildId(stage.Id, i) + ".unanswered", ScenarioTimelineEntryKind.Story, DaysFromNow(stage.UnansweredNextDays), "Story unanswered -> " + Safe(stage.UnansweredNextStage), "StoryStage", "Story", stage.Id, runtimeState, "flow", "story_stage_unanswered", "ScenarioFlow.Stages", i, stage.Id, ScenarioAuthoringWindowIds.Quests, ScenarioStoryFocusedEditorActions.StageOpen(targetStageIndex)));
                 }
 
                 for (int s = 0; stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
@@ -123,9 +124,21 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                     if (intercom == null || intercom.StageChange == null || string.IsNullOrEmpty(intercom.StageChange.Id))
                         continue;
                     string sourceId = stage.Id + "/" + (intercom.Id ?? s.ToString());
-                    entries.Add(NewEntry("flow.stage_change." + BuildId(stage.Id, i) + "." + BuildId(intercom.Id, s), ScenarioTimelineEntryKind.Story, DaysFromNow(intercom.StageChange.DelayDays), "Story stage change -> " + Safe(intercom.StageChange.Id), "StoryStageChange", "Story", intercom.StageChange.Id, runtimeState, "flow", "story_stage_change", "ScenarioFlow.Stages[" + i.ToString() + "].IntercomStages", s, sourceId, ScenarioAuthoringWindowIds.Quests, ScenarioAuthoringActionIds.ActionStoryStageChangeDelayPrefix + i.ToString() + "." + s.ToString()));
+                    int targetStageIndex = ResolveStoryStageIndex(definition, intercom.StageChange.Id, i);
+                    entries.Add(NewEntry("flow.stage_change." + BuildId(stage.Id, i) + "." + BuildId(intercom.Id, s), ScenarioTimelineEntryKind.Story, DaysFromNow(intercom.StageChange.DelayDays), "Story stage change -> " + Safe(intercom.StageChange.Id), "StoryStageChange", "Story", intercom.StageChange.Id, runtimeState, "flow", "story_stage_change", "ScenarioFlow.Stages[" + i.ToString() + "].IntercomStages", s, sourceId, ScenarioAuthoringWindowIds.Quests, ScenarioStoryFocusedEditorActions.StageOpen(targetStageIndex)));
                 }
             }
+        }
+
+        private static int ResolveStoryStageIndex(ScenarioDefinition definition, string stageId, int fallback)
+        {
+            for (int i = 0; definition != null && definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null && i < definition.ScenarioFlow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition candidate = definition.ScenarioFlow.Stages[i];
+                if (candidate != null && string.Equals(candidate.Id, stageId, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+            return Math.Max(0, fallback);
         }
 
         private static void AddTriggers(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, List<ScenarioTimelineEntry> entries)
