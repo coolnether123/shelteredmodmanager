@@ -25,6 +25,8 @@ namespace ModAPI.Debugging
         private float _statusExpiresAt;
         private bool _visible;
         private bool _focusScratch;
+        private bool _focusWindow;
+        private bool _consumePointerUntilMouseUp;
         private GUIStyle _windowStyle;
         private GUIStyle _textAreaStyle;
         private GUIStyle _statusStyle;
@@ -81,6 +83,7 @@ namespace ModAPI.Debugging
             EnsureConfigured();
             _visible = true;
             _focusScratch = true;
+            _focusWindow = true;
             NotifyVisibilityChanged();
         }
 
@@ -114,6 +117,8 @@ namespace ModAPI.Debugging
             if (!_visible)
                 return;
 
+            CapturePolledTextInput();
+
             if (!string.Equals(_scratch, _persistedScratch, StringComparison.Ordinal)
                 && Time.realtimeSinceStartup - _scratchChangedAt >= ScratchSaveDelaySeconds)
             {
@@ -131,13 +136,33 @@ namespace ModAPI.Debugging
             }
 
             if (!_visible || _storage == null)
+            {
+                ConsumeClosingPointerRelease(current);
                 return;
+            }
 
             EnsureStyles();
             GUI.depth = -32000;
             ConstrainWindowToScreen();
+            if (IsPointerEvent(current) && !ContainsPointer(current))
+            {
+                if (current.type == EventType.MouseDown)
+                {
+                    _consumePointerUntilMouseUp = true;
+                    Hide();
+                }
+
+                current.Use();
+                return;
+            }
+
             string title = string.IsNullOrEmpty(_config.WindowTitle) ? "Developer Feedback" : _config.WindowTitle;
             _windowRect = GUI.Window(GetInstanceID(), _windowRect, DrawWindow, title, _windowStyle);
+            if (_focusWindow)
+            {
+                GUI.FocusWindow(GetInstanceID());
+                _focusWindow = false;
+            }
 
             if (current != null && IsKeyboardEvent(current))
                 current.Use();
@@ -150,6 +175,7 @@ namespace ModAPI.Debugging
             GUILayout.Space(4f);
 
             GUI.SetNextControlName(ScratchControlName);
+            GUIUtility.keyboardControl = 0;
             string updated = GUILayout.TextArea(
                 _scratch ?? string.Empty,
                 _textAreaStyle,
@@ -178,19 +204,7 @@ namespace ModAPI.Debugging
                 : "Storage: " + _storage.RootPath;
             GUILayout.Label(footer, _statusStyle, GUILayout.Height(21f));
 
-            if (_focusScratch && Event.current != null && Event.current.type == EventType.Repaint)
-            {
-                GUI.FocusControl(ScratchControlName);
-                _focusScratch = false;
-            }
-
             GUI.DragWindow(new Rect(0f, 0f, _windowRect.width, 24f));
-            Event current = Event.current;
-            if (current != null && _windowRect.Contains(GUIUtility.GUIToScreenPoint(current.mousePosition)))
-            {
-                if (IsConsumablePointerEvent(current))
-                    current.Use();
-            }
         }
 
         private void SubmitFeedback(bool screenshotOnly)
@@ -257,6 +271,34 @@ namespace ModAPI.Debugging
             {
                 SetStatus("Scratch save failed: " + ex.Message);
                 MMLog.WarnOnce("FeedbackOverlay.SaveScratch", "Feedback scratch could not be saved: " + ex.Message);
+            }
+        }
+
+        private void CapturePolledTextInput()
+        {
+            string input = Input.inputString;
+            if (string.IsNullOrEmpty(input))
+                return;
+
+            string value = _scratch ?? string.Empty;
+            for (int i = 0; i < input.Length; i++)
+            {
+                char character = input[i];
+                if (character == '\b')
+                {
+                    if (value.Length > 0)
+                        value = value.Substring(0, value.Length - 1);
+                }
+                else if (character == '\r' || character == '\n' || !char.IsControl(character))
+                {
+                    value += character == '\r' ? '\n' : character;
+                }
+            }
+
+            if (!string.Equals(value, _scratch, StringComparison.Ordinal))
+            {
+                _scratch = value;
+                _scratchChangedAt = Time.realtimeSinceStartup;
             }
         }
 
@@ -367,6 +409,28 @@ namespace ModAPI.Debugging
                 || current.type == EventType.MouseUp
                 || current.type == EventType.MouseDrag
                 || current.type == EventType.ScrollWheel;
+        }
+
+        private static bool IsPointerEvent(Event current)
+        {
+            return current != null && IsConsumablePointerEvent(current);
+        }
+
+        private bool ContainsPointer(Event current)
+        {
+            return current != null && _windowRect.Contains(GUIUtility.GUIToScreenPoint(current.mousePosition));
+        }
+
+        private void ConsumeClosingPointerRelease(Event current)
+        {
+            if (!_consumePointerUntilMouseUp || current == null)
+                return;
+
+            if (current.type == EventType.MouseUp)
+                _consumePointerUntilMouseUp = false;
+
+            if (IsConsumablePointerEvent(current))
+                current.Use();
         }
     }
 }

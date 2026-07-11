@@ -53,6 +53,11 @@ namespace ShelteredAPI.Debugging
     {
         private static bool _overlayVisible;
 
+        public static bool IsOverlayVisible
+        {
+            get { return _overlayVisible; }
+        }
+
         public static void SetOverlayVisible(bool visible)
         {
             _overlayVisible = visible;

@@ -3,6 +3,7 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using ModAPI.InputActions;
 using ShelteredAPI.Input;
+using ShelteredAPI.Debugging;
 using ShelteredAPI.Scenarios;
 using UnityEngine;
 
@@ -131,6 +132,12 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveInputButton(PlatformInput.InputButton button, KeyState state, ref bool result)
         {
+            if (ShelteredFeedbackInputEnabler.IsOverlayVisible)
+            {
+                result = false;
+                return true;
+            }
+
             if (TryResolveAuthoringVanillaInteractionButton(button, state, ref result))
                 return true;
 
@@ -221,6 +228,12 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveMenuButton(PlatformInput.MenuInputButton button, KeyState state, ref bool result)
         {
+            if (ShelteredFeedbackInputEnabler.IsOverlayVisible)
+            {
+                result = false;
+                return true;
+            }
+
             if (TryResolveTouchMapDrag(button, state, ref result))
                 return true;
 
@@ -270,6 +283,12 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveGameplayAxis(PlatformInput.InputAxis axis, bool raw, ref float result)
         {
+            if (ShelteredFeedbackInputEnabler.IsOverlayVisible)
+            {
+                result = 0f;
+                return true;
+            }
+
             if (ScenarioAuthoringRuntimeGuards.ShouldBlockGameplayAxis(axis))
             {
                 result = 0f;
@@ -286,6 +305,12 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
         {
+            if (ShelteredFeedbackInputEnabler.IsOverlayVisible)
+            {
+                result = 0f;
+                return true;
+            }
+
             if (ScenarioAuthoringRuntimeGuards.ShouldBlockMenuAxis(axis))
             {
                 result = 0f;
