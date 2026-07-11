@@ -234,6 +234,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             string headerDetail,
             Action<ScenarioBookDraftEditorModel> save,
             Action openDraft,
+            Action duplicateDraft,
             Action openExportFolder,
             Action deleteDraft)
         {
@@ -248,7 +249,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _draftDescriptionInput = null;
 
             _pagedList.AddRow(BuildHeader(_pagedList.ContentRoot, headerTitle, headerDetail), HeaderHeight);
-            _pagedList.AddRow(BuildDraftEditor(_pagedList.ContentRoot, model, save, openDraft, openExportFolder, deleteDraft), 390);
+            _pagedList.AddRow(BuildDraftEditor(_pagedList.ContentRoot, model, save, openDraft, duplicateDraft, openExportFolder, deleteDraft), 390);
             _pagedList.Layout(6);
 
             if (_navigator != null)
@@ -1193,6 +1194,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             ScenarioBookDraftEditorModel model,
             Action<ScenarioBookDraftEditorModel> save,
             Action openDraft,
+            Action duplicateDraft,
             Action openExportFolder,
             Action deleteDraft)
         {
@@ -1232,8 +1234,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     if (openDraft != null)
                         openDraft();
                 });
-            _chrome.Buttons.Build(root, "DeleteDraft", "Delete Draft",
+            _chrome.Buttons.Build(root, "DuplicateDraft", "Duplicate Draft",
                 new Vector3(420f, -86f, 0f), 160, 44, 17, delegate
+                {
+                    if (duplicateDraft != null)
+                        duplicateDraft();
+                });
+            _chrome.Buttons.Build(root, "DeleteDraft", "Delete Draft",
+                new Vector3(420f, -144f, 0f), 160, 44, 17, delegate
                 {
                     if (deleteDraft != null)
                         deleteDraft();
@@ -1242,7 +1250,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (model != null && model.Facts != null && model.Facts.HasExport)
             {
                 _chrome.Buttons.Build(root, "OpenExportFolder", "Open Export",
-                    new Vector3(420f, -144f, 0f), 160, 44, 17, delegate
+                    new Vector3(420f, -202f, 0f), 160, 44, 17, delegate
                     {
                         if (openExportFolder != null)
                             openExportFolder();
