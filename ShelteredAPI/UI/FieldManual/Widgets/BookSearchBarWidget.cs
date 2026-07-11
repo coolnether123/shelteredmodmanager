@@ -23,7 +23,9 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         private readonly UIPrimitiveFactory _ui;
         private readonly int _maxLength;
         private GameObject _inputRoot;
+        private UILabel _scopeLabel;
         private UILabel _displayLabel;
+        private string _placeholder;
         private bool _hasFocus;
 
         public BookSearchBarWidget(IThemePalette palette, ITextureLibrary textures, UIPrimitiveFactory ui)
@@ -66,11 +68,12 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         {
             GameObject root = _ui.CreateChild(parent, name, localPosition);
 
-            UILabel searchLabel = _ui.CreateLabel(root, "SearchLabel",
+            _scopeLabel = _ui.CreateLabel(root, "SearchLabel",
                 string.IsNullOrEmpty(scopeLabel) ? "SEARCH:" : scopeLabel,
                 new Vector3(-110f, 0f, 0f), 14, _palette.InkFaded,
                 100, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
-            searchLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+            _scopeLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+            _placeholder = placeholder;
 
             _inputRoot = _ui.CreateChild(root, "SearchInput", new Vector3(60f, 0f, 0f));
             _ui.CreateQuad(_inputRoot, "SearchInputPaper", _textures.White, Vector3.zero,
@@ -93,6 +96,14 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             return root;
         }
 
+        public void SetPresentation(string scopeLabel, string placeholder)
+        {
+            if (_scopeLabel != null)
+                _scopeLabel.text = string.IsNullOrEmpty(scopeLabel) ? "SEARCH:" : scopeLabel;
+            _placeholder = string.IsNullOrEmpty(placeholder) ? "Search..." : placeholder;
+            RefreshDisplay(_placeholder);
+        }
+
         public void HandleInput(Action onFilterChanged)
         {
             HandleInput("Search...", onFilterChanged);
@@ -103,10 +114,12 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             if (_inputRoot == null || _displayLabel == null)
                 return;
 
+            string activePlaceholder = string.IsNullOrEmpty(_placeholder) ? placeholder : _placeholder;
+
             if (UnityEngine.Input.GetMouseButtonDown(0))
             {
                 _hasFocus = IsHoveredWithin(_inputRoot);
-                RefreshDisplay(placeholder);
+                RefreshDisplay(activePlaceholder);
             }
 
             if (!_hasFocus)
@@ -150,7 +163,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             if (changed && onFilterChanged != null)
                 onFilterChanged();
 
-            RefreshDisplay(placeholder);
+            RefreshDisplay(activePlaceholder);
         }
 
         public void Clear(Action onFilterChanged)
