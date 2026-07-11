@@ -151,7 +151,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 TimelineRibbon = _timelineRibbonViewModelBuilder.Build(editorSession),
                 StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
-            viewModel.RendererActions = ScenarioAuthoringRendererActionManifest.Build(state, viewModel.Windows, viewModel.CustomSpriteEditor);
+            viewModel.RendererActions = ScenarioAuthoringRendererActionManifest.Build(state, viewModel.Windows, viewModel.CustomSpriteEditor, viewModel.Settings, viewModel.Help);
             windows.Add(ScenarioAuthoringRendererActionManifest.BuildContractWindow(viewModel));
             viewModel.Windows = windows.ToArray();
             _shellChromeBuilder.ApplyShellChrome(viewModel, state, editorSession, session);

@@ -22,6 +22,17 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
+        private enum DisclosureBodyStrategy
+        {
+            Section,
+            HomeBase,
+            HomeDetails,
+            HomeStatus,
+            TimelinePacing,
+            TimelineEntries,
+            TimelineLogic
+        }
+
         private Rect DrawWindowCore(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
             ScenarioAuthoringShellAnimationService.WindowVisualState visual =
@@ -201,12 +212,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else
             {
-                for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
-                {
-                    DrawSection(window.Sections[i]);
-                    if (i < window.Sections.Length - 1)
-                        GUILayout.Space(8f);
-                }
+                DrawFittedWorkshopPage(window);
             }
             GUILayout.Space(18f);
             GUILayout.EndScrollView();
@@ -1716,18 +1722,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             if (baseMode != null)
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.base", "Scenario base", BuildBaseModeSummary(baseMode), false, baseMode, DrawHomeBaseSelectorBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.base", "Scenario base", BuildBaseModeSummary(baseMode), false, baseMode, DisclosureBodyStrategy.HomeBase);
             if (details != null)
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.details", "Scenario details", BuildDetailsSummary(details), false, details, DrawHomeDetailsBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.details", "Scenario details", BuildDetailsSummary(details), false, details, DisclosureBodyStrategy.HomeDetails);
             if (status != null)
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.status", "Save & export status", BuildStatusSummary(status), false, status, DrawHomeStatusBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.status", "Save & export status", BuildStatusSummary(status), false, status, DisclosureBodyStrategy.HomeStatus);
 
             if (quickActions != null)
                 DrawSection(quickActions);
             if (advanced != null)
             {
                 GUILayout.Space(6f);
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.advanced", "Advanced diagnostics", "Debug details", false, advanced, DrawHomeAdvancedGroupBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.advanced", "Advanced diagnostics", "Debug details", false, advanced, DisclosureBodyStrategy.Section);
             }
             GUILayout.EndVertical();
 
@@ -1747,7 +1753,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string summary,
             bool defaultExpanded,
             ScenarioAuthoringInspectorSection section,
-            Action<ScenarioAuthoringInspectorSection> drawBody)
+            DisclosureBodyStrategy bodyStrategy)
         {
             bool expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
             Rect rect = GUILayoutUtility.GetRect(120f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
@@ -1765,12 +1771,134 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
             }
             DrawButtonAnimationOverlay(rect, key, true, IsInteractiveHoverAllowed(rect), IsInteractiveMouseDownAllowed(rect));
-            if (expanded && drawBody != null)
+            if (expanded)
             {
                 GUILayout.Space(4f);
-                drawBody(section);
+                DrawDisclosureBody(section, bodyStrategy);
             }
             GUILayout.Space(8f);
+        }
+
+        private void DrawDisclosureBody(ScenarioAuthoringInspectorSection section, DisclosureBodyStrategy strategy)
+        {
+            switch (strategy)
+            {
+                case DisclosureBodyStrategy.HomeBase:
+                    DrawHomeBaseSelectorBody(section);
+                    break;
+                case DisclosureBodyStrategy.HomeDetails:
+                    DrawHomeDetailsBody(section);
+                    break;
+                case DisclosureBodyStrategy.HomeStatus:
+                    DrawHomeStatusBody(section);
+                    break;
+                case DisclosureBodyStrategy.TimelinePacing:
+                    GUILayout.BeginVertical(_uiContext.Styles.Section);
+                    DrawPacingSection(section);
+                    GUILayout.EndVertical();
+                    break;
+                case DisclosureBodyStrategy.TimelineEntries:
+                    DrawTimelineEntriesDisclosureBody(section);
+                    break;
+                case DisclosureBodyStrategy.TimelineLogic:
+                    GUILayout.BeginVertical(_uiContext.Styles.Section);
+                    DrawFactGrid(section, false);
+                    GUILayout.EndVertical();
+                    break;
+                default:
+                    DrawSection(section);
+                    break;
+            }
+        }
+
+        private void DrawFittedWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
+        {
+            int sectionCount = window != null && window.Sections != null ? window.Sections.Length : 0;
+            if (sectionCount == 0)
+                return;
+
+            float fullWidth = GetSectionContentWidth();
+            float gap = 10f;
+            float columnWidth = Math.Max(300f, (fullWidth - gap) * 0.5f);
+            int leftCount = (sectionCount + 1) / 2;
+            bool roomy = _chromeViewportRect.height >= 820f;
+
+            DrawWorkshopAccent(window, fullWidth);
+            GUILayout.BeginHorizontal();
+            for (int column = 0; column < 2; column++)
+            {
+                if (column > 0)
+                    GUILayout.Space(gap);
+                GUILayout.BeginVertical(GUILayout.Width(columnWidth));
+                _activeContentWidth = Math.Max(120f, columnWidth - 12f);
+                int start = column == 0 ? 0 : leftCount;
+                int end = column == 0 ? leftCount : sectionCount;
+                for (int i = start; i < end; i++)
+                {
+                    ScenarioAuthoringInspectorSection section = window.Sections[i];
+                    if (section == null)
+                        continue;
+                    string key = ScenarioAuthoringRendererActionManifest.BuildWorkshopGroupKey(window.Id, section.Id);
+                    bool defaultExpanded = roomy && i == start && IsBoundedPrimarySection(section);
+                    DrawCollapsibleGroup(
+                        ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix,
+                        key,
+                        !string.IsNullOrEmpty(section.Title) ? section.Title : "Details",
+                        BuildWorkshopSectionSummary(section),
+                        defaultExpanded,
+                        section,
+                        DisclosureBodyStrategy.Section);
+                }
+                GUILayout.EndVertical();
+            }
+            GUILayout.EndHorizontal();
+            _activeContentWidth = fullWidth;
+        }
+
+        private bool IsBoundedPrimarySection(ScenarioAuthoringInspectorSection section)
+        {
+            if (section == null)
+                return false;
+            return section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid
+                && section.Layout != ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid
+                && section.Layout != ScenarioAuthoringInspectorSectionLayout.SurvivorEditor
+                && section.Layout != ScenarioAuthoringInspectorSectionLayout.CastCardGrid
+                && !IsStoryMapSection(section);
+        }
+
+        private static string BuildWorkshopSectionSummary(ScenarioAuthoringInspectorSection section)
+        {
+            int itemCount = section != null && section.Items != null ? section.Items.Length : 0;
+            int actionCount = 0;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+                if (section.Items[i] != null && section.Items[i].Action != null)
+                    actionCount++;
+            if (actionCount > 0)
+                return actionCount == 1 ? "1 action" : actionCount.ToString() + " actions";
+            return itemCount == 1 ? "1 detail" : itemCount.ToString() + " details";
+        }
+
+        private void DrawWorkshopAccent(ScenarioAuthoringShellWindowViewModel window, float width)
+        {
+            Rect accentRect = GUILayoutUtility.GetRect(width, 3f, GUILayout.Width(width), GUILayout.Height(3f));
+            Color oldColor = GUI.color;
+            GUI.color = ResolveWorkshopAccent(window != null ? window.Id : null);
+            GUI.DrawTexture(accentRect, Texture2D.whiteTexture);
+            GUI.color = oldColor;
+            GUILayout.Space(5f);
+        }
+
+        private static Color ResolveWorkshopAccent(string windowId)
+        {
+            int hash = string.IsNullOrEmpty(windowId) ? 0 : (windowId.GetHashCode() & 0x7fffffff);
+            switch (hash % 5)
+            {
+                case 0: return new Color(0.48f, 0.62f, 0.34f, 0.72f);
+                case 1: return new Color(0.38f, 0.58f, 0.66f, 0.72f);
+                case 2: return new Color(0.66f, 0.46f, 0.28f, 0.72f);
+                case 3: return new Color(0.58f, 0.42f, 0.62f, 0.72f);
+                default: return new Color(0.64f, 0.58f, 0.30f, 0.72f);
+            }
         }
 
         private void DrawTimelineWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
@@ -1792,7 +1920,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (pacing != null)
             {
                 GUILayout.Space(8f);
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.pacing", "Pacing", BuildTimelinePacingSummary(pacing), roomy, pacing, DrawTimelinePacingGroupBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.pacing", "Pacing", BuildTimelinePacingSummary(pacing), roomy, pacing, DisclosureBodyStrategy.TimelinePacing);
             }
             GUILayout.EndVertical();
 
@@ -1800,9 +1928,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginVertical(GUILayout.Width(rightWidth));
             _activeContentWidth = Math.Max(120f, rightWidth - 12f);
             if (track != null)
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.entries", "Entries", BuildTimelineEntriesSummary(track), roomy, track, DrawTimelineEntriesGroupBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.entries", "Entries", BuildTimelineEntriesSummary(track), roomy, track, DisclosureBodyStrategy.TimelineEntries);
             if (logic != null)
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.logic", "Logic", BuildTimelineLogicSummary(logic), roomy, logic, DrawTimelineLogicGroupBody);
+                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.logic", "Logic", BuildTimelineLogicSummary(logic), roomy, logic, DisclosureBodyStrategy.TimelineLogic);
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
             _activeContentWidth = fullWidth;
@@ -1834,19 +1962,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return actionCount.ToString() + " creation actions";
         }
 
-        private void DrawTimelinePacingGroupBody(ScenarioAuthoringInspectorSection section)
-        {
-            GUILayout.BeginVertical(_uiContext.Styles.Section);
-            DrawPacingSection(section);
-            GUILayout.EndVertical();
-        }
-
-        private void DrawHomeAdvancedGroupBody(ScenarioAuthoringInspectorSection section)
-        {
-            DrawSection(section);
-        }
-
-        private void DrawTimelineEntriesGroupBody(ScenarioAuthoringInspectorSection section)
+        private void DrawTimelineEntriesDisclosureBody(ScenarioAuthoringInspectorSection section)
         {
             TimelineChipInfo[] chips = BuildTimelineChipInfos(section);
             GUILayout.BeginVertical(_uiContext.Styles.Section);
@@ -1861,13 +1977,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (i < chips.Length - 1)
                     GUILayout.Space(4f);
             }
-            GUILayout.EndVertical();
-        }
-
-        private void DrawTimelineLogicGroupBody(ScenarioAuthoringInspectorSection section)
-        {
-            GUILayout.BeginVertical(_uiContext.Styles.Section);
-            DrawFactGrid(section, false);
             GUILayout.EndVertical();
         }
 
@@ -2049,43 +2158,60 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
             Rect inner = Inset(rect, 10f);
-            RegisterScrollRegion("survivor.appearance", inner);
-            Vector2 scroll = GetWindowScrollPosition("survivor.appearance");
-            float contentHeight = MeasureSurvivorAppearanceContentHeight(editor);
-            Rect viewRect = new Rect(0f, 0f, Math.Max(1f, inner.width - 18f), Math.Max(inner.height, contentHeight));
-            scroll = GUI.BeginScrollView(inner, scroll, viewRect, false, true);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 24f), "Appearance", _sectionTitleStyle);
 
-            GUI.Label(new Rect(0f, 0f, viewRect.width, 24f), "Appearance", _sectionTitleStyle);
-
-            float portraitHeight = 176f;
-            Rect portraitRect = new Rect((viewRect.width - 176f) * 0.5f, 30f, 176f, portraitHeight);
+            float portraitSize = Mathf.Clamp(inner.height * 0.34f, 104f, 142f);
+            Rect portraitRect = new Rect(inner.x + (inner.width - portraitSize) * 0.5f, inner.y + 26f, portraitSize, portraitSize);
             DrawCastPortrait(portraitRect, editor.Portrait, false);
 
-            float y = portraitRect.yMax + 10f;
-            for (int i = 0; editor.TextureRows != null && i < editor.TextureRows.Length; i++)
-            {
-                DrawSurvivorTextureRow(new Rect(0f, y, viewRect.width, 30f), editor.TextureRows[i]);
-                y += 34f;
-            }
-
-            y += 4f;
-            GUI.Label(new Rect(0f, y, viewRect.width, 22f), "Colors", _smallTitleStyle);
-            y += 26f;
-            for (int i = 0; editor.ColorRows != null && i < editor.ColorRows.Length; i++)
-            {
-                DrawSurvivorColorRow(new Rect(0f, y, viewRect.width, 30f), editor.ColorRows[i]);
-                y += 34f;
-            }
-
-            GUI.EndScrollView();
-            SetWindowScrollPosition("survivor.appearance", scroll);
+            float y = portraitRect.yMax + 8f;
+            bool roomy = _chromeViewportRect.height >= 820f;
+            y = DrawSurvivorAppearanceZone(inner, y, "survivor.appearance.textures", "Clothing & hair", editor.TextureRows != null ? editor.TextureRows.Length : 0, roomy, editor, true);
+            DrawSurvivorAppearanceZone(inner, y, "survivor.appearance.colors", "Colors", editor.ColorRows != null ? editor.ColorRows.Length : 0, false, editor, false);
         }
 
-        private static float MeasureSurvivorAppearanceContentHeight(ScenarioSurvivorEditorViewModel editor)
+        private float DrawSurvivorAppearanceZone(
+            Rect bounds,
+            float y,
+            string key,
+            string title,
+            int rowCount,
+            bool defaultExpanded,
+            ScenarioSurvivorEditorViewModel editor,
+            bool textures)
         {
-            int textureRows = editor != null && editor.TextureRows != null ? editor.TextureRows.Length : 0;
-            int colorRows = editor != null && editor.ColorRows != null ? editor.ColorRows.Length : 0;
-            return 30f + 176f + 10f + (textureRows * 34f) + 4f + 22f + 26f + (colorRows * 34f) + 10f;
+            bool expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
+            Rect headerRect = new Rect(bounds.x, y, bounds.width, 26f);
+            string label = (expanded ? "v " : "> ") + title + "  -  " + rowCount.ToString() + " options";
+            if (DrawPlainButton(headerRect, new GUIContent(label, expanded ? "Collapse " + title + "." : "Expand " + title + "."), expanded ? _activeButtonStyle : _buttonStyle, true))
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                    ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, key));
+                if (Event.current != null)
+                    Event.current.Use();
+                expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, defaultExpanded);
+            }
+            y = headerRect.yMax + 4f;
+            if (!expanded)
+                return y + 4f;
+
+            if (textures)
+            {
+                for (int i = 0; editor.TextureRows != null && i < editor.TextureRows.Length; i++)
+                {
+                    DrawSurvivorTextureRow(new Rect(bounds.x, y, bounds.width, 28f), editor.TextureRows[i]);
+                    y += 30f;
+                }
+            }
+            else
+            {
+                for (int i = 0; editor.ColorRows != null && i < editor.ColorRows.Length; i++)
+                {
+                    DrawSurvivorColorRow(new Rect(bounds.x, y, bounds.width, 28f), editor.ColorRows[i]);
+                    y += 30f;
+                }
+            }
+            return y + 4f;
         }
 
         private void DrawSurvivorTextureRow(Rect rect, ScenarioSurvivorTextureRowViewModel row)
@@ -4645,26 +4771,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
-            RegisterScrollRegion((window != null ? window.Id : null) ?? "settings", bodyRect);
-            _settingsScrollPosition = GUILayout.BeginScrollView(_settingsScrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label(settings.Subtitle ?? string.Empty, _mutedTextStyle);
             GUILayout.Space(8f);
-            for (int i = 0; settings.Sections != null && i < settings.Sections.Length; i++)
+            int sectionCount = settings.Sections != null ? settings.Sections.Length : 0;
+            int leftCount = (sectionCount + 1) / 2;
+            float gap = 10f;
+            float columnWidth = Math.Max(220f, (bodyRect.width - 18f - gap) * 0.5f);
+            bool roomy = _chromeViewportRect.height >= 820f;
+            GUILayout.BeginHorizontal();
+            for (int column = 0; column < 2; column++)
             {
-                ScenarioAuthoringSettingsSectionViewModel section = settings.Sections[i];
-                if (section == null)
-                    continue;
-
-                GUILayout.BeginVertical(_uiContext.Styles.Section);
-                GUILayout.Label(section.Title ?? string.Empty, _sectionTitleStyle);
-                for (int j = 0; section.Items != null && j < section.Items.Length; j++)
+                if (column > 0) GUILayout.Space(gap);
+                GUILayout.BeginVertical(GUILayout.Width(columnWidth));
+                int start = column == 0 ? 0 : leftCount;
+                int end = column == 0 ? leftCount : sectionCount;
+                for (int i = start; i < end; i++)
                 {
-                    DrawSettingItem(section.Items[j]);
+                    ScenarioAuthoringSettingsSectionViewModel section = settings.Sections[i];
+                    if (section == null) continue;
+                    string key = "settings.group." + (section.Id ?? i.ToString());
+                    bool expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, roomy && i == start);
+                    Rect header = GUILayoutUtility.GetRect(120f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
+                    string label = (expanded ? "v " : "> ") + (section.Title ?? "Settings") + "  -  " + (section.Items != null ? section.Items.Length : 0).ToString() + " options";
+                    if (DrawPlainButton(header, new GUIContent(label), expanded ? _activeButtonStyle : _buttonStyle, true))
+                    {
+                        ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, key));
+                        if (Event.current != null) Event.current.Use();
+                        expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, roomy && i == start);
+                    }
+                    if (expanded)
+                    {
+                        GUILayout.BeginVertical(_uiContext.Styles.Section);
+                        for (int j = 0; section.Items != null && j < section.Items.Length; j++) DrawSettingItem(section.Items[j]);
+                        GUILayout.EndVertical();
+                    }
+                    GUILayout.Space(8f);
                 }
                 GUILayout.EndVertical();
-                GUILayout.Space(6f);
             }
-            GUILayout.EndScrollView();
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
             _activeContentWidth = previousContentWidth;
             DrawFloatingResizeGrip(rect, window);

@@ -14,6 +14,8 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             ScenarioAuthoringInspectorAction[] rendererActions = ScenarioAuthoringRendererActionManifest.Build(
                 new ScenarioAuthoringState(),
                 new ScenarioAuthoringShellWindowViewModel[0],
+                null,
+                null,
                 null);
             ScenarioAuthoringShellViewModel shell = new ScenarioAuthoringShellViewModel
             {
@@ -37,6 +39,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, "pixel group", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "Home group", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "Timeline group", result);
+            RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Workshop group", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererAssetCategorySelectPrefix, "asset category", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, "candidate search", result);
             RequireFamily(ids, ScenarioAuthoringActionIds.ActionRendererCandidateFilterPrefix, "candidate filter", result);

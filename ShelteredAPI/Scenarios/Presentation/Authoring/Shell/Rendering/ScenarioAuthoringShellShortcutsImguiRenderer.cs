@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
@@ -9,8 +10,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     // grouped by context, and highlights the currently-active context group.
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private Vector2 _shortcutsScroll;
-
         private void DrawHelpShortcutsBody(ScenarioAuthoringShortcutOverlayViewModel shortcuts)
         {
             GUILayout.Label("KEYBOARD SHORTCUTS", _sectionTitleStyle);
@@ -18,45 +17,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Label("Press F1 any time to open this reference. The highlighted group matches your current editing context.", _mutedTextStyle);
             GUILayout.Space(8f);
 
-            _shortcutsScroll = GUILayout.BeginScrollView(_shortcutsScroll);
             ScenarioAuthoringShortcutGroupViewModel[] groups = shortcuts != null ? shortcuts.Groups : null;
-            for (int g = 0; groups != null && g < groups.Length; g++)
-            {
-                ScenarioAuthoringShortcutGroupViewModel group = groups[g];
-                if (group == null)
-                    continue;
-
-                DrawShortcutGroupHeader(group);
-                ScenarioAuthoringShortcutRowViewModel[] rows = group.Rows;
-                for (int r = 0; rows != null && r < rows.Length; r++)
-                {
-                    ScenarioAuthoringShortcutRowViewModel row = rows[r];
-                    if (row == null)
-                        continue;
-
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label(row.KeyChord ?? string.Empty, _uiContext.Styles.Pill, GUILayout.Width(174f));
-                    GUILayout.Label(row.Description ?? string.Empty, _textStyle);
-                    GUILayout.EndHorizontal();
-                    GUILayout.Space(4f);
-                }
-                GUILayout.Space(10f);
-            }
-            GUILayout.EndScrollView();
-        }
-
-        private void DrawShortcutGroupHeader(ScenarioAuthoringShortcutGroupViewModel group)
-        {
+            int groupCount = groups != null ? groups.Length : 0;
+            int leftCount = (groupCount + 1) / 2;
+            float width = Math.Max(220f, (GetSectionContentWidth() - 10f) * 0.5f);
+            bool roomy = _chromeViewportRect.height >= 820f;
             GUILayout.BeginHorizontal();
-            GUILayout.Label((group.Title ?? string.Empty).ToUpperInvariant(), _sectionTitleStyle);
-            if (group.IsActiveContext)
+            for (int column = 0; column < 2; column++)
             {
-                GUILayout.Space(6f);
-                GUILayout.Label("ACTIVE", _uiContext.Styles.PillSuccess, GUILayout.Width(74f));
+                if (column > 0) GUILayout.Space(10f);
+                GUILayout.BeginVertical(GUILayout.Width(width));
+                int start = column == 0 ? 0 : leftCount;
+                int end = column == 0 ? leftCount : groupCount;
+                for (int g = start; g < end; g++)
+                {
+                    ScenarioAuthoringShortcutGroupViewModel group = groups[g];
+                    if (group == null) continue;
+                    string key = "shortcuts.group." + (group.Title ?? g.ToString()).ToLowerInvariant();
+                    bool expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, roomy && group.IsActiveContext);
+                    Rect header = GUILayoutUtility.GetRect(120f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
+                    string label = (expanded ? "v " : "> ") + (group.Title ?? "Shortcuts") + (group.IsActiveContext ? "  -  ACTIVE" : string.Empty);
+                    if (DrawPlainButton(header, new GUIContent(label), group.IsActiveContext ? _activeButtonStyle : _buttonStyle, true))
+                    {
+                        ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, key));
+                        if (Event.current != null) Event.current.Use();
+                        expanded = ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(key, roomy && group.IsActiveContext);
+                    }
+                    if (expanded)
+                    {
+                        ScenarioAuthoringShortcutRowViewModel[] rows = group.Rows;
+                        for (int r = 0; rows != null && r < rows.Length; r++)
+                        {
+                            ScenarioAuthoringShortcutRowViewModel row = rows[r];
+                            if (row == null) continue;
+                            GUILayout.BeginHorizontal();
+                            GUILayout.Label(row.KeyChord ?? string.Empty, _uiContext.Styles.Pill, GUILayout.Width(118f));
+                            GUILayout.Label(row.Description ?? string.Empty, _textStyle);
+                            GUILayout.EndHorizontal();
+                            GUILayout.Space(3f);
+                        }
+                    }
+                    GUILayout.Space(8f);
+                }
+                GUILayout.EndVertical();
             }
-            GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
-            GUILayout.Space(4f);
         }
+
     }
 }

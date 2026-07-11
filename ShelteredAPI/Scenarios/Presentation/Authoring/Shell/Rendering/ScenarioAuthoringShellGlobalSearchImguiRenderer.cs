@@ -30,7 +30,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _globalSearchFocused;
         private bool _globalSearchNeedsFocus;
         private int _globalSearchSelectedIndex;
-        private int _globalSearchFirstVisible;
         private Rect _globalSearchButtonRect = RuntimeCompat.ZeroRect();
 
         private Rect BuildGlobalSearchRect(float scaledWidth, float scaledHeight, Rect hudReserveRect)
@@ -48,7 +47,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _globalSearchIndexBuilt = true;
             _globalSearchNeedsFocus = true;
             _globalSearchSelectedIndex = 0;
-            _globalSearchFirstVisible = 0;
 
             ScenarioAuthoringShellViewModel shell = _snapshot != null ? _snapshot.ShellViewModel : null;
             ScenarioDefinition definition = ResolveWorkingDefinition();
@@ -66,7 +64,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _globalSearchFocused = false;
             _globalSearchNeedsFocus = false;
             _globalSearchSelectedIndex = 0;
-            _globalSearchFirstVisible = 0;
         }
 
         private static ScenarioDefinition ResolveWorkingDefinition()
@@ -119,12 +116,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             _globalSearchResults = ScenarioGlobalSearchService.Rank(_globalSearchIndex, _globalSearchText, GlobalSearchMaxResults);
             int resultCount = _globalSearchResults.Count;
-            if (_globalSearchSelectedIndex >= resultCount)
-                _globalSearchSelectedIndex = Math.Max(0, resultCount - 1);
+            int fitResultCount = Math.Min(resultCount, ResolveGlobalSearchFitResultLimit(rect));
+            if (_globalSearchSelectedIndex >= fitResultCount)
+                _globalSearchSelectedIndex = Math.Max(0, fitResultCount - 1);
             if (_globalSearchSelectedIndex < 0)
                 _globalSearchSelectedIndex = 0;
 
-            HandleGlobalSearchKeys(resultCount);
+            HandleGlobalSearchKeys(fitResultCount);
 
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
             Rect inner = Inset(rect, 16f);
@@ -144,7 +142,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererGlobalSearchQueryPrefix, typed));
                 _globalSearchText = ScenarioAuthoringRendererInteractionState.Instance.GlobalSearchQuery;
                 _globalSearchSelectedIndex = 0;
-                _globalSearchFirstVisible = 0;
             }
 
             if (_globalSearchNeedsFocus)
@@ -181,24 +178,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Rect viewRect = Inset(rect, 4f);
-            int visibleRows = Math.Max(1, Mathf.FloorToInt(viewRect.height / GlobalSearchRowHeight));
-
-            // Mouse wheel scrolls the (absolute-positioned) row window. Rows are drawn in the
-            // same coordinate space as the rest of the overlay so click routing stays correct.
-            Event e = Event.current;
-            if (e != null && e.type == EventType.ScrollWheel && viewRect.Contains(e.mousePosition) && count > visibleRows)
-            {
-                _globalSearchFirstVisible += e.delta.y > 0f ? 1 : -1;
-                e.Use();
-            }
-
-            ClampGlobalSearchWindow(count, visibleRows);
+            int visibleRows = Math.Min(count, Math.Max(1, Mathf.FloorToInt(viewRect.height / GlobalSearchRowHeight)));
 
             for (int row = 0; row < visibleRows; row++)
             {
-                int index = _globalSearchFirstVisible + row;
-                if (index >= count)
-                    break;
+                int index = row;
 
                 Rect rowRect = new Rect(viewRect.x, viewRect.y + (row * GlobalSearchRowHeight), viewRect.width, GlobalSearchRowHeight - 4f);
                 DrawGlobalSearchRow(rowRect, _globalSearchResults[index], index == _globalSearchSelectedIndex);
@@ -207,25 +191,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (count > visibleRows)
             {
                 GUI.Label(
-                    new Rect(viewRect.xMax - 60f, viewRect.yMax - 18f, 60f, 18f),
-                    (_globalSearchFirstVisible + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "-"
-                        + Math.Min(count, _globalSearchFirstVisible + visibleRows).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    new Rect(viewRect.x + 6f, viewRect.yMax - 18f, viewRect.width - 12f, 18f),
+                    "Showing the top " + visibleRows.ToString(System.Globalization.CultureInfo.InvariantCulture) + " matches - refine your search to narrow " + count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " results.",
                     _mutedTextStyle);
             }
         }
 
-        private void ClampGlobalSearchWindow(int count, int visibleRows)
+        private static int ResolveGlobalSearchFitResultLimit(Rect rect)
         {
-            int maxFirst = Math.Max(0, count - visibleRows);
-            if (_globalSearchSelectedIndex < _globalSearchFirstVisible)
-                _globalSearchFirstVisible = _globalSearchSelectedIndex;
-            else if (_globalSearchSelectedIndex >= _globalSearchFirstVisible + visibleRows)
-                _globalSearchFirstVisible = _globalSearchSelectedIndex - visibleRows + 1;
-
-            if (_globalSearchFirstVisible > maxFirst)
-                _globalSearchFirstVisible = maxFirst;
-            if (_globalSearchFirstVisible < 0)
-                _globalSearchFirstVisible = 0;
+            const float fixedChrome = 16f + 22f + 8f + 34f + 10f + 22f + 12f;
+            return Math.Max(1, Mathf.FloorToInt(Math.Max(GlobalSearchRowHeight, rect.height - fixedChrome) / GlobalSearchRowHeight));
         }
 
         private void DrawGlobalSearchRow(Rect rect, ScenarioGlobalSearchEntry entry, bool selected)
