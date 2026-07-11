@@ -122,10 +122,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     MarkerCount = markerCount,
                     ChapterCount = chapterCount,
                     Label = day.ToString(CultureInfo.InvariantCulture),
-                    OverflowLabel = overflow > 0 ? "+" + overflow.ToString(CultureInfo.InvariantCulture) : string.Empty
+                    OverflowLabel = overflow > 0 ? "+" + overflow.ToString(CultureInfo.InvariantCulture) : string.Empty,
+                    HoverAction = BuildDayHoverAction(day, markerCount, chapterCount)
                 };
             }
             return days;
+        }
+
+        private static ScenarioAuthoringInspectorAction BuildDayHoverAction(int day, int markerCount, int chapterCount)
+        {
+            string scheduled = markerCount == 1 ? "1 scheduled event" : markerCount.ToString(CultureInfo.InvariantCulture) + " scheduled events";
+            string chapters = chapterCount == 1 ? "1 story chapter" : chapterCount.ToString(CultureInfo.InvariantCulture) + " story chapters";
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionTimelineDayPrefix + day.ToString(CultureInfo.InvariantCulture),
+                Label = "Day " + day.ToString(CultureInfo.InvariantCulture),
+                Hint = scheduled + ". " + chapters + ".",
+                Detail = markerCount > 0 ? "Timeline density" : "No authored events",
+                IconText = "D" + day.ToString(CultureInfo.InvariantCulture),
+                Enabled = true
+            };
         }
 
         private static ScenarioAuthoringInspectorAction BuildAction(

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
@@ -11,8 +10,8 @@ using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     /// <summary>
-    /// Draws the primary authoring Story Map: parchment stage cards, gold route edges with
-    /// arrowheads, red/amber styling for broken/unreachable stages, and a legend. The model
+    /// Draws the primary authoring Story Map: parchment stage cards, clipped orthogonal
+    /// routes, red/amber styling for broken/unreachable stages, and a legend. The model
     /// (nodes, edges, and deterministic positions) is built by <see cref="ScenarioStoryGraphBuilder"/>
     /// and carried on the section; this surface only draws it and routes clicks back through
     /// the shared open-stage action seam.
@@ -58,7 +57,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             x = DrawStoryMapLegendSwatch(x, legend.y, StoryMapGold, "route");
             x = DrawStoryMapLegendSwatch(x, legend.y, StoryMapAmber, "unreachable");
             x = DrawStoryMapLegendSwatch(x, legend.y, StoryMapRed, "broken / missing");
-            GUI.Label(new Rect(x + 4f, legend.y + 2f, Math.Max(80f, legend.xMax - x - 4f), 18f), "Click a stage to edit", _mutedTextStyle);
+            GUI.Label(new Rect(x + 4f, legend.y + 2f, Math.Max(80f, legend.xMax - x - 4f), 18f), "!N = validation issues (hover for details)", _mutedTextStyle);
             GUILayout.Space(4f);
         }
 
@@ -88,75 +87,119 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = panelColor;
             ScenarioUiAtlasSkin.DrawCornerCutBorder(viewport, _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderSubtleTexture);
 
-            // The map is drawn in the same coordinate space as its viewport.  BeginArea
-            // shifts GUILayout coordinates but not the immediate-mode drawing calls below,
-            // which previously left every card above and outside the visible canvas.
-            Rect canvas = new Rect(
-                viewport.x,
-                viewport.y,
-                Math.Max(viewport.width, model.Width),
-                Math.Max(viewport.height, model.Height));
-
-            Dictionary<string, ScenarioStoryGraphNode> byId = new Dictionary<string, ScenarioStoryGraphNode>(StringComparer.Ordinal);
-            for (int i = 0; i < model.Nodes.Length; i++)
-                if (model.Nodes[i] != null && !string.IsNullOrEmpty(model.Nodes[i].Id))
-                    byId[model.Nodes[i].Id] = model.Nodes[i];
+            // Clip all immediate drawing to the canvas. The old rotated-line primitive also
+            // rotated IMGUI's clip matrix, which is what produced detached line fragments.
+            GUI.BeginGroup(viewport);
+            Rect canvas = new Rect(0f, 0f, Math.Max(viewport.width, model.Width), Math.Max(viewport.height, model.Height));
 
             // Edges behind the cards.
             for (int i = 0; model.Edges != null && i < model.Edges.Length; i++)
-                DrawStoryMapEdge(canvas, byId, model.Edges[i]);
+                DrawStoryMapEdge(canvas, model.Nodes, model.Edges[i], i);
 
             // Node cards on top.
             for (int i = 0; i < model.Nodes.Length; i++)
                 DrawStoryMapNode(canvas, model.Nodes[i]);
-
+            GUI.EndGroup();
         }
 
-        private void DrawStoryMapEdge(Rect canvas, Dictionary<string, ScenarioStoryGraphNode> byId, ScenarioStoryGraphEdge edge)
+        private void DrawStoryMapEdge(
+            Rect canvas,
+            ScenarioStoryGraphNode[] nodes,
+            ScenarioStoryGraphEdge edge,
+            int routeIndex)
         {
             if (edge == null)
                 return;
-            ScenarioStoryGraphNode from;
-            ScenarioStoryGraphNode to;
-            if (!byId.TryGetValue(edge.FromNodeId ?? string.Empty, out from) || !byId.TryGetValue(edge.ToNodeId ?? string.Empty, out to))
+            ScenarioStoryGraphNode from = FindStoryMapNode(nodes, edge.FromNodeId);
+            ScenarioStoryGraphNode to = FindStoryMapNode(nodes, edge.ToNodeId);
+            if (from == null || to == null)
                 return;
 
-            Vector2 start = new Vector2(canvas.x + from.X + from.Width, canvas.y + from.Y + (from.Height * 0.5f));
-            Vector2 end = new Vector2(canvas.x + to.X, canvas.y + to.Y + (to.Height * 0.5f));
             Color color = edge.Status == ScenarioStoryGraphEdgeStatus.Broken ? StoryMapRed : StoryMapGold;
-            DrawStoryMapArrow(start, end, color);
+            if (to.Y > from.Y + 1f)
+            {
+                Vector2 start = new Vector2(canvas.x + from.X + (from.Width * 0.5f), canvas.y + from.Y + from.Height);
+                Vector2 end = new Vector2(canvas.x + to.X + (to.Width * 0.5f), canvas.y + to.Y);
+                float turnY = start.y + Math.Max(12f, (end.y - start.y) * 0.5f);
+                DrawStoryMapOrthogonalRoute(start, new Vector2(start.x, turnY), new Vector2(end.x, turnY), end, color);
+                return;
+            }
+
+            if (to.X >= from.X)
+            {
+                Vector2 start = new Vector2(canvas.x + from.X + from.Width, canvas.y + from.Y + (from.Height * 0.5f));
+                Vector2 end = new Vector2(canvas.x + to.X, canvas.y + to.Y + (to.Height * 0.5f));
+                float turnX = start.x + ((end.x - start.x) * 0.5f);
+                DrawStoryMapOrthogonalRoute(start, new Vector2(turnX, start.y), new Vector2(turnX, end.y), end, color);
+                return;
+            }
+
+            // A route that points backward travels above the stage row so it never cuts
+            // through cards or their outcome leaves.
+            Vector2 reverseStart = new Vector2(canvas.x + from.X, canvas.y + from.Y + (from.Height * 0.5f));
+            Vector2 reverseEnd = new Vector2(canvas.x + to.X + to.Width, canvas.y + to.Y + (to.Height * 0.5f));
+            float channelY = Math.Max(3f, Math.Min(reverseStart.y, reverseEnd.y) - 12f - ((routeIndex % 3) * 4f));
+            Vector2 leftExit = new Vector2(reverseStart.x - 10f, reverseStart.y);
+            Vector2 leftTurn = new Vector2(leftExit.x, channelY);
+            Vector2 rightTurn = new Vector2(reverseEnd.x + 10f, channelY);
+            Vector2 rightEntry = new Vector2(rightTurn.x, reverseEnd.y);
+            DrawStoryMapAxisSegment(reverseStart, leftExit, color, 2f);
+            DrawStoryMapAxisSegment(leftExit, leftTurn, color, 2f);
+            DrawStoryMapAxisSegment(leftTurn, rightTurn, color, 2f);
+            DrawStoryMapAxisSegment(rightTurn, rightEntry, color, 2f);
+            DrawStoryMapAxisSegment(rightEntry, reverseEnd, color, 2f);
+            DrawStoryMapRouteCap(reverseEnd, color);
         }
 
-        private static void DrawStoryMapArrow(Vector2 from, Vector2 to, Color color)
+        private static ScenarioStoryGraphNode FindStoryMapNode(ScenarioStoryGraphNode[] nodes, string id)
         {
-            DrawStoryMapLine(from, to, color, 2f);
-            Vector2 delta = to - from;
-            if (delta.sqrMagnitude < 0.01f)
-                return;
-            float baseAngle = Mathf.Atan2(delta.y, delta.x);
-            const float head = 9f;
-            const float spread = 0.4f; // radians (~23 degrees)
-            Vector2 left = to + new Vector2(Mathf.Cos(baseAngle + Mathf.PI - spread), Mathf.Sin(baseAngle + Mathf.PI - spread)) * head;
-            Vector2 right = to + new Vector2(Mathf.Cos(baseAngle + Mathf.PI + spread), Mathf.Sin(baseAngle + Mathf.PI + spread)) * head;
-            DrawStoryMapLine(to, left, color, 2f);
-            DrawStoryMapLine(to, right, color, 2f);
+            for (int i = 0; nodes != null && i < nodes.Length; i++)
+                if (nodes[i] != null && string.Equals(nodes[i].Id, id, StringComparison.Ordinal))
+                    return nodes[i];
+            return null;
         }
 
-        private static void DrawStoryMapLine(Vector2 a, Vector2 b, Color color, float thickness)
+        private static void DrawStoryMapOrthogonalRoute(
+            Vector2 start,
+            Vector2 cornerOne,
+            Vector2 cornerTwo,
+            Vector2 end,
+            Color color)
         {
-            Vector2 delta = b - a;
-            float length = delta.magnitude;
-            if (length < 0.01f)
-                return;
-
-            Matrix4x4 savedMatrix = GUI.matrix;
-            Color savedColor = GUI.color;
-            float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
-            GUIUtility.RotateAroundPivot(angle, a);
+            DrawStoryMapAxisSegment(start, cornerOne, color, 2f);
+            DrawStoryMapAxisSegment(cornerOne, cornerTwo, color, 2f);
+            DrawStoryMapAxisSegment(cornerTwo, end, color, 2f);
+            Color old = GUI.color;
             GUI.color = color;
-            GUI.DrawTexture(new Rect(a.x, a.y - (thickness * 0.5f), length, thickness), Texture2D.whiteTexture);
-            GUI.matrix = savedMatrix;
-            GUI.color = savedColor;
+            GUI.DrawTexture(new Rect(cornerOne.x - 1f, cornerOne.y - 1f, 3f, 3f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(cornerTwo.x - 1f, cornerTwo.y - 1f, 3f, 3f), Texture2D.whiteTexture);
+            GUI.color = old;
+            DrawStoryMapRouteCap(end, color);
+        }
+
+        private static void DrawStoryMapRouteCap(Vector2 end, Color color)
+        {
+            Color old = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(end.x - 3f, end.y - 3f, 6f, 6f), Texture2D.whiteTexture);
+            GUI.color = old;
+        }
+
+        private static void DrawStoryMapAxisSegment(Vector2 a, Vector2 b, Color color, float thickness)
+        {
+            float left = Math.Min(a.x, b.x);
+            float top = Math.Min(a.y, b.y);
+            float width = Math.Abs(b.x - a.x);
+            float height = Math.Abs(b.y - a.y);
+            if (width < 0.01f && height < 0.01f)
+                return;
+            Rect segment = width >= height
+                ? new Rect(left, a.y - (thickness * 0.5f), Math.Max(thickness, width), thickness)
+                : new Rect(a.x - (thickness * 0.5f), top, thickness, Math.Max(thickness, height));
+            Color old = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(segment, Texture2D.whiteTexture);
+            GUI.color = old;
         }
 
         private void DrawStoryMapNode(Rect canvas, ScenarioStoryGraphNode node)
@@ -195,6 +238,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     float badgeWidth = 30f;
                     Rect badgeRect = new Rect(rect.xMax - badgeWidth - 6f, rect.y + 6f, badgeWidth, 18f);
                     ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, ResolveStoryMapBadgeEmphasis(node.Status));
+                    string badgeHint = node.ProblemCount.ToString(CultureInfo.InvariantCulture)
+                        + (node.ProblemCount == 1 ? " validation issue" : " validation issues")
+                        + (!string.IsNullOrEmpty(node.ProblemSummary) ? ": " + node.ProblemSummary : string.Empty);
+                    GUI.Label(badgeRect, new GUIContent(string.Empty, badgeHint), GUIStyle.none);
                 }
 
                 Rect statusRect = new Rect(rect.x + pad, rect.yMax - 22f, rect.width - (pad * 2f), 16f);

@@ -18,8 +18,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     ///     route (unanswered-call routes and delayed stage changes) as the graph edges;
     ///   * <see cref="ScenarioStoryScriptViewBuilder"/> supplies the plain-language route
     ///     phrasing reused for hover tooltips.
-    /// Layout is a deterministic layered pass (BFS depth = column, siblings stacked) so the
-    /// same scenario always produces the same node positions.
+    /// Layout is a deterministic storyboard grid: stages read left-to-right on one row and
+    /// outcome/missing leaves sit directly below the stage that owns their route.
     /// </summary>
     internal static class ScenarioStoryGraphBuilder
     {
@@ -31,12 +31,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float StageCardHeight = 78f;
         public const float TerminalCardWidth = 132f;
         public const float TerminalCardHeight = 46f;
-        public const float ColumnGap = 72f;
-        public const float RowGap = 26f;
+        public const float ColumnGap = 58f;
+        public const float RowGap = 42f;
         public const float Margin = 20f;
 
         private const float CellWidth = StageCardWidth + ColumnGap;
-        private const float CellHeight = StageCardHeight + RowGap;
 
         public static ScenarioStoryGraphModel Build(ScenarioDefinition definition)
         {
@@ -98,9 +97,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             // --- Edges = stage-to-stage routes via the shared reference index. ---
             List<ScenarioStoryGraphEdge> edges = new List<ScenarioStoryGraphEdge>();
-            List<int>[] children = new List<int>[includedStages];
-            for (int i = 0; i < includedStages; i++)
-                children[i] = new List<int>();
             Dictionary<string, ScenarioStoryGraphNode> missingTargets = new Dictionary<string, ScenarioStoryGraphNode>(StringComparer.OrdinalIgnoreCase);
 
             List<ScenarioReferenceUsage> usages = ScenarioReferenceIndex.Collect(definition);
@@ -119,8 +115,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 int target = FindStageIndex(flow, targetId, includedStages);
                 if (target >= 0)
                 {
-                    if (target != source && !children[source].Contains(target))
-                        children[source].Add(target);
                     edges.Add(Edge(stageNodes[source].Id, StageNodeId(target), usage.DisplayLabel, ScenarioStoryGraphEdgeStatus.Ok));
                 }
                 else
@@ -146,7 +140,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             // --- Terminal outcome leaves (small nodes hung off their owning stage). ---
-            List<ScenarioStoryGraphNode> terminals = new List<ScenarioStoryGraphNode>();
             for (int i = 0; i < includedStages; i++)
             {
                 ScenarioFlowStageDefinition stage = flow.Stages[i];
@@ -163,15 +156,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         NavActionId = ScenarioStoryFocusedEditorActions.StageOpen(i),
                         Tooltip = "Outcome of " + stageNodes[i].Label + "."
                     };
-                    terminals.Add(leaf);
                     nodes.Add(leaf);
                     edges.Add(Edge(stageNodes[i].Id, leaf.Id, outcomeLabel, ScenarioStoryGraphEdgeStatus.Ok));
                 }
             }
 
-            // --- Deterministic layered layout. ---
-            AssignColumns(stageNodes, children);
-            LayoutColumns(nodes, stageNodes, terminals, missingTargets, model);
+            // --- Deterministic storyboard layout. ---
+            LayoutStoryboard(nodes, stageNodes, edges, model);
 
             model.Nodes = nodes.ToArray();
             model.Edges = edges.ToArray();
@@ -180,151 +171,75 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         // === Layout ======================================================================
 
-        // BFS depth = column. Deterministic: children are processed in ascending stage-index
-        // order, unreachable subgraphs are laid out to the right of the reachable ones.
-        private static void AssignColumns(ScenarioStoryGraphNode[] stageNodes, List<int>[] children)
-        {
-            int count = stageNodes.Length;
-            int[] depth = new int[count];
-            for (int i = 0; i < count; i++)
-                depth[i] = -1;
-
-            Queue<int> queue = new Queue<int>();
-            if (count > 0)
-            {
-                depth[0] = 0;
-                queue.Enqueue(0);
-            }
-            BfsAssign(queue, depth, children);
-
-            // Lay any unreachable stages out in index order, seeded past the reachable columns.
-            int maxDepth = MaxAssigned(depth);
-            for (int i = 0; i < count; i++)
-            {
-                if (depth[i] != -1)
-                    continue;
-                int seed = maxDepth + 2;
-                depth[i] = seed;
-                queue.Enqueue(i);
-                BfsAssign(queue, depth, children);
-                maxDepth = MaxAssigned(depth);
-            }
-
-            for (int i = 0; i < count; i++)
-                stageNodes[i].Column = depth[i] < 0 ? 0 : depth[i];
-        }
-
-        private static void BfsAssign(Queue<int> queue, int[] depth, List<int>[] children)
-        {
-            while (queue.Count > 0)
-            {
-                int s = queue.Dequeue();
-                List<int> kids = children[s];
-                kids.Sort();
-                for (int k = 0; k < kids.Count; k++)
-                {
-                    int t = kids[k];
-                    if (depth[t] == -1)
-                    {
-                        depth[t] = depth[s] + 1;
-                        queue.Enqueue(t);
-                    }
-                }
-            }
-        }
-
-        private static int MaxAssigned(int[] depth)
-        {
-            int max = 0;
-            for (int i = 0; i < depth.Length; i++)
-                if (depth[i] > max)
-                    max = depth[i];
-            return max;
-        }
-
-        private static void LayoutColumns(
+        private static void LayoutStoryboard(
             List<ScenarioStoryGraphNode> nodes,
             ScenarioStoryGraphNode[] stageNodes,
-            List<ScenarioStoryGraphNode> terminals,
-            Dictionary<string, ScenarioStoryGraphNode> missingTargets,
+            List<ScenarioStoryGraphEdge> edges,
             ScenarioStoryGraphModel model)
         {
-            // Terminal/missing leaves live one column to the right of their owning stage.
-            for (int i = 0; i < terminals.Count; i++)
+            Dictionary<string, int> stageIndexById = new Dictionary<string, int>(StringComparer.Ordinal);
+            int[] nextLeafRow = new int[stageNodes.Length];
+            for (int i = 0; i < stageNodes.Length; i++)
             {
-                ScenarioStoryGraphNode leaf = terminals[i];
-                int owner = OutcomeOwnerIndex(leaf.Id);
-                leaf.Column = (owner >= 0 && owner < stageNodes.Length ? stageNodes[owner].Column : 0) + 1;
-            }
-            foreach (KeyValuePair<string, ScenarioStoryGraphNode> pair in missingTargets)
-            {
-                int owner = MinSourceColumnFor(stageNodes, pair.Value, model);
-                pair.Value.Column = owner + 1;
+                ScenarioStoryGraphNode stage = stageNodes[i];
+                stageIndexById[stage.Id] = i;
+                nextLeafRow[i] = 1;
+                PlaceStageNode(stage, i);
             }
 
-            // Row = order within a column: stage nodes by index, then terminal leaves.
-            int maxColumn = 0;
+            int maxLeafRow = 0;
             for (int i = 0; i < nodes.Count; i++)
-                if (nodes[i].Column > maxColumn)
-                    maxColumn = nodes[i].Column;
-
-            int maxRow = 0;
-            for (int c = 0; c <= maxColumn; c++)
             {
-                int row = 0;
-                for (int i = 0; i < nodes.Count; i++)
-                {
-                    ScenarioStoryGraphNode node = nodes[i];
-                    if (node.Column != c || node.Kind != ScenarioStoryGraphNodeKind.Stage)
-                        continue;
-                    PlaceNode(node, c, row++);
-                }
-                for (int i = 0; i < nodes.Count; i++)
-                {
-                    ScenarioStoryGraphNode node = nodes[i];
-                    if (node.Column != c || node.Kind != ScenarioStoryGraphNodeKind.Terminal)
-                        continue;
-                    PlaceNode(node, c, row++);
-                }
-                if (row > maxRow)
-                    maxRow = row;
-            }
-
-            model.Columns = maxColumn + 1;
-            model.Rows = maxRow;
-            model.Width = (Margin * 2f) + ((maxColumn + 1) * StageCardWidth) + (maxColumn * ColumnGap);
-            model.Height = (Margin * 2f) + (maxRow * StageCardHeight) + (Math.Max(0, maxRow - 1) * RowGap);
-        }
-
-        private static void PlaceNode(ScenarioStoryGraphNode node, int column, int row)
-        {
-            node.Column = column;
-            node.Row = row;
-            node.X = Margin + (column * CellWidth);
-            node.Y = Margin + (row * CellHeight);
-            if (node.Kind == ScenarioStoryGraphNodeKind.Terminal)
-            {
+                ScenarioStoryGraphNode node = nodes[i];
+                if (node == null || node.Kind != ScenarioStoryGraphNodeKind.Terminal)
+                    continue;
+                int owner = FindOwnerStageIndex(node.Id, edges, stageIndexById);
+                if (owner < 0 || owner >= stageNodes.Length)
+                    owner = 0;
+                int row = nextLeafRow[owner]++;
+                node.Column = owner;
+                node.Row = row;
                 node.Width = TerminalCardWidth;
                 node.Height = TerminalCardHeight;
-                // Vertically centre the smaller terminal card inside its row slot.
-                node.Y += (StageCardHeight - TerminalCardHeight) * 0.5f;
+                node.X = Margin + (owner * CellWidth) + ((StageCardWidth - TerminalCardWidth) * 0.5f);
+                node.Y = Margin + StageCardHeight + RowGap + ((row - 1) * (TerminalCardHeight + 18f));
+                maxLeafRow = Math.Max(maxLeafRow, row);
             }
-            else
-            {
-                node.Width = StageCardWidth;
-                node.Height = StageCardHeight;
-            }
+
+            model.Columns = stageNodes.Length;
+            model.Rows = 1 + maxLeafRow;
+            model.Width = (Margin * 2f) + (stageNodes.Length * StageCardWidth)
+                + (Math.Max(0, stageNodes.Length - 1) * ColumnGap);
+            model.Height = (Margin * 2f) + StageCardHeight;
+            if (maxLeafRow > 0)
+                model.Height += RowGap + (maxLeafRow * TerminalCardHeight) + ((maxLeafRow - 1) * 18f);
         }
 
-        private static int MinSourceColumnFor(ScenarioStoryGraphNode[] stageNodes, ScenarioStoryGraphNode missing, ScenarioStoryGraphModel model)
+        private static void PlaceStageNode(ScenarioStoryGraphNode node, int column)
         {
-            // Missing-target leaves sit past the earliest stage that references them; the
-            // simple, deterministic choice is one column past the highest stage column.
-            int max = 0;
-            for (int i = 0; i < stageNodes.Length; i++)
-                if (stageNodes[i].Column > max)
-                    max = stageNodes[i].Column;
-            return max;
+            node.Column = column;
+            node.Row = 0;
+            node.X = Margin + (column * CellWidth);
+            node.Y = Margin;
+            node.Width = StageCardWidth;
+            node.Height = StageCardHeight;
+        }
+
+        private static int FindOwnerStageIndex(
+            string nodeId,
+            List<ScenarioStoryGraphEdge> edges,
+            Dictionary<string, int> stageIndexById)
+        {
+            for (int i = 0; edges != null && i < edges.Count; i++)
+            {
+                ScenarioStoryGraphEdge edge = edges[i];
+                int owner;
+                if (edge != null
+                    && string.Equals(edge.ToNodeId, nodeId, StringComparison.Ordinal)
+                    && stageIndexById.TryGetValue(edge.FromNodeId ?? string.Empty, out owner))
+                    return owner;
+            }
+            return OutcomeOwnerIndex(nodeId);
         }
 
         // === Problems ====================================================================

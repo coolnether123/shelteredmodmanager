@@ -9,7 +9,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
         private const float TimelineRibbonLabelWidth = 142f;
+        private const float TimelineRibbonZoomDuration = 0.15f;
         private float _timelineRibbonZoom;
+        private float _timelineRibbonTargetZoom;
+        private float _timelineRibbonZoomStart;
+        private float _timelineRibbonZoomStartedAt;
+        private float _timelineRibbonZoomAnchorDay = 1f;
+        private float _timelineRibbonZoomAnchorPixel;
+        private bool _timelineRibbonZoomAnimating;
         private float _timelineRibbonFirstVisibleDay = 1f;
         private bool _timelineRibbonDragCandidate;
         private bool _timelineRibbonDragging;
@@ -19,6 +26,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private GUIStyle _timelineRibbonDayStyle;
         private GUIStyle _timelineRibbonOverflowStyle;
         private GUIStyle _timelineRibbonEmptyStyle;
+        private GUIStyle _timelineRibbonGlyphStyle;
+        private GUIStyle _timelineRibbonChapterStyle;
 
         private void DrawWorkshopTimelineRibbon(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
@@ -48,9 +57,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
             float pixelsPerDay = ResolveTimelineRibbonPixelsPerDay(trackRect, ribbon);
             HandleTimelineRibbonInput(trackRect, ribbon, pixelsPerDay);
+            AdvanceTimelineRibbonZoom(trackRect, ribbon);
             pixelsPerDay = ResolveTimelineRibbonPixelsPerDay(trackRect, ribbon);
             ClampTimelineRibbonPan(trackRect, ribbon, pixelsPerDay);
             UpdateTimelineRibbonViewport(trackRect, ribbon, pixelsPerDay);
+            DrawTimelineRibbonDensity(trackRect, ribbon, pixelsPerDay);
             DrawTimelineRibbonAxis(trackRect, ribbon, pixelsPerDay);
             DrawTimelineRibbonMarkers(trackRect, ribbon, pixelsPerDay);
         }
@@ -70,6 +81,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             _timelineRibbonOverflowStyle.fontSize = Math.Min(_timelineRibbonOverflowStyle.fontSize, 9);
             _timelineRibbonEmptyStyle = new GUIStyle(_mutedTextStyle);
             _timelineRibbonEmptyStyle.alignment = TextAnchor.MiddleLeft;
+            _timelineRibbonGlyphStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonGlyphStyle.alignment = TextAnchor.MiddleCenter;
+            _timelineRibbonGlyphStyle.fontStyle = FontStyle.Bold;
+            _timelineRibbonGlyphStyle.fontSize = Math.Min(_timelineRibbonGlyphStyle.fontSize, 8);
+            _timelineRibbonChapterStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonChapterStyle.alignment = TextAnchor.MiddleLeft;
+            _timelineRibbonChapterStyle.fontStyle = FontStyle.Bold;
+            _timelineRibbonChapterStyle.fontSize = Math.Min(_timelineRibbonChapterStyle.fontSize, 9);
+            _timelineRibbonChapterStyle.clipping = TextClipping.Clip;
         }
 
         private float ResolveTimelineRibbonPixelsPerDay(Rect trackRect, ScenarioDayTimelineRibbonViewModel ribbon)
@@ -88,11 +108,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
             if (current.type == EventType.ScrollWheel && trackRect.Contains(current.mousePosition))
             {
-                float pointerDay = _timelineRibbonFirstVisibleDay + ((current.mousePosition.x - trackRect.x) / Math.Max(1f, pixelsPerDay));
-                _timelineRibbonZoom = Mathf.Clamp01(_timelineRibbonZoom - (current.delta.y * 0.08f));
-                float nextPixelsPerDay = ResolveTimelineRibbonPixelsPerDay(trackRect, ribbon);
-                _timelineRibbonFirstVisibleDay = pointerDay - ((current.mousePosition.x - trackRect.x) / Math.Max(1f, nextPixelsPerDay));
-                ClampTimelineRibbonPan(trackRect, ribbon, nextPixelsPerDay);
+                _timelineRibbonZoomAnchorPixel = current.mousePosition.x - trackRect.x;
+                _timelineRibbonZoomAnchorDay = _timelineRibbonFirstVisibleDay
+                    + (_timelineRibbonZoomAnchorPixel / Math.Max(1f, pixelsPerDay));
+                _timelineRibbonZoomStart = _timelineRibbonZoom;
+                _timelineRibbonTargetZoom = Mathf.Clamp01(_timelineRibbonTargetZoom - (current.delta.y * 0.10f));
+                _timelineRibbonZoomStartedAt = Time.realtimeSinceStartup;
+                _timelineRibbonZoomAnimating = true;
                 current.Use();
                 return;
             }
@@ -126,6 +148,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 _timelineRibbonDragging = false;
                 if (wasDragging)
                     current.Use();
+            }
+        }
+
+        private void AdvanceTimelineRibbonZoom(Rect trackRect, ScenarioDayTimelineRibbonViewModel ribbon)
+        {
+            if (!_timelineRibbonZoomAnimating)
+                return;
+            float elapsed = Math.Max(0f, Time.realtimeSinceStartup - _timelineRibbonZoomStartedAt);
+            float progress = Mathf.Clamp01(elapsed / TimelineRibbonZoomDuration);
+            float eased = progress * progress * (3f - (2f * progress));
+            _timelineRibbonZoom = Mathf.Lerp(_timelineRibbonZoomStart, _timelineRibbonTargetZoom, eased);
+            float pixelsPerDay = ResolveTimelineRibbonPixelsPerDay(trackRect, ribbon);
+            _timelineRibbonFirstVisibleDay = _timelineRibbonZoomAnchorDay
+                - (_timelineRibbonZoomAnchorPixel / Math.Max(1f, pixelsPerDay));
+            ClampTimelineRibbonPan(trackRect, ribbon, pixelsPerDay);
+            if (progress >= 0.999f)
+            {
+                _timelineRibbonZoom = _timelineRibbonTargetZoom;
+                _timelineRibbonZoomAnimating = false;
             }
         }
 
@@ -172,6 +213,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             }
         }
 
+        private void DrawTimelineRibbonDensity(Rect trackRect, ScenarioDayTimelineRibbonViewModel ribbon, float pixelsPerDay)
+        {
+            for (int day = ribbon.FirstDay; day <= ribbon.LastDay; day++)
+            {
+                float centerX = TimelineRibbonDayCenterX(trackRect, day, pixelsPerDay);
+                Rect cellRect = new Rect(centerX - (pixelsPerDay * 0.5f) + 1f, trackRect.y + 1f, Math.Max(2f, pixelsPerDay - 2f), trackRect.height - 2f);
+                if (cellRect.xMax < trackRect.x || cellRect.x > trackRect.xMax)
+                    continue;
+                cellRect.xMin = Math.Max(cellRect.xMin, trackRect.x);
+                cellRect.xMax = Math.Min(cellRect.xMax, trackRect.xMax);
+                ScenarioDayTimelineRibbonDayViewModel dayModel = GetTimelineRibbonDay(ribbon, day);
+                int count = dayModel != null ? dayModel.MarkerCount : 0;
+                float density = Mathf.Clamp01(count / 5f);
+                Color old = GUI.color;
+                GUI.color = count > 0
+                    ? new Color(0.58f, 0.42f, 0.22f, 0.05f + (density * 0.15f))
+                    : new Color(0.44f, 0.38f, 0.29f, 0.025f);
+                GUI.DrawTexture(cellRect, Texture2D.whiteTexture);
+                GUI.color = old;
+                if (dayModel != null && dayModel.HoverAction != null)
+                    RegisterRichHoverHelpSource(cellRect, dayModel.HoverAction);
+            }
+        }
+
         private void DrawTimelineRibbonMarkers(Rect trackRect, ScenarioDayTimelineRibbonViewModel ribbon, float pixelsPerDay)
         {
             ScenarioDayTimelineRibbonMarkerViewModel[] markers = ribbon.Markers;
@@ -207,8 +272,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 return;
 
             Rect markerRect = marker.IsChapter
-                ? new Rect(centerX - 9f, trackRect.y + 3f, 18f, 29f)
-                : new Rect(centerX - 6f, trackRect.y + 5f + (lane * 8f), 12f, 12f);
+                ? ResolveTimelineRibbonChapterRect(trackRect, centerX)
+                : new Rect(centerX - 8f, trackRect.y + 5f + (lane * 8f), 16f, 16f);
             bool hovered = IsInteractiveHoverAllowed(markerRect);
             bool pressed = IsInteractiveMouseDownAllowed(markerRect);
             RegisterInteractiveRegion(markerRect);
@@ -221,7 +286,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (marker.IsChapter)
             {
                 GUI.DrawTexture(new Rect(markerRect.x + 2f, markerRect.y, 2f, markerRect.height), Texture2D.whiteTexture);
-                ScenarioUiAtlasSkin.DrawCornerCutTexture(new Rect(markerRect.x + 4f, markerRect.y, markerRect.width - 4f, 16f), Texture2D.whiteTexture);
+                ScenarioUiAtlasSkin.DrawCornerCutTexture(new Rect(markerRect.x + 4f, markerRect.y, markerRect.width - 4f, markerRect.height), Texture2D.whiteTexture);
             }
             else
             {
@@ -229,12 +294,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             }
             GUI.color = oldColor;
 
+            if (marker.IsChapter && markerRect.width > 24f)
+            {
+                GUI.Label(new Rect(markerRect.x + 9f, markerRect.y + 1f, markerRect.width - 12f, markerRect.height - 2f),
+                    ShortenToFit(marker.Title ?? string.Empty, markerRect.width - 12f, _timelineRibbonChapterStyle),
+                    _timelineRibbonChapterStyle);
+            }
+            else if (!marker.IsChapter)
+            {
+                DrawTimelineRibbonMarkerGlyph(new Rect(markerRect.x + 3f, markerRect.y + 3f, markerRect.width - 6f, markerRect.height - 6f), marker);
+            }
+
             if (DrawPlainButton(markerRect, GUIContent.none, GUIStyle.none, marker.Action.Enabled))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(marker.Action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
+        }
+
+        private Rect ResolveTimelineRibbonChapterRect(
+            Rect trackRect,
+            float centerX)
+        {
+            float pixelsPerDay = ResolveTimelineRibbonPixelsPerDay(trackRect,
+                _snapshot != null && _snapshot.ShellViewModel != null ? _snapshot.ShellViewModel.TimelineRibbon : null);
+            float width = pixelsPerDay >= 72f ? Math.Min(112f, Math.Max(46f, pixelsPerDay - 8f)) : 18f;
+            return new Rect(centerX - (width * 0.5f), trackRect.y + 3f, width, width > 24f ? 18f : 29f);
+        }
+
+        private void DrawTimelineRibbonMarkerGlyph(Rect rect, ScenarioDayTimelineRibbonMarkerViewModel marker)
+        {
+            string role = ResolveTimelineIconRole(marker != null ? marker.Domain : null);
+            if (!string.IsNullOrEmpty(role) && ScenarioUiAtlasSkin.HasIcon(role) && ScenarioUiAtlasSkin.DrawIcon(rect, role))
+                return;
+            string glyph = marker != null && marker.Action != null ? marker.Action.IconText : string.Empty;
+            GUI.Label(rect, ShortenToFit(glyph ?? string.Empty, rect.width, _timelineRibbonGlyphStyle), _timelineRibbonGlyphStyle);
         }
 
         private void DrawTimelineRibbonOverflow(
@@ -248,6 +343,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioUiAtlasSkin.DrawCornerCutTexture(overflowRect, Texture2D.whiteTexture);
             GUI.color = oldColor;
             GUI.Label(overflowRect, day != null ? day.OverflowLabel : string.Empty, _timelineRibbonOverflowStyle);
+            if (day != null && day.HoverAction != null)
+                RegisterRichHoverHelpSource(overflowRect, day.HoverAction);
         }
 
         private static ScenarioDayTimelineRibbonDayViewModel GetTimelineRibbonDay(
@@ -268,9 +365,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private void ResetTimelineRibbonInteraction()
         {
             _timelineRibbonZoom = 0f;
+            _timelineRibbonTargetZoom = 0f;
+            _timelineRibbonZoomStart = 0f;
+            _timelineRibbonZoomAnimating = false;
             _timelineRibbonFirstVisibleDay = 1f;
             _timelineRibbonDragCandidate = false;
             _timelineRibbonDragging = false;
+            _timelineTrackZoom = 0f;
+            _timelineTrackTargetZoom = 0f;
+            _timelineTrackZoomStart = 0f;
+            _timelineTrackZoomAnimating = false;
+            _timelineTrackDragCandidate = false;
+            _timelineTrackDragging = false;
         }
     }
 }

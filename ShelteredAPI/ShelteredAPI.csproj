@@ -477,6 +477,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioTestConsoleAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Timeline\ScenarioTimelineCreatorText.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioTimelineUxVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioStoryGraphUxVerification.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioQuestAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioScoringAuthoringSummary.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioWorkflowAuthoringContentBuilder.cs" />

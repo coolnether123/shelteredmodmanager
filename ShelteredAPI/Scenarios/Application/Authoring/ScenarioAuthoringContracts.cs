@@ -1213,6 +1213,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int ChapterCount { get; set; }
         public string Label { get; set; }
         public string OverflowLabel { get; set; }
+        public ScenarioAuthoringInspectorAction HoverAction { get; set; }
     }
 
     internal sealed class ScenarioDayTimelineRibbonMarkerViewModel
