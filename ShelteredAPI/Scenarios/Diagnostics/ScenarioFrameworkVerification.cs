@@ -44,6 +44,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyAtomicScenarioWrites(root, result);
                 VerifyDraftDeleteDurability(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
+                VerifyCompletionCarrierContract(result);
                 VerifyInventoryProjectionReconciliation(result);
                 VerifySuppliesAuthoring(result);
                 VerifyMapLootProjectionContracts(result);
@@ -599,6 +600,21 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 || afterFailureXml.IndexOf("Updated Atomic Scenario", StringComparison.Ordinal) >= 0,
                 "Failed atomic scenario save did not leave the previous scenario.xml intact.", result);
             Assert(originalXml.IndexOf("Original Atomic Scenario", StringComparison.Ordinal) >= 0, "Verification setup failed to capture the original XML.", result);
+        }
+
+        private static void VerifyCompletionCarrierContract(ScenarioValidationResult result)
+        {
+            ScenarioDefinition definition = CreateDefinition("Scenario.CompletionCarrier");
+            definition.ScenarioFlow.Stages.Add(new ScenarioFlowStageDefinition { Id = "authored-stage" });
+
+            ScenarioDef carrier = ScenarioDefinitionService.BuildScenarioDef(definition);
+
+            Assert(carrier != null && carrier.IsScenario(),
+                "Completion carrier was not a vanilla ScenarioDef.", result);
+            Assert(carrier != null && carrier.stages.Count == 0,
+                "Completion carrier projected an authored stage into vanilla visitor flow.", result);
+            Assert(carrier != null && string.Equals(carrier.id, definition.Id, StringComparison.Ordinal),
+                "Completion carrier did not preserve the authored scenario id used by outcome resolution.", result);
         }
 
         private static void VerifyDraftDeleteDurability(string root, ScenarioValidationResult result)
