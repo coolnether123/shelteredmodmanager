@@ -1309,11 +1309,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             for (int i = 0; i < rows.Count; i++)
             {
                 ScenarioBookRowModel row = rows[i];
-                bool persistentRootNavigation = view == ScenarioBookBrowserViewKind.Types
-                    && row != null
-                    && (row.Kind == ScenarioBookRowKind.OpenInstallScenarios
-                        || (row.Kind == ScenarioBookRowKind.Type && row.Type == ScenarioBookType.Draft));
-                if (persistentRootNavigation || MatchesSearch(row, searchFilter))
+                if (MatchesSearch(row, searchFilter))
                     filtered.Add(row);
             }
 
