@@ -826,6 +826,8 @@ Assert-Contains "draft row detail wiring" $scenarioBookDataSource "baseMode \+ "
 Assert-Contains "draft row recovery badge" $scenarioBookDataSource "if \(facts != null && facts\.HasRecoveryData\)\s*return ""Recovery"";" "draft rows with unsaved recovery data must badge as Recovery."
 Assert-Contains "recovery needs-attention grouping" $scenarioBookDataSource "AddPublishedScenarioRows\(rows\);.*AddRecoveryRows\(rows\);" "recovery rows must trail the normal type cards, not sit between them."
 Assert-Contains "recovery needs-attention header" $scenarioBookDataSource "Title = ""Needs attention""" "recovery rows must be grouped under a labelled Needs attention section."
+Assert-Contains "persistent root navigation ordering" $scenarioBookDataSource "drafts\.SectionLabel = ""WORK ON DRAFTS"";.*Kind = ScenarioBookRowKind\.OpenInstallScenarios.*AddPublishedScenarioRows\(rows\);" "draft and install navigation must precede catalog-sized published rows so refreshes cannot page them away."
+Assert-Contains "persistent root navigation filtering" $scenarioBookDataSource "persistentRootNavigation = view == ScenarioBookBrowserViewKind\.Types.*ScenarioBookRowKind\.OpenInstallScenarios.*ScenarioBookType\.Draft.*persistentRootNavigation \|\| MatchesSearch" "root search must preserve the draft and install entry points."
 
 Assert-Contains "draft detail pane facts" $scenarioBookRenderer "BuildDraftFacts\(root, model != null \? model\.Facts : null\)" "the draft detail pane must render the assembled draft facts."
 
