@@ -468,7 +468,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     break;
             }
 
-            return FilterRows(rows, searchFilter);
+            return FilterRows(view, rows, searchFilter);
         }
 
         public string GetHeaderTitle(ScenarioBookBrowserViewKind view, ScenarioBookType selectedType, ScenarioCatalogEntry selectedScenario)
@@ -537,7 +537,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             surrounded.SectionLabel = "PLAY PUBLISHED SCENARIOS";
             rows.Add(surrounded);
             rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis", "Scenario saves and custom content built on the Stasis rule set."));
-            AddPublishedScenarioRows(rows);
 
             if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
             {
@@ -557,6 +556,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Badge = "Downloads",
                 SectionLabel = "INSTALL DOWNLOADED SCENARIOS"
             });
+
+            // Keep persistent root navigation ahead of catalog-sized content. The book
+            // displays five rows per page, so appending these controls after published
+            // entries allowed a catalog refresh to push them onto a later page.
+            AddPublishedScenarioRows(rows);
 
             // Interrupted launches and leftover redirects are exceptional, so they trail
             // the normal type cards under their own labelled "Needs attention" section
@@ -1204,7 +1208,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return ScenarioBookSaveMetadataReader.GetSaveTime(save);
         }
 
-        private static List<ScenarioBookRowModel> FilterRows(List<ScenarioBookRowModel> rows, string searchFilter)
+        private static List<ScenarioBookRowModel> FilterRows(
+            ScenarioBookBrowserViewKind view,
+            List<ScenarioBookRowModel> rows,
+            string searchFilter)
         {
             if (rows == null)
                 return new List<ScenarioBookRowModel>();
@@ -1215,7 +1222,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             for (int i = 0; i < rows.Count; i++)
             {
                 ScenarioBookRowModel row = rows[i];
-                if (MatchesSearch(row, searchFilter))
+                bool persistentRootNavigation = view == ScenarioBookBrowserViewKind.Types
+                    && row != null
+                    && (row.Kind == ScenarioBookRowKind.OpenInstallScenarios
+                        || (row.Kind == ScenarioBookRowKind.Type && row.Type == ScenarioBookType.Draft));
+                if (persistentRootNavigation || MatchesSearch(row, searchFilter))
                     filtered.Add(row);
             }
 
