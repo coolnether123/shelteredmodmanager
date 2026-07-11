@@ -48,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private UIInput _draftIdInput;
         private UIInput _draftNameInput;
         private UIInput _draftDescriptionInput;
+        private UILabel _statusLabel;
 
         public ScenarioBookBrowserRenderer(Action back, Action close, Action<int> changePage)
         {
@@ -210,6 +211,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             string headerDetail,
             Action<ScenarioBookDraftEditorModel> save,
             Action openDraft,
+            Action openExportFolder,
             Action deleteDraft)
         {
             if (_pagedList == null)
@@ -222,7 +224,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _draftDescriptionInput = null;
 
             _pagedList.AddRow(BuildHeader(_pagedList.ContentRoot, headerTitle, headerDetail), HeaderHeight);
-            _pagedList.AddRow(BuildDraftEditor(_pagedList.ContentRoot, model, save, openDraft, deleteDraft), 390);
+            _pagedList.AddRow(BuildDraftEditor(_pagedList.ContentRoot, model, save, openDraft, openExportFolder, deleteDraft), 390);
             _pagedList.Layout(6);
 
             if (_navigator != null)
@@ -231,6 +233,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public void SetStatus(string value)
         {
+            if (_statusLabel != null)
+            {
+                _statusLabel.text = value ?? string.Empty;
+                _statusLabel.gameObject.SetActive(!string.IsNullOrEmpty(value));
+            }
         }
 
         public void Dispose()
@@ -275,6 +282,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _navigator.Build(_chrome.Regions.FooterRoot, new Vector3(0f, bottomY, 0f),
                 delegate { _changePage(-1); },
                 delegate { _changePage(1); });
+
+            _statusLabel = _ui.CreateLabel(_chrome.Regions.FooterRoot, "ScenarioBookStatus", string.Empty,
+                new Vector3(0f, bottomY + 43f, 0f), 14, _chrome.Palette.StampRed,
+                700, 38, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            _statusLabel.multiLine = true;
+            _statusLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+            _statusLabel.gameObject.SetActive(false);
 
         }
 
@@ -801,6 +815,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             ScenarioBookDraftEditorModel model,
             Action<ScenarioBookDraftEditorModel> save,
             Action openDraft,
+            Action openExportFolder,
             Action deleteDraft)
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookDraftEditor", Vector3.zero);
@@ -828,23 +843,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             BuildDraftFacts(root, model != null ? model.Facts : null);
 
             _chrome.Buttons.Build(root, "SaveDraftDetails", "Save Details",
-                new Vector3(300f, 30f, 0f), 178, 44, 17, delegate
+                new Vector3(420f, 30f, 0f), 160, 44, 17, delegate
                 {
                     if (save != null)
                         save(ReadDraftEditorModel(model));
                 });
             _chrome.Buttons.Build(root, "OpenDraft", "Open Draft",
-                new Vector3(300f, -28f, 0f), 178, 44, 17, delegate
+                new Vector3(420f, -28f, 0f), 160, 44, 17, delegate
                 {
                     if (openDraft != null)
                         openDraft();
                 });
             _chrome.Buttons.Build(root, "DeleteDraft", "Delete Draft",
-                new Vector3(300f, -86f, 0f), 178, 44, 17, delegate
+                new Vector3(420f, -86f, 0f), 160, 44, 17, delegate
                 {
                     if (deleteDraft != null)
                         deleteDraft();
                 });
+
+            if (model != null && model.Facts != null && model.Facts.HasExport)
+            {
+                _chrome.Buttons.Build(root, "OpenExportFolder", "Open Export",
+                    new Vector3(420f, -144f, 0f), 160, 44, 17, delegate
+                    {
+                        if (openExportFolder != null)
+                            openExportFolder();
+                    });
+            }
 
             return root;
         }
@@ -853,21 +878,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             _ui.CreateLabel(root, "DraftFactsHeading", "Draft status",
                 new Vector3(96f, 168f, 0f), 17, _chrome.Palette.Ink,
-                RightPageWidth - 20, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                245, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
 
             float y = 140f;
             BuildDraftFactLine(root, "BaseMode", "Base mode: " + FactValue(facts != null ? facts.BaseModeLabel : null, "Standard"), y); y -= 22f;
             BuildDraftFactLine(root, "Edited", "Last edited: " + FactValue(facts != null ? facts.LastEditedText : null, "unknown"), y); y -= 22f;
             BuildDraftFactLine(root, "Validation", "Validation: " + FactValue(facts != null ? facts.ValidationSummary : null, "Not checked"), y); y -= 22f;
             BuildDraftFactLine(root, "Export", "Last export: " + (facts != null && facts.HasExport ? FactValue(facts.LastExportText, "exported") : "none yet"), y); y -= 22f;
-            BuildDraftFactLine(root, "Recovery", "Recovery data: " + BuildRecoveryValue(facts), y);
+            BuildDraftFactLine(root, "Recovery", "Recovery data: " + BuildRecoveryValue(facts), y); y -= 22f;
+            if (facts != null && facts.HasExport)
+            {
+                BuildDraftFactLine(root, "ExportPath", "Export folder: " + FactValue(facts.LastExportRoot, "unknown"), y); y -= 22f;
+                BuildDraftFactLine(root, "Share", "Send this folder to another player; they drop it in "
+                    + ScenarioPackageImportService.StagingFolderName + " and click Install.", y);
+            }
         }
 
         private void BuildDraftFactLine(GameObject root, string key, string text, float y)
         {
             UILabel line = _ui.CreateLabel(root, "DraftFact_" + key, text,
                 new Vector3(96f, y, 0f), 15, _chrome.Palette.InkFaded,
-                RightPageWidth - 12, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                245, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             line.overflowMethod = UILabel.Overflow.ShrinkContent;
         }
 

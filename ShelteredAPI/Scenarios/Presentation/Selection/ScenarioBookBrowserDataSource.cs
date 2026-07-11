@@ -28,8 +28,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly IScenarioSaveLibrary _saveLibrary;
+        private readonly ScenarioPackageImportService _importService;
         private readonly object _saveRefreshSync = new object();
         private readonly object _draftFactsRefreshSync = new object();
+        private readonly object _importRefreshSync = new object();
         private ScenarioCatalogEntry[] _entries = new ScenarioCatalogEntry[0];
         private int _appliedVersion;
         private string _lastRefreshError;
@@ -47,16 +49,69 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private int _draftFactsRefreshVersion;
         private int _appliedDraftFactsRefreshVersion;
         private int _draftFactsRefreshRequestVersion;
+        private bool _importRefreshRunning;
+        private ScenarioPackageImportScanResult _importResult;
+        private int _importRefreshVersion;
+        private int _appliedImportRefreshVersion;
+        private int _importRefreshRequestVersion;
         private bool _cancelled;
 
-        public ScenarioBookBrowserDataSource(IScenarioSelectionCatalogService catalog, IScenarioSaveLibrary saveLibrary)
+        public ScenarioBookBrowserDataSource(
+            IScenarioSelectionCatalogService catalog,
+            IScenarioSaveLibrary saveLibrary,
+            ScenarioPackageImportService importService)
         {
             if (catalog == null) throw new ArgumentNullException("catalog");
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
+            if (importService == null) throw new ArgumentNullException("importService");
 
             _catalog = catalog;
             _saveLibrary = saveLibrary;
+            _importService = importService;
             ApplyLatestSnapshot();
+        }
+
+        public void BeginImportRefreshAsync()
+        {
+            int requestVersion;
+            lock (_importRefreshSync)
+            {
+                requestVersion = ++_importRefreshRequestVersion;
+                _importRefreshRunning = true;
+            }
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                ScenarioPackageImportScanResult result;
+                try { result = _importService.Scan(); }
+                catch (Exception ex)
+                {
+                    result = new ScenarioPackageImportScanResult { Error = "Could not scan downloaded scenarios: " + ex.Message };
+                }
+
+                lock (_importRefreshSync)
+                {
+                    if (!_cancelled && requestVersion == _importRefreshRequestVersion)
+                    {
+                        _importResult = result ?? new ScenarioPackageImportScanResult();
+                        _importRefreshVersion++;
+                        _importRefreshRunning = false;
+                    }
+                }
+            });
+        }
+
+        public bool ApplyLatestImportScan(out string error)
+        {
+            error = null;
+            lock (_importRefreshSync)
+            {
+                if (_importRefreshVersion == _appliedImportRefreshVersion)
+                    return false;
+                _appliedImportRefreshVersion = _importRefreshVersion;
+                error = _importResult != null ? _importResult.Error : null;
+                return true;
+            }
         }
 
         public void Refresh()
@@ -311,6 +366,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _saveRefreshError = null;
             }
 
+            lock (_importRefreshSync)
+            {
+                _importRefreshRequestVersion++;
+                _importRefreshRunning = false;
+            }
+
             InvalidateDraftFactsRefresh();
         }
 
@@ -399,6 +460,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 case ScenarioBookBrowserViewKind.DraftDetails:
                     rows = new List<ScenarioBookRowModel>();
                     break;
+                case ScenarioBookBrowserViewKind.InstallScenarios:
+                    rows = BuildImportRows();
+                    break;
                 default:
                     rows = new List<ScenarioBookRowModel>();
                     break;
@@ -415,6 +479,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return GetTypeLabel(selectedType);
             if (view == ScenarioBookBrowserViewKind.DraftDetails)
                 return selectedScenario != null ? Safe(selectedScenario.DisplayName, selectedScenario.ScenarioId) : "Draft Details";
+            if (view == ScenarioBookBrowserViewKind.InstallScenarios)
+                return "Install Scenarios";
             if (selectedScenario != null)
                 return Safe(selectedScenario.DisplayName, selectedScenario.ScenarioId);
 
@@ -431,6 +497,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     : "Pick a scenario. The next page shows saves owned by that scenario.";
             if (view == ScenarioBookBrowserViewKind.DraftDetails)
                 return "Edit the local draft details or open the authoring save.";
+            if (view == ScenarioBookBrowserViewKind.InstallScenarios)
+                return "Put downloaded scenario folders in " + _importService.StagingRoot + ", then click Install.";
             if (selectedScenario != null)
                 return "Read the scenario notes, then choose a save slot.";
 
@@ -462,6 +530,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private List<ScenarioBookRowModel> BuildTypeRows()
         {
             List<ScenarioBookRowModel> rows = new List<ScenarioBookRowModel>();
+            rows.Add(new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.OpenInstallScenarios,
+                Title = "Install Scenarios",
+                Detail = "Make a downloaded scenario playable in one click.",
+                Badge = "Downloads"
+            });
             if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 rows.Add(BuildTypeRow(ScenarioBookType.Draft, "Draft Scenarios", "Authoring workspace for unfinished scenarios, not normal play content."));
 
@@ -474,6 +549,68 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             // instead of sitting between real scenarios.
             AddRecoveryRows(rows);
             return rows;
+        }
+
+        private List<ScenarioBookRowModel> BuildImportRows()
+        {
+            List<ScenarioBookRowModel> rows = new List<ScenarioBookRowModel>();
+            rows.Add(new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.OpenScenarioDownloadsFolder,
+                Title = "Open Download Folder",
+                Detail = _importService.StagingRoot,
+                Badge = "Open Folder"
+            });
+
+            ScenarioPackageImportScanResult scan;
+            bool running;
+            lock (_importRefreshSync)
+            {
+                scan = _importResult;
+                running = _importRefreshRunning;
+            }
+
+            ScenarioPackageImportCandidate[] candidates = scan != null
+                ? scan.Candidates ?? new ScenarioPackageImportCandidate[0]
+                : new ScenarioPackageImportCandidate[0];
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                ScenarioPackageImportCandidate candidate = candidates[i];
+                if (candidate == null)
+                    continue;
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = candidate.CanInstall ? ScenarioBookRowKind.InstallPackage : ScenarioBookRowKind.Empty,
+                    ImportCandidate = candidate,
+                    Title = BuildImportTitle(candidate),
+                    Detail = candidate.CanInstall
+                        ? "Validated and ready to make playable."
+                        : Safe(candidate.FailureReason, "This package cannot be installed."),
+                    Badge = candidate.CanInstall ? "Install" : (candidate.IsAlreadyInstalled ? "Installed" : "Needs Fix")
+                });
+            }
+
+            if (candidates.Length == 0)
+            {
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.Empty,
+                    Title = running ? "Looking for scenarios" : "No packages found",
+                    Detail = running
+                        ? "Checking downloads, exports, and likely misplaced scenario folders."
+                        : "Drop a scenario folder in the download folder above, then return here.",
+                    Badge = running ? "Scanning" : string.Empty
+                });
+            }
+            return rows;
+        }
+
+        private static string BuildImportTitle(ScenarioPackageImportCandidate candidate)
+        {
+            string name = Safe(candidate != null ? candidate.DisplayName : null, "Unreadable scenario package");
+            if (candidate == null || string.IsNullOrEmpty(candidate.ScenarioId))
+                return name;
+            return name + " - v" + Safe(candidate.Version, "unknown") + " by " + Safe(candidate.Author, "unknown");
         }
 
         private ScenarioBookRowModel BuildTypeRow(ScenarioBookType type, string title, string detail)
@@ -836,15 +973,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (entry == null)
                 return string.Empty;
 
-            string package = entry.IsModded
-                ? "Package ID: " + Safe(entry.ScenarioId, "unknown") + "\n"
-                : string.Empty;
             string owner = entry.Source == ScenarioCatalogSource.Vanilla
                 ? "vanilla"
                 : (!string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "local");
             string mode = entry.BaseGameMode.ToString();
             string state = entry.CanStart ? "Ready" : "Locked";
-            return package + owner + " - " + mode + " - " + state;
+            return owner + " - " + mode + " - " + state;
         }
 
         private static string BuildScenarioTitle(ScenarioCatalogEntry entry)
