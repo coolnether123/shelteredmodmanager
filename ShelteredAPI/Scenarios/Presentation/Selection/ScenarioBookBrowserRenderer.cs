@@ -68,7 +68,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public void Build(GameObject root, int overlayDepth, VanillaPageTurnAssets assets)
         {
-            _chrome = FieldManualWindowChrome.BuildBook(root, overlayDepth, "Custom Scenarios", "Types, scenarios, and saves");
+            _chrome = FieldManualWindowChrome.BuildBook(root, overlayDepth, "Custom Scenarios", "Field notes");
             _ui = _chrome.Ui;
             BuildSearchBar();
             BuildPagedList();
