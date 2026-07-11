@@ -18,7 +18,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Triggers = 3,
         Assets = 4,
         WinLoss = 5,
-        Map = 6
+        Map = 6,
+        LaunchSetup = 7
     }
 
     internal enum ScenarioDirtySection
@@ -32,7 +33,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         WinLoss = 32,
         Assets = 64,
         Map = 128,
-        AuthorTestChecklist = 256
+        AuthorTestChecklist = 256,
+        LaunchSetup = 512
     }
 
     /// <summary>

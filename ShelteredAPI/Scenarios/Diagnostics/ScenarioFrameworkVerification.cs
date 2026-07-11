@@ -95,6 +95,26 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             Assert(loaded.Scoring.Rules.Count == 1, "Score rule was not parsed.", result);
             Assert(loaded.Scoring.Rules.Count > 0 && string.Equals(loaded.Scoring.Rules[0].Source, "daysSurvived", StringComparison.OrdinalIgnoreCase), "Score rule source was not parsed.", result);
 
+            ScenarioDefinition launchPolicy = CreateDefinition("Scenario.LaunchPolicy");
+            launchPolicy.LaunchSetup.Mode = ScenarioLaunchSetupMode.Guided;
+            launchPolicy.LaunchSetup.Categories[0].AuthoredValue = 3;
+            launchPolicy.LaunchSetup.Categories[0].PlayerSelectable = false;
+            ScenarioDefinition launchRoundTrip = serializer.FromXml(serializer.ToXml(launchPolicy));
+            Assert(launchRoundTrip.LaunchSetup.Mode == ScenarioLaunchSetupMode.Guided
+                && launchRoundTrip.LaunchSetup.Categories.Count == 7
+                && launchRoundTrip.LaunchSetup.Categories[0].AuthoredValue == 3
+                && !launchRoundTrip.LaunchSetup.Categories[0].PlayerSelectable,
+                "Launch setup policy did not round-trip through scenario XML.", result);
+
+            ScenarioDefinition legacyLaunch = serializer.FromXml("<Scenario><Meta><Id>Scenario.LegacyLaunch</Id><DisplayName>Legacy Launch</DisplayName></Meta></Scenario>");
+            Assert(legacyLaunch.LaunchSetup != null && legacyLaunch.LaunchSetup.Mode == ScenarioLaunchSetupMode.FullSetup,
+                "Legacy XML without LaunchSetup did not preserve the full vanilla setup flow.", result);
+
+            launchPolicy.LaunchSetup.Categories.Add(new ScenarioDifficultyCategoryDefinition { Id = "future-difficulty", AuthoredValue = 2, PlayerSelectable = false });
+            ScenarioValidationResult launchValidation = new ScenarioValidator(new VerificationDependencyResolver(null, null)).Validate(launchPolicy, null);
+            Assert(ContainsIssue(launchValidation, "Unknown launch difficulty category"),
+                "Unknown launch difficulty categories were not reported as validation warnings.", result);
+
             ScenarioDefinition familyChoice = CreateDefinition("Scenario.BaseFamilyChoice");
             familyChoice.BaseFamilyChoice = ScenarioBaseFamilyChoices.KeepCurrentCast;
             ScenarioDefinition familyChoiceRoundTrip = serializer.FromXml(serializer.ToXml(familyChoice));

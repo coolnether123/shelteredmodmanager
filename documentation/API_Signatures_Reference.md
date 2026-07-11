@@ -1371,6 +1371,7 @@ public class ScenarioDefinition
     public string Author { get; set; }
     public string Version { get; set; }
     public FamilySetupDefinition FamilySetup { get; set; }
+    public ScenarioLaunchSetupDefinition LaunchSetup { get; set; }
     public StartingInventoryDefinition StartingInventory { get; set; }
     public BunkerEditsDefinition BunkerEdits { get; set; }
     public WinLossConditionsDefinition WinLossConditions { get; set; }
@@ -1513,6 +1514,21 @@ public enum ModThreadStaleResultPolicy
     DeliverAll = 0,
     SkipIfSuperseded = 1,
     CancelPreviousAndSkip = 2
+}
+
+public enum ScenarioLaunchSetupMode { FullSetup, Direct, Guided }
+
+public sealed class ScenarioLaunchSetupDefinition
+{
+    public ScenarioLaunchSetupMode Mode { get; set; }
+    public List<ScenarioDifficultyCategoryDefinition> Categories { get; }
+}
+
+public sealed class ScenarioDifficultyCategoryDefinition
+{
+    public string Id { get; set; }
+    public int AuthoredValue { get; set; }
+    public bool PlayerSelectable { get; set; }
 }
 
 public sealed class ModThreadOptions

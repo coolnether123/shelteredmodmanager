@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 
 using ModAPI.Scenarios;
 
@@ -86,6 +87,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             ScenarioCharacters = new List<ScenarioNpcDefinition>();
             ScenarioFlow = new ScenarioFlowDefinition();
             FamilySetup = new FamilySetupDefinition();
+            LaunchSetup = ScenarioLaunchSetupDefinition.CreateDefault();
             StartingInventory = new StartingInventoryDefinition();
             BunkerEdits = new BunkerEditsDefinition();
             TriggersAndEvents = new TriggersAndEventsDefinition();
@@ -121,6 +123,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public List<ScenarioNpcDefinition> ScenarioCharacters { get; private set; }
         public ScenarioFlowDefinition ScenarioFlow { get; set; }
         public FamilySetupDefinition FamilySetup { get; set; }
+        /// <summary>Controls the player-facing difficulty and family setup flow when this scenario is launched.</summary>
+        public ScenarioLaunchSetupDefinition LaunchSetup { get; set; }
         public StartingInventoryDefinition StartingInventory { get; set; }
         public BunkerEditsDefinition BunkerEdits { get; set; }
         public TriggersAndEventsDefinition TriggersAndEvents { get; set; }
@@ -137,6 +141,94 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public ScenarioConversationAuthoringDefinition Conversations { get; set; }
         public ScenarioVanillaSuppressionDefinition VanillaSuppression { get; set; }
         internal ScenarioAuthorTestChecklist AuthorTestChecklist { get; set; }
+    }
+
+    /// <summary>Player setup flow used when a published custom scenario starts.</summary>
+    public enum ScenarioLaunchSetupMode
+    {
+        /// <summary>Keep Sheltered's complete difficulty and family customisation flow.</summary>
+        FullSetup = 0,
+        /// <summary>Skip setup and enter the authored scenario immediately.</summary>
+        Direct = 1,
+        /// <summary>Show setup while author-fixed difficulty categories remain locked.</summary>
+        Guided = 2
+    }
+
+    /// <summary>Stable identifiers for Sheltered's vanilla difficulty categories.</summary>
+    public static class ScenarioDifficultyCategoryIds
+    {
+        /// <summary>Rain frequency category (values 0-3).</summary>
+        public const string Rain = "rain";
+        /// <summary>Map resource abundance category (values 0-3).</summary>
+        public const string Resources = "resources";
+        /// <summary>Shelter breach frequency category (values 0-3).</summary>
+        public const string Breach = "breach";
+        /// <summary>Faction density category (values 0-3).</summary>
+        public const string Faction = "faction";
+        /// <summary>Populace mood category (values 0-3).</summary>
+        public const string Mood = "mood";
+        /// <summary>Expedition map size category (values 0-2).</summary>
+        public const string MapSize = "map-size";
+        /// <summary>Fog-of-war category (0 off, 1 on).</summary>
+        public const string Fog = "fog";
+
+        /// <summary>Returns whether an id names a vanilla difficulty category supported by this API version.</summary>
+        public static bool IsKnown(string id)
+        {
+            return string.Equals(id, Rain, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Resources, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Breach, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Faction, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Mood, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, MapSize, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Fog, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>An authored value and whether Guided mode lets the player change it.</summary>
+    public sealed class ScenarioDifficultyCategoryDefinition
+    {
+        /// <summary>Stable id from <see cref="ScenarioDifficultyCategoryIds"/>.</summary>
+        public string Id { get; set; }
+        /// <summary>Vanilla integer setting selected by the author.</summary>
+        public int AuthoredValue { get; set; }
+        /// <summary>Whether Guided mode lets the player change this category.</summary>
+        public bool PlayerSelectable { get; set; }
+    }
+
+    /// <summary>Scenario-authored policy for the vanilla launch setup experience.</summary>
+    public sealed class ScenarioLaunchSetupDefinition
+    {
+        /// <summary>Creates an empty FullSetup policy; prefer <see cref="CreateDefault"/> for the complete vanilla category inventory.</summary>
+        public ScenarioLaunchSetupDefinition()
+        {
+            Mode = ScenarioLaunchSetupMode.FullSetup;
+            Categories = new List<ScenarioDifficultyCategoryDefinition>();
+        }
+
+        /// <summary>Setup flow used when a player chooses PLAY.</summary>
+        public ScenarioLaunchSetupMode Mode { get; set; }
+        /// <summary>Authored values and Guided-mode selection policy, keyed by stable category id.</summary>
+        public List<ScenarioDifficultyCategoryDefinition> Categories { get; private set; }
+
+        /// <summary>Creates a FullSetup policy containing all vanilla categories at Normal defaults.</summary>
+        public static ScenarioLaunchSetupDefinition CreateDefault()
+        {
+            ScenarioLaunchSetupDefinition setup = new ScenarioLaunchSetupDefinition();
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Rain, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Resources, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Breach, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Faction, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Mood, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.MapSize, 0));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Fog, 0));
+            return setup;
+        }
+
+        private static ScenarioDifficultyCategoryDefinition Category(string id, int value)
+        {
+            return new ScenarioDifficultyCategoryDefinition { Id = id, AuthoredValue = value, PlayerSelectable = true };
+        }
     }
 
     public sealed class ScenarioVanillaSuppressionDefinition
