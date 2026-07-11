@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 
 using HarmonyLib;
 using ModAPI.Core;
@@ -14,13 +15,14 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 {
-    internal sealed class ScenarioConversationRuntimeService : IScenarioEffectHandler
+    internal sealed class ScenarioConversationRuntimeService : IScenarioRetryableEffectHandler
     {
         private const string RuntimeObjectName = "ShelteredAPI.ScenarioConversationRuntime";
         private readonly ScenarioActorResolver _actorResolver;
         private readonly ScenarioRuntimeStateService _stateService;
         private readonly ScenarioConditionEvaluatorRegistry _conditions;
         private readonly ScenarioRuntimeExecutionLog _executionLog;
+        private readonly Dictionary<string, int> _participantFailureLoggedDay = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private ScenarioDefinition _activeDefinition;
 
         public ScenarioConversationRuntimeService(
@@ -38,6 +40,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         public void Activate(ScenarioDefinition definition)
         {
             _activeDefinition = definition;
+            _participantFailureLoggedDay.Clear();
         }
 
         public bool CanHandle(ScenarioEffectKind kind)
@@ -47,6 +50,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 
         public bool Handle(ScenarioDefinition definition, ScenarioEffectDefinition effect, ScenarioRuntimeState state, out string message)
         {
+            bool retryable;
+            return Handle(definition, effect, state, out message, out retryable);
+        }
+
+        public bool Handle(ScenarioDefinition definition, ScenarioEffectDefinition effect, ScenarioRuntimeState state, out string message, out bool retryable)
+        {
+            retryable = false;
             string id = effect != null ? (effect.ConversationId ?? effect.TargetId) : null;
             ScenarioConversationDefinition conversation = FindConversation(definition, id);
             if (conversation == null)
@@ -55,7 +65,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 return false;
             }
 
-            return TryStartConversation(definition, conversation, null, null, state, "effect", out message);
+            return TryStartConversation(definition, conversation, null, null, state, "effect", out message, out retryable);
         }
 
         public bool TryHandleRandomComment(FamilyMember initiator, out string message)
@@ -67,7 +77,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             FamilyMember partner = FindNearestIdlePartner(initiator);
             ScenarioRuntimeState state = _stateService != null ? _stateService.State : null;
             ScenarioConversationDefinition conversation = SelectRandomConversation(definition, initiator, partner, state);
-            if (conversation != null && TryStartConversation(definition, conversation, initiator, partner, state, "random", out message))
+            bool retryable;
+            if (conversation != null && TryStartConversation(definition, conversation, initiator, partner, state, "random", out message, out retryable))
                 return true;
 
             if (settings != null && settings.SuppressVanillaRandomChatter)
@@ -126,9 +137,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             FamilyMember partner,
             ScenarioRuntimeState state,
             string source,
-            out string message)
+            out string message,
+            out bool retryable)
         {
             message = null;
+            retryable = false;
             if (conversation == null)
             {
                 message = "Conversation is missing.";
@@ -145,7 +158,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 
             Dictionary<string, FamilyMember> participants;
             if (!TryResolveParticipants(definition, conversation, initiator, partner, out participants, out message))
+            {
+                retryable = true;
+                RecordParticipantResolutionFailure(conversation, message, source);
                 return false;
+            }
             if (!CanRun(conversation, state, out message))
             {
                 Record(conversation, conversation != null && conversation.Trigger != null && conversation.Trigger.Once ? ScenarioRuntimeExecutionLogOutcome.OnceAlreadyConsumed : ScenarioRuntimeExecutionLogOutcome.SkippedConditionFalse, message, source);
@@ -158,6 +175,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             message = "Started conversation '" + (conversation.Id ?? string.Empty) + "' from " + (source ?? "runtime") + ".";
             Record(conversation, ScenarioRuntimeExecutionLogOutcome.Fired, null, source);
             return true;
+        }
+
+        private void RecordParticipantResolutionFailure(ScenarioConversationDefinition conversation, string message, string source)
+        {
+            string id = conversation != null ? (conversation.Id ?? string.Empty) : string.Empty;
+            int loggedDay;
+            if (_participantFailureLoggedDay.TryGetValue(id, out loggedDay) && loggedDay == GameTime.Day)
+                return;
+
+            _participantFailureLoggedDay[id] = GameTime.Day;
+            Record(conversation, ScenarioRuntimeExecutionLogOutcome.RetryPending, message, source + "; participant resolution will retry on the next game-time tick");
         }
 
         private void Record(ScenarioConversationDefinition conversation, ScenarioRuntimeExecutionLogOutcome outcome, string condition, string source)
@@ -176,6 +204,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         {
             participants = new Dictionary<string, FamilyMember>(StringComparer.OrdinalIgnoreCase);
             message = null;
+            List<string> unresolvedRequired = new List<string>();
+            List<string> resolverObservations = new List<string>();
 
             for (int i = 0; conversation.Participants != null && i < conversation.Participants.Count; i++)
             {
@@ -183,17 +213,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 if (participant == null || string.IsNullOrEmpty(participant.Slot))
                     continue;
 
-                FamilyMember member = ResolveParticipant(definition, participant, initiator, partner, participants);
+                string observation;
+                FamilyMember member = ResolveParticipant(definition, participant, initiator, partner, participants, out observation);
+                resolverObservations.Add("slot '" + participant.Slot + "': " + observation);
                 if (member == null && participant.Required)
-                {
-                    message = "Conversation '" + (conversation.Id ?? string.Empty) + "' could not resolve participant slot '" + participant.Slot + "'.";
-                    return false;
-                }
+                    unresolvedRequired.Add(participant.Slot);
                 if (member != null)
                     participants[participant.Slot] = member;
             }
 
-            return participants.Count > 0;
+            if (unresolvedRequired.Count == 0 && participants.Count > 0)
+                return true;
+
+            string unresolved = unresolvedRequired.Count > 0
+                ? string.Join(", ", unresolvedRequired.ToArray())
+                : "all authored slots (no participant resolved)";
+            string observations = resolverObservations.Count > 0
+                ? string.Join("; ", resolverObservations.ToArray())
+                : "no usable participant slots were authored";
+            message = "Conversation '" + (conversation.Id ?? string.Empty) + "' is waiting for participant slots "
+                + unresolved + ". Resolver saw: " + observations + ". Runtime family state: "
+                + (_actorResolver != null ? _actorResolver.DescribeFamilyResolutionState() : "actor resolver missing") + ".";
+            return false;
         }
 
         private FamilyMember ResolveParticipant(
@@ -201,26 +242,55 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             ScenarioConversationParticipantDefinition participant,
             FamilyMember initiator,
             FamilyMember partner,
-            Dictionary<string, FamilyMember> alreadySelected)
+            Dictionary<string, FamilyMember> alreadySelected,
+            out string observation)
         {
+            StringBuilder seen = new StringBuilder();
             FamilyMember member;
             if (participant.ActorRef != null && _actorResolver != null && _actorResolver.TryResolveFamilyMember(definition, participant.ActorRef, out member))
+            {
+                observation = "actor reference resolved to " + DescribeMember(member);
                 return member;
+            }
+            if (participant.ActorRef != null)
+                seen.Append("actorRef=").Append(DescribeActorRef(participant.ActorRef)).Append(" unresolved; ");
 
             ScenarioActorRef storyRef = ResolveStoryCharacterRef(definition, participant.StoryCharacterId);
             if (storyRef != null && _actorResolver != null && _actorResolver.TryResolveFamilyMember(definition, storyRef, out member))
+            {
+                observation = "story character '" + participant.StoryCharacterId + "' resolved to " + DescribeMember(member);
                 return member;
+            }
+            if (!string.IsNullOrEmpty(participant.StoryCharacterId))
+                seen.Append("storyCharacter=").Append(participant.StoryCharacterId).Append(storyRef != null ? " unresolved; " : " missing from definition; ");
 
             if (participant.Fallback == ScenarioConversationParticipantFallback.Initiator)
-                return initiator;
-            if (participant.Fallback == ScenarioConversationParticipantFallback.Partner)
-                return partner;
-            if (participant.Fallback == ScenarioConversationParticipantFallback.NearestIdleFamily)
-                return FindNearestIdlePartner(initiator);
-            if (participant.Fallback == ScenarioConversationParticipantFallback.AnyFamily)
-                return FindAnyIdleFamily(alreadySelected);
+                member = initiator;
+            else if (participant.Fallback == ScenarioConversationParticipantFallback.Partner)
+                member = partner;
+            else if (participant.Fallback == ScenarioConversationParticipantFallback.NearestIdleFamily)
+                member = FindNearestIdlePartner(initiator);
+            else if (participant.Fallback == ScenarioConversationParticipantFallback.AnyFamily)
+                member = FindAnyIdleFamily(alreadySelected);
+            else
+                member = null;
 
-            return null;
+            seen.Append("fallback=").Append(participant.Fallback).Append(member != null ? " resolved to " + DescribeMember(member) : " unresolved");
+            observation = seen.ToString();
+            return member;
+        }
+
+        private static string DescribeActorRef(ScenarioActorRef actorRef)
+        {
+            if (actorRef == null)
+                return "<none>";
+            return (actorRef.BindingType ?? "<no type>") + ":" + (actorRef.BindingKey ?? "<no key>")
+                + " localId=" + actorRef.LocalId;
+        }
+
+        private static string DescribeMember(FamilyMember member)
+        {
+            return member != null ? (member.firstName ?? "<unnamed family member>") : "<null>";
         }
 
         private static ScenarioActorRef ResolveStoryCharacterRef(ScenarioDefinition definition, string storyCharacterId)

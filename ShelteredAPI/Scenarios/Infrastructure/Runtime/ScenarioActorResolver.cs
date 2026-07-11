@@ -244,12 +244,48 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 || index < 0)
                 return false;
 
-            List<FamilyMember> members = FamilyManager.Instance != null ? FamilyManager.Instance.GetAllFamilyMembers() : null;
-            if (members == null || index >= members.Count)
-                return false;
+            try
+            {
+                FamilyManager familyManager = FamilyManager.Instance;
+                List<FamilyMember> members = familyManager != null ? familyManager.GetAllFamilyMembers() : null;
+                if (members == null || index >= members.Count)
+                    return false;
 
-            member = members[index];
-            return member != null;
+                member = members[index];
+                return member != null;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioActorResolver] Starting cast bridge observed an incomplete family world: " + ex.Message);
+                member = null;
+                return false;
+            }
+        }
+
+        public string DescribeFamilyResolutionState()
+        {
+            try
+            {
+                FamilyManager familyManager = FamilyManager.Instance;
+                if (familyManager == null)
+                    return "FamilyManager missing; actorSystem=" + (_actors != null ? "ready" : "missing");
+
+                List<FamilyMember> members = familyManager.GetAllFamilyMembers();
+                if (members == null)
+                    return "FamilyManager ready but family member list is null; actorSystem=" + (_actors != null ? "ready" : "missing");
+
+                int materialized = 0;
+                for (int i = 0; i < members.Count; i++)
+                    if (members[i] != null)
+                        materialized++;
+
+                return "FamilyManager ready; slots=" + members.Count + ", materialized=" + materialized
+                    + ", actorSystem=" + (_actors != null ? "ready" : "missing");
+            }
+            catch (Exception ex)
+            {
+                return "family inspection failed: " + ex.Message;
+            }
         }
 
         public bool BindMaterializedFamilyMember(ScenarioDefinition definition, ScenarioActorRef actorRef, FamilyMember member, out string message)

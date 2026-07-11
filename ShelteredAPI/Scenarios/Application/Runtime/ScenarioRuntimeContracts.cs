@@ -158,6 +158,16 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         void Tick(ScenarioRuntimeState state);
     }
 
+    internal interface IScenarioEndGamePresenter
+    {
+        bool TryPresent(bool success, out string reason);
+    }
+
+    internal interface IScenarioAuthoringSessionContext
+    {
+        bool HasActiveSession { get; }
+    }
+
     internal interface IScenarioScoreSnapshotService
     {
         ScenarioScoreSnapshot GetSnapshot();
