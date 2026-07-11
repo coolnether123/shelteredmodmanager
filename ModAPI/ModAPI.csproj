@@ -156,6 +156,10 @@
     <Compile Include="Harmony\Transpilers\UnityPatterns.cs" />
     <Compile Include="Debugging\LiveDebugger.cs" />
     <Compile Include="Debugging\SmartWatcher.cs" />
+    <Compile Include="Debugging\IFeedbackContextProvider.cs" />
+    <Compile Include="Debugging\FeedbackOverlayConfig.cs" />
+    <Compile Include="Debugging\FeedbackStorage.cs" />
+    <Compile Include="Debugging\FeedbackOverlay.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
