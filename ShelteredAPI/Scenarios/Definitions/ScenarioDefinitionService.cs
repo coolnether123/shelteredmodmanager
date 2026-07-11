@@ -102,6 +102,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
         // Shared by installed-scenario launch and authoring playtest so both paths
         // produce the same vanilla ScenarioDef carrier for completion handling.
+        //
+        // This definition is deliberately an inert carrier, not a projection of
+        // ScenarioFlow.  The authored scheduler owns flow, conversations, and
+        // end conditions.  Giving the vanilla QuestInstance authored intercom
+        // stages lets QuestManager complete and remove that instance on its own,
+        // leaving the scheduled end condition with a stale carrier id.
         internal static ScenarioDef BuildScenarioDef(ScenarioDefinition definition)
         {
             if (definition == null)
@@ -116,22 +122,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             for (int i = 0; definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
                 builder.AddScenarioCharacter(definition.ScenarioCharacters[i]);
 
-            if (definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null && definition.ScenarioFlow.Stages.Count > 0)
-            {
-                for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
-                    builder.AddFlowStage(definition.ScenarioFlow.Stages[i]);
-            }
-            else
-            {
-                string stageId = definition.Id + ".main";
-                if (definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers.Count > 0
-                    && !string.IsNullOrEmpty(definition.TriggersAndEvents.Triggers[0].Id))
-                {
-                    stageId = definition.TriggersAndEvents.Triggers[0].Id;
-                }
-
-                builder.AddSimpleStage(stageId);
-            }
+            builder.AddSimpleStage(definition.Id + ".completion-carrier");
             return builder.Build();
         }
 
