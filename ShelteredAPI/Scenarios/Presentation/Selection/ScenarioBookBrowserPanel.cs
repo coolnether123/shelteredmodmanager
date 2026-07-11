@@ -296,6 +296,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
                         HandleDraftDetailsSaved,
                         HandleDraftOpenRequested,
+                        HandleDraftDuplicateRequested,
                         HandleExportFolderRequested,
                         HandleDraftDeleteRequested);
                 }
@@ -854,6 +855,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void HandleDraftOpenRequested()
         {
             RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(_selectedScenario, out status); });
+        }
+
+        private void HandleDraftDuplicateRequested()
+        {
+            if (_selectedScenario == null)
+                return;
+
+            ModAPI.Scenarios.ScenarioInfo duplicate;
+            string status;
+            if (!_actions.DuplicateDraft(_selectedScenario, out duplicate, out status) || duplicate == null)
+            {
+                SetStatus(status);
+                return;
+            }
+
+            ScenarioCatalogEntry source = _selectedScenario;
+            _selectedScenario = new ScenarioCatalogEntry
+            {
+                ScenarioId = duplicate.Id,
+                StorageScenarioId = duplicate.Id,
+                Source = ScenarioCatalogSource.Draft,
+                LaunchMode = ScenarioLaunchMode.AuthoringDraft,
+                BaseGameMode = source.BaseGameMode,
+                DefaultSaveType = source.DefaultSaveType,
+                DisplayName = duplicate.DisplayName,
+                Description = source.Description,
+                Version = duplicate.Version,
+                Author = source.Author,
+                OwnerModId = duplicate.OwnerModId,
+                CanStart = true
+            };
+            InvalidateDraftFactsCache();
+            StartDataRefresh("Refreshing duplicated draft...");
+            SetStatus(status);
+            RenderCurrentView(false);
         }
 
         private void HandleExportFolderRequested()
