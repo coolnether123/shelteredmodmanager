@@ -122,7 +122,6 @@ namespace ShelteredAPI.Scenarios.Definitions{
             for (int i = 0; definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
                 builder.AddScenarioCharacter(definition.ScenarioCharacters[i]);
 
-            builder.AddSimpleStage(definition.Id + ".completion-carrier");
             return builder.Build();
         }
 
