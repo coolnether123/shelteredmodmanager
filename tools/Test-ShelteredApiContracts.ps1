@@ -176,6 +176,10 @@ $scenarioStoryCharacterActorLinkSectionBuilder = Read-RepoFile "ShelteredAPI\Sce
 $scenarioStoryFocusedEditorDocumentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs"
 $scenarioWorldEventFocusedEditorDocumentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioWorldEventFocusedEditorDocumentBuilder.cs"
 $scenarioQuestAuthoringContentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioQuestAuthoringContentBuilder.cs"
+$scenarioWorkflowAuthoringContentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioWorkflowAuthoringContentBuilder.cs"
+$scenarioWinLossCommandHandler = Read-RepoFile "ShelteredAPI\Scenarios\Application\Commands\ScenarioWinLossCommandHandler.cs"
+$scenarioCharacterAppearanceService = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Assets\ScenarioCharacterAppearanceService.cs"
+$scenarioPackageImportService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Selection\ScenarioPackageImportService.cs"
 $scenarioPublishAuthoringContentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs"
 $scenarioTimelineBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Application\Timeline\ScenarioTimelineBuilder.cs"
 $scenarioTimelineNavigationService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Timeline\ScenarioTimelineNavigationService.cs"
@@ -432,6 +436,8 @@ Assert-Contains "scenario conversation scheduling" $scenarioConversationProvider
 Assert-Contains "scenario conversation registration" $scenarioServiceCollectionExtensions "ScenarioConversationRuntimeService.*dispatcher\.Register\(resolver\.Get<ScenarioConversationRuntimeService>\(\)\).*ScenarioConversationScheduledActionProvider" "conversation runtime and schedule provider must be registered."
 Assert-Contains "scenario conversation validation" $scenarioConversationValidation "dangling|missing story character|empty line|speaker slot|SuppressedVanillaTopicKeys" "validation must flag participant/line issues and document topic-key suppression limits."
 Assert-Contains "scenario conversation UI" $scenarioQuestAuthoringContentBuilder "AppendConversationSections.*Suppress Vanilla Random.*Run Preview.*ScenarioCastMemberPickerBuilder\.BuildSection" "Story workshop must expose conversations, suppression settings, actor picking, and preview."
+Assert-Contains "conversation speaker token persistence" $scenarioQuestAuthoringContentBuilder 'ActionStoryConversationLineSpeakerPrefix \+ pair \+ "\." \+ ScenarioAuthoringActionCodec\.EncodeToken\(slot\)' "line-speaker actions must use the Base64 token transport consumed by the story authoring service."
+Assert-NotContains "conversation speaker token persistence" $scenarioQuestAuthoringContentBuilder 'ActionStoryConversationLineSpeakerPrefix \+ pair \+ "\." \+ Uri\.EscapeDataString\(slot\)' "line-speaker actions must not persist an undecodable URI token as an empty slot."
 
 Assert-Contains "scenario actor contract" $scenarioDefinitionModel "public sealed class ScenarioActorRef.*public string Kind.*public int LocalId.*public string Domain.*public string BindingType.*public string BindingKey.*public string DisplayNameFallback.*public string RequiredModId" "ScenarioActorRef must retain the minimal actor identity and binding contract."
 Assert-Contains "scenario actor contract" $scenarioDefinitionModel "public sealed class ScenarioActorComponentDefinition.*public string ComponentId.*public string OwnerModId.*public int Version.*public string PayloadJson" "ScenarioActorComponentDefinition must preserve owner/version/payload for unknown component round-trips."
@@ -462,6 +468,8 @@ Assert-Contains "survivor condition editor UI" $scenarioAuthoringWindowRenderer 
 Assert-Contains "survivor randomize declared scope" $scenarioSurvivorAuthoringOperations 'RandomizeDisclosure = "Randomizes: name, gender, age, appearance, stats, traits\. Keeps: story links, arrival settings, starting condition, skills, actor identity\."' "Randomize must tell creators exactly what changes and what remains linked."
 Assert-Contains "survivor randomize declared scope" $scenarioSurvivorAuthoringOperations "RandomizeDeclaredFields\(FamilyMemberConfig member\)(?:(?!member\.Conditions|member\.Skills|member\.ActorRef).)*member\.Gender.*member\.ExactAge.*member\.Name.*member\.Stats.*member\.Traits.*RandomizeAppearance\(member\)" "Randomize must touch only name, gender, age, appearance, stats, and traits, preserving condition, skills, and actor identity."
 Assert-Contains "survivor bulk action undo" $scenarioCharacterEditorAuthoringService 'RecordFamilyUndo\(session, "Randomize survivor"\).*RandomizeDeclaredFields' "Randomize must record a family history snapshot before mutation."
+Assert-Contains "appearance random texture bounds" $scenarioCharacterAppearanceService "RandomTextureId.*GetTextureList\(meshType, part\).*UnityEngine\.Random\.Range\(0, textures\.Count\).*IsCustomizationTexture" "Random Look must choose from the actual per-part texture list instead of vanilla cross-array assumptions."
+Assert-Contains "appearance random color bounds" $scenarioCharacterAppearanceService "RandomColorHex.*GetVanillaColorList\(part\).*UnityEngine\.Random\.Range\(0, colors\.Count\)" "Random Look must index the actual per-color option list."
 Assert-Contains "survivor bulk action undo" $scenarioCharacterEditorAuthoringService 'RecordFamilyUndo\(session, "Duplicate starting survivor"\).*DuplicateMember' "Duplicate must record a family history snapshot before mutation."
 Assert-Contains "survivor duplicate fresh actor" $scenarioSurvivorAuthoringOperations "DuplicateMember\(FamilyMemberConfig source\).*copy\.ActorRef = null.*DuplicateFutureSurvivor.*copy\.ActorRef = null.*copy\.Survivor\.ActorRef = null" "Duplicate must never retain the source member or future-survivor actor reference."
 Assert-Contains "survivor duplicate fresh actor" $scenarioCharacterEditorAuthoringService "DuplicateFutureSurvivor\(survivor, survivors\).*EnsureFutureSurvivorRef\(session\.WorkingDefinition, duplicate, duplicateIndex\).*DuplicateMember\(config\).*EnsureStartingMemberRef\(session\.WorkingDefinition, duplicate, duplicateIndex\)" "Every duplicate must receive a newly resolved future or starting actor identity."
@@ -781,20 +789,25 @@ Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "Ends scenario"
 Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioStoryGraphNodeStatus\.Unreachable" "unreachable stages must be flagged on their node status."
 Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioStoryGraphEdgeStatus\.Broken" "routes to missing stages must be flagged as broken edges."
 
-# Deterministic layered layout (BFS depth = column, siblings stacked, capped node count).
+# Deterministic storyboard layout (stage row, owner-aligned outcome leaves, capped node count).
 Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "MaxStageNodes = 50" "the layout must cap the node count for readability."
-Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "kids\.Sort\(\)" "BFS must process children in a deterministic order so layout is stable."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "LayoutStoryboard" "the graph must use the deterministic storyboard grid layout."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "PlaceStageNode\(stage, i\)" "stages must be placed left-to-right in flow order."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "StageCardWidth - TerminalCardWidth" "terminal outcomes must be centered under their owning stage."
 
 # Wiring: the story page publishes a 'story_map' section carrying the model.
 Assert-Contains "story map wiring" $scenarioQuestContent "ScenarioStoryGraphBuilder\.Build\(definition, storyIssues\)" "the story page must build the story map model from the shared analyzer issues."
 Assert-Contains "story map wiring" $scenarioQuestContent "Id = ""story_map""" "the story map must render as a dedicated 'story_map' section."
 Assert-Contains "story map wiring" $scenarioQuestContent "StoryMap = model" "the section must carry the built story graph model for the renderer."
 
-# Renderer draws the visual map: detects the section, draws arrowed edges and a legend.
+# Renderer draws the visual map: detects the section, draws clipped orthogonal edges and a legend.
 Assert-Contains "story map renderer" $scenarioStoryMapRenderer "IsStoryMapSection" "the renderer must detect the story map section by id."
 Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapSection" "the renderer must draw the story map surface."
-Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapArrow" "edges must be drawn with arrowheads."
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapOrthogonalRoute" "edges must be routed through horizontal and vertical segments."
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "GUI\.BeginGroup\(viewport\)" "the story canvas must clip every route to its viewport."
+Assert-NotContains "story map renderer" $scenarioStoryMapRenderer "RotateAroundPivot" "the graph drawer must not rotate IMGUI clip space for route segments."
 Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapLegend" "the map must show a legend."
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "!N = validation issues" "the issue badge count must be explained in the legend."
 Assert-Contains "story map renderer" $scenarioStoryMapRenderer "ScenarioAuthoringBackendService\.Instance\.ExecuteAction\(node\.NavActionId\)" "clicking a node must execute its navigation action."
 
 # STORYUX: humane story-character labels replace the 'Display name 1' debug steppers.
@@ -849,6 +862,7 @@ Assert-Contains "draft slot path helper" $scenarioDraftRepository "internal stat
 Assert-Contains "draft durable delete transaction" $scenarioDraftRepository "Directory\.Move\(source, deletedPath\).*Directory\.Delete\(deletedPath, true\)" "confirmed draft deletion must quarantine then purge the owned draft folder."
 Assert-Contains "draft delete slot boundary" $scenarioDraftRepository "string\.Equals\(parent, root.*name\.StartsWith\(" "draft deletion must only mutate direct Slot_N children of the draft root."
 Assert-Contains "draft delete virtual-save boundary" $scenarioDraftRepository "saveEntry\.absoluteSlot != slot" "draft deletion must refuse a mismatched virtual save entry."
+Assert-Contains "draft delete catalog authority" $scenarioDraftRepository "definition folder is the catalog authority.*return draftDeleted;" "a durably removed draft folder must complete deletion even when optional virtual-save cleanup reports failure."
 Assert-Contains "draft delete executable contract" $scenarioVerification "VerifyDraftDeleteDurability.*scenario\.xml\.bak.*autosave\.xml.*Slot_23.*Fresh draft catalog scan" "framework verification must prove durable draft deletion removes backups/history, preserves unrelated slots, and survives a fresh catalog scan."
 
 Assert-Contains "draft row detail wiring" $scenarioBookDataSource "baseMode \+ "" base, edited "" \+ edited \+ recovery" "draft rows must show base mode, relative edit time, and a recovery marker."
@@ -880,9 +894,15 @@ Assert-Contains "flash-free book open ordering" $scenarioBookPanel "StartDataRef
 Assert-Contains "flash-free book close ordering" $scenarioBookPanel "if \(restoreUnderlyingPanel\).*StartCoroutine\(CloseAfterUnderlyingFirstRender\(root, overlay\)\).*CloseAfterUnderlyingFirstRender.*RestoreUnderlyingPanel\(\);.*yield return new WaitForEndOfFrame\(\);.*overlay\.SetActive\(false\);" "closing the book must restore and render vanilla chrome before hiding the overlay."
 
 Assert-Contains "confirmation localize routing" $scenarioBookPanel "MessageBox\.Show\(MessageBoxButtons\.YesNo_Buttons, message,.*, null, null, localize\)" "confirmations must pass an explicit localize flag so custom draft messages render verbatim."
+Assert-Contains "confirmation completion ownership" $scenarioBookPanel "MessageBoxResponse\(delegate\(int response\).*ResolveConfirmation\(onConfirmed, response\).*private void ResolveConfirmation" "confirmation callbacks must complete synchronously from MessageBox OnClose instead of depending on a coroutine owned by closing UI."
+Assert-NotContains "confirmation completion ownership" $scenarioBookPanel "StartCoroutine\(ResolveConfirmationAfterClickRelease" "draft completion must not be deferred to a coroutine that can stop with the closing panel."
 Assert-Contains "draft delete non-localized message" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildDeleteMessage\(draftName, facts\);\s*localize = false;" "draft deletes must use the built draft-named message without localization."
 Assert-Contains "duplicate confirmation" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildDuplicateMessage\(draftName, facts\)" "duplicate must confirm with a draft-named message."
 Assert-Contains "rename confirmation" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildRenameMessage\(draftName, model\.DraftId, facts\)" "renaming a draft file must confirm with a draft-named message."
+Assert-Contains "quest outcome target picker" $scenarioWorkflowAuthoringContentBuilder "RuntimeKind == ScenarioConditionKind\.QuestCompleted.*TargetWinPrefix.*definition\.Quests\.Quests.*ScenarioAuthoringActionCodec\.EncodeToken\(quest\.Id\)" "quest outcome conditions must expose authored quest ids as selectable targets."
+Assert-Contains "quest outcome target mutation" $scenarioWinLossCommandHandler 'TargetWinPrefix.*TryParseToken.*ScenarioPropertyBag\.Set\(condition\.Properties, "questId", targetId\).*ScenarioPropertyBag\.Set\(condition\.Properties, "targetId", targetId\)' "quest target selection must persist both canonical and compatibility target properties."
+Assert-Contains "installed package uninstall boundary" $scenarioPackageImportService "Uninstall\(ScenarioPackageImportCandidate candidate\).*Path\.GetDirectoryName\(installPath\), installedRoot.*ReadCandidate\(installPath\).*Directory\.Delete\(installPath, true\).*RefreshDefinitionCatalog" "uninstall must identity-check and delete only a direct installed-package child before refreshing the catalog."
+Assert-Contains "installed package save retention" ($scenarioBookDataSource + $scenarioBookPanel + $scenarioPackageImportService) "UninstallPackage.*saved runs and drafts are retained|Saved runs and authoring drafts were retained" "uninstall UI and completion status must state that save archives and drafts are retained."
 
 # WIZINFO: wizard quick-setting explanations, installed-copy content summary,
 # top-issue "next" surfacing on Home, and the optional scenario goal field.

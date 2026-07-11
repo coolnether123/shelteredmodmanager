@@ -472,7 +472,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Deleted pending draft '" + draftId + "'. slot=" + slot
                             + " saveDeleted=" + saveDeleted + " draftDeleted=" + draftDeleted
                             + " reason=" + (reason ?? "unspecified") + ".");
-                        return saveDeleted && draftDeleted;
+                        // The definition folder is the catalog authority.  Once it
+                        // is durably gone, report deletion complete so the browser
+                        // refreshes instead of retaining a ghost row merely because
+                        // an optional virtual-save cleanup failed.
+                        return draftDeleted;
                     }
                     catch (Exception ex)
                     {

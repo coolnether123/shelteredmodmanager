@@ -53,6 +53,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return result != null && result.Success;
         }
 
+        public string BuildUninstallConfirmation(ScenarioPackageImportCandidate candidate)
+        {
+            string name = candidate != null && !string.IsNullOrEmpty(candidate.DisplayName)
+                ? candidate.DisplayName
+                : "this scenario";
+            int saveCount = candidate != null && !string.IsNullOrEmpty(candidate.ScenarioId)
+                ? _saveLibrary.CountSaves(candidate.ScenarioId)
+                : 0;
+            return "Uninstall " + name + "?\n\nOnly the installed package folder will be deleted. "
+                + saveCount.ToString() + (saveCount == 1 ? " saved run stays" : " saved runs stay")
+                + " archived and will reconnect if the same scenario is installed again. Drafts and exports are not changed.";
+        }
+
+        public bool UninstallPackage(ScenarioPackageImportCandidate candidate, out string status)
+        {
+            ScenarioPackageImportResult result = _importService.Uninstall(candidate);
+            status = result != null ? result.Message : "Uninstall service is unavailable.";
+            return result != null && result.Success;
+        }
+
         internal static string CreateInteractiveDraftForLiveVerification()
         {
             SaveManager.SaveType launchSaveType = SaveManager.SaveType.Slot1;

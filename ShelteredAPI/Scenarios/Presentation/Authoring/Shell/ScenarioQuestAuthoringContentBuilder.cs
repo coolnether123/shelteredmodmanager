@@ -361,7 +361,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (!string.IsNullOrEmpty(slot))
                 {
                     items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
-                        ScenarioAuthoringActionIds.ActionStoryConversationLineSpeakerPrefix + pair + "." + Uri.EscapeDataString(slot),
+                        ScenarioAuthoringActionIds.ActionStoryConversationLineSpeakerPrefix + pair + "." + ScenarioAuthoringActionCodec.EncodeToken(slot),
                         "Speaker " + slot,
                         "Use this participant slot for the line.",
                         true,

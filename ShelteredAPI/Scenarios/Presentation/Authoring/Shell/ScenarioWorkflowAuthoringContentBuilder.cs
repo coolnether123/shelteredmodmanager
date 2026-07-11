@@ -278,13 +278,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(VictorySection("victory_overview", "Victory Rules", ScenarioAuthoringInspectorSectionLayout.Summary, overview));
 
             List<ScenarioAuthoringInspectorItem> wins = new List<ScenarioAuthoringInspectorItem>();
-            AddConditionList(wins, winLoss != null ? winLoss.WinConditions : null, true);
+            AddConditionList(wins, winLoss != null ? winLoss.WinConditions : null, true, definition);
             if (winCount == 0)
                 wins.Add(Item.Text("No win conditions yet. Add one above to let the run end in victory."));
             sections.Add(VictorySection("victory_wins", "Win Conditions", ScenarioAuthoringInspectorSectionLayout.PropertyList, wins));
 
             List<ScenarioAuthoringInspectorItem> losses = new List<ScenarioAuthoringInspectorItem>();
-            AddConditionList(losses, winLoss != null ? winLoss.LossConditions : null, false);
+            AddConditionList(losses, winLoss != null ? winLoss.LossConditions : null, false, definition);
             if (lossCount == 0)
                 losses.Add(Item.Text("No failure conditions yet. Add one above to let the run be lost."));
             sections.Add(VictorySection("victory_losses", "Failure Conditions", ScenarioAuthoringInspectorSectionLayout.PropertyList, losses));
@@ -330,12 +330,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(Item.Text("No victory condition - scenario runs forever."));
             items.Add(Item.ActionItem(Item.Action(ScenarioWinLossAuthoringActionIds.AddWin, "Add Victory Condition", "Create a runtime-backed win condition.", definition != null, false, "W+")));
             items.Add(Item.ActionItem(Item.Action(ScenarioWinLossAuthoringActionIds.AddLoss, "Add Failure Condition", "Create a runtime-backed loss condition.", definition != null, false, "L+")));
-            AddConditionList(items, winLoss != null ? winLoss.WinConditions : null, true);
-            AddConditionList(items, winLoss != null ? winLoss.LossConditions : null, false);
+            AddConditionList(items, winLoss != null ? winLoss.WinConditions : null, true, definition);
+            AddConditionList(items, winLoss != null ? winLoss.LossConditions : null, false, definition);
             AddSupportedConditionSummary(items);
         }
 
-        private static void AddConditionList(List<ScenarioAuthoringInspectorItem> items, List<ConditionDef> conditions, bool win)
+        private static void AddConditionList(List<ScenarioAuthoringInspectorItem> items, List<ConditionDef> conditions, bool win, ScenarioDefinition definition)
         {
             string label = win ? "Victory" : "Failure";
             string typePrefix = win ? ScenarioWinLossAuthoringActionIds.TypeWinPrefix : ScenarioWinLossAuthoringActionIds.TypeLossPrefix;
@@ -351,7 +351,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (descriptor != null)
                     items.Add(Item.Text(descriptor.Summary));
                 items.Add(Item.ActionItem(Item.Action(typePrefix + i.ToString(CultureInfo.InvariantCulture), "Condition Type", "Cycle to the next runtime-supported condition type.", condition != null, false, "TY", descriptor != null ? descriptor.Label : "Unsupported type")));
-                AddConditionFieldItems(items, condition, descriptor, i, win);
+                AddConditionFieldItems(items, condition, descriptor, i, win, definition);
                 items.Add(Item.ActionItem(Item.Action(deletePrefix + i.ToString(CultureInfo.InvariantCulture), "Delete " + label, "Remove this outcome condition.", condition != null, false, "DEL")));
             }
         }
@@ -361,7 +361,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ConditionDef condition,
             ScenarioWinLossConditionDescriptor descriptor,
             int index,
-            bool win)
+            bool win,
+            ScenarioDefinition definition)
         {
             if (condition == null || descriptor == null)
                 return;
@@ -397,8 +398,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
-            items.Add(Item.Property("Target Id", Item.Safe(ScenarioPropertyBag.FirstString(condition.Properties, "questId", "survivorId", "name", "bunkerExpansionId", "triggerId", "targetId"))));
-            items.Add(Item.Text("Target ids are loaded from XML today; the runtime honors this type but this surface does not yet include text entry."));
+            string targetId = ScenarioPropertyBag.FirstString(condition.Properties, "questId", "survivorId", "name", "bunkerExpansionId", "triggerId", "targetId");
+            items.Add(Item.Property("Target Id", Item.Safe(targetId)));
+            if (descriptor.RuntimeKind == ScenarioConditionKind.QuestCompleted
+                || descriptor.RuntimeKind == ScenarioConditionKind.QuestFailed
+                || descriptor.RuntimeKind == ScenarioConditionKind.QuestActive)
+            {
+                string targetPrefix = win ? ScenarioWinLossAuthoringActionIds.TargetWinPrefix : ScenarioWinLossAuthoringActionIds.TargetLossPrefix;
+                int questCount = 0;
+                for (int questIndex = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && questIndex < definition.Quests.Quests.Count; questIndex++)
+                {
+                    QuestDefinition quest = definition.Quests.Quests[questIndex];
+                    if (quest == null || string.IsNullOrEmpty(quest.Id))
+                        continue;
+
+                    questCount++;
+                    items.Add(Item.ActionItem(Item.Action(
+                        targetPrefix + index.ToString(CultureInfo.InvariantCulture) + "." + ScenarioAuthoringActionCodec.EncodeToken(quest.Id),
+                        "Quest " + quest.Id,
+                        "Use this authored quest as the outcome target.",
+                        true,
+                        string.Equals(targetId, quest.Id, System.StringComparison.OrdinalIgnoreCase),
+                        "Q",
+                        quest.Description)));
+                }
+
+                if (questCount == 0)
+                    items.Add(Item.Text("Add an authored quest before choosing a quest outcome target."));
+                return;
+            }
+
+            items.Add(Item.Text("This target type is runtime-supported but does not yet have a catalog picker on this surface."));
         }
 
         private static void AddStepper(List<ScenarioAuthoringInspectorItem> items, string prefix, int index, string label, int small, int large)
