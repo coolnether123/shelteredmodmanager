@@ -960,7 +960,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_dataSource != null)
                 _dataSource.CancelRefreshes();
             if (restoreUnderlyingPanel)
-                RestoreUnderlyingPanel();
+            {
+                StartCoroutine(CloseAfterUnderlyingFirstRender(root, overlay));
+                return;
+            }
             else
             {
                 // The selection panel is being unloaded.  Its suppressed chrome
@@ -972,6 +975,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             // EnsureOverlayPanel owns the named UI Root/ShelteredAPI_ScenarioBookBrowser
             // parent. Hiding only this child leaves an active empty overlay that the
             // harness and the next hub click can mistake for a live book.
+            overlay.SetActive(false);
+            if (_renderer != null)
+            {
+                _renderer.Dispose();
+                _renderer = null;
+            }
+
+            Destroy(root);
+        }
+
+        private IEnumerator CloseAfterUnderlyingFirstRender(GameObject root, GameObject overlay)
+        {
+            RestoreUnderlyingPanel();
+
+            // NGUI reactivation is submitted later in this frame. Retain the custom
+            // book through the end-of-frame render so no raw menu background appears
+            // between restoring vanilla chrome and removing this overlay.
+            yield return new WaitForEndOfFrame();
+
             overlay.SetActive(false);
             if (_renderer != null)
             {
