@@ -36,6 +36,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioDraftSnapshotService _snapshotService;
         private ScenarioAuthoringState _state = new ScenarioAuthoringState();
         private ScenarioAuthoringSession _activeSession;
+        private int _presentationRevision;
+        private int _cachedShellPresentationRevision = -1;
+        private int _cachedShellDraftRevision = -1;
+        private int _cachedShellContextMenuRevision = -1;
+        private ScenarioEditorSession _cachedShellEditorSession;
+        private ScenarioAuthoringSession _cachedShellAuthoringSession;
+        private ScenarioAuthoringShellViewModel _cachedShellViewModel;
 
         public static ScenarioAuthoringBackendService Instance
         {
@@ -637,10 +644,42 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public ScenarioAuthoringShellViewModel GetShellViewModel()
         {
-            ScenarioAuthoringContext context = BuildContext(CurrentState, GetActiveSession());
-            return _presentationBuilder.BuildShellViewModel(
-                context,
+            ScenarioEditorSession editorSession = _sessionStore.Current;
+            int draftRevision = editorSession != null ? editorSession.DraftRevision : -1;
+            int contextMenuRevision = _contextMenuService.Revision;
+            ScenarioAuthoringState state;
+            ScenarioAuthoringSession authoringSession;
+            int presentationRevision;
+
+            lock (_sync)
+            {
+                presentationRevision = _presentationRevision;
+                authoringSession = _activeSession;
+                if (_cachedShellViewModel != null
+                    && _cachedShellPresentationRevision == presentationRevision
+                    && _cachedShellDraftRevision == draftRevision
+                    && _cachedShellContextMenuRevision == contextMenuRevision
+                    && object.ReferenceEquals(_cachedShellEditorSession, editorSession)
+                    && object.ReferenceEquals(_cachedShellAuthoringSession, authoringSession))
+                    return _cachedShellViewModel;
+
+                state = _state.Copy();
+            }
+
+            ScenarioAuthoringShellViewModel viewModel = _presentationBuilder.BuildShellViewModel(
+                BuildContext(state, authoringSession),
                 _contextMenuService.Current);
+
+            lock (_sync)
+            {
+                _cachedShellPresentationRevision = presentationRevision;
+                _cachedShellDraftRevision = draftRevision;
+                _cachedShellContextMenuRevision = contextMenuRevision;
+                _cachedShellEditorSession = editorSession;
+                _cachedShellAuthoringSession = authoringSession;
+                _cachedShellViewModel = viewModel;
+            }
+            return viewModel;
         }
 
         public ScenarioAuthoringInspectorDocument GetShellDocument()
@@ -660,6 +699,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private void RaiseStateChanged()
         {
+            lock (_sync)
+            {
+                _presentationRevision++;
+            }
             Action<ScenarioAuthoringState> handler = StateChanged;
             if (handler == null)
                 return;

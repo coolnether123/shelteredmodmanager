@@ -7,6 +7,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
     {
         private readonly object _sync = new object();
         private ScenarioAuthoringContextMenuModel _model = new ScenarioAuthoringContextMenuModel();
+        private int _revision;
+
+        public int Revision
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _revision;
+                }
+            }
+        }
 
         public ScenarioAuthoringContextMenuModel Current
         {
@@ -33,6 +45,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
                     CenterOnScreen = centerOnScreen,
                     Actions = actions ?? new ScenarioAuthoringInspectorAction[0]
                 };
+                _revision++;
             }
         }
 
@@ -41,6 +54,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
             lock (_sync)
             {
                 _model = new ScenarioAuthoringContextMenuModel();
+                _revision++;
             }
         }
 
