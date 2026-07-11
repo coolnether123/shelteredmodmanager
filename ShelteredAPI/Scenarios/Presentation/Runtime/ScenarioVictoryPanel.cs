@@ -20,6 +20,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Runtime
         private FieldManualWindowChrome _chrome;
         private bool _continued;
 
+        internal static bool HasActivePanel { get { return _active != null; } }
+
+        internal static void ResetForNewRun()
+        {
+            ScenarioVictoryPanel panel = _active;
+            _active = null;
+            if (panel == null)
+                return;
+
+            UIPanelManager manager = UIPanelManager.Instance();
+            if (manager != null && manager.IsPanelOnStack(panel))
+                manager.PopPanel(panel);
+            else
+                UnityEngine.Object.Destroy(panel.gameObject);
+            if (panel != null && panel.gameObject != null)
+                panel.gameObject.SetActive(false);
+        }
+
         internal static bool TryShow(ScenarioEndGamePresentation presentation, out string reason)
         {
             reason = null;
@@ -133,6 +151,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Runtime
 
             _continued = true;
             TooltipperObj.ShowTooltip(null);
+            ResetForNewRun();
             if (SaveManager.instance != null)
                 SaveManager.instance.DeleteCurrentSlot();
             if (LoadingScreen.Instance != null)

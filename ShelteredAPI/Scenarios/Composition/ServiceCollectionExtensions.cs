@@ -70,7 +70,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioSaveLibrary>(),
                     resolver.Get<IScenarioSelectionCatalogService>(),
                     resolver.Get<ICustomScenarioLifecycleService>(),
-                    resolver.Get<IScenarioDefinitionCatalogService>());
+                    resolver.Get<IScenarioDefinitionCatalogService>(),
+                    resolver.Get<IScenarioWinLossOutcomeService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStageCoordinator(resolver.Get<ScenarioStageRegistry>(), new IScenarioStageModule[0]); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PublishValidationSummaryBuilder(); });

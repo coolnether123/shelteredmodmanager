@@ -18,8 +18,31 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             VerifyPresenterSelection(result);
             VerifyInstalledPresenterModeBranching(result);
             VerifyVictoryPresentationText(result);
+            VerifyPerRunResetContract(result);
             VerifyRetryableEffectContract(result);
             VerifyAuthoredVisitorPriorityContract(result);
+        }
+
+        private static void VerifyPerRunResetContract(ScenarioValidationResult result)
+        {
+            ScenarioRuntimeBinding first = new ScenarioRuntimeBinding
+            {
+                ScenarioId = "repeatable.scenario",
+                VersionApplied = "1.0.0",
+                DayCreated = 1,
+                RunId = "run-a"
+            };
+            ScenarioRuntimeBinding second = new ScenarioRuntimeBinding
+            {
+                ScenarioId = first.ScenarioId,
+                VersionApplied = first.VersionApplied,
+                DayCreated = first.DayCreated,
+                RunId = "run-b"
+            };
+            string firstKey = ScenarioRuntimeStateService.BuildRuntimeBindingId(first, first.ScenarioId, first.VersionApplied);
+            string secondKey = ScenarioRuntimeStateService.BuildRuntimeBindingId(second, second.ScenarioId, second.VersionApplied);
+            Assert(!string.Equals(firstKey, secondKey, System.StringComparison.OrdinalIgnoreCase),
+                "Separate starts of the same installed scenario must receive separate runtime journal scopes.", result);
         }
 
         private static void VerifyPresenterSelection(ScenarioValidationResult result)
@@ -120,6 +143,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
         private sealed class StubPlaytestPresenter : IScenarioEndGamePresentationTarget
         {
             public int Calls;
+            public void ResetForNewRun() { }
             public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
             {
                 Calls++;
@@ -131,6 +155,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
         private sealed class StubInstalledPresenter : IScenarioEndGamePresentationTarget
         {
             public int Calls;
+            public void ResetForNewRun() { }
             public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
             {
                 Calls++;

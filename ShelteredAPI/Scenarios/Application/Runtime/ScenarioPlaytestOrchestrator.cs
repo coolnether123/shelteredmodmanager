@@ -183,6 +183,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 IsActive = true,
                 IsConvertedToNormalSave = false,
                 DayCreated = GameTime.Day,
+                RunId = Guid.NewGuid().ToString("N"),
                 LastEditorSaveTick = Environment.TickCount
             });
         }

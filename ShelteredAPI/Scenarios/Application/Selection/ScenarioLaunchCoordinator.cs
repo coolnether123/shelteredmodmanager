@@ -21,22 +21,26 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly ICustomScenarioLifecycleService _scenarioLifecycle;
         private readonly IScenarioDefinitionCatalogService _definitions;
+        private readonly IScenarioWinLossOutcomeService _outcomeService;
 
         public ScenarioLaunchCoordinator(
             IScenarioSaveLibrary saveLibrary,
             IScenarioSelectionCatalogService catalog,
             ICustomScenarioLifecycleService scenarioLifecycle,
-            IScenarioDefinitionCatalogService definitions)
+            IScenarioDefinitionCatalogService definitions,
+            IScenarioWinLossOutcomeService outcomeService)
         {
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
             if (catalog == null) throw new ArgumentNullException("catalog");
             if (scenarioLifecycle == null) throw new ArgumentNullException("scenarioLifecycle");
             if (definitions == null) throw new ArgumentNullException("definitions");
+            if (outcomeService == null) throw new ArgumentNullException("outcomeService");
 
             _saveLibrary = saveLibrary;
             _catalog = catalog;
             _scenarioLifecycle = scenarioLifecycle;
             _definitions = definitions;
+            _outcomeService = outcomeService;
         }
 
         public SaveManager.SaveType GetVirtualSaveType(ScenarioCatalogEntry entry)
@@ -112,6 +116,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error);
                 return false;
             }
+            if (usesCustomLifecycle)
+                _outcomeService.ResetForNewRun();
 
             SaveEntry startupSave;
             try
@@ -265,7 +271,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 error = "Failed to queue draft target: " + ex.Message;
                 return false;
             }
-
             string directSceneName;
             if (TryGetAuthoringLaunchScene(baseGameMode, out directSceneName))
             {
