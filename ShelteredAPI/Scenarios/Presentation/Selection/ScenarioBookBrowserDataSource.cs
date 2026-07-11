@@ -126,6 +126,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             BeginSharedRefreshAsync(_catalog);
         }
 
+        public void BeginRefreshAsync(bool reuseAvailableSharedRefresh)
+        {
+            if (reuseAvailableSharedRefresh)
+            {
+                lock (SharedSnapshotSync)
+                {
+                    if (_sharedRefreshRunning
+                        || (_sharedSnapshot != null && string.IsNullOrEmpty(_sharedSnapshot.Error)))
+                        return;
+                }
+            }
+
+            BeginSharedRefreshAsync(_catalog);
+        }
+
         public void InvalidateCatalogSnapshot()
         {
             lock (SharedSnapshotSync)
@@ -277,6 +292,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             });
         }
 
+        internal static bool IsSharedRefreshRunning
+        {
+            get
+            {
+                lock (SharedSnapshotSync)
+                    return _sharedRefreshRunning;
+            }
+        }
+
+        internal static int SharedSnapshotVersion
+        {
+            get
+            {
+                lock (SharedSnapshotSync)
+                    return _sharedSnapshot != null ? _sharedSnapshot.Version : 0;
+            }
+        }
+
+        internal static string SharedSnapshotError
+        {
+            get
+            {
+                lock (SharedSnapshotSync)
+                    return _sharedSnapshot != null ? _sharedSnapshot.Error : null;
+            }
+        }
+
         public bool ApplyLatestSnapshot()
         {
             CatalogSnapshot snapshot;
@@ -378,6 +420,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public bool HasEntries
         {
             get { return _entries != null && _entries.Length > 0; }
+        }
+
+        public bool HasAppliedCatalogSnapshot
+        {
+            get { return _appliedVersion > 0 && string.IsNullOrEmpty(_lastRefreshError); }
         }
 
         public string LastRefreshError

@@ -7,6 +7,15 @@ using ShelteredAPI.UI.FieldManual.Textures.Generators;
 
 namespace ShelteredAPI.UI.FieldManual.Textures
 {
+    internal enum BookChromeTexture
+    {
+        Vignette = 0,
+        White = 1,
+        Gunmetal = 2,
+        Paper = 3,
+        Rivet = 4
+    }
+
     /// <summary>
     /// ITextureLibrary implementation that delegates to the per-kind generators and
     /// caches results for the process lifetime keyed by generator inputs and palette.
@@ -14,6 +23,8 @@ namespace ShelteredAPI.UI.FieldManual.Textures
     /// </summary>
     internal sealed class ProceduralTextureLibrary : ITextureLibrary
     {
+        internal const int BookChromeTextureCount = 5;
+
         private readonly IThemePalette _palette;
         private readonly string _paletteFingerprint;
         private static readonly Dictionary<string, Texture2D> SharedCache = new Dictionary<string, Texture2D>();
@@ -82,6 +93,48 @@ namespace ShelteredAPI.UI.FieldManual.Textures
         {
             return GetOrCreate("vig:" + width + "x" + height,
                 delegate { return VignetteGenerator.Generate(width, height, _palette); });
+        }
+
+        internal Texture2D GetBookChromeTexture(BookChromeTexture texture)
+        {
+            switch (texture)
+            {
+                case BookChromeTexture.Vignette:
+                    return Vignette(512, 512);
+                case BookChromeTexture.White:
+                    return White;
+                case BookChromeTexture.Gunmetal:
+                    return Gunmetal(1240, 720);
+                case BookChromeTexture.Paper:
+                    return Paper(560, 660);
+                case BookChromeTexture.Rivet:
+                    return Rivet(18);
+                default:
+                    throw new ArgumentOutOfRangeException("texture");
+            }
+        }
+
+        /// <summary>
+        /// Warms a bounded slice of the exact unique texture keys used by the book
+        /// frame. Callers can pass one as maxTextures to keep generation to one
+        /// main-thread texture per frame.
+        /// </summary>
+        internal static int PrewarmAll(IThemePalette palette, int nextTextureIndex, int maxTextures)
+        {
+            if (palette == null) throw new ArgumentNullException("palette");
+            if (nextTextureIndex < 0) throw new ArgumentOutOfRangeException("nextTextureIndex");
+            if (maxTextures < 0) throw new ArgumentOutOfRangeException("maxTextures");
+
+            ProceduralTextureLibrary textures = new ProceduralTextureLibrary(palette);
+            int warmed = 0;
+            while (nextTextureIndex < BookChromeTextureCount && warmed < maxTextures)
+            {
+                textures.GetBookChromeTexture((BookChromeTexture)nextTextureIndex);
+                nextTextureIndex++;
+                warmed++;
+            }
+
+            return nextTextureIndex;
         }
 
         public void Dispose()
