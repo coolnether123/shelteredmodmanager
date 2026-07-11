@@ -205,6 +205,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (record != null && TryResolveFamilyMember(record.Id, out member))
                 return true;
 
+            // Starting cast records are synthetic scenario actors, while the live
+            // Shelter family owns vanilla FamilyMember instances.  They deliberately
+            // do not share ActorId kinds, so bridge the stable :start:<index> binding
+            // back to the corresponding active family member.
+            if (TryResolveStartingCastMember(actorRef, out member))
+                return true;
+
             IReadOnlyList<ActorBinding> bindings = record != null && _actors != null ? _actors.GetBindings(record.Id) : null;
             for (int i = 0; bindings != null && i < bindings.Count; i++)
             {
@@ -220,6 +227,29 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             }
 
             return false;
+        }
+
+        private static bool TryResolveStartingCastMember(ScenarioActorRef actorRef, out FamilyMember member)
+        {
+            member = null;
+            if (actorRef == null
+                || !string.Equals(actorRef.BindingType, ScenarioCastBindingType, StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrEmpty(actorRef.BindingKey))
+                return false;
+
+            int marker = actorRef.BindingKey.LastIndexOf(":start:", StringComparison.OrdinalIgnoreCase);
+            int index;
+            if (marker < 0
+                || !int.TryParse(actorRef.BindingKey.Substring(marker + 7), out index)
+                || index < 0)
+                return false;
+
+            List<FamilyMember> members = FamilyManager.Instance != null ? FamilyManager.Instance.GetAllFamilyMembers() : null;
+            if (members == null || index >= members.Count)
+                return false;
+
+            member = members[index];
+            return member != null;
         }
 
         public bool BindMaterializedFamilyMember(ScenarioDefinition definition, ScenarioActorRef actorRef, FamilyMember member, out string message)
