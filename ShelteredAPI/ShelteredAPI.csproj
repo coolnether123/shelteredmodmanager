@@ -420,6 +420,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossConditionAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossOutcomeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioEndGamePresenter.cs" />
+    <Compile Include="Scenarios\Presentation\Runtime\ScenarioVictoryPanel.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledBunkerRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledInventoryRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledObjectRuntimeService.cs" />

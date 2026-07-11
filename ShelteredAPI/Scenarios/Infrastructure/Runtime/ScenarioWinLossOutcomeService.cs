@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ModAPI.Core;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Conditions;
@@ -8,6 +9,7 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioWinLossOutcomeService : IScenarioWinLossOutcomeService
     {
@@ -21,7 +23,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private ScenarioRuntimeBinding _binding;
         private string _lastBlockedReason;
         private bool _presentationPending;
-        private bool _pendingPresentationSuccess;
+        private ScenarioEndGamePresentation _pendingPresentation;
         private string _lastPresentationFailure;
 
         public ScenarioWinLossOutcomeService(
@@ -46,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             _binding = binding;
             _lastBlockedReason = null;
             _presentationPending = false;
+            _pendingPresentation = null;
             _lastPresentationFailure = null;
         }
 
@@ -57,7 +60,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (!string.IsNullOrEmpty(state.ScenarioOutcome))
             {
                 if (_presentationPending)
-                    PresentOutcome(_pendingPresentationSuccess);
+                    PresentOutcome(_pendingPresentation);
                 return;
             }
 
@@ -149,14 +152,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 + " as " + state.ScenarioOutcome
                 + " via condition '" + (state.ScenarioOutcomeConditionId ?? string.Empty) + "'.");
             _presentationPending = true;
-            _pendingPresentationSuccess = success;
-            PresentOutcome(success);
+            _pendingPresentation = BuildPresentation(_definition, condition, success);
+            PresentOutcome(_pendingPresentation);
         }
 
-        private void PresentOutcome(bool success)
+        private void PresentOutcome(ScenarioEndGamePresentation presentation)
         {
             string reason = null;
-            if (_endGamePresenter != null && _endGamePresenter.TryPresent(success, out reason))
+            if (_endGamePresenter != null && _endGamePresenter.TryPresent(presentation, out reason))
             {
                 _presentationPending = false;
                 _lastPresentationFailure = null;
@@ -169,6 +172,73 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 _lastPresentationFailure = reason;
                 MMLog.WriteWarning("[ScenarioWinLoss] Outcome resolved; presentation remains pending: " + reason);
             }
+        }
+
+        internal static ScenarioEndGamePresentation BuildPresentation(ScenarioDefinition definition, ConditionDef condition, bool success)
+        {
+            int day = 0;
+            try { day = GameTime.Day; }
+            catch { }
+
+            return new ScenarioEndGamePresentation
+            {
+                Success = success,
+                BaseGameMode = definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival,
+                ScenarioDisplayName = definition != null && !string.IsNullOrEmpty(definition.DisplayName)
+                    ? definition.DisplayName
+                    : "Custom Scenario",
+                DaysSurvived = Math.Max(0, day),
+                FulfilledConditionText = BuildFulfilledConditionText(definition, condition)
+            };
+        }
+
+        internal static string BuildFulfilledConditionText(ScenarioDefinition definition, ConditionDef condition)
+        {
+            if (condition == null)
+                return definition != null && !string.IsNullOrEmpty(definition.Goal)
+                    ? definition.Goal
+                    : "The authored victory condition was fulfilled.";
+
+            string type = ScenarioWinLossConditionSupport.Normalize(condition.Type);
+            if (type == "survivedays")
+            {
+                int days = ScenarioPropertyBag.GetInt(condition.Properties, "days", ScenarioPropertyBag.GetInt(condition.Properties, "day", 0));
+                return "Survived for " + Math.Max(1, days).ToString(CultureInfo.InvariantCulture) + " days.";
+            }
+            if (type == "timereached" || type == "dayreached")
+            {
+                int day = ScenarioPropertyBag.GetInt(condition.Properties, "day", ScenarioPropertyBag.GetInt(condition.Properties, "days", 1));
+                int hour = ScenarioPropertyBag.GetInt(condition.Properties, "hour", 0);
+                int minute = ScenarioPropertyBag.GetInt(condition.Properties, "minute", 0);
+                return "Reached day " + Math.Max(1, day).ToString(CultureInfo.InvariantCulture)
+                    + " at " + hour.ToString("D2", CultureInfo.InvariantCulture)
+                    + ":" + minute.ToString("D2", CultureInfo.InvariantCulture) + ".";
+            }
+            if (type == "itemquantityavailable" || type == "itemquantity" || type == "hasitem")
+            {
+                int quantity = ScenarioPropertyBag.GetInt(condition.Properties, "quantity", 1);
+                string item = ScenarioPropertyBag.FirstString(condition.Properties, "itemId", "targetId");
+                return "Secured " + Math.Max(1, quantity).ToString(CultureInfo.InvariantCulture) + " " + SafePresentationValue(item, "required item") + ".";
+            }
+            if (type == "questcompleted")
+                return "Completed quest " + SafePresentationValue(ScenarioPropertyBag.FirstString(condition.Properties, "questId", "targetId"), "objective") + ".";
+            if (type == "survivorpresent")
+                return SafePresentationValue(ScenarioPropertyBag.FirstString(condition.Properties, "survivorId", "name", "targetId"), "The required survivor") + " is present.";
+            if (type == "bunkerexpansionunlocked" || type == "technologyunlocked")
+                return "Unlocked " + SafePresentationValue(ScenarioPropertyBag.FirstString(condition.Properties, "bunkerExpansionId", "technologyId", "targetId"), "the required shelter upgrade") + ".";
+            if (type == "scenarioflagset" || type == "flagset")
+                return "Completed objective " + SafePresentationValue(ScenarioPropertyBag.FirstString(condition.Properties, "flagId", "targetId"), "scenario flag") + ".";
+            if (type == "customtrigger" || type == "trigger")
+                return "Triggered " + SafePresentationValue(ScenarioPropertyBag.FirstString(condition.Properties, "triggerId", "targetId"), "the authored objective") + ".";
+
+            return definition != null && !string.IsNullOrEmpty(definition.Goal)
+                ? definition.Goal
+                : "Fulfilled victory condition " + SafePresentationValue(condition.Id, condition.Type) + ".";
+        }
+
+        private static string SafePresentationValue(string value, string fallback)
+        {
+            return string.IsNullOrEmpty(value) ? (fallback ?? "objective") : value.Replace("_", " ");
         }
 
         private static void ReturnAuthoringPlaytestToEditor()
