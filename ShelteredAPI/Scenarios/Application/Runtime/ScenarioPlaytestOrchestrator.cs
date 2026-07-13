@@ -15,19 +15,22 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         private readonly IScenarioPauseService _pauseService;
         private readonly ScenarioAuthorTestChecklistService _testChecklistService;
         private readonly IVanillaScenarioRuntime _vanillaRuntime;
+        private readonly IScenarioPlaytestUiService _vanillaUiService;
 
         public ScenarioPlaytestOrchestrator(
             IScenarioApplier applier,
             IScenarioRuntimeBindingService runtimeBindingService,
             IScenarioPauseService pauseService,
             ScenarioAuthorTestChecklistService testChecklistService,
-            IVanillaScenarioRuntime vanillaRuntime)
+            IVanillaScenarioRuntime vanillaRuntime,
+            IScenarioPlaytestUiService vanillaUiService)
         {
             _applier = applier;
             _runtimeBindingService = runtimeBindingService;
             _pauseService = pauseService;
             _testChecklistService = testChecklistService;
             _vanillaRuntime = vanillaRuntime;
+            _vanillaUiService = vanillaUiService;
         }
 
         public ScenarioApplyResult BeginPlaytest(ScenarioEditorSession session, string scenarioFilePath)
@@ -138,6 +141,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             if (_testChecklistService != null)
                 _testChecklistService.MarkPlaytestStarted(session);
             _pauseService.ReleasePause("Scenario authoring released simulation.");
+            if (_vanillaUiService != null)
+                _vanillaUiService.RestoreForPlaytest();
             MMLog.WriteInfo("[ScenarioPlaytestOrchestrator] Playtest started for scenario '" + session.WorkingDefinition.Id
                 + "'. Messages=" + result.Messages.Length + ", appliedDraftRevision=" + session.AppliedDraftRevision + ".");
             return result;

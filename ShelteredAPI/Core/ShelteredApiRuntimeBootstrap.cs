@@ -95,6 +95,8 @@ namespace ShelteredAPI.Core
 
         private static void EnsureApiRegistrations()
         {
+            RegisterApi(OverlayInputCaptureApi.Name, new ShelteredOverlayInputCaptureService());
+
             var gameHelper = new GameHelperImpl();
             RegisterApi(GameRuntimeApiIds.GameHelper, gameHelper);
             RegisterApi(ShelteredApiAliasIds.GameHelper, gameHelper);

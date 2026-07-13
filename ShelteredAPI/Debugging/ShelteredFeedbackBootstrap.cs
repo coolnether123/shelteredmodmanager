@@ -24,11 +24,13 @@ namespace ShelteredAPI.Debugging
             try
             {
                 string installRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-                string storageRoot = Path.Combine(Path.Combine(installRoot, "SMM"), "Feedback");
+                string smmRoot = Path.Combine(installRoot, "SMM");
+                string storageRoot = Path.Combine(smmRoot, "Feedback");
                 FeedbackOverlayConfig config = new FeedbackOverlayConfig(storageRoot)
                 {
                     ToggleKey = KeyCode.F4,
                     WindowTitle = "Sheltered Developer Feedback",
+                    RuntimeLogPath = Path.Combine(smmRoot, "mod_manager.log"),
                     OverlayVisibilityChanged = ShelteredFeedbackInputEnabler.SetOverlayVisible
                 };
 

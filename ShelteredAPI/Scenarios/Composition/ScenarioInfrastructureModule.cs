@@ -25,6 +25,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringPauseService(); });
             services.AddSingleton<IScenarioPauseService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioAuthoringPauseService>(); });
+            services.AddSingleton<IScenarioPlaytestUiService>(delegate(IServiceResolver resolver) { return new ScenarioPlaytestVanillaUiService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringDraftRepository(resolver.Get<IScenarioSaveLibrary>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDraftMetadataEditService(resolver.Get<ScenarioAuthoringDraftRepository>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringHistoryService(); });
