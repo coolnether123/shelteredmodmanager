@@ -726,6 +726,7 @@ namespace Manager
         {
             CaptureWindowPlacement();
 
+            RefreshRuntimeWritableSettings();
             // Save settings on close
             _settingsService.Save(_settings);
             
@@ -834,6 +835,9 @@ namespace Manager
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
+
+                // The running game may have changed its remembered prompt choice.
+                RefreshRuntimeWritableSettings();
 
                 // Save settings before launch
                 SaveSettingsFromUi();
@@ -1857,6 +1861,14 @@ namespace Manager
         {
             _suppressSettingsReloadLogCount++;
             _settingsService.Save(_settings);
+        }
+
+        private void RefreshRuntimeWritableSettings()
+        {
+            if (_settings == null || _settingsService == null)
+                return;
+
+            _settings.AutoCondenseSaves = _settingsService.LoadAutoCondensePreference();
         }
 
         private void UpdateStatusCounts()
