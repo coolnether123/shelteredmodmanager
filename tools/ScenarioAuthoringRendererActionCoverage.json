@@ -26,7 +26,7 @@
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateCard", "actionFamily": "action.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateFilterButton", "actionFamily": "shell.renderer.candidate_filter.select." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateFilterControls", "actionFamily": "shell.renderer.candidate_search.set." },
-    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateSearchControl", "actionFamily": "shell.renderer.candidate_search.set." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCandidateSearchControlContents", "actionFamily": "shell.renderer.candidate_search.set." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCastCard", "actionFamily": "card.PrimaryAction.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawCastReferenceCard", "actionFamily": "card.PrimaryAction.Id" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawChecklistItem", "actionFamily": "action.Id" },
