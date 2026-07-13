@@ -37,7 +37,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioRuntimeBindingService>(),
                     resolver.Get<IScenarioPauseService>(),
                     resolver.Get<ScenarioAuthorTestChecklistService>(),
-                    resolver.Get<IVanillaScenarioRuntime>());
+                    resolver.Get<IVanillaScenarioRuntime>(),
+                    resolver.Get<IScenarioPlaytestUiService>());
             });
             services.AddScenarioRuntime();
             services.AddSingleton<IScenarioRuntimeOrchestrator>(delegate(IServiceResolver resolver)

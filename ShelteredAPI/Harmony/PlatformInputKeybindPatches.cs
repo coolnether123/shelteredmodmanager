@@ -34,6 +34,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputButtonDownPrefix(PlatformInput.InputButton button, ref bool __result)
         {
+            if (TrySuppressButton(ref __result))
+                return false;
+
             return !TryResolveInputButton(button, KeyState.Down, ref __result);
         }
 
@@ -41,6 +44,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputButtonUpPrefix(PlatformInput.InputButton button, ref bool __result)
         {
+            if (TrySuppressButton(ref __result))
+                return false;
+
             return !TryResolveInputButton(button, KeyState.Up, ref __result);
         }
 
@@ -48,6 +54,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputButtonHeldPrefix(PlatformInput.InputButton button, ref bool __result)
         {
+            if (TrySuppressButton(ref __result))
+                return false;
+
             return !TryResolveInputButton(button, KeyState.Held, ref __result);
         }
 
@@ -55,6 +64,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuButtonDownPrefix(PlatformInput.MenuInputButton button, ref bool __result)
         {
+            if (TrySuppressButton(ref __result))
+                return false;
+
             return !TryResolveMenuButton(button, KeyState.Down, ref __result);
         }
 
@@ -62,6 +74,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuButtonUpPrefix(PlatformInput.MenuInputButton button, ref bool __result)
         {
+            if (TrySuppressButton(ref __result))
+                return false;
+
             return !TryResolveMenuButton(button, KeyState.Up, ref __result);
         }
 
@@ -69,6 +84,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuButtonHeldPrefix(PlatformInput.MenuInputButton button, ref bool __result)
         {
+            if (TrySuppressButton(ref __result))
+                return false;
+
             return !TryResolveMenuButton(button, KeyState.Held, ref __result);
         }
 
@@ -76,6 +94,12 @@ namespace ShelteredAPI.Harmony
         [HarmonyPostfix]
         private static void GetAnyInputPostfix(ref bool __result)
         {
+            if (OverlayInputCaptureRuntime.ShouldSuppressAnyInput())
+            {
+                __result = false;
+                return;
+            }
+
             if (__result) return;
             if (ShelteredVanillaInputActions.IsAnyMappedKeyDown())
             {
@@ -106,6 +130,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuAxisPrefix(PlatformInput.MenuInputAxis axis, ref float __result)
         {
+            if (TrySuppressAxis(ref __result))
+                return false;
+
             return !TryResolveMenuAxis(axis, false, ref __result);
         }
 
@@ -113,6 +140,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuAxisRawPrefix(PlatformInput.MenuInputAxis axis, ref float __result)
         {
+            if (TrySuppressAxis(ref __result))
+                return false;
+
             return !TryResolveMenuAxis(axis, true, ref __result);
         }
 
@@ -120,6 +150,9 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputAxisPrefix(PlatformInput.InputAxis axis, ref float __result)
         {
+            if (TrySuppressAxis(ref __result))
+                return false;
+
             return !TryResolveGameplayAxis(axis, false, ref __result);
         }
 
@@ -127,7 +160,28 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputAxisRawPrefix(PlatformInput.InputAxis axis, ref float __result)
         {
+            if (TrySuppressAxis(ref __result))
+                return false;
+
             return !TryResolveGameplayAxis(axis, true, ref __result);
+        }
+
+        private static bool TrySuppressButton(ref bool result)
+        {
+            if (!OverlayInputCaptureRuntime.ShouldSuppressAnyInput())
+                return false;
+
+            result = false;
+            return true;
+        }
+
+        private static bool TrySuppressAxis(ref float result)
+        {
+            if (!OverlayInputCaptureRuntime.ShouldSuppressAnyInput())
+                return false;
+
+            result = 0f;
+            return true;
         }
 
         private static bool TryResolveInputButton(PlatformInput.InputButton button, KeyState state, ref bool result)

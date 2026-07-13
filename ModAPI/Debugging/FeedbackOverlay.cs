@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using ModAPI.Core;
 using UnityEngine;
@@ -27,6 +28,7 @@ namespace ModAPI.Debugging
         private bool _focusScratch;
         private bool _focusWindow;
         private bool _consumePointerUntilMouseUp;
+        private bool _captureInProgress;
         private GUIStyle _windowStyle;
         private GUIStyle _textAreaStyle;
         private GUIStyle _statusStyle;
@@ -135,6 +137,12 @@ namespace ModAPI.Debugging
                 current.Use();
             }
 
+            // CaptureScreenshot records the completed frame. Suppress only the
+            // overlay's rendering for the deferred capture frame while keeping
+            // the host input gate active and the overlay logically open.
+            if (_captureInProgress)
+                return;
+
             if (!_visible || _storage == null)
             {
                 ConsumeClosingPointerRelease(current);
@@ -171,7 +179,7 @@ namespace ModAPI.Debugging
         private void DrawWindow(int windowId)
         {
             GUILayout.Space(5f);
-            GUILayout.Label("Notes are autosaved locally. Submit captures this frame to the install's feedback folder.");
+            GUILayout.Label("Notes autosave locally. Submit captures a clean frame and the recent runtime log.");
             GUILayout.Space(4f);
 
             GUI.SetNextControlName(ScratchControlName);
@@ -209,15 +217,50 @@ namespace ModAPI.Debugging
 
         private void SubmitFeedback(bool screenshotOnly)
         {
+            if (_captureInProgress)
+                return;
+
             DateTime timestamp = DateTime.Now;
             try
             {
                 IList<KeyValuePair<string, string>> context = CaptureContext();
                 string screenshotPath = _storage.ReserveScreenshotPath(timestamp);
-                Application.CaptureScreenshot(screenshotPath);
-                _storage.AppendEntry(timestamp, _scratch, context, screenshotPath, screenshotOnly);
+                string submittedText = _scratch;
+                string logExcerpt = _storage.ReadLogExcerpt(
+                    _config.RuntimeLogPath,
+                    _config.MaxLogExcerptLines,
+                    _config.MaxLogExcerptBytes);
+                _captureInProgress = true;
+                StartCoroutine(CaptureFeedback(timestamp, submittedText, context, screenshotPath, logExcerpt, screenshotOnly));
+            }
+            catch (Exception ex)
+            {
+                _captureInProgress = false;
+                SetStatus("Save failed: " + ex.Message);
+                MMLog.WarnOnce("FeedbackOverlay.SubmitFeedback", "Feedback entry could not be saved: " + ex.Message);
+            }
+        }
 
-                if (!screenshotOnly)
+        private IEnumerator CaptureFeedback(
+            DateTime timestamp,
+            string submittedText,
+            IList<KeyValuePair<string, string>> context,
+            string screenshotPath,
+            string logExcerpt,
+            bool screenshotOnly)
+        {
+            // The click frame already contains this IMGUI window. Wait for a
+            // fresh frame in which OnGUI suppresses it, then capture that clean
+            // frame at the end of rendering.
+            yield return null;
+            yield return new WaitForEndOfFrame();
+
+            try
+            {
+                Application.CaptureScreenshot(screenshotPath);
+                _storage.AppendEntry(timestamp, submittedText, context, screenshotPath, logExcerpt, screenshotOnly);
+
+                if (!screenshotOnly && string.Equals(_scratch, submittedText, StringComparison.Ordinal))
                 {
                     _scratch = string.Empty;
                     SaveScratchNow();
@@ -230,6 +273,10 @@ namespace ModAPI.Debugging
             {
                 SetStatus("Save failed: " + ex.Message);
                 MMLog.WarnOnce("FeedbackOverlay.SubmitFeedback", "Feedback entry could not be saved: " + ex.Message);
+            }
+            finally
+            {
+                _captureInProgress = false;
             }
         }
 

@@ -255,6 +255,11 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         bool IsPauseMenuPanel(BasePanel panel);
     }
 
+    internal interface IScenarioPlaytestUiService
+    {
+        void RestoreForPlaytest();
+    }
+
     internal interface IScenarioRuntimeOrchestrator
     {
         void UpdatePendingScenarioSpawn();

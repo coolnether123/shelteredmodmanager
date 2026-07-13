@@ -14,6 +14,8 @@ namespace ModAPI.Debugging
             StorageRootPath = storageRootPath;
             ToggleKey = KeyCode.F4;
             WindowTitle = "Developer Feedback";
+            MaxLogExcerptLines = 80;
+            MaxLogExcerptBytes = 65536;
         }
 
         /// <summary>Absolute or host-relative directory containing scratch, entries, and screenshots.</summary>
@@ -24,6 +26,15 @@ namespace ModAPI.Debugging
 
         /// <summary>Title shown by the IMGUI window.</summary>
         public string WindowTitle { get; set; }
+
+        /// <summary>Optional active runtime log whose tail is captured with each submission.</summary>
+        public string RuntimeLogPath { get; set; }
+
+        /// <summary>Maximum number of trailing log lines attached to one submission.</summary>
+        public int MaxLogExcerptLines { get; set; }
+
+        /// <summary>Maximum bytes read from the end of the active log for one submission.</summary>
+        public int MaxLogExcerptBytes { get; set; }
 
         /// <summary>
         /// Optional host-owned input gate notified when the overlay changes visibility.

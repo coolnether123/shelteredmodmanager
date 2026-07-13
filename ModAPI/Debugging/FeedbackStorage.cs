@@ -59,11 +59,58 @@ namespace ModAPI.Debugging
             return path;
         }
 
+        public string ReadLogExcerpt(string logPath, int maxLines, int maxBytes)
+        {
+            if (string.IsNullOrEmpty(logPath))
+                return string.Empty;
+
+            try
+            {
+                string fullPath = Path.GetFullPath(logPath);
+                if (!File.Exists(fullPath))
+                    return "[Runtime log was not found at submission time.]";
+
+                int safeLines = Math.Max(1, maxLines);
+                int safeBytes = Math.Max(1024, maxBytes);
+                byte[] buffer;
+                bool startedMidFile;
+                using (FileStream stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    long offset = Math.Max(0L, stream.Length - safeBytes);
+                    startedMidFile = offset > 0L;
+                    stream.Seek(offset, SeekOrigin.Begin);
+                    int count = (int)Math.Min((long)safeBytes, stream.Length - offset);
+                    buffer = new byte[count];
+                    int read = 0;
+                    while (read < count)
+                    {
+                        int next = stream.Read(buffer, read, count - read);
+                        if (next <= 0)
+                            break;
+                        read += next;
+                    }
+                    if (read != count)
+                        Array.Resize(ref buffer, read);
+                }
+
+                string text = Utf8WithoutBom.GetString(buffer);
+                string[] lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+                int first = startedMidFile && lines.Length > 1 ? 1 : 0;
+                first = Math.Max(first, lines.Length - safeLines);
+                return string.Join(Environment.NewLine, lines, first, lines.Length - first).TrimEnd();
+            }
+            catch (Exception ex)
+            {
+                return "[Runtime log excerpt unavailable: " + ex.Message + "]";
+            }
+        }
+
         public void AppendEntry(
             DateTime timestamp,
             string text,
             IList<KeyValuePair<string, string>> context,
             string screenshotPath,
+            string logExcerpt,
             bool screenshotOnly)
         {
             EnsureReady();
@@ -97,6 +144,14 @@ namespace ModAPI.Debugging
             else
             {
                 entry.AppendLine(text ?? string.Empty);
+            }
+
+            if (!string.IsNullOrEmpty(logExcerpt))
+            {
+                entry.AppendLine().AppendLine("### Runtime log near submission").AppendLine();
+                string[] logLines = logExcerpt.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+                for (int i = 0; i < logLines.Length; i++)
+                    entry.Append("    ").AppendLine(logLines[i]);
             }
 
             entry.AppendLine().AppendLine("---").AppendLine();

@@ -145,6 +145,7 @@
     <Compile Include="Harmony\ShelteredDeferredPatchTriggers.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
+    <Compile Include="Harmony\OverlayInputCapturePatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
     <Compile Include="Interactions\ObjectButtonInjector.cs" />
     <Compile Include="Persistence\ModPersistence.cs" />
@@ -574,6 +575,7 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeGuards.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioLoadingTransitionGuard.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioPlaytestRestartCutsceneGuard.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioPlaytestVanillaUiService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringScrollFocusService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringSelectionMenuService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSelectionService.cs" />
@@ -702,6 +704,7 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ShelteredScenarioDefBuilder.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioRegistration.cs" />
     <Compile Include="Input\ShelteredTouchpadInputRouter.cs" />
+    <Compile Include="Input\ShelteredOverlayInputCaptureService.cs" />
     <Compile Include="Input\ShelteredInput.cs" />
     <Compile Include="Input\ShelteredInputActions.cs" />
     <Compile Include="Input\ShelteredVanillaInputActions.cs" />
