@@ -120,6 +120,25 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             _lastOwnerReason = null;
         }
 
+        public void ReleasePauseForRunningSimulation(string reason)
+        {
+            ReleasePause(reason);
+
+            // A shelter scene transition can engage authoring pause while Unity's
+            // loading flow already has Time.timeScale at zero. In that case the
+            // owned pause depth is released correctly, but PauseManager restores
+            // the captured zero scale and the new world's initialization never
+            // advances (notably ExpeditionMap in Stasis). These callers explicitly
+            // require a running simulation, so normalize only when no pause owner
+            // remains.
+            if (!PauseManager.isPaused && Time.timeScale <= 0f)
+            {
+                Time.timeScale = 1f;
+                MMLog.WriteInfo("[ScenarioAuthoringPause] Restored running simulation after controlled authoring release. Reason="
+                    + (reason ?? "unspecified") + ".");
+            }
+        }
+
         public bool ShouldSuppressPauseMenu()
         {
             return _ownsPause && !_pauseMenuExplicitlyOpened && ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation();

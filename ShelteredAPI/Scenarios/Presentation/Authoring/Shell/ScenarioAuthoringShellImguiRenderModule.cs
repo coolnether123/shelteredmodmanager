@@ -92,6 +92,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect _dragLastRect = RuntimeCompat.ZeroRect();
         private string _buildPaletteSearchText = string.Empty;
         private bool _buildPaletteSearchFocused;
+        private bool _workspaceSearchFocused;
         private readonly Dictionary<string, string> _editableFieldDrafts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _editableFieldsFocusedLastFrame = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _editableFieldFocused;
@@ -275,6 +276,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 tourTargets.ClearFrame();
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
             _editableFieldFocused = false;
+            _workspaceSearchFocused = false;
             BeginRichHoverFrame();
             BeginVisualSurfaceFrame();
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
@@ -306,23 +308,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 // workspaces (notably Home at compact resolutions) must not animate it
                 // away, or the user loses the only visible route between editor areas.
                 float chromeProgress = _animations.GetChromeProgress(ShellChromeAnimationKey, true);
-                if (_snapshot.State != null && _snapshot.State.ReloadPending)
-                {
-                    Rect playtestStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
-                    if (chromeProgress > ChromeInteractionThreshold && playtestStatusRect.width > 0f && playtestStatusRect.height > 0f)
-                    {
-                        inputCapture.RegisterInteractiveRect(playtestStatusRect);
-                    }
-
-                    inputCapture.SetTextFieldFocused(false);
-                    inputCapture.SetKeyboardCaptured(false);
-                    inputCapture.SetPopupOpen(false);
-                    inputCapture.SetTransitionActive(_animations.TransitionActive);
-                    Rect reloadContentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
-                    DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, reloadContentRect);
-                    return;
-                }
-
                 if (ScenarioAuthoringRuntimeGuards.IsPlaytesting()
                     && (_snapshot.State == null || _snapshot.State.ActiveStage != ScenarioStageKind.Test))
                 {
@@ -679,6 +664,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             bool textFieldFocused = _buildPaletteSearchFocused
+                || _workspaceSearchFocused
                 || _spritePickerSearchFocused
                 || _assetBrowserSearchFocused
                 || _editableFieldFocused
@@ -977,11 +963,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ? _survivorColorPicker.Control.MinimumSize
                 : new Vector2(430f, 300f);
             float minWidth = Math.Max(430f, minimum.x + 28f);
-            float minHeight = Math.Max(330f, minimum.y + 62f);
+            float minHeight = Math.Max(350f, minimum.y + 82f);
             float maxWidth = Math.Max(minWidth, scaledWidth - (Margin * 2f));
             float maxHeight = Math.Max(minHeight, scaledHeight - TopBarHeight - StatusHeight - (Margin * 3f));
             float width = Mathf.Clamp(preferred.x + 28f, minWidth, maxWidth);
-            float height = Mathf.Clamp(preferred.y + 62f, minHeight, maxHeight);
+            float height = Mathf.Clamp(preferred.y + 82f, minHeight, maxHeight);
             return ScenarioAuthoringShellLayout.BuildCenteredPopupRect(scaledWidth, scaledHeight, width, height, hudReserveRect);
         }
 
@@ -993,6 +979,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
             Rect inner = Inset(rect, 14f);
             GUI.Label(new Rect(inner.x, inner.y, inner.width, 24f), _survivorColorPicker.Title ?? "Color", _sectionTitleStyle);
+            GUI.Label(
+                new Rect(inner.x, inner.y + 26f, inner.width, 20f),
+                "Choose in the large color field, then refine with Hue, Alpha, HEX, RGB, or HSV.",
+                _mutedTextStyle);
 
             ColorPickerImguiStyle style = _survivorColorPicker.Control.Style;
             style.Label = _textStyle;
@@ -1001,7 +991,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             style.SmallButton = _buttonStyle;
             style.SwatchLabel = _mutedTextStyle;
 
-            Rect pickerRect = new Rect(inner.x, inner.y + 34f, inner.width, Math.Max(120f, inner.height - 34f));
+            Rect pickerRect = new Rect(inner.x, inner.y + 54f, inner.width, Math.Max(120f, inner.height - 54f));
             _survivorColorPicker.Control.Draw(pickerRect);
             if (_survivorColorPicker.Session != null && _survivorColorPicker.Session.WantsClose)
                 CloseSurvivorColorPicker();

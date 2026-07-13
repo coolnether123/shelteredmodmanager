@@ -44,7 +44,7 @@ namespace ModAPI.Inspector
                 for (int i = 0; i < renderers.Length; i++)
                 {
                     var r = renderers[i];
-                    if (r == null) continue;
+                    if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
                     if (!hasBounds)
                     {
                         combined = r.bounds;

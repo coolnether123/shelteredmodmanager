@@ -141,7 +141,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
                 FocusedEditorDocument = state != null && state.HistoryWindowOpen
                     ? BuildHistoryDocument(state)
-                    : BuildFocusedEditorDocument(state, editorSession, definition, _captureService),
+                    : BuildFocusedEditorDocument(state, editorSession, definition, context.AuthoringSession, _captureService),
                 CustomSpriteEditor = _assetAuthoringContentBuilder.BuildCustomEditorModel(state),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
                 Help = state != null && state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
@@ -463,7 +463,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     false,
                     ">>")));
 
-                int displayCount = state.SelectionStackExpanded ? stackCount : Mathf.Min(stackCount, 5);
+                // Keep the stack summarized until explicitly expanded. Rendering
+                // every overlapping target by default made the inspector noisy
+                // and caused long target names to become unreadable.
+                int displayCount = state.SelectionStackExpanded ? stackCount : 0;
                 for (int i = 0; i < displayCount; i++)
                 {
                     ScenarioAuthoringTarget candidate = state.SelectionStack[i];
@@ -487,18 +490,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     items.Add(ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded,
-                        "+" + (stackCount - displayCount).ToString(CultureInfo.InvariantCulture) + " more",
-                        "Show the remaining targets captured at the selected click point.",
+                        "Show " + stackCount.ToString(CultureInfo.InvariantCulture) + " targets",
+                        "Expand all targets captured at the selected click point.",
                         true,
                         false,
                         "+")));
                 }
-                else if (state.SelectionStackExpanded && stackCount > 5)
+                else if (state.SelectionStackExpanded)
                 {
                     items.Add(ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded,
-                        "Show fewer",
-                        "Collapse the target stack back to the first five rows.",
+                        "Hide target list",
+                        "Collapse the target stack back to its summary.",
                         true,
                         false,
                         "-")));
@@ -2170,9 +2173,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state,
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition,
+            ScenarioAuthoringSession authoringSession,
             ScenarioAuthoringCaptureService captureService)
         {
-            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind) || definition == null)
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind))
+                return null;
+
+            bool baseModeEditor = string.Equals(
+                state.FocusedEditorKind,
+                ScenarioBaseModeAuthoringActions.FocusedEditorKind,
+                StringComparison.OrdinalIgnoreCase);
+            if (definition == null && !baseModeEditor)
                 return null;
 
             if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindCaptureFamily, StringComparison.OrdinalIgnoreCase))
@@ -2197,17 +2208,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (ScenarioStoryFocusedEditorDocumentBuilder.TryBuild(state, definition, out storyDocument))
                 return storyDocument;
 
-            if (string.Equals(state.FocusedEditorKind, ScenarioBaseModeAuthoringActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+            if (baseModeEditor)
             {
                 if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), state.FocusedEditorIndex))
                     return null;
 
                 ScenarioBaseGameMode targetMode = (ScenarioBaseGameMode)state.FocusedEditorIndex;
+                ScenarioBaseGameMode currentMode = definition != null
+                    ? definition.BaseGameMode
+                    : (authoringSession != null ? authoringSession.BaseMode : targetMode);
                 string targetLabel = FormatBaseMode(targetMode);
                 title = "Switch base to " + targetLabel + "?";
-                subtitle = "Save this base mode's shelter world, then load the " + targetLabel + " world.";
+                subtitle = state.ReloadPending || state.WorldLoading
+                    ? "Finish the current load, then automatically load the " + targetLabel + " world."
+                    : "Save this base mode's shelter world, then load the " + targetLabel + " world.";
                 List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
-                facts.Add(Fact("Current Draft Base", FormatBaseMode(definition.BaseGameMode), "Base saved in the scenario XML."));
+                facts.Add(Fact("Current Draft Base", FormatBaseMode(currentMode), "Base currently loading or saved in the scenario XML."));
                 facts.Add(Fact("Target Base", targetLabel, "Loads the saved shelter world for this base mode."));
                 facts.Add(Fact("Current World", "Saved", "Returning to this base mode restores rooms, objects, walls, wiring, ladders, lights, and scene placements as you left them."));
                 facts.Add(Fact("Shared Settings", "Unchanged", "Supplies, cast, story, map, timeline, art, and victory stay shared across all base modes."));

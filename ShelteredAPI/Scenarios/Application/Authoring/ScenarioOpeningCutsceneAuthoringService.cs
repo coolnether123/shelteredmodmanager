@@ -336,9 +336,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 
             _activePreview = new PreviewContext(state, manager, cutscene, previousShellVisible);
             RestoreVanillaPanelInputForAuthoring("opening cutscene preview start");
-            ScenarioAuthoringPauseService.Instance.ReleasePause("Opening cutscene preview started.");
-            if (Time.timeScale == 0f)
-                Time.timeScale = 1f;
+            ScenarioAuthoringPauseService.Instance.ReleasePauseForRunningSimulation("Opening cutscene preview started.");
 
             manager.pauseCutsceneManager = false;
             MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview started. scene="

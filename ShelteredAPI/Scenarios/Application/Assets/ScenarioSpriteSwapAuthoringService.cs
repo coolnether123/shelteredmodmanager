@@ -592,7 +592,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             };
 
             AttachAnimationFramesIfAvailable(model.Target, session.WorkingDefinition, model);
-            ScenarioSpriteRuntimeMutationService.TryApply(model.Target, previewSprite);
+            ApplyCustomEditorPreview(state);
             Rect editorWindowRect = PositionPixelEditorWindowBesideTarget(state);
             BeginCustomEditorCameraSession(state, editorWindowRect);
             state.SpriteSwapPicker.PreviewCandidateToken = null;
@@ -1065,8 +1065,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             Color color = _customEditorSession.ActiveColor;
             _customEditorSession.Texture.SetPixel(pixelX, pixelY, color);
             _customEditorSession.Texture.Apply();
-            ApplyCustomEditorPreview(state);
             MarkCustomEditorDirty();
+            ApplyCustomEditorPreview(state);
             message = "Painted custom sprite pixel.";
             return true;
         }
@@ -1256,8 +1256,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             _customEditorSession.Texture.Apply();
-            ApplyCustomEditorPreview(state);
             MarkCustomEditorDirty();
+            ApplyCustomEditorPreview(state);
             _customEditorSession.LastInteractionX = targetX;
             _customEditorSession.LastInteractionY = targetY;
             _customEditorSession.HasSelection = true;
@@ -2587,7 +2587,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (frame != null)
             {
                 frame.Dirty = true;
-                frame.PreviewSprite = CreatePreviewSprite(frame.Texture, frame.OriginalSprite);
+                if (frame.PreviewSprite == null)
+                    frame.PreviewSprite = CreatePreviewSprite(frame.Texture, frame.OriginalSprite);
                 _customEditorSession.PreviewSprite = frame.PreviewSprite;
             }
 
@@ -3224,7 +3225,12 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             ScenarioEditorSession session;
             SpritePickerModel model;
             string message;
-            if (TryGetOpenPickerModel(state, out session, out model, out message) && model != null && model.Target != null)
+            if (!TryGetOpenPickerModel(state, out session, out model, out message) || model == null || model.Target == null)
+                return;
+
+            if (IsAnimationEditor())
+                ScenarioSpriteRuntimeMutationService.TryPreviewEditedFrame(model.Target, _customEditorSession.PreviewSprite);
+            else
                 ScenarioSpriteRuntimeMutationService.TryApply(model.Target, _customEditorSession.PreviewSprite);
         }
 
@@ -3266,8 +3272,11 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (string.IsNullOrEmpty(targetPath))
                 return;
 
+            ScenarioSpriteTargetComponentKind targetKind = _previewSession != null
+                ? _previewSession.TargetKind
+                : ScenarioSpriteTargetComponentKind.SpriteRenderer;
             ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget;
-            if (_runtimeResolver.TryResolve(targetPath, ScenarioSpriteTargetComponentKind.SpriteRenderer, out runtimeTarget) && runtimeTarget != null)
+            if (_runtimeResolver.TryResolve(targetPath, targetKind, out runtimeTarget) && runtimeTarget != null)
                 ScenarioSpriteRuntimeMutationService.StopEditedAnimation(runtimeTarget);
         }
 

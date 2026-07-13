@@ -43,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private ScenarioEditorSession _cachedShellEditorSession;
         private ScenarioAuthoringSession _cachedShellAuthoringSession;
         private ScenarioAuthoringShellViewModel _cachedShellViewModel;
+        private string _queuedReloadStatus;
 
         public static ScenarioAuthoringBackendService Instance
         {
@@ -150,6 +151,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 : statusMessage;
             lock (_sync)
             {
+                bool preserveBaseModeDialog = _state != null
+                    && string.Equals(_state.FocusedEditorKind, ScenarioBaseModeAuthoringActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase);
+                int focusedBaseMode = preserveBaseModeDialog ? _state.FocusedEditorIndex : -1;
                 _activeSession = session;
                 _state = new ScenarioAuthoringState
                 {
@@ -157,7 +161,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     ShellVisible = true,
                     SelectionModeActive = false,
                     WorldLoading = true,
-                    WorldLoadingStatus = status,
+                    WorldLoadingStatus = AppendQueuedReloadStatus(status),
                     ActiveStage = ScenarioStageKind.None,
                     ActiveBunkerStage = ScenarioStageKind.BunkerInside,
                     ActiveTool = ScenarioAuthoringTool.Objects,
@@ -167,7 +171,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     InspectorTab = ScenarioAuthoringInspectorTab.Properties,
                     ActiveDraftId = session.DraftId,
                     ActiveScenarioFilePath = session.ScenarioFilePath,
-                    StatusMessage = status,
+                    StatusMessage = AppendQueuedReloadStatus(status),
+                    FocusedEditorKind = preserveBaseModeDialog ? ScenarioBaseModeAuthoringActions.FocusedEditorKind : null,
+                    FocusedEditorIndex = focusedBaseMode,
                     Settings = _settingsService.Load(),
                     SetupState = _setupStateService != null ? _setupStateService.LoadForScenarioFile(session.ScenarioFilePath) : new ScenarioAuthoringSetupState()
                 };
@@ -196,8 +202,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 string status = string.IsNullOrEmpty(statusMessage)
                     ? "Loading game"
                     : statusMessage;
-                _state.WorldLoadingStatus = status;
-                _state.StatusMessage = status;
+                _state.WorldLoadingStatus = AppendQueuedReloadStatus(status);
+                _state.StatusMessage = _state.WorldLoadingStatus;
             }
 
             RaiseStateChanged();
@@ -222,9 +228,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _state.ShellVisible = true;
                 _state.ActiveDraftId = session.DraftId;
                 _state.ActiveScenarioFilePath = session.ScenarioFilePath;
-                _state.StatusMessage = string.IsNullOrEmpty(statusMessage)
+                _state.StatusMessage = AppendQueuedReloadStatus(string.IsNullOrEmpty(statusMessage)
                     ? ResolveInitialStatusMessage(_sessionStore.Current)
-                    : statusMessage;
+                    : statusMessage);
                 if (_state.Settings == null)
                     _state.Settings = _settingsService.Load();
                 if (_state.SetupState == null)
@@ -287,7 +293,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 _state.IsActive = true;
                 _state.ReloadPending = true;
-                _state.ReloadPendingReason = string.IsNullOrEmpty(reason) ? "Reloading authoring world." : reason;
+                _state.ReloadPendingReason = AppendQueuedReloadStatus(
+                    string.IsNullOrEmpty(reason) ? "Reloading authoring world." : reason);
                 _state.ShellVisible = true;
                 _state.SelectionModeActive = false;
                 _state.HoveredTarget = null;
@@ -306,6 +313,25 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioHoverVisualService.Instance.Clear();
             MMLog.WriteInfo("[ScenarioAuthoringBackend] Reload pending. Reason=" + (reason ?? "unspecified") + ".");
             RaiseStateChanged();
+        }
+
+        // Trusted integration seam for selecting a live world object. CurrentState
+        // is a defensive copy, so selection must be applied while the backend owns
+        // the mutable state or it will disappear before the next command executes.
+        public bool TrySelectRuntimeObject(
+            UnityEngine.GameObject gameObject,
+            out ScenarioAuthoringTarget target,
+            out string message)
+        {
+            bool selected;
+            lock (_sync)
+            {
+                selected = _selectionService.TrySelectRuntimeObject(_state, gameObject, out target, out message);
+            }
+
+            if (selected)
+                RaiseStateChanged();
+            return selected;
         }
 
         internal void Update()
@@ -419,10 +445,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 if (_state == null)
                     _state = new ScenarioAuthoringState();
-                _state.StatusMessage = message ?? string.Empty;
+                _state.StatusMessage = AppendQueuedReloadStatus(message ?? string.Empty);
             }
 
             RaiseStateChanged();
+        }
+
+        internal void SetQueuedReloadStatus(string status)
+        {
+            lock (_sync)
+            {
+                _queuedReloadStatus = status ?? string.Empty;
+                if (_state == null)
+                    _state = new ScenarioAuthoringState();
+                _state.StatusMessage = _queuedReloadStatus;
+                if (_state.ReloadPending)
+                    _state.ReloadPendingReason = _queuedReloadStatus;
+                if (_state.WorldLoading)
+                    _state.WorldLoadingStatus = _queuedReloadStatus;
+            }
+
+            RaiseStateChanged();
+        }
+
+        internal void ClearQueuedReloadStatus()
+        {
+            lock (_sync)
+                _queuedReloadStatus = null;
         }
 
         internal void BeginVanillaInteractionSession(string kind, string assistNote)
@@ -489,7 +538,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (snapshot == null || !snapshot.IsActive)
                 return ScenarioAuthoringActionExecutionResult.Unavailable(actionId, "Scenario authoring is not active.");
 
-            if (snapshot.ReloadPending)
+            if (snapshot.ReloadPending && !IsBaseModeTransitionAction(actionId))
             {
                 string reason = string.IsNullOrEmpty(snapshot.ReloadPendingReason)
                     ? "Scenario world is reloading; controls are disabled until the editor reconnects."
@@ -518,6 +567,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringState transitionedState = CurrentState;
             if (transitionedState != null && transitionedState.ReloadPending)
             {
+                if (snapshot.ReloadPending && IsBaseModeTransitionAction(actionId))
+                {
+                    snapshot.ReloadPending = true;
+                    snapshot.ReloadPendingReason = transitionedState.ReloadPendingReason;
+                    snapshot.WorldLoading = transitionedState.WorldLoading;
+                    snapshot.WorldLoadingStatus = transitionedState.WorldLoadingStatus;
+                    snapshot.StatusMessage = transitionedState.StatusMessage;
+                    lock (_sync)
+                        _state = snapshot;
+                }
                 if (result == null)
                     result = ScenarioAuthoringActionExecutionResult.Success(actionId, changed, transitionedState.StatusMessage);
                 result.StatusMessage = transitionedState.StatusMessage ?? string.Empty;
@@ -584,8 +643,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 || actionId.StartsWith("scene_sprite.", StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringOpen, StringComparison.Ordinal)
                 || actionId.StartsWith("scenario.map.", StringComparison.Ordinal)
-                || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchReloadPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchOnlyPrefix, StringComparison.Ordinal);
+        }
+
+        private static bool IsBaseModeTransitionAction(string actionId)
+        {
+            if (string.IsNullOrEmpty(actionId))
+                return false;
+
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionScenarioModePrevious, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionScenarioModeNext, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioBaseModeAuthoringActions.ActionSwitchCancel, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchReloadPrefix, StringComparison.Ordinal);
+        }
+
+        private string AppendQueuedReloadStatus(string status)
+        {
+            if (string.IsNullOrEmpty(_queuedReloadStatus))
+                return status ?? string.Empty;
+            if (string.IsNullOrEmpty(status)
+                || string.Equals(status, _queuedReloadStatus, StringComparison.Ordinal))
+            {
+                return _queuedReloadStatus;
+            }
+
+            if (status.EndsWith(_queuedReloadStatus, StringComparison.Ordinal))
+                return status;
+
+            return status + " " + _queuedReloadStatus;
         }
 
         private static bool IsSafetySnapshotAction(string actionId)

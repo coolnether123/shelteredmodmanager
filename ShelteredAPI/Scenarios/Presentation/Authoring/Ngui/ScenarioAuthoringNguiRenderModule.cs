@@ -177,7 +177,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(_scaledWidth, hudReserveRect);
             Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(_scaledWidth, _scaledHeight);
             Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(_scaledWidth, topRect, statusRect);
-            if (isPlaytesting || reloadPending)
+            if (isPlaytesting)
             {
                 DrawPlaytestStrip(statusRect, snapshot.State);
                 return;

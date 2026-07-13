@@ -674,4 +674,33 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             return allowed;
         }
     }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioDynamicFamilyUiReadiness",
+        TargetBehavior = "Dynamically spawned scenario survivors wait for their vanilla UI_Character binding before warning UI updates run.",
+        FailureMode = "A newly spawned survivor can throw UI_CharacterInfo.Update NullReferenceException during its first frame.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the dynamic family UI readiness patch host.",
+        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
+        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
+        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
+        ManagerToggleDefault = true,
+        ManagerToggleRequiresRestart = true,
+        ManagerToggleSortOrder = 100,
+        StartupTiming = PatchStartupTiming.BootCritical)]
+    internal static class ScenarioDynamicFamilyUiReadinessPatches
+    {
+        [HarmonyPatch(typeof(UI_CharacterInfo), "Update")]
+        [HarmonyPrefix]
+        private static bool UpdatePrefix(UI_CharacterInfo __instance)
+        {
+            if (__instance == null || __instance.transform == null)
+                return true;
+
+            Transform parent = __instance.transform.parent;
+            UI_Character character = parent != null ? parent.GetComponent<UI_Character>() : null;
+            if (character == null && parent != null && parent.parent != null)
+                character = parent.parent.GetComponent<UI_Character>();
+
+            return character != null && character.familyMember != null;
+        }
+    }
 }

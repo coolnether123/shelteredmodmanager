@@ -1,12 +1,17 @@
 using System.Collections.Generic;
+using ModAPI.Core;
 using UnityEngine;
 
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAuthoringInputCaptureService
     {
+        private const string OverlayCaptureOwnerId = "ShelteredAPI.ScenarioAuthoring";
         private readonly List<Rect> _interactiveRects = new List<Rect>();
         private readonly ScenarioAuthoringScrollFocusService _scrollFocusService;
+        private IOverlayInputCaptureService _overlayInputCaptureService;
         private float _coordinateScale = 1f;
         private bool _textFieldFocusedThisGuiFrame;
         private bool _textFieldFocusedLastGuiFrame;
@@ -143,6 +148,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             TransitionActive = false;
             KeyboardShortcutHandled = false;
             _scrollFocusService.BeginFrame();
+            UpdateOverlayInputCapture(false, false);
         }
 
         private static Rect Expand(Rect rect, float padding)
@@ -202,6 +208,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 PointerOverAuthoringUi = true;
 
             _textFieldFocusedLastGuiFrame = _textFieldFocusedThisGuiFrame;
+            ScenarioAuthoringState state = ScenarioAuthoringBackendService.Instance.CurrentState;
+            bool editorKeyboardCaptured = KeyboardCaptured
+                || TextFieldFocused
+                || (state != null
+                    && state.IsActive
+                    && state.ShellVisible
+                    && !ScenarioAuthoringRuntimeGuards.IsPlaytesting());
+            UpdateOverlayInputCapture(ShouldSuppressWorldInputNow(), editorKeyboardCaptured);
+        }
+
+        private void UpdateOverlayInputCapture(bool captureMouse, bool captureKeyboard)
+        {
+            IOverlayInputCaptureService service = ResolveOverlayInputCaptureService();
+            if (service == null)
+                return;
+
+            if (captureMouse || captureKeyboard)
+                service.ReportCapture(OverlayCaptureOwnerId, captureMouse, captureKeyboard);
+            else
+                service.ReleaseCapture(OverlayCaptureOwnerId);
+        }
+
+        private IOverlayInputCaptureService ResolveOverlayInputCaptureService()
+        {
+            if (_overlayInputCaptureService != null)
+                return _overlayInputCaptureService;
+
+            IOverlayInputCaptureService service;
+            if (ModAPIRegistry.TryGetAPI<IOverlayInputCaptureService>(OverlayInputCaptureApi.Name, out service))
+                _overlayInputCaptureService = service;
+            return _overlayInputCaptureService;
         }
     }
 }
