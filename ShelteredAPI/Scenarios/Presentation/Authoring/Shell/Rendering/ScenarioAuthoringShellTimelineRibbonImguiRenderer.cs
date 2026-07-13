@@ -23,6 +23,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private Vector2 _timelineRibbonDragStartMouse;
         private float _timelineRibbonDragStartDay;
         private GUIStyle _timelineRibbonCaptionStyle;
+        private GUIStyle _timelineRibbonTitleStyle;
         private GUIStyle _timelineRibbonDayStyle;
         private GUIStyle _timelineRibbonOverflowStyle;
         private GUIStyle _timelineRibbonEmptyStyle;
@@ -43,9 +44,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             GUI.color = oldColor;
             ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
 
-            Rect labelRect = new Rect(rect.x + 10f, rect.y + 8f, TimelineRibbonLabelWidth - 18f, rect.height - 16f);
-            GUI.Label(new Rect(labelRect.x, labelRect.y, labelRect.width, 21f), window != null ? window.Title ?? string.Empty : string.Empty, _smallTitleStyle);
             EnsureTimelineRibbonStyles();
+            Rect labelRect = new Rect(rect.x + 10f, rect.y + 8f, TimelineRibbonLabelWidth - 18f, rect.height - 16f);
+            string workspaceTitle = window != null ? window.Title ?? string.Empty : string.Empty;
+            GUI.Label(
+                new Rect(labelRect.x, labelRect.y, labelRect.width, 21f),
+                ShortenToFit(workspaceTitle, labelRect.width, _timelineRibbonTitleStyle),
+                _timelineRibbonTitleStyle);
             GUI.Label(new Rect(labelRect.x, labelRect.y + 23f, labelRect.width, 16f), "DAY TIMELINE", _timelineRibbonCaptionStyle);
 
             Rect trackRect = new Rect(rect.x + TimelineRibbonLabelWidth, rect.y + 4f, Math.Max(80f, rect.width - TimelineRibbonLabelWidth - 8f), rect.height - 8f);
@@ -68,9 +73,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private void EnsureTimelineRibbonStyles()
         {
-            if (_timelineRibbonCaptionStyle != null)
+            if (_timelineRibbonCaptionStyle != null && _timelineRibbonTitleStyle != null)
                 return;
 
+            _timelineRibbonTitleStyle = new GUIStyle(_smallTitleStyle);
+            _timelineRibbonTitleStyle.wordWrap = false;
+            _timelineRibbonTitleStyle.clipping = TextClipping.Clip;
             _timelineRibbonCaptionStyle = new GUIStyle(_mutedTextStyle);
             _timelineRibbonCaptionStyle.fontSize = Math.Min(_timelineRibbonCaptionStyle.fontSize, 10);
             _timelineRibbonDayStyle = new GUIStyle(_mutedTextStyle);

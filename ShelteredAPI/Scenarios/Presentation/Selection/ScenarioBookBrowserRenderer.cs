@@ -26,7 +26,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private const float ReferenceContentHeight = 490f;
         private const int LibraryToolRowHeight = 52;
         private const int LibraryScenarioRowHeight = 49;
-        private const float SearchBarX = -310f;
+        private const float SearchBarX = -355f;
+        private const float SortButtonX = -147f;
         private const float SearchBarY = 232f;
         private const float SearchReservedHeight = 39f;
         private const float StatStartY = 38f;
@@ -43,7 +44,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private readonly Action _back;
         private readonly Action<int> _changePage;
-        private readonly Action _cycleLibrarySort;
+        private readonly Action<ScenarioLibrarySortMode> _selectLibrarySort;
         private readonly Action<ScenarioBookRowModel> _toggleLibraryPin;
         private readonly Dictionary<string, PreparedPage> _preparedPages = new Dictionary<string, PreparedPage>();
         private FieldManualWindowChrome _chrome;
@@ -56,6 +57,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private GameObject _searchBarRoot;
         private GameObject _sortRoot;
         private UILabel _sortLabel;
+        private GameObject _sortMenuRoot;
+        private ScenarioLibrarySortMode _librarySortMode;
+        private bool _evaluateSortMenuClose;
         private UIInput _draftIdInput;
         private UIInput _draftNameInput;
         private UIInput _draftDescriptionInput;
@@ -64,12 +68,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public ScenarioBookBrowserRenderer(
             Action back,
             Action<int> changePage,
-            Action cycleLibrarySort,
+            Action<ScenarioLibrarySortMode> selectLibrarySort,
             Action<ScenarioBookRowModel> toggleLibraryPin)
         {
             _back = back;
             _changePage = changePage;
-            _cycleLibrarySort = cycleLibrarySort;
+            _selectLibrarySort = selectLibrarySort;
             _toggleLibraryPin = toggleLibraryPin;
         }
 
@@ -101,6 +105,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             if (_searchBar != null)
                 _searchBar.HandleInput("Titles, details, and saves...", onFilterChanged);
+
+            HandleSortMenuOutsideClick();
         }
 
         public void Render(
@@ -311,15 +317,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _chrome.Regions.ContentRoot,
                 "ScenarioLibrarySort",
                 "Pinned first",
-                new Vector3(2f, SearchBarY, 0f),
+                // Keep both controls on the left page. At the reference scale,
+                // the sort button's right edge aligns with the library cards.
+                new Vector3(SortButtonX, SearchBarY, 0f),
                 136,
                 35,
                 11,
-                _cycleLibrarySort);
+                ToggleSortMenu);
             _sortLabel = FindLabel(_sortRoot);
             ScenarioBookLibraryHarnessPayload sortPayload = _sortRoot.AddComponent<ScenarioBookLibraryHarnessPayload>();
             sortPayload.SortMode = ScenarioLibrarySortMode.PinnedFirst.ToString();
-            SpineWidgetRuntime.SetTooltip(_sortRoot, "Change scenario sort order");
             _sortRoot.SetActive(false);
         }
 
@@ -334,13 +341,91 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_sortRoot == null)
                 return;
 
+            CloseSortMenu();
+            _librarySortMode = mode;
             _sortRoot.SetActive(visible);
             if (_sortLabel != null)
-                _sortLabel.text = ScenarioLibraryOrganizer.Label(mode);
+                _sortLabel.text = ScenarioLibraryOrganizer.Label(mode) + "  v";
             ScenarioBookLibraryHarnessPayload payload = _sortRoot.GetComponent<ScenarioBookLibraryHarnessPayload>();
             if (payload != null)
                 payload.SortMode = mode.ToString();
             _sortRoot.name = "ScenarioLibrarySort_" + mode.ToString();
+        }
+
+        private void ToggleSortMenu()
+        {
+            if (_sortMenuRoot != null)
+            {
+                CloseSortMenu();
+                return;
+            }
+
+            _sortMenuRoot = _ui.CreateChild(
+                _chrome.Regions.ContentRoot,
+                "ScenarioLibrarySortDropdown",
+                new Vector3(SortButtonX, SearchBarY - 39f, 0f));
+
+            ScenarioLibrarySortMode[] modes = (ScenarioLibrarySortMode[])Enum.GetValues(typeof(ScenarioLibrarySortMode));
+            for (int i = 0; i < modes.Length; i++)
+            {
+                ScenarioLibrarySortMode option = modes[i];
+                bool selected = option == _librarySortMode;
+                GameObject optionRoot = _chrome.Buttons.Build(
+                    _sortMenuRoot,
+                    "ScenarioLibrarySortOption_" + option,
+                    (selected ? "> " : "  ") + ScenarioLibraryOrganizer.Label(option),
+                    new Vector3(0f, -(i * 34f), 0f),
+                    184,
+                    33,
+                    11,
+                    delegate { SelectSortMode(option); });
+                ScenarioBookLibraryHarnessPayload payload = optionRoot.AddComponent<ScenarioBookLibraryHarnessPayload>();
+                payload.SortMode = option.ToString();
+            }
+        }
+
+        private void SelectSortMode(ScenarioLibrarySortMode mode)
+        {
+            CloseSortMenu();
+            if (_selectLibrarySort != null)
+                _selectLibrarySort(mode);
+        }
+
+        private void HandleSortMenuOutsideClick()
+        {
+            if (_evaluateSortMenuClose)
+            {
+                _evaluateSortMenuClose = false;
+                if (_sortMenuRoot != null
+                    && !IsHoveredWithin(_sortMenuRoot)
+                    && !IsHoveredWithin(_sortRoot))
+                {
+                    CloseSortMenu();
+                }
+            }
+
+            if (_sortMenuRoot != null && UnityEngine.Input.GetMouseButtonDown(0))
+                _evaluateSortMenuClose = true;
+        }
+
+        private void CloseSortMenu()
+        {
+            _evaluateSortMenuClose = false;
+            if (_sortMenuRoot == null)
+                return;
+
+            UnityEngine.Object.Destroy(_sortMenuRoot);
+            _sortMenuRoot = null;
+        }
+
+        private static bool IsHoveredWithin(GameObject root)
+        {
+            if (root == null || UICamera.hoveredObject == null)
+                return false;
+
+            GameObject hovered = UICamera.hoveredObject;
+            return hovered == root
+                || (hovered.transform != null && hovered.transform.IsChildOf(root.transform));
         }
 
         private void BuildFooter(VanillaPageTurnAssets assets)
@@ -517,15 +602,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     scenarios.Add(row);
             }
 
-            BuildSectionLabel(spread, "LibraryToolsLabel", "TOOLS", -520f, 217f, LeftPageWidth - 18, LibraryFont(13));
-            for (int i = 0; i < tools.Count; i++)
-                BuildLibraryToolRow(spread, tools[i], i, 181f - (i * LibraryMetric(54)), select);
+            bool searching = !string.IsNullOrEmpty(SearchFilter);
+            if (!searching)
+            {
+                BuildSectionLabel(spread, "LibraryToolsLabel", "TOOLS", -520f, 217f, LeftPageWidth - 18, LibraryFont(13));
+                for (int i = 0; i < tools.Count; i++)
+                    BuildLibraryToolRow(spread, tools[i], i, 181f - (i * LibraryMetric(54)), select);
+            }
 
-            BuildSectionLabel(spread, "LibraryScenariosLabel", "SCENARIOS", -520f, 90f, LeftPageWidth - 18, LibraryFont(13));
+            float scenarioLabelY = searching ? 217f : 90f;
+            float scenarioStartY = searching ? 172f : 45f;
+            BuildSectionLabel(spread, "LibraryScenariosLabel", "SCENARIOS", -520f, scenarioLabelY, LeftPageWidth - 18, LibraryFont(13));
             int start = Math.Max(0, pageIndex) * ScenarioBookBrowserPanel.LibraryRowsPerPage;
             int end = Math.Min(scenarios.Count, start + ScenarioBookBrowserPanel.LibraryRowsPerPage);
             for (int i = start; i < end; i++)
-                BuildLibraryScenarioRow(spread, scenarios[i], i, 45f - ((i - start) * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
+                BuildLibraryScenarioRow(spread, scenarios[i], i, scenarioStartY - ((i - start) * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
 
             if (scenarios.Count == 0)
             {
@@ -536,7 +627,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     Detail = string.IsNullOrEmpty(SearchFilter)
                         ? "Use Install Downloads to add one to this library."
                         : "Try a title, author, or base-mode search."
-                }, 0, 45f, selectedScenario, select);
+                }, 0, scenarioStartY, selectedScenario, select);
             }
 
             if (selectedScenario == null)
@@ -634,8 +725,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     delegate { if (_toggleLibraryPin != null) _toggleLibraryPin(row); });
                 UILabel pinLabel = FindLabel(pin);
                 if (pinLabel != null)
-                    pinLabel.color = row.IsPinned ? _chrome.Palette.StampRed : _chrome.Palette.InkFaded;
-                SpineWidgetRuntime.SetTooltip(pin, row.IsPinned ? "Unpin from top" : "Pin to top");
+                {
+                    pinLabel.text = row.IsPinned ? "\u2605" : "\u2606";
+                    pinLabel.color = row.IsPinned
+                        ? new Color(0.83f, 0.62f, 0.16f, 1f)
+                        : _chrome.Palette.InkFaded;
+                }
             }
             if (select != null && row != null && row.Kind != ScenarioBookRowKind.Empty)
                 _ui.AddClickCollider(root, LeftPageWidth, LibraryMetric(LibraryScenarioRowHeight) - LibraryMetric(3), delegate { select(row); });

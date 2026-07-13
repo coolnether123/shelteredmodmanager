@@ -129,8 +129,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             const float width = 310f;
             const float height = 24f;
-            float bottom = placementHudRect.height > 0f ? placementHudRect.y - 7f : scaledHeight - StatusHeight - 7f;
-            Rect rect = new Rect((scaledWidth - width) * 0.5f, bottom - height, width, height);
+            float y = scaledHeight - StatusHeight - height - 4f;
+            Rect rect = new Rect((scaledWidth - width) * 0.5f, y, width, height);
             Color previous = GUI.color;
             GUI.color = new Color(previous.r, previous.g, previous.b, previous.a * 0.72f);
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);

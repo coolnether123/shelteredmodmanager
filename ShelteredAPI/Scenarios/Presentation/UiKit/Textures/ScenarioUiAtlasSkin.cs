@@ -14,7 +14,6 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
         public const float ShadowOffset = 2f;
 
         private static readonly Dictionary<string, AtlasSprite> Cache = new Dictionary<string, AtlasSprite>(StringComparer.OrdinalIgnoreCase);
-        private static bool _scanned;
 
         public static bool DrawPanel(Rect rect)
         {
@@ -117,6 +116,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
         {
             StringBuilder builder = new StringBuilder(32768);
             UIAtlas[] atlases = Resources.FindObjectsOfTypeAll<UIAtlas>();
+            CacheRoles(atlases);
             builder.Append("{\"atlases\":[");
             for (int i = 0; atlases != null && i < atlases.Length; i++)
             {
@@ -180,18 +180,16 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 
         private static AtlasSprite ResolveRole(string role)
         {
-            EnsureScanned();
+            // Normal rendering deliberately never discovers global Unity resources here.
+            // A cache miss is expected: every caller has a deterministic palette/text-glyph
+            // fallback, so OnGUI remains safe even when no diagnostic atlas dump was run.
             AtlasSprite sprite;
             return Cache.TryGetValue(role ?? string.Empty, out sprite) ? sprite : null;
         }
 
-        private static void EnsureScanned()
+        private static void CacheRoles(UIAtlas[] atlases)
         {
-            if (_scanned)
-                return;
-
-            _scanned = true;
-            UIAtlas[] atlases = Resources.FindObjectsOfTypeAll<UIAtlas>();
+            Cache.Clear();
             RegisterRole(atlases, "panel", "UI_Panel", "BluePaper", "UI_ClipboardNew_1", "Paper");
             RegisterRole(atlases, "header", "PaperStripLong", "ClipboardStatusBarBackground");
             RegisterRole(atlases, "button", "UI_Button", "PCButton_Normal", "OM_Stasis_Button");
@@ -327,7 +325,6 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 
         private static void AppendRoleChoices(StringBuilder builder)
         {
-            EnsureScanned();
             builder.Append('{');
             int index = 0;
             foreach (KeyValuePair<string, AtlasSprite> pair in Cache)

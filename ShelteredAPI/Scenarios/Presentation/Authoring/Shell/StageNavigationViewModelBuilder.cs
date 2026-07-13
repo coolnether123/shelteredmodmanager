@@ -53,7 +53,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < children.Length; i++)
             {
                 ScenarioStageDefinition child = children[i];
-                if (child != null)
+                // Surface currently has no distinct selectable authoring target;
+                // exposing it as a workspace implies functionality it cannot provide.
+                if (child != null && child.Kind != ScenarioStageKind.BunkerSurface)
                     AddTab(actions, child, activeStageKind, true);
             }
 
@@ -309,7 +311,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioStageKind.Test:
                     return "Test Console";
                 case ScenarioStageKind.Publish:
-                    return "Package / Export";
+                    return "Publish";
                 default:
                     return child ? "Layer" : "Workshop";
             }

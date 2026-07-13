@@ -13,13 +13,16 @@ using ShelteredAPI.Scenarios.Composition;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserPanel : MonoBehaviour
     {
-        internal const int RowsPerPage = 5;
+        // Four full-height rows fit without exposing a clipped fifth row that
+        // looks scrollable even though this surface uses explicit paging.
+        internal const int RowsPerPage = 4;
         internal const int LibraryRowsPerPage = 6;
         internal const int SaveRowsPerPage = 4;
         private const int OverlayDepth = 50200;
         private const string OverlayName = "ShelteredAPI_ScenarioBookBrowser";
 
         private static GameObject _instance;
+        private static GameObject _preparedInstance;
 
         internal static bool IsShowing
         {
@@ -97,12 +100,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _instance = null;
             }
 
-            GameObject root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
-            _instance = root;
+            GameObject root = _preparedInstance;
+            ScenarioBookBrowserPanel browser = root != null ? root.GetComponent<ScenarioBookBrowserPanel>() : null;
+            _preparedInstance = null;
+            if (root == null || browser == null)
+            {
+                root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
+                browser = root.AddComponent<ScenarioBookBrowserPanel>();
+                browser.PrepareVisual(root);
+            }
 
-            ScenarioBookBrowserPanel browser = root.AddComponent<ScenarioBookBrowserPanel>();
+            _instance = root;
             browser._adapter = new ScenarioBrowserPanelAdapter(panel);
+            root.SetActive(true);
             browser.Initialise(root);
+        }
+
+        internal static bool TryPrepareVisual()
+        {
+            if (_instance != null || _preparedInstance != null || !ScenarioBookPrewarmService.IsMenuScene())
+                return false;
+
+            GameObject root = null;
+            try
+            {
+                root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_PreparedRoot");
+                ScenarioBookBrowserPanel browser = root.AddComponent<ScenarioBookBrowserPanel>();
+                browser.PrepareVisual(root);
+                root.SetActive(false);
+                _preparedInstance = root;
+                MMLog.WriteInfo("[ScenarioBookPrewarm] Prepared hidden scenario-book chrome for instant open.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (root != null)
+                    Destroy(root);
+                MMLog.WriteWarning("[ScenarioBookPrewarm] Could not prepare hidden scenario-book chrome: " + ex.Message);
+                return false;
+            }
         }
 
         /// <summary>
@@ -150,6 +186,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _dataSource = new ScenarioBookBrowserDataSource(Catalog, SaveLibrary, _importService);
             _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService, _importService);
 
+            PrepareVisual(root);
+
+            StartDataRefresh("Loading scenarios...", false);
+            StartCoroutine(SuppressUnderlyingAfterFirstRender());
+        }
+
+        private void PrepareVisual(GameObject root)
+        {
+            if (_renderer != null)
+                return;
+
             VanillaPageTurnAssets pageTurnAssets = new VanillaPageTurnAssets();
             _renderer = new ScenarioBookBrowserRenderer(
                 BackOrClose,
@@ -159,9 +206,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _renderer.Build(root, OverlayDepth, pageTurnAssets);
             _pageTurn = FieldManualBookPageTurn.Attach(root, _renderer.Chrome, pageTurnAssets);
             _pageFlipRoot = _renderer.Chrome.Ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
-
-            StartDataRefresh("Loading scenarios...", false);
-            StartCoroutine(SuppressUnderlyingAfterFirstRender());
         }
 
         private IEnumerator SuppressUnderlyingAfterFirstRender()
@@ -700,12 +744,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             RenderCurrentView(false);
         }
 
-        private void HandleLibrarySortChanged()
+        private void HandleLibrarySortChanged(ScenarioLibrarySortMode mode)
         {
             if (_view != ScenarioBookBrowserViewKind.Types || _dataSource == null)
                 return;
 
-            _dataSource.CycleLibrarySortMode();
+            _dataSource.SetLibrarySortMode(mode);
             _pageIndex = 0;
             ClearPreparedPages();
             RenderCurrentView(false);
@@ -1108,6 +1152,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             if (_instance == gameObject)
                 _instance = null;
+            if (_preparedInstance == gameObject)
+                _preparedInstance = null;
         }
 
         private void RestoreUnderlyingPanel()

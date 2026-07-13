@@ -27,6 +27,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         private UILabel _displayLabel;
         private string _placeholder;
         private bool _hasFocus;
+        private bool _evaluatePointerFocus;
 
         public BookSearchBarWidget(IThemePalette palette, ITextureLibrary textures, UIPrimitiveFactory ui)
             : this(palette, textures, ui, 64)
@@ -84,6 +85,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
                 new Vector3(-150f, 0f, 0f), 16, Color.white,
                 300, 28, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             _displayLabel.overflowMethod = UILabel.Overflow.ClampContent;
+            _displayLabel.maxLineCount = 1;
 
             UIEventListener.Get(_inputRoot).onClick = delegate
             {
@@ -116,11 +118,18 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
             string activePlaceholder = string.IsNullOrEmpty(_placeholder) ? placeholder : _placeholder;
 
-            if (UnityEngine.Input.GetMouseButtonDown(0))
+            // NGUI updates hoveredObject after regular MonoBehaviour.Update. Defer
+            // the focus decision one frame so an outside click is evaluated against
+            // the object that was actually clicked instead of the previous hover.
+            if (_evaluatePointerFocus)
             {
                 _hasFocus = IsHoveredWithin(_inputRoot);
+                _evaluatePointerFocus = false;
                 RefreshDisplay(activePlaceholder);
             }
+
+            if (UnityEngine.Input.GetMouseButtonDown(0))
+                _evaluatePointerFocus = true;
 
             if (!_hasFocus)
                 return;
@@ -190,8 +199,35 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
                 return;
             }
 
-            _displayLabel.text = _hasFocus ? (Filter + "|") : Filter;
+            string displayText = _hasFocus ? (Filter + "|") : Filter;
+            _displayLabel.text = FitTrailingText(displayText);
             _displayLabel.color = InputTextColor;
+        }
+
+        private string FitTrailingText(string value)
+        {
+            if (_displayLabel == null || string.IsNullOrEmpty(value))
+                return value ?? string.Empty;
+
+            string candidate = value;
+            string wrapped;
+            if (_displayLabel.Wrap(candidate, out wrapped, _displayLabel.height)
+                && string.Equals(candidate, wrapped, StringComparison.Ordinal))
+            {
+                return candidate;
+            }
+
+            for (int start = 1; start < value.Length; start++)
+            {
+                candidate = "…" + value.Substring(start);
+                if (_displayLabel.Wrap(candidate, out wrapped, _displayLabel.height)
+                    && string.Equals(candidate, wrapped, StringComparison.Ordinal))
+                {
+                    return candidate;
+                }
+            }
+
+            return value.Substring(value.Length - 1, 1);
         }
 
         private static bool IsHoveredWithin(GameObject root)

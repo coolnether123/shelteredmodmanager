@@ -23,7 +23,7 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private const float RichHoverDwellSeconds = 0.60f;
+        private const float RichHoverDwellSeconds = 0.90f;
         private const float RichHoverGraceSeconds = 0.30f;
         private const float RichHoverMouseMovePx = 5f;
         private const float RichHoverPopupMaxWidth = 380f;
@@ -338,7 +338,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float height = Mathf.Clamp(
                 CalculateRichHoverPopupHeight(model, width),
                 72f,
-                Math.Min(280f, bounds.height));
+                Math.Min(420f, bounds.height));
             Rect avoidRect = sourceRect.width > 0f && sourceRect.height > 0f
                 ? sourceRect
                 : BuildTooltipAvoidanceRect(Event.current != null ? Event.current.mousePosition : Vector2.zero, bounds, scaledWidth, false);

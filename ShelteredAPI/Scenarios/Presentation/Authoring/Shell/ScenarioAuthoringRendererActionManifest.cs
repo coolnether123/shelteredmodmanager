@@ -384,7 +384,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private static void AddCandidateControls(List<ScenarioAuthoringInspectorAction> actions)
         {
-            string[] controls = { "build_palette_search", "sprite_picker_search" };
+            string[] controls = { "build_palette_search", "sprite_picker_search", "workspace_section_search.publish" };
             string[] filters = { "all", "active", "vanilla", "scenario" };
             for (int i = 0; i < controls.Length; i++)
             {
