@@ -53,6 +53,7 @@ namespace ShelteredAPI.Harmony
                 }
 
                 MMLog.WriteDebug("Postfix triggered.");
+                UIFontCache.SeedFromGameObject(__instance.gameObject, "main menu");
                 ModManagerPanelScaffolding.WarmScenarioBookVisualCache();
                 ShelteredAPI.Scenarios.Presentation.Selection.ScenarioBookPrewarmService.TryStart(__instance);
 

@@ -21,7 +21,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         private const float ButtonRecoverDuration = 0.12f;
         private const float PopupDuration = 0.15f;
         private const float TooltipDuration = 0.12f;
-        private const float TooltipShowDelaySeconds = 0.40f;
+        private const float TooltipShowDelaySeconds = 0.80f;
         private const float ModalDimDuration = 0.15f;
         private const float ModalPanelDuration = 0.18f;
         private const float ToastInDuration = 0.20f;

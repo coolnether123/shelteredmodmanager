@@ -647,6 +647,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             GUILayout.BeginArea(toolsRect);
             RegisterInteractiveRegion(toolsRect);
+            Vector2 toolsScroll = GetWindowScrollPosition("pixel_editor_tools");
+            toolsScroll.x = 0f;
+            toolsScroll = GUILayout.BeginScrollView(
+                toolsScroll,
+                false,
+                true,
+                GUILayout.Width(Math.Max(180f, toolsRect.width)),
+                GUILayout.Height(Math.Max(100f, toolsRect.height)));
             GUILayout.BeginVertical(_uiContext.Styles.Section, GUILayout.Width(Math.Max(180f, toolsRect.width)));
             DrawPixelEditorPrimaryControls(editor, controlsContentWidth);
             GUILayout.Space(4f);
@@ -664,6 +672,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Space(4f);
             DrawPixelEditorColorGroup(editor, controlsContentWidth);
             GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+            toolsScroll.x = 0f;
+            SetWindowScrollPosition("pixel_editor_tools", toolsScroll);
             GUILayout.EndArea();
 
             DrawPixelCanvasViewport(canvasPane, editor);
@@ -758,9 +769,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             GUILayout.EndHorizontal();
             GUILayout.Space(3f);
+            DrawColorSlider("R", editor, contentWidth, 0);
+            DrawColorSlider("G", editor, contentWidth, 1);
+            DrawColorSlider("B", editor, contentWidth, 2);
+            DrawColorSlider("A", editor, contentWidth, 3);
+            GUILayout.Space(3f);
             GUILayout.BeginHorizontal();
             DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPick, "Picker", editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick, 70f, "Use the picker tool to sample a color from the sprite.");
-            GUILayout.Label("Sample on canvas", _mutedTextStyle, GUILayout.Width(Math.Max(88f, contentWidth - 78f)));
+            GUIStyle pickerHelpStyle = new GUIStyle(_mutedTextStyle) { wordWrap = false };
+            GUILayout.Label("Click canvas to sample", pickerHelpStyle, GUILayout.Width(Math.Max(104f, contentWidth - 78f)));
             GUILayout.EndHorizontal();
         }
 
@@ -1123,8 +1140,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             float currentValue = Mathf.Clamp(editor != null ? editor.AnimationSpeed : 1f, 0.25f, 2f);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Speed", _textStyle, GUILayout.Width(44f));
-            float sliderWidth = Math.Max(72f, contentWidth - 94f);
+            GUIStyle speedStyle = new GUIStyle(_textStyle) { wordWrap = false };
+            GUILayout.Label("Speed", speedStyle, GUILayout.Width(58f));
+            float sliderWidth = Math.Max(72f, contentWidth - 108f);
             float nextValue = GUILayout.HorizontalSlider(currentValue, 0.25f, 2f, GUILayout.Width(sliderWidth));
             GUILayout.Label(currentValue.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "x", _mutedTextStyle, GUILayout.Width(42f));
             GUILayout.EndHorizontal();
@@ -1618,8 +1636,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ref string searchText,
             ref bool searchFocused)
         {
-            searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
+            DrawCandidateSearchControl(rect, controlName, ref searchText, ref searchFocused, "Filter choices");
+        }
+
+        private void DrawCandidateSearchControl(
+            Rect rect,
+            string controlName,
+            ref string searchText,
+            ref bool searchFocused,
+            string placeholder)
+        {
             GUILayout.BeginArea(rect);
+            DrawCandidateSearchControlContents(controlName, ref searchText, ref searchFocused, placeholder);
+            GUILayout.EndArea();
+        }
+
+        private void DrawCandidateSearchControlContents(
+            string controlName,
+            ref string searchText,
+            ref bool searchFocused,
+            string placeholder)
+        {
+            searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(26f));
             Rect searchRect = GUILayoutUtility.GetRect(0f, 26f, GUILayout.ExpandWidth(true), GUILayout.Height(26f));
@@ -1640,7 +1678,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, controlName + "\n" + nextSearchText));
                 searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
             }
-            DrawSearchPlaceholder(searchRect, searchText, "Filter choices");
+            DrawSearchPlaceholder(searchRect, searchText, placeholder);
             if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
                 DrawFieldFocusBorder(searchRect);
 
@@ -1651,7 +1689,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
             }
             GUILayout.EndHorizontal();
-            GUILayout.EndArea();
             searchFocused = searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
         }
 
@@ -1818,9 +1855,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             float fullWidth = GetSectionContentWidth();
+            string searchText = string.Empty;
+            bool contextualSearch = string.Equals(window.Id, ScenarioAuthoringWindowIds.Publish, StringComparison.OrdinalIgnoreCase);
+            if (contextualSearch)
+            {
+                string controlName = "workspace_section_search." + window.Id;
+                searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
+                DrawCandidateSearchControlContents(controlName, ref searchText, ref _workspaceSearchFocused, "Filter publish sections, actions, and details");
+                GUILayout.Space(8f);
+            }
+
+            List<ScenarioAuthoringInspectorSection> visibleSections = new List<ScenarioAuthoringInspectorSection>();
+            for (int i = 0; i < sectionCount; i++)
+            {
+                ScenarioAuthoringInspectorSection section = window.Sections[i];
+                if (SectionMatchesContextSearch(section, searchText))
+                    visibleSections.Add(section);
+            }
+
+            if (visibleSections.Count == 0)
+            {
+                GUILayout.Label("No publish sections match '" + (searchText ?? string.Empty).Trim() + "'.", _mutedTextStyle);
+                return;
+            }
+
             float gap = 10f;
             float columnWidth = Math.Max(300f, (fullWidth - gap) * 0.5f);
-            int leftCount = (sectionCount + 1) / 2;
+            int leftCount = (visibleSections.Count + 1) / 2;
             bool roomy = _chromeViewportRect.height >= 820f;
 
             DrawWorkshopAccent(window, fullWidth);
@@ -1832,10 +1893,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUILayout.BeginVertical(GUILayout.Width(columnWidth));
                 _activeContentWidth = Math.Max(120f, columnWidth - 12f);
                 int start = column == 0 ? 0 : leftCount;
-                int end = column == 0 ? leftCount : sectionCount;
+                int end = column == 0 ? leftCount : visibleSections.Count;
                 for (int i = start; i < end; i++)
                 {
-                    ScenarioAuthoringInspectorSection section = window.Sections[i];
+                    ScenarioAuthoringInspectorSection section = visibleSections[i];
                     if (section == null)
                         continue;
                     string key = ScenarioAuthoringRendererActionManifest.BuildWorkshopGroupKey(window.Id, section.Id);
@@ -1853,6 +1914,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             GUILayout.EndHorizontal();
             _activeContentWidth = fullWidth;
+        }
+
+        private static bool SectionMatchesContextSearch(ScenarioAuthoringInspectorSection section, string searchText)
+        {
+            string normalized = (searchText ?? string.Empty).Trim();
+            if (normalized.Length == 0)
+                return section != null;
+            if (section == null)
+                return false;
+
+            string haystack = (section.Id ?? string.Empty) + " " + (section.Title ?? string.Empty);
+            for (int i = 0; section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null)
+                    continue;
+                haystack += " " + (item.Label ?? string.Empty)
+                    + " " + (item.Value ?? string.Empty)
+                    + " " + (item.Detail ?? string.Empty)
+                    + " " + (item.HoverHint ?? string.Empty);
+                if (item.Action != null)
+                {
+                    haystack += " " + (item.Action.Label ?? string.Empty)
+                        + " " + (item.Action.Detail ?? string.Empty)
+                        + " " + (item.Action.Hint ?? string.Empty)
+                        + " " + (item.Action.Badge ?? string.Empty);
+                }
+            }
+
+            string[] tokens = normalized.Split(new[] { ' ', '\t', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                if (haystack.IndexOf(tokens[i], StringComparison.OrdinalIgnoreCase) < 0)
+                    return false;
+            }
+            return true;
         }
 
         private bool IsBoundedPrimarySection(ScenarioAuthoringInspectorSection section)
@@ -2132,10 +2229,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float gap = 12f;
             float leftWidth = Mathf.Clamp(contentRect.width * 0.44f, 360f, 458f);
             leftWidth = Math.Min(leftWidth, Math.Max(260f, contentRect.width - 360f - gap));
-            Rect leftRect = new Rect(contentRect.x, contentRect.y, leftWidth, contentRect.height);
-            Rect rightRect = new Rect(leftRect.xMax + gap, contentRect.y, Math.Max(260f, contentRect.xMax - leftRect.xMax - gap), contentRect.height);
+            float scrollContentWidth = Math.Max(1f, contentRect.width - 18f);
+            float editorContentHeight = Math.Max(contentRect.height, 610f);
+            Vector2 editorScroll = GetWindowScrollPosition("survivor_editor_content");
+            editorScroll.x = 0f;
+            editorScroll = GUI.BeginScrollView(
+                contentRect,
+                editorScroll,
+                new Rect(0f, 0f, scrollContentWidth, editorContentHeight),
+                false,
+                true);
+            Rect leftRect = new Rect(0f, 0f, leftWidth, editorContentHeight);
+            Rect rightRect = new Rect(leftRect.xMax + gap, 0f, Math.Max(260f, scrollContentWidth - leftRect.xMax - gap), editorContentHeight);
             DrawSurvivorAppearancePanel(leftRect, editor);
             DrawSurvivorStatsPanel(rightRect, editor);
+            GUI.EndScrollView();
+            editorScroll.x = 0f;
+            SetWindowScrollPosition("survivor_editor_content", editorScroll);
             DrawSurvivorEditorFooter(footerRect, editor);
         }
 
@@ -2970,6 +3080,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             GUILayout.EndHorizontal();
             GUILayout.Space(3f);
+            GUIStyle setupHelpStyle = new GUIStyle(_mutedTextStyle) { wordWrap = true };
+            GUILayout.Label("Finish these four essentials before playtesting. OK is complete; GO opens the next unfinished step.", setupHelpStyle);
+            GUILayout.Space(4f);
             GUILayout.BeginVertical(_uiContext.Styles.Card);
 
             string recommendedActionId = null;
@@ -3018,7 +3131,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float labelX = chipRect.xMax + 10f;
             Rect labelRect = new Rect(labelX, rect.y + 3f, Math.Max(20f, rect.xMax - labelX - 10f), rect.height - 6f);
-            GUI.Label(labelRect, label, complete ? _uiContext.Styles.PaperMutedText : _uiContext.Styles.PaperBodyText);
+            GUIStyle labelStyle = new GUIStyle(complete ? _mutedTextStyle : _textStyle)
+            {
+                clipping = TextClipping.Clip,
+                wordWrap = false
+            };
+            GUI.Label(labelRect, label, labelStyle);
 
             if (!complete && action.Enabled)
             {

@@ -92,8 +92,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public ScenarioLibrarySortMode CycleLibrarySortMode()
         {
             ScenarioLibrarySortMode next = ScenarioLibraryOrganizer.Next(LibrarySortMode);
-            _libraryPreferences.SetSortMode(next);
+            SetLibrarySortMode(next);
             return next;
+        }
+
+        public void SetLibrarySortMode(ScenarioLibrarySortMode mode)
+        {
+            _libraryPreferences.SetSortMode(mode);
         }
 
         public bool ToggleLibraryPin(string scenarioId)

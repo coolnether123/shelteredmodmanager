@@ -36,6 +36,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int restoreChipCount,
             float openProgress)
         {
+            if (state != null && state.PixelEditorChromeSuppressed)
+                return RuntimeCompat.ZeroRect();
+
             ScenarioAuthoringToolButtonViewModel[] buttons = shell != null ? shell.ToolButtons : null;
             int count = buttons != null ? buttons.Length : 0;
             float restoreReserve = restoreChipCount > 0

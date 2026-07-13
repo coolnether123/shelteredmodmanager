@@ -144,6 +144,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
 
                 if (_texturesComplete && _catalogComplete)
                 {
+                    ScenarioBookBrowserPanel.TryPrepareVisual();
                     ScenarioBookPrewarmService.Complete(
                         _textureTimer.ElapsedMilliseconds,
                         _catalogTimer.ElapsedMilliseconds,
