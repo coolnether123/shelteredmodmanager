@@ -33,6 +33,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioAuthoringCaptureService _captureService;
         private readonly ScenarioAuthoringInventoryProjectionService _inventoryProjectionService;
         private readonly ScenarioAuthoringEntryFlowService _entryFlowService;
+        private readonly ScenarioAuthoringBaseModeReloadService _baseModeReloadService;
         private ScenarioAuthoringSession _pendingSession;
         private ScenarioAuthoringSession _activeSession;
         private string _lastPendingDraftId;
@@ -57,7 +58,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             IScenarioRuntimeBindingService runtimeBindingService,
             ScenarioAuthoringCaptureService captureService,
             ScenarioAuthoringInventoryProjectionService inventoryProjectionService,
-            ScenarioAuthoringEntryFlowService entryFlowService)
+            ScenarioAuthoringEntryFlowService entryFlowService,
+            ScenarioAuthoringBaseModeReloadService baseModeReloadService)
         {
             _backend = backend;
             _draftRepository = draftRepository;
@@ -70,6 +72,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _captureService = captureService;
             _inventoryProjectionService = inventoryProjectionService;
             _entryFlowService = entryFlowService;
+            _baseModeReloadService = baseModeReloadService;
             try { GameEvents.OnAfterLoad += HandleAfterLoad; }
             catch { }
         }
@@ -167,8 +170,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioBaseGameMode baseMode = ResolveDraftBaseMode(draftInfo);
             lock (_sync)
             {
-                if (_pendingSession != null
-                    && string.Equals(_pendingSession.DraftId, draftId, StringComparison.OrdinalIgnoreCase))
+                bool sameDraftPending = _pendingSession != null
+                    && string.Equals(_pendingSession.DraftId, draftId, StringComparison.OrdinalIgnoreCase);
+                bool sameLaunchPending = sameDraftPending
+                    && _pendingSession.BaseMode == baseMode
+                    && _pendingSession.LaunchSaveType == launchSaveType
+                    && string.Equals(_pendingSession.StartupSaveId, startupSave.id, StringComparison.Ordinal)
+                    && _pendingSession.StartupSaveSlot == startupSave.absoluteSlot;
+                if (sameLaunchPending)
                 {
                     MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Reusing pending existing draft bootstrap: " + _pendingSession.DraftId + ".");
                     return _pendingSession;
@@ -177,7 +186,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (_pendingSession != null)
                 {
                     MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Replacing pending draft bootstrap '" + _pendingSession.DraftId
-                        + "' with existing draft '" + draftId + "'.");
+                        + "' (base=" + _pendingSession.BaseMode
+                        + ", saveType=" + _pendingSession.LaunchSaveType
+                        + ") with existing draft '" + draftId
+                        + "' (base=" + baseMode
+                        + ", saveType=" + launchSaveType + ").");
                     _pendingSession = null;
                     _lastPendingDraftId = null;
                     _lastPendingBlockingReason = null;
@@ -235,6 +248,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _backend.ClearActiveSession(reason ?? "Pending draft canceled.");
             if (_entryFlowService != null)
                 _entryFlowService.Hide("Pending draft canceled.");
+            if (_baseModeReloadService != null)
+                _baseModeReloadService.CancelQueuedReload(pending != null ? pending.DraftId : null, reason);
             if (cleanupDraftArtifacts && pending != null)
                 CleanupPendingDraftArtifacts(pending, reason);
         }
@@ -351,6 +366,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 + (previous != null ? previous.DraftId : "<none>")
                 + " pendingDraft=" + (pendingSession != null ? pendingSession.DraftId : "<none>")
                 + " reason=" + (reason ?? "unspecified") + ".");
+        }
+
+        internal void SetQueuedReloadStatus(string status)
+        {
+            if (_backend != null)
+                _backend.SetQueuedReloadStatus(status);
+            if (_entryFlowService != null)
+                _entryFlowService.SetLoadingStatus("Status: " + (status ?? "waiting for the current mode load."));
+        }
+
+        internal void ClearQueuedReloadStatus()
+        {
+            if (_backend != null)
+                _backend.ClearQueuedReloadStatus();
         }
 
         public bool RequestCloseActiveSessionToMainMenu(string reason, out string message)
@@ -643,6 +672,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 + "'. Opening authoring shell.");
             if (!worldLoadingShellOpen)
                 _menuService.Open(pending, true);
+
+            string queuedReloadMessage;
+            if (_baseModeReloadService != null
+                && _baseModeReloadService.TryStartQueuedReload(editorSession, pending.DraftId, out queuedReloadMessage))
+            {
+                if (!HasPendingDraftLaunch() && !string.IsNullOrEmpty(queuedReloadMessage))
+                    _backend.SetStatusMessage(queuedReloadMessage);
+                return;
+            }
         }
 
         private bool TryOpenWorldLoadingShell(ScenarioAuthoringSession pending)
@@ -685,7 +723,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (_entryFlowService != null)
                 _entryFlowService.MarkEditorReady(pending, false);
             _menuService.Open(pending, true);
-            ScenarioAuthoringPauseService.Instance.ReleasePause("World-loading shell opened before draft warmup completed.");
+            ScenarioAuthoringPauseService.Instance.ReleasePauseForRunningSimulation("World-loading shell opened before draft warmup completed.");
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Opened navigable draft shell while world loads. draftId="
                 + pending.DraftId + " definitionLoaded=" + (editorSession != null && editorSession.WorkingDefinition != null) + ".");
             return true;

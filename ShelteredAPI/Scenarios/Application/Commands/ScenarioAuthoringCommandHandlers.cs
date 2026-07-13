@@ -633,7 +633,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionShellTabTest:
                     return SetStage(state, ScenarioStageKind.Test, out message, "Test Console workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellTabPublish:
-                    return SetStage(state, ScenarioStageKind.Publish, out message, "Package / Export workspace active.");
+                    return SetStage(state, ScenarioStageKind.Publish, out message, "Publish workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellToggle:
                     state.ShellVisible = !state.ShellVisible;
                     message = state.ShellVisible ? "Authoring shell opened." : "Authoring shell hidden.";
@@ -1956,15 +1956,48 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             bool discard = cancel && state.FocusedEditorIsNew;
             if (discard)
                 DiscardFocusedEntry(kind, index);
+            bool reverted = cancel && !discard && RestoreFocusedSurvivor(state, kind, index);
 
             state.TimelineSelectedEntryId = discard ? null : kind + ":" + index.ToString(CultureInfo.InvariantCulture);
             state.FocusedEditorKind = null;
             state.FocusedEditorIndex = -1;
             state.FocusedEditorIsNew = false;
+            state.FocusedSurvivorOriginal = null;
+            state.FocusedFutureSurvivorOriginal = null;
             state.SurvivorColorPickerChannel = null;
             state.SurvivorColorPickerRequestId = 0;
-            message = discard ? "New timeline entry discarded." : "Timeline entry saved.";
+            message = discard
+                ? "New editor entry discarded."
+                : (reverted ? "Survivor edits reverted." : (cancel ? "Editor closed without additional changes." : "Editor changes kept."));
             return true;
+        }
+
+        private bool RestoreFocusedSurvivor(ScenarioAuthoringState state, string kind, int index)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (state == null || definition == null || definition.FamilySetup == null || index < 0)
+                return false;
+
+            if (string.Equals(kind, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, StringComparison.OrdinalIgnoreCase)
+                && state.FocusedSurvivorOriginal != null
+                && index < definition.FamilySetup.Members.Count)
+            {
+                definition.FamilySetup.Members[index] = ScenarioSurvivorAuthoringOperations.CloneMember(state.FocusedSurvivorOriginal);
+                session.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+                return true;
+            }
+
+            if (string.Equals(kind, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, StringComparison.OrdinalIgnoreCase)
+                && state.FocusedFutureSurvivorOriginal != null
+                && index < definition.FamilySetup.FutureSurvivors.Count)
+            {
+                definition.FamilySetup.FutureSurvivors[index] = ScenarioSurvivorAuthoringOperations.CloneFutureSurvivor(state.FocusedFutureSurvivorOriginal);
+                session.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+                return true;
+            }
+
+            return false;
         }
 
         private bool RestartPlaytest(ScenarioAuthoringState state, out string message)
@@ -2073,14 +2106,22 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             message = null;
             ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
-            if (state == null || definition == null)
+            ScenarioAuthoringSession loadingSession = ScenarioAuthoringBootstrapService.Instance.CurrentOrPendingSessionForEntryFlow();
+            if (state == null || (definition == null && loadingSession == null))
             {
                 message = "No active scenario definition is available.";
                 return true;
             }
 
-            ScenarioBaseGameMode nextMode = ResolveAdjacentBaseMode(definition.BaseGameMode, direction);
-            if (nextMode == definition.BaseGameMode)
+            ScenarioBaseGameMode currentMode = definition != null
+                ? definition.BaseGameMode
+                : loadingSession.BaseMode;
+            string draftId = definition != null ? definition.Id : loadingSession.DraftId;
+            if (_baseModeReloadService != null)
+                currentMode = _baseModeReloadService.ResolveModeSelectionBase(draftId, currentMode);
+
+            ScenarioBaseGameMode nextMode = ResolveAdjacentBaseMode(currentMode, direction);
+            if (nextMode == currentMode)
             {
                 message = "Base mode is already " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(nextMode) + ".";
                 return true;
@@ -2192,6 +2233,20 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             {
                 definition.Journal.Entries.RemoveAt(index);
                 MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if (string.Equals(kind, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, StringComparison.OrdinalIgnoreCase)
+                && definition.FamilySetup != null
+                && index < definition.FamilySetup.Members.Count)
+            {
+                definition.FamilySetup.Members.RemoveAt(index);
+                session.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+            }
+            else if (string.Equals(kind, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, StringComparison.OrdinalIgnoreCase)
+                && definition.FamilySetup != null
+                && index < definition.FamilySetup.FutureSurvivors.Count)
+            {
+                definition.FamilySetup.FutureSurvivors.RemoveAt(index);
+                session.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
             }
         }
 

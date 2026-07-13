@@ -10,6 +10,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private const float PanAcceleration = 22f;
         private const float PanDeceleration = 28f;
         private const float MinZoom = 2f;
+        private const float PixelEditorMinZoom = 0.75f;
         private const float ZoomStep = 1.5f;
         private const float ZoomEaseSpeed = 14f;
         private const float LeftDragPanThresholdPixels = 5f;
@@ -301,17 +302,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return camera.ScreenToWorldPoint(screenPosition);
         }
 
-        private static float ClampZoom(Camera camera, BasicCamera basicCamera, float requested)
+        private static float ClampZoom(Camera camera, BasicCamera basicCamera, float requested, float minZoom = MinZoom)
         {
             Rect bounds = basicCamera != null ? basicCamera.CameraBounds : new Rect();
             float maxZoom = 20f;
             if (bounds.width > 0.001f && bounds.height > 0.001f)
             {
                 float aspect = camera.aspect > 0.001f ? camera.aspect : ((float)Screen.width / Mathf.Max(1f, Screen.height));
-                maxZoom = Mathf.Max(MinZoom, Mathf.Min(bounds.height * 0.5f, bounds.width / (2f * aspect)));
+                maxZoom = Mathf.Max(minZoom, Mathf.Min(bounds.height * 0.5f, bounds.width / (2f * aspect)));
             }
 
-            return Mathf.Clamp(requested, MinZoom, maxZoom);
+            return Mathf.Clamp(requested, minZoom, maxZoom);
         }
 
         private static Vector3 ClampCameraPosition(Camera camera, BasicCamera basicCamera, Vector3 position)
@@ -395,13 +396,24 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             float regionHeight = Mathf.Max(240f, Screen.height - 36f);
             float regionAspect = regionWidth / Mathf.Max(1f, regionHeight);
             float fitHeight = Mathf.Max(bounds.size.y, bounds.size.x / Mathf.Max(0.25f, regionAspect));
-            float orthographicSize = ClampZoom(camera, basicCamera, Mathf.Clamp(Mathf.Max(MinZoom, fitHeight * 1.12f), MinZoom, 8f));
+            float orthographicSize = ClampZoom(
+                camera,
+                basicCamera,
+                Mathf.Clamp(Mathf.Max(PixelEditorMinZoom, fitHeight * 0.62f), PixelEditorMinZoom, 6f),
+                PixelEditorMinZoom);
+
+            // Preserve the target's vertical screen position. The editor only
+            // needs horizontal room; recentering vertically made the selected
+            // object appear to jump upward when editing began.
+            float desiredScreenY = Mathf.Clamp(
+                camera.WorldToScreenPoint(bounds.center).y,
+                Screen.height * 0.20f,
+                Screen.height * 0.80f);
 
             camera.orthographicSize = orthographicSize;
             _targetOrthographicSize = orthographicSize;
 
             float desiredScreenX = regionWidth * 0.5f;
-            float desiredScreenY = Screen.height * 0.5f;
             float pixelsToWorld = (camera.orthographicSize * 2f) / Mathf.Max(1f, camera.pixelHeight);
             Vector3 screenOffsetWorld = new Vector3(
                 (desiredScreenX - (camera.pixelWidth * 0.5f)) * pixelsToWorld,

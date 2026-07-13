@@ -293,6 +293,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return true;
         }
 
+        public static bool TryPreviewEditedFrame(
+            ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget,
+            Sprite frame)
+        {
+            if (runtimeTarget == null || runtimeTarget.Transform == null || frame == null)
+                return false;
+
+            if (runtimeTarget.Kind != ScenarioSpriteTargetComponentKind.SpriteRenderer
+                && runtimeTarget.Kind != ScenarioSpriteTargetComponentKind.UI2DSprite)
+            {
+                return TryApply(runtimeTarget, frame);
+            }
+
+            AnimatedFrameSwapDriver driver = runtimeTarget.Transform.GetComponent<AnimatedFrameSwapDriver>();
+            if (driver == null)
+                driver = runtimeTarget.Transform.gameObject.AddComponent<AnimatedFrameSwapDriver>();
+
+            driver.BindTarget(runtimeTarget);
+            driver.ConfigurePreview(new[] { frame }, null, 1f);
+            return true;
+        }
+
         public static void StopEditedAnimation(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)
         {
             if (runtimeTarget == null || runtimeTarget.Transform == null)

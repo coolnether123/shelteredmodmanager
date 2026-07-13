@@ -82,6 +82,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
 
                 FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, index, false);
+                state.FocusedSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneMember(family.Members[index]);
                 message = "Opened focused survivor editor.";
                 return true;
             }
@@ -99,6 +100,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
 
                 FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, index, false);
+                state.FocusedFutureSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneFutureSurvivor(family.FutureSurvivors[index]);
                 message = "Opened focused survivor editor.";
                 return true;
             }
@@ -162,6 +164,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             family.Members.Add(config);
             MarkDirty(session);
             FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, false);
+            state.FocusedSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneMember(config);
             message = "Added " + config.Name + " to the starting cast.";
             return true;
         }
@@ -194,6 +197,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             state.FocusedEditorKind = kind;
             state.FocusedEditorIndex = index;
             state.FocusedEditorIsNew = isNew;
+            state.FocusedSurvivorOriginal = null;
+            state.FocusedFutureSurvivorOriginal = null;
             state.SurvivorColorPickerChannel = null;
             state.SurvivorColorPickerRequestId = 0;
         }

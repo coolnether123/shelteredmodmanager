@@ -70,6 +70,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private static readonly string[] FallbackShirtColors = new[] { "#5F7EA6", "#7D8B55", "#9A4B4B", "#6B5D8F", "#C1A34F", "#535353" };
         private static readonly string[] FallbackPantsColors = new[] { "#2D3B4F", "#4F4A42", "#5E5A35", "#3A3A3A", "#6C513A" };
 
+        private static readonly Color DefaultHairColor = new Color(0.23f, 0.13f, 0.08f, 1f);
+        private static readonly Color DefaultSkinColor = new Color(0.84f, 0.61f, 0.45f, 1f);
+        private static readonly Color DefaultShirtColor = new Color(0.37f, 0.45f, 0.58f, 1f);
+        private static readonly Color DefaultPantsColor = new Color(0.25f, 0.25f, 0.25f, 1f);
+
         private readonly IScenarioSpriteAssetResolver _assetResolver;
 
         public static ScenarioCharacterAppearanceService Instance
@@ -517,6 +522,33 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 + ToByte(color.g).ToString("X2")
                 + ToByte(color.b).ToString("X2")
                 + ToByte(color.a).ToString("X2");
+        }
+
+        public static void ResolveConfiguredColors(
+            FamilyMemberAppearanceConfig appearance,
+            out Color hair,
+            out Color skin,
+            out Color shirt,
+            out Color pants)
+        {
+            hair = DefaultHairColor;
+            skin = DefaultSkinColor;
+            shirt = DefaultShirtColor;
+            pants = DefaultPantsColor;
+            if (appearance == null)
+                return;
+
+            ApplyConfiguredColorValue(appearance.HairColorHex, ref hair);
+            ApplyConfiguredColorValue(appearance.SkinColorHex, ref skin);
+            ApplyConfiguredColorValue(appearance.ShirtColorHex, ref shirt);
+            ApplyConfiguredColorValue(appearance.PantsColorHex, ref pants);
+        }
+
+        private static void ApplyConfiguredColorValue(string colorHex, ref Color target)
+        {
+            Color parsed;
+            if (TryParseColorHex(colorHex, out parsed))
+                target = parsed;
         }
 
         public static bool TryParseColorHex(string value, out Color color)

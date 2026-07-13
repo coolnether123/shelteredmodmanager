@@ -674,6 +674,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             else
                 DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
             LoadingScreen.Instance.ShowLoadingScreen(sceneName);
+            ScenarioLoadingTransitionGuard.OwnManagedLoadingTransition(sceneName, launchTargetLabel);
             if (ownsDirectLaunchFadeHandoff)
                 ScenarioLoadingTransitionGuard.OwnDirectLaunchTransition(sceneName, launchTargetLabel);
             MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scene launch started. target="

@@ -763,12 +763,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 else if (!hasEditableDefinition)
                     disabledReason = "No editable scenario definition is available to copy.";
 
-                // Show what the copy actually includes (world/cast/story/timeline/
-                // map/assets/mods) so authors know before committing. Fall back to
-                // the catalog description only when the definition cannot be read.
-                string detail = editableDefinition != null
-                    ? ScenarioContentSummary.Build(editableDefinition).ToCardLine()
-                    : Safe(entry.Description, "No scenario summary provided.");
+                // These cards answer "what is this scenario?". Structural counts
+                // belong in validation/details surfaces, not in the description.
+                string detail = editableDefinition != null && !string.IsNullOrEmpty(editableDefinition.Description)
+                    ? editableDefinition.Description
+                    : Safe(entry.Description, "No scenario description was provided.");
                 string author = editableDefinition != null && !string.IsNullOrEmpty(editableDefinition.Author)
                     ? editableDefinition.Author
                     : entry.OwnerModId;
@@ -870,6 +869,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             private string _nameBuffer;
             private string _lastSnapshotName;
             private bool _nameInitialized;
+            private Vector2 _wizardScroll;
             private const string NameControlName = "ScenarioAuthoringWizard.NameField";
 
             public void Initialize(ScenarioAuthoringEntryFlowService owner, ScenarioAuthoringSettingsService settingsService)
@@ -911,6 +911,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     _nameInitialized = false;
                     _lastSnapshotName = null;
+                    _wizardScroll = Vector2.zero;
                 }
             }
 
@@ -1091,19 +1092,31 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
                 y += 44f;
 
-                // Base selection
-                GUI.Label(new Rect(inner.x, y, inner.width, 26f), "Choose a starting point", _sectionStyle);
-                y += 30f;
-                float cardsBottom = DrawCards(new Rect(inner.x, y, inner.width, 0f), snapshot);
-                y = cardsBottom + 10f;
-
-                // Quick settings
-                GUI.Label(new Rect(inner.x, y, inner.width, 26f), "Quick settings", _sectionStyle);
-                y += 30f;
-                y = DrawSettings(new Rect(inner.x, y, inner.width, 0f), snapshot) + 10f;
-
                 // Status band
                 float statusY = inner.yMax - 96f;
+
+                // Base choices and quick settings can exceed a 900p viewport.
+                // Give that variable content its own scroll region while the
+                // name, status, and commit/cancel controls remain stable.
+                Rect scrollViewport = new Rect(inner.x, y, inner.width, Math.Max(120f, statusY - y - 10f));
+                float scrollContentWidth = Math.Max(1f, scrollViewport.width - 18f);
+                float scrollContentHeight = Math.Max(scrollViewport.height, 720f);
+                _wizardScroll = GUI.BeginScrollView(
+                    scrollViewport,
+                    _wizardScroll,
+                    new Rect(0f, 0f, scrollContentWidth, scrollContentHeight),
+                    false,
+                    true);
+                float contentY = 0f;
+                GUI.Label(new Rect(0f, contentY, scrollContentWidth, 26f), "Choose a starting point", _sectionStyle);
+                contentY += 30f;
+                float cardsBottom = DrawCards(new Rect(0f, contentY, scrollContentWidth, 0f), snapshot);
+                contentY = cardsBottom + 10f;
+                GUI.Label(new Rect(0f, contentY, scrollContentWidth, 26f), "Quick settings", _sectionStyle);
+                contentY += 30f;
+                DrawSettings(new Rect(0f, contentY, scrollContentWidth, 0f), snapshot);
+                GUI.EndScrollView();
+
                 GUI.Box(new Rect(inner.x, statusY, inner.width, 32f), snapshot.Status ?? string.Empty, _statusStyle);
 
                 // Open / cancel row
@@ -1116,7 +1129,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 int columns = 4;
                 float gap = 12f;
                 float cardWidth = Mathf.Max(200f, (area.width - (gap * (columns - 1))) / columns);
-                float cardHeight = 112f;
+                float cardHeight = 154f;
                 float bottom = area.y;
                 float cursorY = area.y;
                 int column = 0;
@@ -1167,8 +1180,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Rect badgeRect = new Rect(rect.x + 10f, rect.y + 10f, 66f, 22f);
                 GUI.Box(badgeRect, card != null ? card.Badge ?? string.Empty : string.Empty, (enabled || selected) ? _uiContext.Styles.PillEmphasized : _uiContext.Styles.Pill);
                 GUI.Label(new Rect(rect.x + 86f, rect.y + 8f, rect.width - 96f, 26f), card != null ? card.Title ?? string.Empty : string.Empty, enabled ? _cardTitleStyle : _disabledTextStyle);
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 40f, rect.width - 24f, 50f), card != null ? card.Detail ?? string.Empty : string.Empty, enabled ? _cardTextStyle : _disabledTextStyle);
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 90f, rect.width - 24f, 20f), card != null && !enabled ? card.DisabledReason ?? string.Empty : (card != null ? card.Meta ?? string.Empty : string.Empty), enabled ? _cardMetaStyle : _disabledTextStyle);
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 40f, rect.width - 24f, 82f), card != null ? card.Detail ?? string.Empty : string.Empty, enabled ? _cardTextStyle : _disabledTextStyle);
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 128f, rect.width - 24f, 20f), card != null && !enabled ? card.DisabledReason ?? string.Empty : (card != null ? card.Meta ?? string.Empty : string.Empty), enabled ? _cardMetaStyle : _disabledTextStyle);
             }
 
             private void DrawCardStateOverlay(Rect rect, bool enabled, bool selected)
@@ -1355,10 +1368,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _cardTitleStyle.fontSize = 15;
                 _cardTextStyle = new GUIStyle(_uiContext.Styles.PaperBodyText);
                 _cardTextStyle.fontSize = 12;
+                _cardTextStyle.wordWrap = true;
+                _cardTextStyle.clipping = TextClipping.Clip;
                 _cardMetaStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
                 _cardMetaStyle.fontSize = 11;
                 _disabledTextStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
                 _disabledTextStyle.normal.textColor = new Color(0.28f, 0.23f, 0.18f, 1f);
+                _disabledTextStyle.wordWrap = true;
+                _disabledTextStyle.clipping = TextClipping.Clip;
             }
 
             private void OnDestroy()

@@ -10,10 +10,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
     internal static class ScenarioCastPortraitResolver
     {
-        private static readonly Color DefaultHairColor = new Color(0.23f, 0.13f, 0.08f, 1f);
-        private static readonly Color DefaultSkinColor = new Color(0.84f, 0.61f, 0.45f, 1f);
-        private static readonly Color DefaultShirtColor = new Color(0.37f, 0.45f, 0.58f, 1f);
-        private static readonly Color DefaultPantsColor = new Color(0.25f, 0.25f, 0.25f, 1f);
         private static readonly Dictionary<string, CachedPortrait> ColorizedPortraitCache = new Dictionary<string, CachedPortrait>();
         private static Material AvatarMaterialTemplate;
         private static int LastAvatarMaterialLookupFrame = -120;
@@ -95,15 +91,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             out Color shirt,
             out Color pants)
         {
-            ResolveDefaultColors(out hair, out skin, out shirt, out pants);
             FamilyMemberAppearanceConfig appearance = config != null ? config.Appearance : null;
-            if (appearance == null)
-                return;
-
-            ApplyColor(appearance.HairColorHex, ref hair);
-            ApplyColor(appearance.SkinColorHex, ref skin);
-            ApplyColor(appearance.ShirtColorHex, ref shirt);
-            ApplyColor(appearance.PantsColorHex, ref pants);
+            ScenarioCharacterAppearanceService.ResolveConfiguredColors(appearance, out hair, out skin, out shirt, out pants);
         }
 
         public static void ResolveColors(
@@ -195,17 +184,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private static void ResolveDefaultColors(out Color hair, out Color skin, out Color shirt, out Color pants)
         {
-            hair = DefaultHairColor;
-            skin = DefaultSkinColor;
-            shirt = DefaultShirtColor;
-            pants = DefaultPantsColor;
-        }
-
-        private static void ApplyColor(string hex, ref Color target)
-        {
-            Color parsed;
-            if (ScenarioCharacterAppearanceService.TryParseColorHex(hex, out parsed))
-                target = parsed;
+            ScenarioCharacterAppearanceService.ResolveConfiguredColors(null, out hair, out skin, out shirt, out pants);
         }
 
         private static Texture2D ResolveTexture(Sprite sprite, Color hair, Color skin, Color shirt, Color pants)

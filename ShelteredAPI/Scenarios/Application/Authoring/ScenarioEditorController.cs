@@ -126,6 +126,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioValidationResult validation = ValidateForSave(session.WorkingDefinition, path);
 
             _serializer.Save(session.WorkingDefinition, path);
+            // Saving atomically replaces scenario.xml, which changes the exact
+            // file stamp used by the draft metadata cache. Republish the entry
+            // now so main-thread draft views can resolve and reopen this draft
+            // without performing XML I/O on the Unity thread.
+            _serializer.LoadInfo(path, ScenarioAuthoringDraftRepository.DraftOwnerId);
             session.OriginalDefinition = ScenarioDefinitionCloner.Clone(session.WorkingDefinition);
             session.DirtyFlags.Clear();
             _sessionStore.Set(session, path);

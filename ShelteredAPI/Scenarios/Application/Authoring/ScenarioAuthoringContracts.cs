@@ -7,6 +7,7 @@ using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Story;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
@@ -717,6 +718,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
         public bool FocusedEditorIsNew { get; set; }
+        public FamilyMemberConfig FocusedSurvivorOriginal { get; set; }
+        public FutureSurvivorDefinition FocusedFutureSurvivorOriginal { get; set; }
         public string SurvivorColorPickerChannel { get; set; }
         public int SurvivorColorPickerRequestId { get; set; }
         public ScenarioAuthoringInspectorTab InspectorTab { get; set; }
@@ -786,6 +789,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,
                 FocusedEditorIsNew = FocusedEditorIsNew,
+                FocusedSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneMember(FocusedSurvivorOriginal),
+                FocusedFutureSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneFutureSurvivor(FocusedFutureSurvivorOriginal),
                 SurvivorColorPickerChannel = SurvivorColorPickerChannel,
                 SurvivorColorPickerRequestId = SurvivorColorPickerRequestId,
                 InspectorTab = InspectorTab,

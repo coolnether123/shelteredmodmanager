@@ -11,11 +11,13 @@ using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringBaseModeReloadService
     {
+        private readonly object _queuedReloadSync = new object();
         private readonly IScenarioEditorService _editorService;
         private readonly ScenarioAuthoringDraftRepository _draftRepository;
         private readonly ScenarioLaunchCoordinator _launchCoordinator;
         private readonly ScenarioAuthoringCaptureService _captureService;
         private readonly ScenarioPlayStartReadiness _playStartReadiness = new ScenarioPlayStartReadiness();
+        private QueuedBaseModeReload _queuedReload;
 
         public ScenarioAuthoringBaseModeReloadService(
             IScenarioEditorService editorService,
@@ -50,6 +52,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             out string message)
         {
             message = null;
+            ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
+            if (bootstrap != null && bootstrap.HasPendingDraftLaunch())
+            {
+                return QueueAfterCurrentReload(
+                    bootstrap,
+                    editorSession,
+                    newBaseMode,
+                    familyChoice,
+                    autoPopulateStartingCastAfterReload,
+                    out message);
+            }
+
             if (editorSession == null || editorSession.WorkingDefinition == null)
             {
                 message = "No active scenario definition is available.";
@@ -223,6 +237,130 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 + " with " + FormatFamilyChoice(familyChoice)
                 + ". The target backend world is saved and will load next time this draft opens."
                 + FormatValidationSuffix(validation);
+            return true;
+        }
+
+        internal ScenarioBaseGameMode ResolveModeSelectionBase(string draftId, ScenarioBaseGameMode fallbackMode)
+        {
+            lock (_queuedReloadSync)
+            {
+                return _queuedReload != null
+                    && string.Equals(_queuedReload.DraftId, draftId, StringComparison.Ordinal)
+                    ? _queuedReload.BaseMode
+                    : fallbackMode;
+            }
+        }
+
+        internal bool TryStartQueuedReload(
+            ScenarioEditorSession editorSession,
+            string completedDraftId,
+            out string message)
+        {
+            message = null;
+            QueuedBaseModeReload queued;
+            lock (_queuedReloadSync)
+            {
+                if (_queuedReload == null
+                    || !string.Equals(_queuedReload.DraftId, completedDraftId, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                queued = _queuedReload;
+                _queuedReload = null;
+            }
+
+            ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
+            if (bootstrap != null)
+                bootstrap.ClearQueuedReloadStatus();
+
+            ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "The queued " + FormatBaseMode(queued.BaseMode) + " load could not start because the draft did not reopen.";
+                MMLog.WriteWarning("[ScenarioAuthoringBaseModeReload] " + message + " draftId=" + (completedDraftId ?? "<none>") + ".");
+                return true;
+            }
+
+            MMLog.WriteInfo("[ScenarioAuthoringBaseModeReload] Current load completed. Starting queued "
+                + FormatBaseMode(queued.BaseMode) + " load for draftId=" + completedDraftId + ".");
+            SaveAndReload(
+                editorSession,
+                queued.BaseMode,
+                queued.FamilyChoice,
+                queued.AutoPopulateStartingCastAfterReload,
+                out message);
+            return true;
+        }
+
+        internal void CancelQueuedReload(string draftId, string reason)
+        {
+            bool cleared = false;
+            lock (_queuedReloadSync)
+            {
+                if (_queuedReload != null
+                    && (string.IsNullOrEmpty(draftId)
+                        || string.Equals(_queuedReload.DraftId, draftId, StringComparison.Ordinal)))
+                {
+                    _queuedReload = null;
+                    cleared = true;
+                }
+            }
+
+            if (!cleared)
+                return;
+
+            ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
+            if (bootstrap != null)
+                bootstrap.ClearQueuedReloadStatus();
+            MMLog.WriteInfo("[ScenarioAuthoringBaseModeReload] Cleared queued mode load for draftId="
+                + (draftId ?? "<any>") + ". Reason=" + (reason ?? "unspecified") + ".");
+        }
+
+        private bool QueueAfterCurrentReload(
+            ScenarioAuthoringBootstrapService bootstrap,
+            ScenarioEditorSession editorSession,
+            ScenarioBaseGameMode newBaseMode,
+            string familyChoice,
+            bool autoPopulateStartingCastAfterReload,
+            out string message)
+        {
+            ScenarioAuthoringSession loadingSession = bootstrap.CurrentOrPendingSessionForEntryFlow();
+            string draftId = editorSession != null && editorSession.WorkingDefinition != null
+                ? editorSession.WorkingDefinition.Id
+                : (loadingSession != null ? loadingSession.DraftId : null);
+            if (string.IsNullOrEmpty(draftId) || loadingSession == null)
+            {
+                message = "A mode load is already running, but its draft could not be identified.";
+                return true;
+            }
+
+            string loadingModeLabel = FormatBaseMode(loadingSession.BaseMode);
+            string queuedModeLabel = FormatBaseMode(newBaseMode);
+            if (newBaseMode == loadingSession.BaseMode)
+            {
+                lock (_queuedReloadSync)
+                    _queuedReload = null;
+                bootstrap.ClearQueuedReloadStatus();
+                message = "Queued mode change cleared. Continuing to load " + loadingModeLabel + ".";
+                MMLog.WriteInfo("[ScenarioAuthoringBaseModeReload] Queued mode load cleared because the latest selection matches the active load. draftId="
+                    + draftId + " mode=" + newBaseMode + ".");
+                return true;
+            }
+
+            lock (_queuedReloadSync)
+            {
+                _queuedReload = new QueuedBaseModeReload(
+                    draftId,
+                    newBaseMode,
+                    NormalizeFamilyChoice(familyChoice),
+                    autoPopulateStartingCastAfterReload);
+            }
+
+            message = "Waiting for " + loadingModeLabel + " to finish loading; then loading " + queuedModeLabel + ".";
+            bootstrap.SetQueuedReloadStatus(message);
+            MMLog.WriteInfo("[ScenarioAuthoringBaseModeReload] Queued " + queuedModeLabel
+                + " after the active " + loadingModeLabel + " load. draftId=" + draftId + ".");
             return true;
         }
 
@@ -419,6 +557,26 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 definition.AssetReferences = _definition.AssetReferences;
                 definition.BackendWorlds = _definition.BackendWorlds;
             }
+        }
+
+        private sealed class QueuedBaseModeReload
+        {
+            public QueuedBaseModeReload(
+                string draftId,
+                ScenarioBaseGameMode baseMode,
+                string familyChoice,
+                bool autoPopulateStartingCastAfterReload)
+            {
+                DraftId = draftId;
+                BaseMode = baseMode;
+                FamilyChoice = familyChoice;
+                AutoPopulateStartingCastAfterReload = autoPopulateStartingCastAfterReload;
+            }
+
+            public string DraftId { get; private set; }
+            public ScenarioBaseGameMode BaseMode { get; private set; }
+            public string FamilyChoice { get; private set; }
+            public bool AutoPopulateStartingCastAfterReload { get; private set; }
         }
     }
 }

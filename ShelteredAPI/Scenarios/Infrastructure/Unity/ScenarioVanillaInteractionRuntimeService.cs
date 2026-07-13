@@ -377,25 +377,62 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         private static Obj_Base ResolveInteractableUnderPointer()
         {
-            Obj_Base selected = InteractionManager.Instance != null ? InteractionManager.Instance.SelectedObject : null;
-            if (HasPlayerInteractions(selected))
-                return selected;
+            EnsureSelectedFamilyMember();
 
             Obj_Base hovered = FindInteractableUnderPointer();
-            if (hovered == null)
-                return selected;
+            if (HasPlayerInteractions(hovered))
+                return SelectInteractionObject(hovered);
+
+            ScenarioAuthoringState state = GetState();
+            ScenarioAuthoringTarget authoringTarget = state != null ? state.HoveredTarget : null;
+            UnityEngine.Object runtimeObject = authoringTarget != null ? authoringTarget.RuntimeObject : null;
+            GameObject authoringObject = runtimeObject as GameObject;
+            Component authoringComponent = runtimeObject as Component;
+            if (authoringObject == null && authoringComponent != null)
+                authoringObject = authoringComponent.gameObject;
+
+            Obj_Base authoringHovered = ResolveObjBase(authoringObject);
+            if (HasPlayerInteractions(authoringHovered))
+                return SelectInteractionObject(authoringHovered);
+
+            Obj_Base selected = InteractionManager.Instance != null ? InteractionManager.Instance.SelectedObject : null;
+            return HasPlayerInteractions(selected) ? selected : null;
+        }
+
+        private static Obj_Base SelectInteractionObject(Obj_Base candidate)
+        {
+            if (candidate == null)
+                return null;
 
             try
             {
-                if (InteractionManager.Instance != null && InteractionManager.Instance.SelectedObject != hovered)
-                    InteractionManager.Instance.SelectObject(hovered);
+                if (InteractionManager.Instance != null && InteractionManager.Instance.SelectedObject != candidate)
+                    InteractionManager.Instance.SelectObject(candidate);
             }
             catch (Exception ex)
             {
                 MMLog.WarnOnce("ScenarioVanillaInteraction.SelectHovered", ex.Message);
             }
 
-            return hovered;
+            return candidate;
+        }
+
+        private static void EnsureSelectedFamilyMember()
+        {
+            InteractionManager manager = InteractionManager.Instance;
+            if (manager == null || manager.GetSelectedFamilyMember() != null)
+                return;
+
+            for (int i = 0; i < manager.GetNumFamilyMembers(); i++)
+            {
+                FamilyMember member = manager.GetFamilyMemberByIndex(i);
+                if (member == null || member.isDead)
+                    continue;
+
+                manager.SelectFamilyMemberByIndex(i);
+                if (manager.GetSelectedFamilyMember() != null)
+                    return;
+            }
         }
 
         private static Obj_Base FindInteractableUnderPointer()

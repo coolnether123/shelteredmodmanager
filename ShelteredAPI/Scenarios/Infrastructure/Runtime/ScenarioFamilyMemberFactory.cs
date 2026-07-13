@@ -139,19 +139,23 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             attributes.m_lastName = string.Empty;
             attributes.m_meshId = ResolveMeshId(config);
 
-            if (config.Appearance != null)
+            FamilyMemberAppearanceConfig appearance = config.Appearance;
+            if (appearance != null)
             {
-                if (!string.IsNullOrEmpty(config.Appearance.HeadTextureId))
-                    attributes.m_headTexture = config.Appearance.HeadTextureId;
-                if (!string.IsNullOrEmpty(config.Appearance.TorsoTextureId))
-                    attributes.m_torsoTexture = config.Appearance.TorsoTextureId;
-                if (!string.IsNullOrEmpty(config.Appearance.LegTextureId))
-                    attributes.m_legTexture = config.Appearance.LegTextureId;
-                ApplyColor(config.Appearance.HairColorHex, delegate(Color color) { attributes.m_hairColor = color; });
-                ApplyColor(config.Appearance.SkinColorHex, delegate(Color color) { attributes.m_skinColor = color; });
-                ApplyColor(config.Appearance.ShirtColorHex, delegate(Color color) { attributes.m_shirtColor = color; });
-                ApplyColor(config.Appearance.PantsColorHex, delegate(Color color) { attributes.m_pantsColor = color; });
+                if (!string.IsNullOrEmpty(appearance.HeadTextureId))
+                    attributes.m_headTexture = appearance.HeadTextureId;
+                if (!string.IsNullOrEmpty(appearance.TorsoTextureId))
+                    attributes.m_torsoTexture = appearance.TorsoTextureId;
+                if (!string.IsNullOrEmpty(appearance.LegTextureId))
+                    attributes.m_legTexture = appearance.LegTextureId;
             }
+
+            ScenarioCharacterAppearanceService.ResolveConfiguredColors(
+                appearance,
+                out attributes.m_hairColor,
+                out attributes.m_skinColor,
+                out attributes.m_shirtColor,
+                out attributes.m_pantsColor);
 
             for (int i = 0; config.Stats != null && i < config.Stats.Count; i++)
                 ApplyStat(attributes, config.Stats[i]);
@@ -333,16 +337,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (gender == ScenarioGender.Female)
                 return adult ? "woman" : "girl";
             return adult ? "man" : "boy";
-        }
-
-        private static void ApplyColor(string colorHex, Action<Color> apply)
-        {
-            if (apply == null)
-                return;
-
-            Color color;
-            if (ScenarioCharacterAppearanceService.TryParseColorHex(colorHex, out color))
-                apply(color);
         }
 
         private static void ApplyStat(FamilySpawner.CharacterAttributes attributes, StatOverride stat)

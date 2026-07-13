@@ -111,6 +111,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             return copy;
         }
 
+        public static FamilyMemberConfig CloneMember(FamilyMemberConfig source)
+        {
+            if (source == null)
+                return null;
+
+            FamilyMemberConfig copy = DuplicateMember(source);
+            copy.Name = source.Name;
+            copy.ActorRef = ScenarioCastMemberReferenceCatalog.CopyActorRef(source.ActorRef);
+            return copy;
+        }
+
+        public static FutureSurvivorDefinition CloneFutureSurvivor(FutureSurvivorDefinition source)
+        {
+            if (source == null)
+                return null;
+
+            FutureSurvivorDefinition copy = new FutureSurvivorDefinition
+            {
+                Id = source.Id,
+                ActorRef = ScenarioCastMemberReferenceCatalog.CopyActorRef(source.ActorRef),
+                Arrival = CopySchedule(source.Arrival),
+                AskToJoin = source.AskToJoin,
+                Survivor = CloneMember(source.Survivor)
+            };
+            CopyActorComponents(source.ActorComponents, copy.ActorComponents);
+            return copy;
+        }
+
         public static FutureSurvivorDefinition DuplicateFutureSurvivor(FutureSurvivorDefinition source, IList<FutureSurvivorDefinition> siblings)
         {
             FutureSurvivorDefinition copy = new FutureSurvivorDefinition();
