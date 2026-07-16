@@ -165,6 +165,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             state.VanillaInteractionAssistNote = BuildAssistNote(state.VanillaInteractionKind);
 
+            if (string.Equals(state.VanillaInteractionKind, KindMap, StringComparison.OrdinalIgnoreCase)
+                && state.MapAuthoringActive)
+            {
+                ScenarioMapAuthoringRuntimeService mapAuthoring = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
+                if (mapAuthoring != null && mapAuthoring.IsVanillaMapOpen())
+                    return false;
+            }
+
             if (_pendingMenuObject != null)
             {
                 if (TryOpenPendingWorldMenu())
