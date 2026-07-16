@@ -8,6 +8,7 @@
     { "key": "ScenarioAuthoringShellShortcutsImguiRenderer.cs::DrawHelpShortcutsBody", "actionFamily": "shell.renderer.workshop_group.toggle." },
     { "key": "ScenarioAuthoringShellInventorySlotGridImguiRenderer.cs::DrawInventorySlotCell", "actionFamily": "slot actions" },
     { "key": "ScenarioAuthoringShellMapUxImguiRenderer.cs::DrawMapFilterChip", "actionFamily": "shell.renderer.map_filter.toggle." },
+    { "key": "ScenarioAuthoringShellMapOverlayImguiRenderer.cs::DrawMapOptionDropdown", "actionFamily": "action.Id" },
     { "key": "ScenarioAuthoringShellNewWindowsImguiRenderer.cs::DrawAssetInventoryFilters", "actionFamily": "shell.renderer.asset_inventory_filter.select." },
     { "key": "ScenarioAuthoringShellNewWindowsImguiRenderer.cs::DrawNewWindowsEditableControl", "actionFamily": "editable item action prefix" },
     { "key": "ScenarioAuthoringShellPlacementHudImguiRenderer.cs::DrawPlacementHudButton", "actionFamily": "delegates to placement HUD semantic actions" },
