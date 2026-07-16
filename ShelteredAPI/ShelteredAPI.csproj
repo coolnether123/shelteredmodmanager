@@ -621,6 +621,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringActions.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryFocusedEditorActions.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioInventoryItemCatalog.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioInventoryItemPreviewResolver.cs" />
     <Compile Include="Scenarios\Shared\ScenarioPropertyBag.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringActionCodec.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringMutationHelpers.cs" />
