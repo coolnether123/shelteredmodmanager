@@ -5,6 +5,7 @@ using System.Text;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -18,6 +19,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             VerifyLootPreview(result);
             VerifyDuplicate(result);
             VerifyProjectionMap(result);
+            VerifyTerrainBrushDraft(result);
         }
 
         private static void VerifyLootPreview(ScenarioValidationResult result)
@@ -92,6 +94,33 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 "MAPUX encounter projection descriptors and executable apply actions must stay synchronized.", result);
             Assert(projected == 4 && storedOnly == 2,
                 "MAPUX encounter projection matrix must cover four runtime chance fields plus stored-only entries and properties.", result);
+        }
+
+        private static void VerifyTerrainBrushDraft(ScenarioValidationResult result)
+        {
+            ScenarioEditorSession session = new ScenarioEditorSession
+            {
+                WorkingDefinition = new ScenarioDefinition { Id = "Scenario.MapBrush" }
+            };
+            ScenarioMapDraftService service = new ScenarioMapDraftService();
+            MapTerrainPatchDefinition round = service.PaintTerrainArea(
+                session, 10, 6, ScenarioMapTerrainModes.GeneratedBlend, MapTerrainBrushShape.Circle, 5);
+            MapTerrainPatchDefinition square = service.PaintTerrainArea(
+                session, 10, 6, "Woodland", MapTerrainBrushShape.Rectangle, 3);
+
+            Assert(round != null
+                && round.Shape == MapTerrainBrushShape.Circle
+                && Math.Abs(round.X - 10.5f) < 0.001f
+                && Math.Abs(round.Y - 6.5f) < 0.001f
+                && Math.Abs(round.Radius - 2.5f) < 0.001f,
+                "MAPUX round generated-blend brush must persist centered five-cell geometry.", result);
+            Assert(square != null
+                && square.Shape == MapTerrainBrushShape.Rectangle
+                && Math.Abs(square.X - 9f) < 0.001f
+                && Math.Abs(square.Y - 5f) < 0.001f
+                && Math.Abs(square.Width - 3f) < 0.001f
+                && session.WorkingDefinition.Map.TerrainPatches.Count == 2,
+                "MAPUX overlapping brush strokes must persist as ordered area patches.", result);
         }
 
         private static string DistributionSignature(ScenarioMapLootPreview preview)

@@ -8,13 +8,16 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Map;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioMapAuthoringRuntimeService
     {
         private readonly ScenarioMapDraftService _draftService;
         private UI_ExpeditionMap _hoveredMap;
-        private MapRegion _hoveredRegion;
+        private int _hoveredGridX;
+        private int _hoveredGridY;
+        private bool _hasHoveredGrid;
         private readonly Dictionary<string, GameObject> _markers = new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
 
         public ScenarioMapAuthoringRuntimeService(ScenarioMapDraftService draftService)
@@ -58,13 +61,31 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return UIPanelManager.Instance().IsPanelOnStack(UI_PanelContainer.Instance.MapPanel);
         }
 
-        public void ObserveHoveredRegion(UI_ExpeditionMap map, MapRegion region)
+        public void ObserveHoveredRegion(UI_ExpeditionMap map, MapRegion region, Vector2? worldPosition)
         {
             if (!ScenarioAuthoringRuntimeGuards.IsMapAuthoringActive())
                 return;
 
             _hoveredMap = map;
-            _hoveredRegion = region;
+            if (region != null)
+            {
+                _hoveredGridX = region.gridReference.x;
+                _hoveredGridY = region.gridReference.y;
+                _hasHoveredGrid = true;
+                return;
+            }
+
+            int gridX = 0;
+            int gridY = 0;
+            float centreX;
+            float centreY;
+            _hasHoveredGrid = worldPosition.HasValue
+                && TryResolveGrid(worldPosition.Value.x, worldPosition.Value.y, out gridX, out gridY, out centreX, out centreY);
+            if (_hasHoveredGrid)
+            {
+                _hoveredGridX = gridX;
+                _hoveredGridY = gridY;
+            }
         }
 
         public void ClickMap(UI_ExpeditionMap map, Vector2 worldPosition, string source)
@@ -166,6 +187,56 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return true;
         }
 
+        public bool CanPaintTerrainAtGrid(int gridX, int gridY, string terrainId, out string reason)
+        {
+            reason = null;
+            MapRegion.Topography topography;
+            if (!string.Equals(terrainId, ScenarioMapTerrainModes.GeneratedBlend, StringComparison.OrdinalIgnoreCase)
+                && !ScenarioMapTerrainProjection.TryParseTerrain(terrainId, out topography))
+            {
+                reason = "Unknown map terrain '" + (terrainId ?? string.Empty) + "'.";
+                return false;
+            }
+
+            if (ExpeditionMap.Instance == null)
+            {
+                reason = "The expedition map is not ready.";
+                return false;
+            }
+
+            if (gridX < 0 || gridY < 0 || gridX >= ExpeditionMap.Instance.width || gridY >= ExpeditionMap.Instance.height)
+            {
+                reason = "The selected cell is outside the expedition map.";
+                return false;
+            }
+
+            if (ExpeditionMap.Instance.GetRegionOnMap(new ExpeditionMap.GridRef(gridX, gridY)) == null)
+            {
+                reason = "The selected cell has no live map region to paint.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool PreviewTerrainDraft(ScenarioEditorSession session, out string reason)
+        {
+            reason = null;
+            if (ExpeditionMap.Instance == null)
+            {
+                reason = "The expedition map is not ready.";
+                return false;
+            }
+            if (session == null || session.WorkingDefinition == null || session.WorkingDefinition.Map == null)
+            {
+                reason = "The scenario map draft is not available.";
+                return false;
+            }
+
+            ScenarioMapTerrainProjection.Apply(session.WorkingDefinition.Map, ExpeditionMap.Instance, null);
+            return true;
+        }
+
         public bool Synchronize(ScenarioAuthoringState state, ScenarioEditorSession session)
         {
             if (state == null)
@@ -216,6 +287,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             Dictionary<string, bool> live = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             ScenarioMapAuthoringMarkerFilter.ApplyVanillaRegionFilter();
+            ScenarioMapAuthoringMarkerFilter.ApplyTerrainBrushPreview(state, _hoveredGridX, _hoveredGridY, _hasHoveredGrid);
             for (int i = 0; i < map.Locations.Count; i++)
             {
                 MapLocationDefinition location = map.Locations[i];
@@ -254,6 +326,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             }
 
             _markers.Clear();
+            _hasHoveredGrid = false;
         }
 
         private bool SelectRegion(MapRegion region, Vector2? requestedWorldPosition, string source)

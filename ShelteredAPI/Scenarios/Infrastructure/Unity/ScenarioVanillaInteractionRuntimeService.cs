@@ -103,6 +103,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (!HasPlayerInteractions(selected))
                 return false;
 
+            if (selected is Obj_Radio)
+            {
+                bool opened = ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionMapAuthoringOpen);
+                if (opened)
+                    return true;
+            }
+
             BeginWorldObjectSession("Right-click object interaction.");
             _pendingMenuObject = selected;
             _pendingMenuOpenUntil = RealTime.time + 0.75f;

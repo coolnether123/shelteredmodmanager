@@ -4,6 +4,7 @@ using UnityEngine;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
@@ -56,9 +57,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float y = inner.y + 34f;
             y = DrawModeTab(inner.x, y, inner.width, "Select", "SL", ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect, state == null || string.IsNullOrEmpty(state.MapAuthoringMode) || state.MapAuthoringMode == "select", true);
-            y = DrawModeTab(inner.x, y + 6f, inner.width, "Place", "PL", ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, state != null && state.MapAuthoringMode == "place", true);
+            y = DrawModeTab(inner.x, y + 6f, inner.width, "Place POI", "PL", ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, state != null && state.MapAuthoringMode == "place", true);
             bool canMove = selection != null && selection.Authored;
             y = DrawModeTab(inner.x, y + 6f, inner.width, "Move", "MV", ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, state != null && state.MapAuthoringMode == "move", canMove);
+            GUI.Label(new Rect(inner.x, y + 8f, inner.width, 18f), "Terrain", _mutedTextStyle);
+            y += 28f;
+            y = DrawModeTab(inner.x, y, inner.width, "Trees", "TR", ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainTrees, state != null && state.MapAuthoringMode == "terrain:Woodland", true);
+            y = DrawModeTab(inner.x, y + 6f, inner.width, "Mountains", "MT", ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainMountains, state != null && state.MapAuthoringMode == "terrain:Mountains", true);
+            y = DrawModeTab(inner.x, y + 6f, inner.width, "Clear", "ER", ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainClear, state != null && state.MapAuthoringMode == "terrain:NowhereSpecial", true);
+            y = DrawModeTab(inner.x, y + 6f, inner.width, "Blend", "GB", ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainGeneratedBlend, state != null && state.MapAuthoringMode == "terrain:" + ScenarioMapTerrainModes.GeneratedBlend, true);
             DrawMapAuthoringLegend(inner, y + 14f);
 
             Rect closeRect = new Rect(inner.x, inner.yMax - 30f, inner.width, 28f);
@@ -100,14 +107,46 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             scroll = GUILayout.BeginScrollView(scroll, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, body.width - 18f);
+            DrawMapBrushControls(state);
             if (selection == null)
                 DrawMapAuthoringEmptySelection(state);
             else
                 DrawMapAuthoringSelectionEditor(selection, state);
+            DrawMapGenerationControls();
             _activeContentWidth = previousContentWidth;
             GUILayout.EndScrollView();
             GUILayout.EndArea();
             SetWindowScrollPosition("map.authoring.right_dock", scroll);
+        }
+
+        private void DrawMapBrushControls(ScenarioAuthoringState state)
+        {
+            int size = state != null && state.MapTerrainBrushSize > 0 ? state.MapTerrainBrushSize : 3;
+            string shape = state != null && !string.IsNullOrEmpty(state.MapTerrainBrushShape) ? state.MapTerrainBrushShape : "circle";
+            GUILayout.Label("Terrain Paintbrush", _textStyle);
+            GUILayout.Label("Mode: " + FormatOverlayMode(state) + "  |  " + shape + "  |  "
+                + size.ToString(CultureInfo.InvariantCulture) + " cells", _mutedTextStyle);
+            DrawCompactBrushButton(ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeCircle, "Round Brush", "O", shape == "circle");
+            DrawCompactBrushButton(ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeSquare, "Square Brush", "[]", shape == "square");
+            DrawCompactBrushButton(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize1, "Size 1", "1", size == 1);
+            DrawCompactBrushButton(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize3, "Size 3", "3", size == 3);
+            DrawCompactBrushButton(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize5, "Size 5", "5", size == 5);
+            DrawCompactBrushButton(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize7, "Size 7", "7", size == 7);
+            GUILayout.Label("Generated Blend fills the marked area deterministically, favors adjoining manual terrain, and leaves generated POI assets intact.", _mutedTextStyle);
+            GUILayout.Space(10f);
+        }
+
+        private void DrawCompactBrushButton(string actionId, string label, string icon, bool active)
+        {
+            DrawButton(GUILayoutUtility.GetRect(0f, 25f, GUILayout.ExpandWidth(true), GUILayout.Height(25f)), new ScenarioAuthoringInspectorAction
+            {
+                Id = actionId,
+                Label = label,
+                Hint = "Configure the active map terrain paintbrush.",
+                Enabled = true,
+                Emphasized = active,
+                IconText = icon
+            }, false);
         }
 
         private void DrawMapAuthoringEmptySelection(ScenarioAuthoringState state)
@@ -115,7 +154,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Label("Click the map to select or place locations.", _textStyle);
             GUILayout.Space(6f);
             GUILayout.Label("Mode: " + FormatOverlayMode(state) + ". Escape or Close returns to the Map workshop page.", _mutedTextStyle);
-            GUILayout.Label("Place and Move require an existing vanilla region; empty NowhereSpecial cells are blocked.", _mutedTextStyle);
+            GUILayout.Label("Place POI and Move require an existing non-empty vanilla region. Terrain brushes can paint any generated map cell.", _mutedTextStyle);
         }
 
         private void DrawMapAuthoringSelectionEditor(ScenarioMapRegionSelection selection, ScenarioAuthoringState state)
@@ -149,6 +188,36 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawMapUxSelectionDetails(selection, state);
             GUILayout.Space(8f);
             GUILayout.Label("Mode: " + FormatOverlayMode(state), _mutedTextStyle);
+        }
+
+        private void DrawMapGenerationControls()
+        {
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            bool fixedSeed = definition != null && definition.SeedOverride.HasValue;
+            GUILayout.Space(14f);
+            GUILayout.Label("Map Generation", _textStyle);
+            GUILayout.Label(fixedSeed
+                ? "Fixed seed " + definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture) + ". Changes render on the next world load."
+                : "Vanilla generation; any normal map may render.", _mutedTextStyle);
+            DrawButton(GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f)), new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionScenarioSeedRandom,
+                Label = "Render Normally",
+                Hint = "Use Sheltered's normal map generation without pinning a scenario seed.",
+                Enabled = definition != null,
+                Emphasized = !fixedSeed,
+                IconText = "VN"
+            }, false);
+            DrawButton(GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f)), new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionScenarioSeedReroll,
+                Label = "Randomize Next Map",
+                Hint = "Choose a new fixed seed. Reload or Playtest to render the randomized base map.",
+                Enabled = definition != null,
+                Emphasized = false,
+                IconText = "RR"
+            }, false);
         }
 
         private void DrawOverlayEditableProperty(string label, string value, string field, string locationId, string hint)

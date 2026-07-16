@@ -50,6 +50,26 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return SetMode(state, "place", out message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, StringComparison.Ordinal))
                 return SetMode(state, "move", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainTrees, StringComparison.Ordinal))
+                return SetMode(state, "terrain:Woodland", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainMountains, StringComparison.Ordinal))
+                return SetMode(state, "terrain:Mountains", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainClear, StringComparison.Ordinal))
+                return SetMode(state, "terrain:NowhereSpecial", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainGeneratedBlend, StringComparison.Ordinal))
+                return SetMode(state, "terrain:" + ScenarioMapTerrainModes.GeneratedBlend, out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeCircle, StringComparison.Ordinal))
+                return SetBrushShape(state, "circle", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeSquare, StringComparison.Ordinal))
+                return SetBrushShape(state, "square", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize1, StringComparison.Ordinal))
+                return SetBrushSize(state, 1, out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize3, StringComparison.Ordinal))
+                return SetBrushSize(state, 3, out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize5, StringComparison.Ordinal))
+                return SetBrushSize(state, 5, out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize7, StringComparison.Ordinal))
+                return SetBrushSize(state, 7, out message);
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectWorldPrefix, StringComparison.Ordinal))
                 return SelectWorldPosition(state, actionId, out message);
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix, StringComparison.Ordinal))
@@ -137,6 +157,23 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return true;
         }
 
+        private bool SetBrushShape(ScenarioAuthoringState state, string shape, out string message)
+        {
+            state.MapTerrainBrushShape = string.Equals(shape, "square", StringComparison.OrdinalIgnoreCase) ? "square" : "circle";
+            message = "Terrain paintbrush shape: " + state.MapTerrainBrushShape + ".";
+            state.StatusMessage = message;
+            return true;
+        }
+
+        private bool SetBrushSize(ScenarioAuthoringState state, int size, out string message)
+        {
+            state.MapTerrainBrushSize = size == 1 || size == 5 || size == 7 ? size : 3;
+            message = "Terrain paintbrush size: " + state.MapTerrainBrushSize.ToString(CultureInfo.InvariantCulture)
+                + " x " + state.MapTerrainBrushSize.ToString(CultureInfo.InvariantCulture) + " cells.";
+            state.StatusMessage = message;
+            return true;
+        }
+
         private bool SelectWorldPosition(ScenarioAuthoringState state, string actionId, out string message)
         {
             message = null;
@@ -207,6 +244,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return PlaceAtGrid(state, gridX, gridY, centreX, centreY, out message);
             if (string.Equals(mode, "move", StringComparison.OrdinalIgnoreCase))
                 return MoveSelectedToGrid(state, gridX, gridY, centreX, centreY, out message);
+            if (mode.StartsWith("terrain:", StringComparison.OrdinalIgnoreCase))
+                return PaintTerrainAtGrid(state, gridX, gridY, mode.Substring("terrain:".Length), out message);
             string duplicateSourceId;
             if (ScenarioMapLocationDuplicateService.TryReadSourceId(mode, out duplicateSourceId))
                 return DuplicateSelectedToGrid(state, duplicateSourceId, gridX, gridY, centreX, centreY, out message);
@@ -268,6 +307,53 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             state.StatusMessage = message;
             if (_runtimeService != null)
                 _runtimeService.RefreshMarkers(state, session);
+            return true;
+        }
+
+        private bool PaintTerrainAtGrid(ScenarioAuthoringState state, int gridX, int gridY, string terrainId, out string message)
+        {
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            if (_draftService == null || session == null)
+            {
+                message = "The map draft is not available.";
+                return false;
+            }
+
+            int brushSize = state.MapTerrainBrushSize > 0 ? state.MapTerrainBrushSize : 3;
+            MapTerrainBrushShape brushShape = string.Equals(state.MapTerrainBrushShape, "square", StringComparison.OrdinalIgnoreCase)
+                ? MapTerrainBrushShape.Rectangle
+                : MapTerrainBrushShape.Circle;
+            string previewReason = null;
+            if (_runtimeService == null || !_runtimeService.CanPaintTerrainAtGrid(gridX, gridY, terrainId, out previewReason))
+            {
+                message = !string.IsNullOrEmpty(previewReason) ? previewReason : "That terrain cannot be painted on this map cell.";
+                return false;
+            }
+
+            RecordMapUndo(session, "Paint " + terrainId + " terrain area at "
+                + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture));
+            MapTerrainPatchDefinition patch = _draftService.PaintTerrainArea(session, gridX, gridY, terrainId, brushShape, brushSize);
+            if (patch == null)
+            {
+                message = "The terrain patch could not be saved to the scenario draft.";
+                return false;
+            }
+
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
+            if (!_runtimeService.PreviewTerrainDraft(session, out previewReason))
+            {
+                message = "Saved " + FormatTerrainMode(terrainId) + " area at grid "
+                    + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture)
+                    + "; live preview is unavailable: " + previewReason;
+            }
+            else
+            {
+                message = "Painted " + FormatTerrainMode(terrainId) + " with a "
+                    + state.MapTerrainBrushShape + " " + brushSize.ToString(CultureInfo.InvariantCulture) + "-cell brush at grid "
+                    + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture) + ".";
+            }
+
+            state.StatusMessage = message;
             return true;
         }
 
@@ -664,6 +750,16 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect, StringComparison.Ordinal)
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, StringComparison.Ordinal)
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainTrees, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainMountains, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainClear, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainGeneratedBlend, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeCircle, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeSquare, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize1, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize3, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize5, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize7, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectWorldPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal)
@@ -671,6 +767,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationDuplicatePrefix, StringComparison.Ordinal);
+        }
+
+        private static string FormatTerrainMode(string terrainId)
+        {
+            return string.Equals(terrainId, ScenarioMapTerrainModes.GeneratedBlend, StringComparison.OrdinalIgnoreCase)
+                ? "generated blend terrain"
+                : terrainId + " terrain";
         }
 
         private static bool ValidateLocationField(string field, string value, out string error)
