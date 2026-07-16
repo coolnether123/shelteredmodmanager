@@ -72,6 +72,65 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 message = "Map filter toggled: " + filter + ".";
                 return true;
             }
+            string workspaceId;
+            string subtabId;
+            string workspaceValue;
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceSubtabSelectPrefix, StringComparison.Ordinal))
+            {
+                if (!TryWorkspacePayload(actionId, ScenarioAuthoringActionIds.ActionRendererWorkspaceSubtabSelectPrefix, out workspaceId, out subtabId, out workspaceValue))
+                    return Invalid("Workspace subtab action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSubtab(workspaceId, subtabId);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix, StringComparison.Ordinal))
+            {
+                string prefix = actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix, StringComparison.Ordinal)
+                    ? ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix
+                    : (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix, StringComparison.Ordinal)
+                        ? ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix
+                        : ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix);
+                if (!TryWorkspacePayload(actionId, prefix, out workspaceId, out subtabId, out workspaceValue)
+                    || string.IsNullOrEmpty(workspaceValue))
+                    return Invalid("Workspace selection action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSubtab(workspaceId, subtabId);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSelection(workspaceId, subtabId, workspaceValue);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceNarrowPane(workspaceId, subtabId, true);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceGroupTogglePrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceRowTogglePrefix, StringComparison.Ordinal))
+            {
+                string prefix = actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceGroupTogglePrefix, StringComparison.Ordinal)
+                    ? ScenarioAuthoringActionIds.ActionRendererWorkspaceGroupTogglePrefix
+                    : ScenarioAuthoringActionIds.ActionRendererWorkspaceRowTogglePrefix;
+                if (!TryWorkspacePayload(actionId, prefix, out workspaceId, out subtabId, out workspaceValue)
+                    || string.IsNullOrEmpty(workspaceValue))
+                    return Invalid("Workspace expansion action was malformed.", out message);
+                bool expanded = ScenarioAuthoringRendererInteractionState.Instance.GetWorkspaceExpanded(workspaceId, subtabId, workspaceValue, false);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceExpanded(workspaceId, subtabId, workspaceValue, !expanded);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceSearchSetPrefix, StringComparison.Ordinal))
+            {
+                if (!TryWorkspacePayload(actionId, ScenarioAuthoringActionIds.ActionRendererWorkspaceSearchSetPrefix, out workspaceId, out subtabId, out workspaceValue))
+                    return Invalid("Workspace search action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSearch(workspaceId, subtabId, workspaceValue);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceBackPrefix, StringComparison.Ordinal))
+            {
+                if (!TryWorkspacePayload(actionId, ScenarioAuthoringActionIds.ActionRendererWorkspaceBackPrefix, out workspaceId, out subtabId, out workspaceValue))
+                    return Invalid("Workspace Back action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceNarrowPane(workspaceId, subtabId, false);
+                message = null;
+                return true;
+            }
             if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, out token)
                 || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, out token)
                 || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, out token)
@@ -204,6 +263,31 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             key = token.Substring(0, separator);
             value = token.Substring(separator + 1);
             return true;
+        }
+
+        private static bool TryWorkspacePayload(
+            string actionId,
+            string prefix,
+            out string workspaceId,
+            out string subtabId,
+            out string value)
+        {
+            workspaceId = null;
+            subtabId = null;
+            value = null;
+            string payload;
+            if (!TryToken(actionId, prefix, out payload))
+                return false;
+
+            int firstSeparator = payload.IndexOf('\n');
+            int secondSeparator = firstSeparator >= 0 ? payload.IndexOf('\n', firstSeparator + 1) : -1;
+            if (firstSeparator <= 0 || secondSeparator <= firstSeparator + 1)
+                return false;
+
+            workspaceId = payload.Substring(0, firstSeparator);
+            subtabId = payload.Substring(firstSeparator + 1, secondSeparator - firstSeparator - 1);
+            value = payload.Substring(secondSeparator + 1);
+            return !string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(subtabId);
         }
 
         private static bool Invalid(string reason, out string message)

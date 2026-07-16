@@ -557,6 +557,7 @@
     <Compile Include="Scenarios\Application\Commands\ScenarioDraftHistoryCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioAuthorTestChecklistCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringWorkspaceContracts.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringLocalActionIds.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBaseModeAuthoringActions.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringContextMenuService.cs" />
@@ -571,6 +572,7 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringPauseService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationService.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Workspace\*.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeDriver.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringEditorCameraService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioMapAuthoringRuntimeService.cs" />
@@ -611,6 +613,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellVisualSurfaceGate.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellInventorySlotGridImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellMasterDetailImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellNewWindowsImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorkspaceTabsImguiRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioAuthoringStoragePaths.cs" />

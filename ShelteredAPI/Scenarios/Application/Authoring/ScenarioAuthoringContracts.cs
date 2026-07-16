@@ -94,6 +94,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionRendererCandidateSearchPrefix = "shell.renderer.candidate_search.set.";
         public const string ActionRendererCandidateFilterPrefix = "shell.renderer.candidate_filter.select.";
         public const string ActionRendererGlobalSearchQueryPrefix = "shell.renderer.global_search.query.";
+        public const string ActionRendererWorkspaceSubtabSelectPrefix = "shell.renderer.workspace.subtab.select.";
+        public const string ActionRendererWorkspaceEntitySelectPrefix = "shell.renderer.workspace.entity.select.";
+        public const string ActionRendererWorkspaceWarningOpenPrefix = "shell.renderer.workspace.warning.open.";
+        public const string ActionRendererWorkspaceGroupTogglePrefix = "shell.renderer.workspace.group.toggle.";
+        public const string ActionRendererWorkspaceRowTogglePrefix = "shell.renderer.workspace.row.toggle.";
+        public const string ActionRendererWorkspaceSearchSetPrefix = "shell.renderer.workspace.search.set.";
+        public const string ActionRendererWorkspaceBreadcrumbSelectPrefix = "shell.renderer.workspace.breadcrumb.select.";
+        public const string ActionRendererWorkspaceBackPrefix = "shell.renderer.workspace.back.";
         public const string ActionRendererTopBarMoreToggle = "shell.renderer.top_bar_more.toggle";
         public const string ActionRendererPlacementBack = "shell.renderer.placement.back";
         public const string ActionRendererPlacementDone = "shell.renderer.placement.done";
@@ -1091,6 +1099,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public float MinHeight { get; set; }
         public int ZIndex { get; set; }
         public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
+        public ScenarioAuthoringWorkspaceViewModel WorkspaceBody { get; set; }
         public ScenarioAuthoringInspectorSection[] Sections { get; set; }
     }
 
@@ -1370,6 +1379,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Id { get; set; }
         public string Title { get; set; }
         public bool Expanded { get; set; }
+        public bool IsAdvanced { get; set; }
+        public ScenarioAuthoringStatusChipViewModel[] StatusChips { get; set; }
         public ScenarioAuthoringInspectorSectionLayout Layout { get; set; }
         public ScenarioAuthoringInspectorItem[] Items { get; set; }
         public ScenarioSurvivorEditorViewModel SurvivorEditor { get; set; }
@@ -1383,7 +1394,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         Text = 0,
         Property = 1,
-        Action = 2
+        Action = 2,
+        Choice = 3
     }
 
     internal sealed class ScenarioAuthoringInspectorItem
@@ -1403,6 +1415,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string PulseKey { get; set; }
         public string PulseSignature { get; set; }
         public ScenarioCastCardViewModel CastCard { get; set; }
+        public ScenarioAuthoringCompactChoiceViewModel Choice { get; set; }
         public ScenarioAuthoringInspectorAction Action { get; set; }
     }
 
