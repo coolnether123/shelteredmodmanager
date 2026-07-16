@@ -2,6 +2,7 @@ using ShelteredAPI.Core;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
@@ -30,7 +31,13 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDraftMetadataEditService(resolver.Get<ScenarioAuthoringDraftRepository>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringHistoryService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringInventoryProjectionService(resolver.Get<InventoryApplyService>()); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringCaptureService(resolver.Get<IScenarioDraftMutationService>(), resolver.Get<ScenarioActorResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringCaptureService(
+                    resolver.Get<IScenarioDraftMutationService>(),
+                    resolver.Get<ScenarioActorResolver>(),
+                    resolver.Get<ScenarioObjectIdentityAssignmentService>());
+            });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioGameplayScheduleAuthoringService(resolver.Get<ScenarioActorResolver>(), resolver.Get<ScenarioAuthoringInventoryProjectionService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStoryAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioEventAuthoringService(); });

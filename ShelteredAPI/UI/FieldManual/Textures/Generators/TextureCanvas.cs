@@ -3,20 +3,20 @@ using UnityEngine;
 namespace ShelteredAPI.UI.FieldManual.Textures.Generators
 {
     /// <summary>
-    /// Mutable Color[] buffer with helpers for primitive drawing. Keeps generator code
+    /// Mutable 8-bit pixel buffer with helpers for primitive drawing. Keeps generator code
     /// declarative — generators describe pixels, not Texture2D plumbing.
     /// </summary>
     internal sealed class TextureCanvas
     {
         public readonly int Width;
         public readonly int Height;
-        public readonly Color[] Pixels;
+        public readonly Color32[] Pixels;
 
         public TextureCanvas(int width, int height)
         {
             Width = Mathf.Max(1, width);
             Height = Mathf.Max(1, height);
-            Pixels = new Color[Width * Height];
+            Pixels = new Color32[Width * Height];
         }
 
         public void Fill(Color color)
@@ -104,8 +104,10 @@ namespace ShelteredAPI.UI.FieldManual.Textures.Generators
             var tex = new Texture2D(Width, Height, TextureFormat.ARGB32, false);
             tex.filterMode = filter;
             tex.wrapMode = TextureWrapMode.Clamp;
-            tex.SetPixels(Pixels);
-            tex.Apply(false, false);
+            tex.SetPixels32(Pixels);
+            // Procedural chrome is immutable after creation. Discarding Unity's
+            // readable CPU copy keeps the shared process-lifetime cache GPU-only.
+            tex.Apply(false, true);
             return tex;
         }
     }

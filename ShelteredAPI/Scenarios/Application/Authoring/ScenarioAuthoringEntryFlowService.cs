@@ -1224,8 +1224,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     int row = i / columns;
                     Rect rect = new Rect(area.x + (col * (toggleWidth + gap)), area.y + (row * (toggleHeight + gap)), toggleWidth, toggleHeight);
                     GUIContent content = new GUIContent(string.Empty, toggle != null ? toggle.Detail ?? string.Empty : string.Empty);
-                    if (GUI.Button(rect, content, toggle != null && toggle.On ? _uiContext.Styles.ButtonActive : _cardButtonStyle))
+                    if (GUI.Button(rect, content, _cardButtonStyle))
                         _owner.ToggleWizardSetting(toggle.Key);
+
+                    DrawCardStateOverlay(rect, true, toggle != null && toggle.On);
 
                     string mark = toggle != null && toggle.On ? "[ON]" : "[OFF]";
                     GUI.Box(new Rect(rect.x + 10f, rect.y + 10f, 56f, 22f), mark, toggle != null && toggle.On ? _uiContext.Styles.PillSuccess : _uiContext.Styles.Pill);

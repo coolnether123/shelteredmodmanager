@@ -22,7 +22,6 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Shared;
-using ShelteredAPI.Scenarios.Infrastructure.Harmony;
 namespace ShelteredAPI.Core
 {
     /// <summary>
@@ -45,7 +44,6 @@ namespace ShelteredAPI.Core
 
                 MeasureStartupPhase("ShelteredAPI ShelteredUnityLogNormalizers.Register", ShelteredUnityLogNormalizers.Register);
                 MeasureStartupPhase("ShelteredAPI ScenarioCompositionRoot.EnsureRuntimeInitialized", ScenarioCompositionRoot.EnsureRuntimeInitialized);
-                MeasureStartupPhase("ShelteredAPI ScenarioRngPatches.Install", ScenarioRngPatches.Install);
                 MeasureStartupPhase("ShelteredAPI ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle", ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle);
                 if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 {

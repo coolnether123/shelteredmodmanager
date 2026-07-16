@@ -69,6 +69,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private GUIStyle _smallTitleStyle;
         private GUIStyle _textStyle;
         private GUIStyle _mutedTextStyle;
+        private GUIStyle _resizeGripStyle;
         private GUIStyle _buttonStyle;
         private GUIStyle _activeButtonStyle;
         private GUIStyle _buttonContentStyle;
@@ -892,9 +893,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 _animations.UpdateWindowRect(window.Id, rect);
                 bool visualInteractive = visual == null || visual.Alpha > WindowInteractionAlphaThreshold;
-                Rect interactiveRect;
-                using (EnterVisualSurface(VisualSurfaceIdForWindow(window.Id), visualInteractive))
-                    interactiveRect = DrawWindowCore(rect, window);
+                Rect interactiveRect = DrawWindowCoreWithInputGate(rect, window, visualInteractive);
                 if (interactiveRect.width > 0f && interactiveRect.height > 0f && (visual == null || visual.Alpha > WindowInteractionAlphaThreshold))
                 {
                     inputCapture.RegisterInteractiveRect(interactiveRect);
@@ -909,13 +908,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect rect = state.LastRect;
-                Rect interactiveRect;
-                using (EnterVisualSurface(VisualSurfaceIdForWindow(state.Window.Id), state.Alpha > WindowInteractionAlphaThreshold))
-                    interactiveRect = DrawWindowCore(rect, state.Window);
+                Rect interactiveRect = DrawWindowCoreWithInputGate(
+                    rect,
+                    state.Window,
+                    state.Alpha > WindowInteractionAlphaThreshold);
                 if (interactiveRect.width > 0f && interactiveRect.height > 0f && state.Alpha > WindowInteractionAlphaThreshold)
                 {
                     inputCapture.RegisterInteractiveRect(interactiveRect);
                 }
+            }
+        }
+
+        private Rect DrawWindowCoreWithInputGate(
+            Rect rect,
+            ScenarioAuthoringShellWindowViewModel window,
+            bool visualInteractive)
+        {
+            string surfaceId = VisualSurfaceIdForWindow(window != null ? window.Id : null);
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled
+                && visualInteractive
+                && IsVisualSurfaceTopmost(surfaceId, rect);
+            try
+            {
+                using (EnterVisualSurface(surfaceId, visualInteractive))
+                    return DrawWindowCore(rect, window);
+            }
+            finally
+            {
+                GUI.enabled = previousEnabled;
             }
         }
 
@@ -1114,6 +1135,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (canStartDrag
                 && !IsDraggingWindow(window.Id)
+                && IsVisualSurfaceTopmost(VisualSurfaceIdForWindow(window.Id), rect)
                 && (eventPrimaryDown || rawPrimaryDown))
             {
                 Vector2 mouse = eventPrimaryDown ? eventMouse : rawMouse;
@@ -1187,7 +1209,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float minHeight = window != null && window.MinHeight > 0f ? window.MinHeight : 140f;
             next = ScenarioAuthoringShellLayout.ClampWindowRect(next, contentRect, minWidth, minHeight);
             _dragLastRect = next;
-            CommitFloatingWindowFrame(window != null ? window.Id : null, next, persist);
+            if (persist)
+                CommitFloatingWindowFrame(window != null ? window.Id : null, next, true);
             return next;
         }
 
@@ -1231,7 +1254,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             Event current = Event.current;
             Rect gripRect = BuildDockedInspectorResizeRect(rect);
-            if (current != null && current.type == EventType.MouseDown && current.button == 0 && gripRect.Contains(current.mousePosition))
+            if (current != null
+                && current.type == EventType.MouseDown
+                && current.button == 0
+                && gripRect.Contains(current.mousePosition)
+                && IsVisualSurfaceTopmost(VisualSurfaceIdForWindow(window != null ? window.Id : null), rect))
             {
                 _dragWindowId = window.Id;
                 _dragMode = FloatingWindowDragMode.Resize;
@@ -1399,6 +1426,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _sectionTitleStyle = styles.SectionTitleText;
             _textStyle = styles.BodyText;
             _mutedTextStyle = styles.MutedText;
+            _resizeGripStyle = new GUIStyle(_mutedTextStyle);
+            _resizeGripStyle.alignment = TextAnchor.LowerRight;
+            _resizeGripStyle.clipping = TextClipping.Clip;
+            _resizeGripStyle.wordWrap = false;
+            _resizeGripStyle.fontSize = Math.Min(11, _resizeGripStyle.fontSize);
+            _resizeGripStyle.padding = new RectOffset(0, 0, 0, 0);
             _buttonStyle = styles.Button;
             _activeButtonStyle = styles.ButtonActive;
             _tabStyle = styles.Tab;
@@ -1425,6 +1458,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _smallTitleStyle = null;
             _textStyle = null;
             _mutedTextStyle = null;
+            _resizeGripStyle = null;
             _buttonStyle = null;
             _activeButtonStyle = null;
             _buttonContentStyle = null;

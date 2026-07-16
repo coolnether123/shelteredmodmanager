@@ -676,6 +676,15 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 "Completion carrier projected an authored stage into vanilla visitor flow.", result);
             Assert(carrier != null && string.Equals(carrier.id, definition.Id, StringComparison.Ordinal),
                 "Completion carrier did not preserve the authored scenario id used by outcome resolution.", result);
+
+            ScenarioDef playable = ScenarioDefinitionService.BuildPlayableScenarioDef(definition);
+            Assert(playable != null && playable.stages.Count == 0,
+                "Playable carrier should ignore authored stages that have no intercom content.", result);
+
+            definition.ScenarioFlow.Stages[0].IntercomStages.Add(new ScenarioIntercomStageDefinition { Id = "opening" });
+            playable = ScenarioDefinitionService.BuildPlayableScenarioDef(definition);
+            Assert(playable != null && playable.stages.Count == 1,
+                "Playable carrier did not project an authored intercom stage into vanilla story flow.", result);
         }
 
         private static void VerifyScenarioSaveDiscoveryExcludesSoftDeletedFolders(string root, ScenarioValidationResult result)

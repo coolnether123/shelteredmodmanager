@@ -20,7 +20,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioMapAuthoringPatches
     {
         [HarmonyPatch(typeof(UI_ExpeditionMap), "GetMapRegionUnderCursor")]

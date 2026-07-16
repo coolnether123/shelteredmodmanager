@@ -89,7 +89,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             }
 
             SpriteCatalog catalog = BuildCatalog(session.WorkingDefinition, target, resolvedTarget, scenarioFilePath, _familyMatcher, _assetResolver);
-            if (_cachedCatalog != null)
+            bool sameCatalogScope = _cachedCatalog != null
+                && string.Equals(_cachedTargetPath, targetPath, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(_cachedScenarioFilePath, scenarioFilePath, StringComparison.OrdinalIgnoreCase);
+            if (sameCatalogScope)
             {
                 ScheduleCatalogRefresh(catalog, targetPath, currentSpriteKey, scenarioFilePath, customSpriteSignature);
                 return CloneCatalog(_cachedCatalog);

@@ -95,6 +95,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (_visualSurfaceEnabledStack.Count > 0 && !_visualSurfaceEnabledStack[_visualSurfaceEnabledStack.Count - 1])
                 return false;
 
+            return IsVisualSurfaceTopmost(CurrentVisualSurfaceId, rect);
+        }
+
+        private bool IsVisualSurfaceTopmost(string surfaceId, Rect rect)
+        {
             Vector2 pointer = GetCurrentEventPointer();
             if (!rect.Contains(pointer))
                 return true;
@@ -103,9 +108,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (topmost == null)
                 return true;
 
-            string current = CurrentVisualSurfaceId;
-            return !string.IsNullOrEmpty(current)
-                && string.Equals(topmost.Id, current, StringComparison.OrdinalIgnoreCase);
+            return !string.IsNullOrEmpty(surfaceId)
+                && string.Equals(topmost.Id, surfaceId, StringComparison.OrdinalIgnoreCase);
         }
 
         private bool IsInteractiveHoverAllowed(Rect rect)

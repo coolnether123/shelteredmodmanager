@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 101,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioStorageAuthoringPatches
     {
         [HarmonyPatch(typeof(StoragePanel), "OnContextMenuSelected", new[] { typeof(string) })]

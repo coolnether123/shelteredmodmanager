@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
@@ -1279,13 +1280,16 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
     {
         private readonly IScenarioEditorService _editorService;
         private readonly ScenarioSelectionScopeService _scopeService;
+        private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
 
         public StationUpgradeCommandHandler(
             IScenarioEditorService editorService,
-            ScenarioSelectionScopeService scopeService)
+            ScenarioSelectionScopeService scopeService,
+            ScenarioObjectIdentityAssignmentService identityAssignmentService)
         {
             _editorService = editorService;
             _scopeService = scopeService;
+            _identityAssignmentService = identityAssignmentService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -1377,7 +1381,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatClearPrefix, StringComparison.Ordinal));
         }
 
-        private static ObjectPlacement EnsurePlacement(ScenarioEditorSession session, Obj_Base obj)
+        private ObjectPlacement EnsurePlacement(ScenarioEditorSession session, Obj_Base obj)
         {
             BunkerEditsDefinition edits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
             int index = ScenarioBunkerDraftService.FindPlacementIndex(edits.ObjectPlacements, obj);
@@ -1386,6 +1390,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(obj);
             edits.ObjectPlacements.Add(placement);
+            if (_identityAssignmentService != null)
+                _identityAssignmentService.AssignMissingIds(session);
             return placement;
         }
 

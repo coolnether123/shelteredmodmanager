@@ -18,6 +18,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private readonly ScenarioSpriteRuntimeResolver _resolver;
         private readonly Dictionary<string, BaselineState> _baselineByTarget = new Dictionary<string, BaselineState>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ScenarioSpriteRuntimeResolver.ResolvedTarget> _targetCache = new Dictionary<string, ScenarioSpriteRuntimeResolver.ResolvedTarget>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Sprite> _alignedReplacementCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _activeTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _activeAnimationTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -58,7 +59,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     continue;
 
                 CaptureBaseline(entry.TargetPath, runtimeTarget);
-                if (ScenarioSpriteRuntimeMutationService.TryApply(runtimeTarget, entry.Sprite))
+                Sprite replacement = ResolveAlignedReplacement(entry.TargetPath, entry.Sprite);
+                if (ScenarioSpriteRuntimeMutationService.TryApply(runtimeTarget, replacement))
                     appliedCount++;
 
                 nextTargets.Add(entry.TargetPath);
@@ -76,7 +78,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     continue;
 
                 CaptureBaseline(pair.Key, runtimeTarget);
-                if (ScenarioSpriteRuntimeMutationService.TryApplyAnimatedFrameSwaps(runtimeTarget, pair.Value))
+                Dictionary<string, Sprite> alignedFrames = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+                foreach (KeyValuePair<string, Sprite> frame in pair.Value)
+                    alignedFrames[frame.Key] = ResolveAlignedReplacement(pair.Key, frame.Value);
+                if (ScenarioSpriteRuntimeMutationService.TryApplyAnimatedFrameSwaps(runtimeTarget, alignedFrames))
                     appliedCount += pair.Value.Count;
                 nextAnimationTargets.Add(pair.Key);
             }
@@ -98,6 +103,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             RestoreRemovedTargets(new HashSet<string>(StringComparer.OrdinalIgnoreCase), reason);
             _baselineByTarget.Clear();
             _targetCache.Clear();
+            foreach (Sprite alignedReplacement in _alignedReplacementCache.Values)
+            {
+                if (alignedReplacement != null)
+                    UnityEngine.Object.Destroy(alignedReplacement);
+            }
+            _alignedReplacementCache.Clear();
             _activeTargets.Clear();
             _activeAnimationTargets.Clear();
         }
@@ -155,6 +166,57 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 Kind = runtimeTarget.Kind,
                 Sprite = runtimeTarget.CurrentSprite
             };
+        }
+
+        private Sprite ResolveAlignedReplacement(string targetPath, Sprite replacement)
+        {
+            BaselineState baseline;
+            if (replacement == null
+                || string.IsNullOrEmpty(targetPath)
+                || !_baselineByTarget.TryGetValue(targetPath, out baseline)
+                || baseline == null
+                || baseline.Sprite == null
+                || replacement.texture == null)
+            {
+                return replacement;
+            }
+
+            Rect replacementRect = replacement.rect;
+            Rect baselineRect = baseline.Sprite.rect;
+            if (replacementRect.width <= 0f || replacementRect.height <= 0f
+                || baselineRect.width <= 0f || baselineRect.height <= 0f)
+            {
+                return replacement;
+            }
+
+            Vector2 replacementPivot = new Vector2(
+                replacement.pivot.x / replacementRect.width,
+                replacement.pivot.y / replacementRect.height);
+            Vector2 baselinePivot = new Vector2(
+                baseline.Sprite.pivot.x / baselineRect.width,
+                baseline.Sprite.pivot.y / baselineRect.height);
+            if ((replacementPivot - baselinePivot).sqrMagnitude <= 0.000001f
+                && Mathf.Abs(replacement.pixelsPerUnit - baseline.Sprite.pixelsPerUnit) <= 0.001f)
+            {
+                return replacement;
+            }
+
+            string cacheKey = targetPath + "|" + replacement.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Sprite aligned;
+            if (_alignedReplacementCache.TryGetValue(cacheKey, out aligned) && aligned != null)
+                return aligned;
+
+            aligned = Sprite.Create(
+                replacement.texture,
+                replacement.textureRect,
+                baselinePivot,
+                baseline.Sprite.pixelsPerUnit);
+            if (aligned == null)
+                return replacement;
+
+            aligned.name = replacement.name;
+            _alignedReplacementCache[cacheKey] = aligned;
+            return aligned;
         }
 
         private bool TryResolveRuntimeTarget(string targetPath, ScenarioSpriteTargetComponentKind preferredKind, out ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)

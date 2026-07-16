@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioVanillaInteractionPatches
     {
         [HarmonyPatch(typeof(Obj_Base), "OnInteractionSelected", new[] { typeof(FamilyMember), typeof(string) })]

@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
@@ -12,7 +12,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
     /// <summary>Auditable first RNG batch. Missing Epic/Steam members are skipped, never fatal.</summary>
     internal static class ScenarioRngPatches
     {
-        private static bool _installed;
+        private static volatile bool _installed;
+        private static readonly object InstallSync = new object();
         // Generated from phase6_rngsweep.md Tier 1.  Each entry is a catalogued declaring
         // method, never a broad type scan; the IL precheck below is a second drift guard.
         private static readonly string[] TargetMethodManifest = new string[]
@@ -45,40 +46,53 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
         public static void Install()
         {
             if (_installed) return;
-            _installed = true;
-            HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("ShelteredModManager.ScenarioRngPatch");
-            int patched = 0;
-            for (int i = 0; i < TargetMethodManifest.Length; i++)
+            lock (InstallSync)
             {
-                string[] manifest = TargetMethodManifest[i].Split('|');
-                Type type = AccessTools.TypeByName(manifest[0]);
-                if (type == null)
+                if (_installed) return;
+
+                Stopwatch timer = Stopwatch.StartNew();
+                HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("ShelteredModManager.ScenarioRngPatch");
+                HarmonyMethod transpiler = new HarmonyMethod(typeof(ScenarioRngPatches), "RngTranspiler");
+                int patched = 0;
+                for (int i = 0; i < TargetMethodManifest.Length; i++)
                 {
-                    MMLog.WriteWarning("[ScenarioRngPatch] SKIP type mismatch: " + manifest[0]);
-                    continue;
-                }
-                string[] names = manifest[1].Split(',');
-                for (int j = 0; j < names.Length; j++)
-                {
-                    MethodInfo[] methods = type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    bool found = false;
-                    for (int k = 0; k < methods.Length; k++)
+                    string[] manifest = TargetMethodManifest[i].Split('|');
+                    Type type = AccessTools.TypeByName(manifest[0]);
+                    if (type == null)
                     {
-                        MethodInfo target = methods[k];
-                        if (target == null || target.Name != names[j] || target.IsAbstract || target.ContainsGenericParameters) continue;
-                        found = true;
-                        if (!ContainsRedirectableRngCall(target))
-                        {
-                            MMLog.WriteWarning("[ScenarioRngPatch] SKIP catalog drift/no RNG call: " + type.FullName + "." + target.Name);
-                            continue;
-                        }
-                        try { harmony.Patch(target, transpiler: new HarmonyMethod(typeof(ScenarioRngPatches), "RngTranspiler")); patched++; }
-                        catch (Exception ex) { MMLog.WriteWarning("[ScenarioRngPatch] SKIP method mismatch: " + type.FullName + "." + target.Name + " :: " + ex.Message); }
+                        MMLog.WriteWarning("[ScenarioRngPatch] SKIP type mismatch: " + manifest[0]);
+                        continue;
                     }
-                    if (!found) MMLog.WriteWarning("[ScenarioRngPatch] SKIP method missing: " + type.FullName + "." + names[j]);
+
+                    string[] names = manifest[1].Split(',');
+                    MethodInfo[] methods = type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                    for (int j = 0; j < names.Length; j++)
+                    {
+                        bool found = false;
+                        for (int k = 0; k < methods.Length; k++)
+                        {
+                            MethodInfo target = methods[k];
+                            if (target == null || target.Name != names[j] || target.IsAbstract || target.ContainsGenericParameters)
+                                continue;
+
+                            found = true;
+                            if (!ContainsRedirectableRngCall(target))
+                            {
+                                MMLog.WriteWarning("[ScenarioRngPatch] SKIP catalog drift/no RNG call: " + type.FullName + "." + target.Name);
+                                continue;
+                            }
+                            try { harmony.Patch(target, transpiler: transpiler); patched++; }
+                            catch (Exception ex) { MMLog.WriteWarning("[ScenarioRngPatch] SKIP method mismatch: " + type.FullName + "." + target.Name + " :: " + ex.Message); }
+                        }
+                        if (!found) MMLog.WriteWarning("[ScenarioRngPatch] SKIP method missing: " + type.FullName + "." + names[j]);
+                    }
                 }
+
+                _installed = true;
+                timer.Stop();
+                MMLog.WriteInfo("[ScenarioRngPatch] Installed first tier-1 batches on fixed-seed activation; methods="
+                    + patched + " elapsedMs=" + timer.ElapsedMilliseconds + ".");
             }
-            MMLog.WriteInfo("[ScenarioRngPatch] Installed first tier-1 batches; methods=" + patched + ".");
         }
 
         public static IEnumerable<CodeInstruction> RngTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original, ILGenerator generator)

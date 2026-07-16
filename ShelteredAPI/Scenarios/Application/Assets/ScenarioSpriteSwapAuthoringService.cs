@@ -732,7 +732,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     + " texture to " + SafeLabel(target.DisplayName));
 
                 string patchMessage;
-                string patchId = UpsertPatchSpriteAsset(definition, customTextureId, _customEditorSession.SourceLabel, out patchMessage);
+                string patchId = UpsertPatchSpriteAsset(definition, customTextureId, _customEditorSession.SourceLabel, state.ActiveScenarioFilePath, out patchMessage);
                 if (string.IsNullOrEmpty(patchId))
                 {
                     message = !string.IsNullOrEmpty(patchMessage) ? patchMessage : "Character texture patch could not be generated.";
@@ -1367,7 +1367,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     "Apply custom sprite to " + SafeLabel(state.SpriteSwapPicker.Target.DisplayName));
 
                 string patchMessage;
-                string patchId = UpsertPatchSpriteAsset(definition, customSpriteId, _customEditorSession.SourceLabel, out patchMessage);
+                string patchId = UpsertPatchSpriteAsset(definition, customSpriteId, _customEditorSession.SourceLabel, state.ActiveScenarioFilePath, out patchMessage);
                 if (string.IsNullOrEmpty(patchId))
                 {
                     message = !string.IsNullOrEmpty(patchMessage) ? patchMessage : "Custom sprite patch could not be generated.";
@@ -1912,6 +1912,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     frame.SourceRuntimeSpriteKey,
                     frame.BaselineTexture,
                     frame.Texture,
+                    state.ActiveScenarioFilePath,
                     out patchMessage);
                 if (string.IsNullOrEmpty(patchId))
                 {
@@ -3076,7 +3077,12 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             return "character_" + safe.ToLowerInvariant() + "_" + part.ToString().ToLowerInvariant() + "_" + DateTime.UtcNow.Ticks;
         }
 
-        private string UpsertPatchSpriteAsset(ScenarioDefinition definition, string spriteId, string displayName, out string message)
+        private string UpsertPatchSpriteAsset(
+            ScenarioDefinition definition,
+            string spriteId,
+            string displayName,
+            string scenarioFilePath,
+            out string message)
         {
             message = null;
             if (definition == null || _customEditorSession == null || string.IsNullOrEmpty(spriteId))
@@ -3085,7 +3091,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 return null;
             }
 
-            return _spritePatchAuthoringService.UpsertPatchSpriteAsset(
+            return UpsertPatchSpriteAsset(
                 definition,
                 spriteId,
                 displayName,
@@ -3094,6 +3100,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 _customEditorSession.BaseRuntimeSpriteKey,
                 _customEditorSession.BaselineTexture,
                 _customEditorSession.Texture,
+                scenarioFilePath,
                 out message);
         }
 
@@ -3106,12 +3113,51 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             string baseRuntimeSpriteKey,
             Texture2D baselineTexture,
             Texture2D editedTexture,
+            string scenarioFilePath,
             out string message)
         {
             message = null;
             if (definition == null || string.IsNullOrEmpty(spriteId))
             {
                 message = "No animation frame edit was available to save.";
+                return null;
+            }
+
+            string packRoot = !string.IsNullOrEmpty(scenarioFilePath) ? Path.GetDirectoryName(scenarioFilePath) : null;
+            if (baselineTexture == null || string.IsNullOrEmpty(packRoot))
+            {
+                message = "Scenario pack path and baseline pixels are required to save a deterministic sprite patch.";
+                return null;
+            }
+
+            try
+            {
+                string safeFileName = spriteId;
+                char[] invalidFileNameChars = Path.GetInvalidFileNameChars();
+                for (int i = 0; i < invalidFileNameChars.Length; i++)
+                    safeFileName = safeFileName.Replace(invalidFileNameChars[i], '_');
+                safeFileName = safeFileName.Replace('/', '_').Replace('\\', '_').Replace(':', '_');
+
+                baseRelativePath = "Assets/PixelPatchBases/" + safeFileName + ".base.png";
+                string baselinePath = Path.Combine(packRoot, baseRelativePath.Replace('/', Path.DirectorySeparatorChar));
+                string baselineDirectory = Path.GetDirectoryName(baselinePath);
+                if (!Directory.Exists(baselineDirectory))
+                    Directory.CreateDirectory(baselineDirectory);
+
+                byte[] encodedBaseline = baselineTexture.EncodeToPNG();
+                if (encodedBaseline == null || encodedBaseline.Length == 0)
+                {
+                    message = "The pixel editor baseline could not be encoded for deterministic reloads.";
+                    return null;
+                }
+
+                File.WriteAllBytes(baselinePath, encodedBaseline);
+                baseSpriteId = null;
+                baseRuntimeSpriteKey = null;
+            }
+            catch (Exception ex)
+            {
+                message = "The pixel editor baseline could not be saved: " + ex.Message;
                 return null;
             }
 
@@ -3286,7 +3332,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             {
                 ScenarioAuthoringEditorCameraService cameraService = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>();
                 if (cameraService != null && state != null && state.SpriteSwapPicker != null)
-                    cameraService.BeginPixelEditorSession(state.SpriteSwapPicker.Target, editorWindowRect);
+                    cameraService.BeginPixelEditorSession(
+                        state.SpriteSwapPicker.Target,
+                        state.SpriteSwapPicker.TargetPath,
+                        editorWindowRect);
             }
             catch
             {

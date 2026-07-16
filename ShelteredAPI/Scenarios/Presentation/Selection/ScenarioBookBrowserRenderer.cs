@@ -26,8 +26,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private const float ReferenceContentHeight = 490f;
         private const int LibraryToolRowHeight = 52;
         private const int LibraryScenarioRowHeight = 49;
-        private const float SearchBarX = -355f;
-        private const float SortButtonX = -147f;
+        private const float SearchBarX = -365f;
+        private const float SortButtonX = -157f;
         private const float SearchBarY = 232f;
         private const float SearchReservedHeight = 39f;
         private const float StatStartY = 38f;
@@ -306,19 +306,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void BuildSearchBar()
         {
             _searchBar = new BookSearchBarWidget(_chrome.Palette, _chrome.Textures, _ui);
+            BookSearchBarLayout searchLayout = new BookSearchBarLayout
+            {
+                ScopeLabelPosition = new Vector3(-135f, 25f, 0f),
+                ScopeLabelWidth = 220,
+                ScopeLabelAlignment = NGUIText.Alignment.Left,
+                ScopeLabelPivot = UIWidget.Pivot.Left,
+                InputPosition = Vector3.zero,
+                InputWidth = 270
+            };
             _searchBarRoot = _searchBar.Build(
                 _chrome.Regions.ContentRoot,
                 "ScenarioSearchBar",
                 new Vector3(SearchBarX, SearchBarY, 0f),
                 "SEARCH THIS LIST:",
-                "Titles, details, and saves...");
+                "Titles, details, and saves...",
+                searchLayout);
 
             _sortRoot = _chrome.Buttons.Build(
                 _chrome.Regions.ContentRoot,
                 "ScenarioLibrarySort",
                 "Pinned first",
-                // Keep both controls on the left page. At the reference scale,
-                // the sort button's right edge aligns with the library cards.
+                // The compact input ends at x=-230 and this button starts at
+                // x=-225. Its wider dropdown ends exactly at the left-page edge.
                 new Vector3(SortButtonX, SearchBarY, 0f),
                 136,
                 35,

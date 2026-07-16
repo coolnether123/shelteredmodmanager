@@ -22,7 +22,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private const string OverlayName = "ShelteredAPI_ScenarioBookBrowser";
 
         private static GameObject _instance;
-        private static GameObject _preparedInstance;
 
         internal static bool IsShowing
         {
@@ -49,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private ScenarioBookDraftFactsModel _draftFactsCache;
         private ScenarioCatalogEntry _draftFactsCacheScenario;
         private ScenarioPackageImportService _importService;
+        private readonly object _importServiceSync = new object();
         private string _statusText;
 
         private IScenarioSelectionCatalogService Catalog
@@ -86,6 +86,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             get { return ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>(); }
         }
 
+        private ScenarioPackageImportService ImportService
+        {
+            get
+            {
+                lock (_importServiceSync)
+                {
+                    if (_importService == null)
+                    {
+                        _importService = new ScenarioPackageImportService(
+                            DefinitionSerializer,
+                            DefinitionValidator,
+                            DefinitionCatalog);
+                    }
+
+                    return _importService;
+                }
+            }
+        }
+
         public static void Show(ScenarioSelectionPanel panel)
         {
             if (panel == null)
@@ -100,45 +119,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _instance = null;
             }
 
-            GameObject root = _preparedInstance;
-            ScenarioBookBrowserPanel browser = root != null ? root.GetComponent<ScenarioBookBrowserPanel>() : null;
-            _preparedInstance = null;
-            if (root == null || browser == null)
-            {
-                root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
-                browser = root.AddComponent<ScenarioBookBrowserPanel>();
-                browser.PrepareVisual(root);
-            }
+            // Texture and catalog data are warmed independently. Build the live
+            // NGUI hierarchy only when it is needed so widgets always register
+            // against the current active UI root and overlay panel.
+            GameObject root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
+            ScenarioBookBrowserPanel browser = root.AddComponent<ScenarioBookBrowserPanel>();
+            browser.PrepareVisual(root);
 
             _instance = root;
             browser._adapter = new ScenarioBrowserPanelAdapter(panel);
-            root.SetActive(true);
             browser.Initialise(root);
-        }
-
-        internal static bool TryPrepareVisual()
-        {
-            if (_instance != null || _preparedInstance != null || !ScenarioBookPrewarmService.IsMenuScene())
-                return false;
-
-            GameObject root = null;
-            try
-            {
-                root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_PreparedRoot");
-                ScenarioBookBrowserPanel browser = root.AddComponent<ScenarioBookBrowserPanel>();
-                browser.PrepareVisual(root);
-                root.SetActive(false);
-                _preparedInstance = root;
-                MMLog.WriteInfo("[ScenarioBookPrewarm] Prepared hidden scenario-book chrome for instant open.");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                if (root != null)
-                    Destroy(root);
-                MMLog.WriteWarning("[ScenarioBookPrewarm] Could not prepare hidden scenario-book chrome: " + ex.Message);
-                return false;
-            }
         }
 
         /// <summary>
@@ -182,9 +172,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             // underneath the higher-depth book until the overlay has completed a
             // render. This avoids exposing the raw menu background during the swap.
             _adapter.SetInputEnabled(false);
-            _importService = new ScenarioPackageImportService(DefinitionSerializer, DefinitionValidator, DefinitionCatalog);
-            _dataSource = new ScenarioBookBrowserDataSource(Catalog, SaveLibrary, _importService);
-            _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService, _importService);
+            IScenarioSaveLibrary saveLibrary = SaveLibrary;
+            _dataSource = new ScenarioBookBrowserDataSource(
+                Catalog,
+                saveLibrary,
+                delegate { return ImportService; });
+            _actions = new ScenarioBookBrowserActionService(
+                _adapter,
+                delegate { return LaunchCoordinator; },
+                saveLibrary,
+                delegate { return DraftMetadataEditService; },
+                delegate { return ImportService; });
 
             PrepareVisual(root);
 
@@ -1152,8 +1150,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             if (_instance == gameObject)
                 _instance = null;
-            if (_preparedInstance == gameObject)
-                _preparedInstance = null;
         }
 
         private void RestoreUnderlyingPanel()

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
@@ -6,11 +7,19 @@ using UnityEngine;
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioAuthoringEditorCameraService
     {
+        private sealed class SavedAvatarVisibility
+        {
+            public GameObject GameObject;
+            public bool ActiveSelf;
+        }
+
         private const float BasePanSpeed = 8f;
         private const float PanAcceleration = 22f;
         private const float PanDeceleration = 28f;
         private const float MinZoom = 2f;
-        private const float PixelEditorMinZoom = 0.75f;
+        private const float PixelEditorMinZoom = 0.60f;
+        private const float PixelEditorFitScale = 0.55f;
+        private const float PixelEditorMaxZoom = 0.85f;
         private const float ZoomStep = 1.5f;
         private const float ZoomEaseSpeed = 14f;
         private const float LeftDragPanThresholdPixels = 5f;
@@ -32,6 +41,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private bool _hasSavedCameraState;
         private Vector3 _savedCameraPosition;
         private float _savedOrthographicSize;
+        private BasicCamera _savedBasicCamera;
+        private bool _savedBasicCameraEnabled;
+        private readonly List<SavedAvatarVisibility> _savedAvatarVisibility = new List<SavedAvatarVisibility>();
 
         public ScenarioAuthoringEditorCameraService(
             ScenarioAuthoringInputCaptureService inputCapture,
@@ -43,7 +55,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public void Update()
         {
-            if (!CanRunCameraUpdate())
+            if (!_cameraLockActive && !CanRunCameraUpdate())
             {
                 ResetDragState();
                 _keyboardPanVelocity = Vector2.zero;
@@ -52,7 +64,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             }
 
             BasicCamera basicCamera = ResolveBasicCamera();
-            Camera camera = basicCamera != null ? basicCamera.GetComponent<Camera>() : Camera.main;
+            Camera camera = Camera.main;
+            if (camera == null && basicCamera != null)
+                camera = basicCamera.GetComponent<Camera>();
             if (camera == null || !camera.orthographic)
                 return;
 
@@ -65,7 +79,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 _keyboardPanVelocity = Vector2.zero;
                 ApplyAssetFrame(camera, basicCamera);
                 ApplyEasedZoom(camera, basicCamera);
-                camera.transform.position = ClampCameraPosition(camera, basicCamera, camera.transform.position);
                 return;
             }
 
@@ -95,7 +108,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return false;
 
             Bounds bounds;
-            if (!TryResolveTargetBounds(target, out bounds))
+            if (!TryResolveTargetBounds(target, null, out bounds))
                 return false;
 
             float aspect = camera.aspect > 0.001f ? camera.aspect : ((float)Screen.width / Mathf.Max(1f, Screen.height));
@@ -107,23 +120,44 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return true;
         }
 
-        public bool BeginPixelEditorSession(ScenarioAuthoringTarget target, Rect editorWindowRect)
+        public bool BeginPixelEditorSession(ScenarioAuthoringTarget target, string runtimeTargetPath, Rect editorWindowRect)
         {
             Camera camera = Camera.main;
             if (camera == null || !camera.orthographic)
                 return false;
+
+            BasicCamera basicCamera = ResolveBasicCamera();
 
             if (!_cameraLockActive)
             {
                 _savedCameraPosition = camera.transform.position;
                 _savedOrthographicSize = camera.orthographicSize;
                 _hasSavedCameraState = true;
+                _savedBasicCamera = basicCamera;
+                _savedBasicCameraEnabled = basicCamera != null && basicCamera.enabled;
+                _savedAvatarVisibility.Clear();
+                UI_Avatar[] avatars = Object.FindObjectsOfType<UI_Avatar>();
+                for (int i = 0; avatars != null && i < avatars.Length; i++)
+                {
+                    GameObject avatarObject = avatars[i] != null ? avatars[i].gameObject : null;
+                    if (avatarObject == null)
+                        continue;
+
+                    _savedAvatarVisibility.Add(new SavedAvatarVisibility
+                    {
+                        GameObject = avatarObject,
+                        ActiveSelf = avatarObject.activeSelf
+                    });
+                    avatarObject.SetActive(false);
+                }
             }
 
             _cameraLockActive = true;
+            if (basicCamera != null)
+                basicCamera.enabled = false;
             ResetDragState();
             _keyboardPanVelocity = Vector2.zero;
-            return FrameTargetLeftOfWindow(target, editorWindowRect, camera, ResolveBasicCamera());
+            return FrameTargetLeftOfWindow(target, runtimeTargetPath, editorWindowRect, camera, basicCamera);
         }
 
         public void EndPixelEditorSession()
@@ -134,9 +168,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 camera.transform.position = _savedCameraPosition;
                 camera.orthographicSize = _savedOrthographicSize;
             }
+            if (_savedBasicCamera != null)
+                _savedBasicCamera.enabled = _savedBasicCameraEnabled;
+            for (int i = 0; i < _savedAvatarVisibility.Count; i++)
+            {
+                SavedAvatarVisibility savedAvatar = _savedAvatarVisibility[i];
+                if (savedAvatar != null && savedAvatar.GameObject != null)
+                    savedAvatar.GameObject.SetActive(savedAvatar.ActiveSelf);
+            }
+            _savedAvatarVisibility.Clear();
 
             _cameraLockActive = false;
             _hasSavedCameraState = false;
+            _savedBasicCamera = null;
+            _savedBasicCameraEnabled = false;
             _targetOrthographicSize = -1f;
             _assetFrameActive = false;
             ResetDragState();
@@ -290,10 +335,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         private void ApplyEasedZoom(Camera camera, BasicCamera basicCamera)
         {
-            _targetOrthographicSize = ClampZoom(camera, basicCamera, _targetOrthographicSize);
+            float minZoom = _cameraLockActive ? PixelEditorMinZoom : MinZoom;
+            _targetOrthographicSize = ClampZoom(camera, basicCamera, _targetOrthographicSize, minZoom);
             float deltaTime = GetRealDeltaTime();
             camera.orthographicSize = Mathf.Lerp(camera.orthographicSize, _targetOrthographicSize, 1f - Mathf.Exp(-ZoomEaseSpeed * deltaTime));
-            camera.orthographicSize = ClampZoom(camera, basicCamera, camera.orthographicSize);
+            camera.orthographicSize = ClampZoom(camera, basicCamera, camera.orthographicSize, minZoom);
         }
 
         private static Vector3 ScreenToCameraPlane(Camera camera, Vector3 screenPosition)
@@ -381,6 +427,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         private bool FrameTargetLeftOfWindow(
             ScenarioAuthoringTarget target,
+            string runtimeTargetPath,
             Rect editorWindowRect,
             Camera camera,
             BasicCamera basicCamera)
@@ -389,7 +436,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return false;
 
             Bounds bounds;
-            if (!TryResolveTargetBounds(target, out bounds))
+            if (!TryResolveTargetBounds(target, runtimeTargetPath, out bounds))
                 return false;
 
             float regionWidth = Mathf.Clamp(editorWindowRect.x - 18f, Screen.width * 0.30f, Screen.width);
@@ -399,16 +446,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             float orthographicSize = ClampZoom(
                 camera,
                 basicCamera,
-                Mathf.Clamp(Mathf.Max(PixelEditorMinZoom, fitHeight * 0.62f), PixelEditorMinZoom, 6f),
+                Mathf.Clamp(
+                    Mathf.Max(PixelEditorMinZoom, fitHeight * PixelEditorFitScale),
+                    PixelEditorMinZoom,
+                    PixelEditorMaxZoom),
                 PixelEditorMinZoom);
 
-            // Preserve the target's vertical screen position. The editor only
-            // needs horizontal room; recentering vertically made the selected
-            // object appear to jump upward when editing began.
-            float desiredScreenY = Mathf.Clamp(
-                camera.WorldToScreenPoint(bounds.center).y,
-                Screen.height * 0.20f,
-                Screen.height * 0.80f);
+            // Center vertically in the unobscured viewport. Preserving an old
+            // off-screen position leaves low-mounted shelter objects below the
+            // screen after the close pixel-editor zoom is applied.
+            float desiredScreenY = Screen.height * 0.5f;
 
             camera.orthographicSize = orthographicSize;
             _targetOrthographicSize = orthographicSize;
@@ -419,26 +466,69 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 (desiredScreenX - (camera.pixelWidth * 0.5f)) * pixelsToWorld,
                 (desiredScreenY - (camera.pixelHeight * 0.5f)) * pixelsToWorld,
                 0f);
-            Vector3 position = new Vector3(bounds.center.x, bounds.center.y, camera.transform.position.z) - screenOffsetWorld;
-            camera.transform.position = ClampCameraPosition(camera, basicCamera, PreserveCameraZ(camera, position));
+            // Renderer bounds can be displaced by a live custom-sprite preview
+            // (especially when the source sprite uses a non-central pivot). Use
+            // the selected runtime object's transform as the horizontal anchor
+            // so the object itself, rather than the preview mesh bounds, is kept
+            // beside the editor.
+            float frameCenterX = target.WorldPosition.x;
+            GameObject targetObject = ResolveGameObject(target, runtimeTargetPath);
+            if (targetObject != null)
+                frameCenterX = targetObject.transform.position.x;
+
+            Vector3 position = new Vector3(frameCenterX, bounds.center.y, camera.transform.position.z) - screenOffsetWorld;
+            // Pixel editing intentionally frames the selected asset outside the
+            // normal gameplay camera bounds so it remains visible beside the
+            // editor, including objects near either edge of the bunker.
+            camera.transform.position = PreserveCameraZ(camera, position);
             _assetFrameTarget = camera.transform.position;
             _assetFrameActive = false;
             return true;
         }
 
-        private static bool TryResolveTargetBounds(ScenarioAuthoringTarget target, out Bounds bounds)
+        private static bool TryResolveTargetBounds(ScenarioAuthoringTarget target, string runtimeTargetPath, out Bounds bounds)
         {
             bounds = new Bounds(target != null ? target.WorldPosition : Vector3.zero, Vector3.one);
-            GameObject gameObject = ResolveGameObject(target);
+            GameObject gameObject = ResolveGameObject(target, runtimeTargetPath);
             if (gameObject == null)
                 return target != null;
+
+            // Shelter objects often carry active warning icons, selection
+            // markers, and info overlays as child renderers. Frame the largest
+            // active sprite as the object's visual body instead of allowing
+            // those auxiliary renderers to pull the camera away from it.
+            SpriteRenderer[] spriteRenderers = gameObject.GetComponentsInChildren<SpriteRenderer>(true);
+            SpriteRenderer primarySprite = null;
+            float primaryArea = 0f;
+            for (int i = 0; spriteRenderers != null && i < spriteRenderers.Length; i++)
+            {
+                SpriteRenderer candidate = spriteRenderers[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy || candidate.sprite == null)
+                    continue;
+
+                Bounds candidateBounds = candidate.bounds;
+                float candidateArea = Mathf.Abs(candidateBounds.size.x * candidateBounds.size.y);
+                if (primarySprite == null || candidateArea > primaryArea)
+                {
+                    primarySprite = candidate;
+                    primaryArea = candidateArea;
+                }
+            }
+
+            if (primarySprite != null)
+            {
+                bounds = primarySprite.bounds;
+                if (bounds.size.sqrMagnitude < 0.0001f)
+                    bounds.size = Vector3.one;
+                return true;
+            }
 
             Renderer[] renderers = gameObject.GetComponentsInChildren<Renderer>(true);
             bool initialized = false;
             for (int i = 0; renderers != null && i < renderers.Length; i++)
             {
                 Renderer renderer = renderers[i];
-                if (renderer == null)
+                if (renderer == null || !renderer.gameObject.activeInHierarchy)
                     continue;
 
                 if (!initialized)
@@ -460,17 +550,38 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return true;
         }
 
+        private static GameObject ResolveGameObject(ScenarioAuthoringTarget target, string runtimeTargetPath)
+        {
+            if (!string.IsNullOrEmpty(runtimeTargetPath))
+            {
+                GameObject runtimeTarget = GameObject.Find(runtimeTargetPath.Replace('\\', '/'));
+                if (runtimeTarget != null)
+                    return runtimeTarget;
+            }
+
+            return ResolveGameObject(target);
+        }
+
         private static GameObject ResolveGameObject(ScenarioAuthoringTarget target)
         {
             if (target == null || target.RuntimeObject == null)
                 return null;
 
             GameObject gameObject = target.RuntimeObject as GameObject;
-            if (gameObject != null)
-                return gameObject;
-
             Component component = target.RuntimeObject as Component;
-            return component != null ? component.gameObject : null;
+            if (gameObject == null && component != null)
+                gameObject = component.gameObject;
+            if (gameObject == null)
+                return null;
+
+            if (target.Kind == ScenarioAuthoringTargetKind.PlaceableObject)
+            {
+                Obj_Base owningObject = gameObject.GetComponentInParent<Obj_Base>();
+                if (owningObject != null)
+                    return owningObject.gameObject;
+            }
+
+            return gameObject;
         }
 
         private static float GetRealDeltaTime()

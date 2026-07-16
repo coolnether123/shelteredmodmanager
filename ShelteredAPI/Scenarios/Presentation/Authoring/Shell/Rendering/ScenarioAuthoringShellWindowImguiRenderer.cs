@@ -228,7 +228,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Rect gripRect = BuildFloatingResizeRect(rect);
-            GUI.Label(gripRect, "///", _mutedTextStyle);
+            GUI.Label(gripRect, "///", _resizeGripStyle ?? _mutedTextStyle);
         }
 
         private Rect DrawInspectorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
@@ -2396,7 +2396,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             y += 6f;
-            GUI.Label(new Rect(inner.x, y, inner.width, 22f), "Condition", _sectionTitleStyle);
+            GUI.Label(new Rect(inner.x, y, inner.width, 22f), "Starting Condition", _sectionTitleStyle);
             y += 26f;
             float conditionGap = 8f;
             float conditionWidth = Math.Max(170f, (inner.width - conditionGap) * 0.5f);
@@ -3378,7 +3378,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 float cardGap = buildPaletteSection ? 3f : 4f;
                 float preferredCardWidth = buildPaletteSection ? (compactInspector ? 152f : 176f) : (compactInspector ? 190f : 224f);
                 float minCardWidth = buildPaletteSection ? (compactInspector ? 136f : 156f) : (compactInspector ? 176f : 196f);
-                float cardHeight = buildPaletteSection ? 72f : 94f;
+                float cardHeight = buildPaletteSection ? 88f : 94f;
                 int maxColumns = buildPaletteSection ? (compactInspector ? 4 : 5) : (compactInspector ? 2 : 4);
                 int columns = Mathf.Clamp(
                     Mathf.FloorToInt((availableWidth + cardGap) / (minCardWidth + cardGap)),
@@ -3400,7 +3400,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         continue;
 
                     Rect rect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
-                    DrawCandidateCard(rect, item.Action);
+                    DrawCandidateCard(rect, item.Action, false, false, buildPaletteSection);
                     count++;
                     if (count % columns == 0 && HasMoreVisibleCandidate(section, i + 1, candidateSearchText, candidateFilter))
                     {
@@ -3898,7 +3898,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUILayout.BeginVertical(_uiContext.Styles.Section);
             bool hasPreview = item.PreviewSprite != null;
-            float rowHeight = hasPreview ? 92f : 78f;
+            float availableTextWidth = Math.Max(120f, GetSectionContentWidth() - (hasPreview ? 108f : 12f));
+            string title = item.Value ?? string.Empty;
+            string detail = item.Kind == ScenarioAuthoringInspectorItemKind.Property
+                ? CombineDetail(item.Label, item.Detail)
+                : item.Detail;
+            float detailHeight = string.IsNullOrEmpty(detail)
+                ? 0f
+                : Mathf.Clamp(_mutedTextStyle.CalcHeight(new GUIContent(detail), availableTextWidth), 20f, 72f);
+            float contentHeight = 24f
+                + (detailHeight > 0f ? 2f + detailHeight : 0f)
+                + (!string.IsNullOrEmpty(item.Badge) ? 4f + 20f : 0f)
+                + 12f;
+            float rowHeight = Math.Max(hasPreview ? 92f : 54f, contentHeight);
             Rect rowRect = GUILayoutUtility.GetRect(120f, rowHeight, GUILayout.ExpandWidth(true));
             Rect textRect;
             if (hasPreview && rowRect.width >= 220f)
@@ -3912,18 +3924,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 textRect = new Rect(rowRect.x + 6f, rowRect.y + 6f, rowRect.width - 12f, rowRect.height - 12f);
             }
 
-            string title = item.Value ?? string.Empty;
-            string detail = item.Kind == ScenarioAuthoringInspectorItemKind.Property
-                ? CombineDetail(item.Label, item.Detail)
-                : item.Detail;
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 24f), ShortenToFit(title, textRect.width, _sectionTitleStyle), _sectionTitleStyle);
             if (!string.IsNullOrEmpty(detail))
-                GUI.Label(new Rect(textRect.x, textRect.y + 26f, textRect.width, 34f), detail, _mutedTextStyle);
+                GUI.Label(new Rect(textRect.x, textRect.y + 26f, textRect.width, detailHeight), detail, _mutedTextStyle);
 
             if (!string.IsNullOrEmpty(item.Badge))
             {
                 Vector2 badgeSize = _mutedTextStyle.CalcSize(new GUIContent(item.Badge));
-                Rect badgeRect = new Rect(textRect.x, rowRect.yMax - 26f, Mathf.Max(56f, badgeSize.x + 18f), 20f);
+                Rect badgeRect = new Rect(
+                    textRect.x,
+                    textRect.y + 26f + detailHeight + (detailHeight > 0f ? 4f : 0f),
+                    Mathf.Max(56f, badgeSize.x + 18f),
+                    20f);
                 ScenarioUiWidgets.DrawPill(badgeRect, item.Badge, _uiContext.Styles, item.Emphasized ? ScenarioUiPillEmphasis.Active : ScenarioUiPillEmphasis.Default);
             }
             GUILayout.EndVertical();
@@ -3940,6 +3952,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         }
 
         private void DrawCandidateCard(Rect rect, ScenarioAuthoringInspectorAction action, bool armPlacementOnAssetBrowserClick, bool showFavoriteToggle)
+        {
+            DrawCandidateCard(rect, action, armPlacementOnAssetBrowserClick, showFavoriteToggle, false);
+        }
+
+        private void DrawCandidateCard(
+            Rect rect,
+            ScenarioAuthoringInspectorAction action,
+            bool armPlacementOnAssetBrowserClick,
+            bool showFavoriteToggle,
+            bool suppressSecondaryText)
         {
             if (action == null)
                 return;
@@ -3963,7 +3985,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect textRect;
             if (action.PreviewSprite != null && rect.width >= 150f)
             {
-                float previewSize = Mathf.Clamp(rect.height - 12f, 44f, 70f);
+                float previewSize = Mathf.Clamp(rect.height - 28f, 44f, 70f);
                 Rect previewRect = new Rect(rect.x + 6f, rect.y + 6f, previewSize, previewSize);
                 DrawSpritePreview(previewRect, action.PreviewSprite, action.Emphasized, action.HasPreviewTint ? action.PreviewTint : Color.white);
                 textRect = new Rect(previewRect.xMax + 10f, rect.y + 8f, rect.width - previewRect.width - 22f, rect.height - 16f);
@@ -3980,9 +4002,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string fittedLabel = action.Label ?? string.Empty;
             string labelTooltip = RegisterRichHoverHelpSource(rect, action) ? string.Empty : BuildFullLabelTooltip(action);
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), new GUIContent(fittedLabel, labelTooltip), labelStyle);
-            string detail = !string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint;
-            if (!string.IsNullOrEmpty(detail))
-                GUI.Label(new Rect(textRect.x, textRect.y + labelHeight + 2f, textRect.width, Math.Max(16f, rect.height - labelHeight - 30f)), detail, _mutedTextStyle);
+            string detail = suppressSecondaryText
+                ? null
+                : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint);
+            float badgeTop = !string.IsNullOrEmpty(action.Badge) ? rect.yMax - 22f : rect.yMax - 4f;
+            float detailTop = textRect.y + labelHeight + 2f;
+            float detailHeight = badgeTop - detailTop - 4f;
+            if (!string.IsNullOrEmpty(detail) && detailHeight >= 14f)
+                GUI.Label(new Rect(textRect.x, detailTop, textRect.width, detailHeight), detail, _mutedTextStyle);
 
             if (!string.IsNullOrEmpty(action.Badge))
             {
@@ -4111,6 +4138,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringInspectorItem item = section.Items[i];
                 if (item == null)
                     continue;
+
+                bool fullWidthText = item.Action == null
+                    && item.Kind == ScenarioAuthoringInspectorItemKind.Text
+                    && !string.IsNullOrEmpty(item.Value);
+                if (fullWidthText)
+                {
+                    if (column != 0 || actionRow)
+                    {
+                        GUILayout.EndHorizontal();
+                        GUILayout.BeginHorizontal();
+                    }
+                    column = 0;
+                    actionColumn = 0;
+                    actionRow = false;
+                    float textHeight = Mathf.Clamp(
+                        _textStyle.CalcHeight(new GUIContent(item.Value), Math.Max(80f, availableWidth - 16f)) + 28f,
+                        64f,
+                        180f);
+                    Rect noteRect = GUILayoutUtility.GetRect(
+                        availableWidth,
+                        textHeight,
+                        GUILayout.Width(availableWidth),
+                        GUILayout.Height(textHeight));
+                    DrawFactCell(noteRect, item);
+                    if (i + 1 < section.Items.Length)
+                    {
+                        GUILayout.EndHorizontal();
+                        GUILayout.BeginHorizontal();
+                    }
+                    continue;
+                }
 
                 if (item.Action != null)
                 {
