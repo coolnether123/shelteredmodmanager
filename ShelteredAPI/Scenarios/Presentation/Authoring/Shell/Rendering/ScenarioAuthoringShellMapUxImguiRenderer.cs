@@ -22,11 +22,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             GUI.Label(new Rect(inner.x, y, inner.width, 20f), "Legend + filters", _smallTitleStyle);
             y += 23f;
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.VanillaRegions, "Vanilla regions", "VN");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.AuthoredLocations, "Authored locations", "AU");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.HiddenUntilDiscovered, "Hidden until found", "HD");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.InvalidOrBlocked, "Invalid / blocked", "!!");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.DependencyLocked, "Dependency locked", "LK");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.VanillaRegions, "Vanilla", "VN");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.AuthoredLocations, "Authored POI", "AU");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.HiddenUntilDiscovered, "Hidden", "HD");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.InvalidOrBlocked, "Invalid", "!!");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.DependencyLocked, "Locked", "LK");
             GUI.Label(new Rect(inner.x, y + 3f, inner.width, 34f), "Off filters dim matching markers.", _mutedTextStyle);
             return y + 37f;
         }
