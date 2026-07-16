@@ -114,11 +114,14 @@ namespace ShelteredAPI.Scenarios.Definitions{
                         continue;
 
                     string[] discoveredDirectories;
-                    string[] discoveredFiles;
+                    string[] discoveredDefinitions;
                     try
                     {
                         discoveredDirectories = Directory.GetDirectories(scenariosRoot, "*", SearchOption.AllDirectories);
-                        discoveredFiles = Directory.GetFiles(scenariosRoot, "*", SearchOption.AllDirectories);
+                        discoveredDefinitions = Directory.GetFiles(
+                            scenariosRoot,
+                            ScenarioDefinitionSerializer.DefaultFileName,
+                            SearchOption.AllDirectories);
                     }
                     catch (Exception ex)
                     {
@@ -129,12 +132,10 @@ namespace ShelteredAPI.Scenarios.Definitions{
                     for (int i = 0; i < discoveredDirectories.Length; i++)
                         directories[ScenarioCatalogDiskStamp.NormalizePath(discoveredDirectories[i])] = ScenarioCatalogDiskStamp.ReadDirectory(discoveredDirectories[i]);
 
-                    for (int i = 0; i < discoveredFiles.Length; i++)
+                    for (int i = 0; i < discoveredDefinitions.Length; i++)
                     {
-                        string filePath = ScenarioCatalogDiskStamp.NormalizePath(discoveredFiles[i]);
+                        string filePath = ScenarioCatalogDiskStamp.NormalizePath(discoveredDefinitions[i]);
                         files[filePath] = ScenarioCatalogDiskStamp.ReadFile(filePath);
-                        if (!string.Equals(Path.GetFileName(filePath), ScenarioDefinitionSerializer.DefaultFileName, StringComparison.OrdinalIgnoreCase))
-                            continue;
                         if (IsAuthoringDraftScenarioFile(filePath))
                         {
                             MMLog.WriteInfo("[ScenarioCatalog] Skipping authoring draft scenario file outside playable catalog: " + filePath);

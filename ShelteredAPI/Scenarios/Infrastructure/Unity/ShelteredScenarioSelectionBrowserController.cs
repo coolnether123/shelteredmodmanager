@@ -170,16 +170,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                     return;
                 }
 
-                RefreshDefinitionCatalogSafely();
-                CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-                state.ScenarioCount = scenarios.Length;
                 UIButton sourceButton = scenarioButtons[scenarioButtons.Count - 1];
                 if (sourceButton == null || sourceButton.gameObject == null)
                     return;
 
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Initialize start. panel=" + panel.GetInstanceID()
                     + " vanillaButtons=" + scenarioButtons.Count
-                    + " discoveredScenarios=" + scenarios.Length
                     + " sourceButton=" + sourceButton.name + ".");
 
                 if (state.OriginalButtons.Count == 0)
@@ -206,11 +202,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 scenarioButtons.Add(hubButton);
                 state.BaseButtonCount = scenarioButtons.Count - 1;
                 state.HubButton = hubButton;
-                EnsurePagingUi(panel, state, sourceButton);
                 state.ButtonsCreated = true;
 
-                MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Added custom scenario hub and paging UI. panel="
-                    + panel.GetInstanceID() + " scenarios=" + scenarios.Length + " layout=" + DescribeLayoutMetrics(state.LayoutMetrics) + ".");
+                MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Added custom scenario hub. panel="
+                    + panel.GetInstanceID() + " layout=" + DescribeLayoutMetrics(state.LayoutMetrics) + ".");
             }
             catch (Exception ex)
             {
@@ -480,6 +475,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (sourceButton == null)
                 return;
 
+            // The current scenario-book flow only needs the hub button. Keep the
+            // legacy inline paging controls lazy so cloning their hidden NGUI
+            // hierarchy never delays the vanilla scenario panel opening.
+            EnsurePagingUi(panel, state, sourceButton);
             ScenarioLayoutMetrics metrics = GetOrCreateLayoutMetrics(state, sourceButton);
             scenarioButtons.Clear();
 
