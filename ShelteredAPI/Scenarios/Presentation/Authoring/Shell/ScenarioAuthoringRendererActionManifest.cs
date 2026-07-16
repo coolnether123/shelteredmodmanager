@@ -5,6 +5,7 @@ using System.Text;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Domain.Story;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
@@ -59,6 +60,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             AddGroupActions(actions, HomeGroups, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "Toggle Home group");
             AddGroupActions(actions, TimelineGroups, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "Toggle Timeline group");
             AddGroupActions(actions, SurvivorAppearanceGroups, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Toggle survivor appearance group");
+            AddWorkspaceActionFamilies(actions);
             AddWorkshopGroupActions(actions, windows);
             AddSettingsGroupActions(actions, settings);
             AddShortcutGroupActions(actions, help != null ? help.Shortcuts : null);
@@ -96,6 +98,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             CollectTutorial(actions, shell != null ? shell.Tutorial : null);
             CollectTour(actions, shell != null ? shell.Tour : null);
             CollectSettings(actions, shell != null ? shell.Settings : null);
+            VerifyUniqueActionIdsForContract(actions.ToArray());
 
             // Ribbon markers use the same scenario.timeline.entry.* actions already
             // collected from the Timeline window. Re-adding them here makes the
@@ -130,8 +133,62 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 ScenarioAuthoringShellWindowViewModel window = windows[i];
                 if (window == null) continue;
                 AddRange(actions, window.HeaderActions);
-                CollectSections(actions, window.Sections);
+                if (window.WorkspaceBody != null)
+                    CollectWorkspace(actions, window.WorkspaceBody);
+                else
+                    CollectSections(actions, window.Sections);
             }
+        }
+
+        private static void CollectWorkspace(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringWorkspaceViewModel workspace)
+        {
+            if (workspace == null) return;
+            for (int i = 0; workspace.Subtabs != null && i < workspace.Subtabs.Length; i++)
+            {
+                ScenarioAuthoringWorkspaceSubtabViewModel subtab = workspace.Subtabs[i];
+                if (subtab == null) continue;
+                AddExisting(actions, subtab.SelectAction);
+                CollectStatusChips(actions, subtab.StatusChips);
+            }
+
+            ScenarioAuthoringNavigatorViewModel navigator = workspace.Navigator;
+            for (int i = 0; navigator != null && navigator.Groups != null && i < navigator.Groups.Length; i++)
+            {
+                ScenarioAuthoringNavigatorGroupViewModel group = navigator.Groups[i];
+                if (group == null) continue;
+                AddExisting(actions, group.ToggleAction);
+                AddExisting(actions, group.CreateAction);
+                CollectStatusChips(actions, group.StatusChips);
+                CollectNavigatorRows(actions, group.Rows);
+            }
+
+            ScenarioAuthoringWorkspaceDocumentViewModel document = workspace.Document;
+            if (document == null) return;
+            AddExisting(actions, document.BackAction);
+            AddRange(actions, document.HeaderActions);
+            CollectStatusChips(actions, document.StatusChips);
+            for (int i = 0; document.Breadcrumbs != null && i < document.Breadcrumbs.Length; i++)
+                AddExisting(actions, document.Breadcrumbs[i] != null ? document.Breadcrumbs[i].Action : null);
+            CollectSections(actions, document.Sections);
+        }
+
+        private static void CollectNavigatorRows(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringNavigatorRowViewModel[] rows)
+        {
+            for (int i = 0; rows != null && i < rows.Length; i++)
+            {
+                ScenarioAuthoringNavigatorRowViewModel row = rows[i];
+                if (row == null) continue;
+                AddExisting(actions, row.SelectAction);
+                AddExisting(actions, row.ToggleAction);
+                CollectStatusChips(actions, row.StatusChips);
+                CollectNavigatorRows(actions, row.Children);
+            }
+        }
+
+        private static void CollectStatusChips(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringStatusChipViewModel[] chips)
+        {
+            for (int i = 0; chips != null && i < chips.Length; i++)
+                AddExisting(actions, chips[i] != null ? chips[i].Action : null);
         }
 
         private static void CollectDocument(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringInspectorDocument document)
@@ -146,18 +203,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             for (int i = 0; sections != null && i < sections.Length; i++)
             {
                 ScenarioAuthoringInspectorSection section = sections[i];
+                CollectStatusChips(actions, section != null ? section.StatusChips : null);
                 for (int j = 0; section != null && section.Items != null && j < section.Items.Length; j++)
                 {
                     ScenarioAuthoringInspectorItem item = section.Items[j];
                     AddExisting(actions, item != null ? item.Action : null);
+                    ScenarioAuthoringCompactChoiceViewModel choice = item != null ? item.Choice : null;
+                    for (int optionIndex = 0; choice != null && choice.Options != null && optionIndex < choice.Options.Length; optionIndex++)
+                        AddExisting(actions, choice.Options[optionIndex] != null ? choice.Options[optionIndex].Action : null);
                     ScenarioCastCardViewModel cast = item != null ? item.CastCard : null;
                     AddExisting(actions, cast != null ? cast.PrimaryAction : null);
                     AddRange(actions, cast != null ? cast.SecondaryActions : null);
                 }
                 CollectInventory(actions, section != null ? section.InventorySlotGrid : null);
                 CollectSurvivor(actions, section != null ? section.SurvivorEditor : null);
+                CollectStoryMap(actions, section != null ? section.StoryMap : null);
                 for (int j = 0; section != null && section.ModFieldRows != null && j < section.ModFieldRows.Length; j++)
                     CollectModField(actions, section.ModFieldRows[j]);
+            }
+        }
+
+        private static void CollectStoryMap(List<ScenarioAuthoringInspectorAction> actions, ScenarioStoryGraphModel storyMap)
+        {
+            for (int i = 0; storyMap != null && storyMap.Nodes != null && i < storyMap.Nodes.Length; i++)
+            {
+                ScenarioStoryGraphNode node = storyMap.Nodes[i];
+                if (node == null || string.IsNullOrEmpty(node.NavActionId)) continue;
+                AddExisting(actions, new ScenarioAuthoringInspectorAction
+                {
+                    Id = node.NavActionId,
+                    Label = "Open " + (node.Label ?? "story node"),
+                    Enabled = true
+                });
             }
         }
 
@@ -317,6 +394,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             actions.Add(action);
         }
 
+        internal static void VerifyUniqueActionIdsForContract(ScenarioAuthoringInspectorAction[] actions)
+        {
+            HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; actions != null && i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null || string.IsNullOrEmpty(action.Id)) continue;
+                if (!ids.Add(action.Id))
+                    throw new InvalidOperationException("Duplicate authoring semantic action id '" + action.Id + "'.");
+            }
+        }
+
         private static void AddMapFilters(List<ScenarioAuthoringInspectorAction> actions)
         {
             Array values = Enum.GetValues(typeof(ScenarioMapAuthoringFilter));
@@ -325,6 +414,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 ScenarioMapAuthoringFilter filter = (ScenarioMapAuthoringFilter)values.GetValue(i);
                 Add(actions, ScenarioAuthoringActionIds.ActionRendererMapFilterTogglePrefix + filter, "Toggle map filter: " + filter, ScenarioMapAuthoringFilterState.IsVisible(filter));
             }
+        }
+
+        private static void AddWorkspaceActionFamilies(List<ScenarioAuthoringInspectorAction> actions)
+        {
+            const string workspaceId = "contract.workspace";
+            const string subtabId = "contract.subtab";
+            const string entityId = "contract.entity";
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceSubtabSelectPrefix, workspaceId, subtabId, string.Empty), "Select workspace subtab", false);
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix, workspaceId, subtabId, entityId), "Select workspace entity", false);
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix, workspaceId, subtabId, entityId), "Open workspace warning", false);
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceGroupTogglePrefix, workspaceId, subtabId, "contract.group"), "Toggle workspace group", false);
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceRowTogglePrefix, workspaceId, subtabId, entityId), "Toggle workspace row", false);
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceSearchSetPrefix, workspaceId, subtabId, string.Empty), "Set workspace search", false);
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix, workspaceId, subtabId, entityId), "Select workspace breadcrumb", false);
+            Add(actions, ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(ScenarioAuthoringActionIds.ActionRendererWorkspaceBackPrefix, workspaceId, subtabId, string.Empty), "Workspace Back", false);
         }
 
         private static void AddGroupActions(List<ScenarioAuthoringInspectorAction> actions, string[] keys, string prefix, string label)
@@ -474,6 +578,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private readonly Dictionary<string, bool> _disclosures = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _candidateSearches = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _candidateFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _workspaceSubtabs = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _workspaceSelections = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _workspaceExpansions = new Dictionary<string, bool>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _workspaceSearches = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _workspaceNarrowPanes = new Dictionary<string, bool>(StringComparer.Ordinal);
 
         public static ScenarioAuthoringRendererInteractionState Instance { get { return Shared; } }
         public string AssetBrowserSearch { get; set; }
@@ -531,6 +640,85 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         public void SetCandidateFilter(string key, string value)
         {
             if (!string.IsNullOrEmpty(key)) _candidateFilters[key] = value ?? string.Empty;
+        }
+
+        public string GetWorkspaceSubtab(string workspaceId, string fallback)
+        {
+            string value;
+            return !string.IsNullOrEmpty(workspaceId) && _workspaceSubtabs.TryGetValue(workspaceId, out value)
+                ? value
+                : fallback;
+        }
+
+        public void SetWorkspaceSubtab(string workspaceId, string subtabId)
+        {
+            if (!string.IsNullOrEmpty(workspaceId))
+                _workspaceSubtabs[workspaceId] = subtabId ?? string.Empty;
+        }
+
+        public string GetWorkspaceSelection(string workspaceId, string subtabId)
+        {
+            string value;
+            string key = BuildWorkspaceSubtabKey(workspaceId, subtabId);
+            return _workspaceSelections.TryGetValue(key, out value) ? value : null;
+        }
+
+        public void SetWorkspaceSelection(string workspaceId, string subtabId, string entityId)
+        {
+            string key = BuildWorkspaceSubtabKey(workspaceId, subtabId);
+            if (string.IsNullOrEmpty(entityId))
+                _workspaceSelections.Remove(key);
+            else
+                _workspaceSelections[key] = entityId;
+        }
+
+        public bool GetWorkspaceExpanded(string workspaceId, string subtabId, string entityId, bool defaultExpanded)
+        {
+            bool expanded;
+            string key = BuildWorkspaceEntityKey(workspaceId, subtabId, entityId);
+            if (_workspaceExpansions.TryGetValue(key, out expanded))
+                return expanded;
+            _workspaceExpansions[key] = defaultExpanded;
+            return defaultExpanded;
+        }
+
+        public void SetWorkspaceExpanded(string workspaceId, string subtabId, string entityId, bool expanded)
+        {
+            _workspaceExpansions[BuildWorkspaceEntityKey(workspaceId, subtabId, entityId)] = expanded;
+        }
+
+        public string GetWorkspaceSearch(string workspaceId, string subtabId)
+        {
+            string value;
+            string key = BuildWorkspaceSubtabKey(workspaceId, subtabId);
+            return _workspaceSearches.TryGetValue(key, out value) ? value : string.Empty;
+        }
+
+        public void SetWorkspaceSearch(string workspaceId, string subtabId, string value)
+        {
+            _workspaceSearches[BuildWorkspaceSubtabKey(workspaceId, subtabId)] = value ?? string.Empty;
+        }
+
+        public bool GetWorkspaceNarrowPane(string workspaceId, string subtabId, bool defaultDocumentPane)
+        {
+            bool documentPane;
+            string key = BuildWorkspaceSubtabKey(workspaceId, subtabId);
+            return _workspaceNarrowPanes.TryGetValue(key, out documentPane) ? documentPane : defaultDocumentPane;
+        }
+
+        public void SetWorkspaceNarrowPane(string workspaceId, string subtabId, bool documentPane)
+        {
+            _workspaceNarrowPanes[BuildWorkspaceSubtabKey(workspaceId, subtabId)] = documentPane;
+        }
+
+        private static string BuildWorkspaceSubtabKey(string workspaceId, string subtabId)
+        {
+            return (workspaceId ?? string.Empty) + "\n" + (subtabId ?? string.Empty);
+        }
+
+        private static string BuildWorkspaceEntityKey(string workspaceId, string subtabId, string entityId)
+        {
+            return BuildWorkspaceSubtabKey(workspaceId, subtabId) + "\n" + (entityId ?? string.Empty);
         }
     }
 }

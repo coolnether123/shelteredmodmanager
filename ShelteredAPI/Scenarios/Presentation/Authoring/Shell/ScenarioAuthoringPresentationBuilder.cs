@@ -66,6 +66,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioAuthoringTutorialService _tutorialService;
         private readonly ScenarioHelpAuthoringContentBuilder _helpAuthoringContentBuilder;
         private readonly Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> _windowSectionBuilders;
+        private readonly ScenarioAuthoringWorkspaceComposer _workspaceComposer;
 
         public ScenarioAuthoringPresentationBuilder(
             ScenarioAuthoringCaptureService captureService,
@@ -116,6 +117,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineAuthoringContentBuilder = new ScenarioTimelineAuthoringContentBuilder(timelineBuilder, timelineViewModelBuilder);
             _timelineRibbonViewModelBuilder = new ScenarioDayTimelineRibbonViewModelBuilder(timelineBuilder);
             _windowSectionBuilders = CreateWindowSectionBuilders();
+            _workspaceComposer = new ScenarioAuthoringWorkspaceComposer();
         }
 
         public ScenarioAuthoringShellViewModel BuildShellViewModel(
@@ -1475,7 +1477,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ZIndex = windowState.ZIndex,
                     HeaderActions = BuildWindowHeaderActions(definitionEntry, windowState, state)
                 };
-                window.Sections = BuildWindowSections(definitionEntry, state, editorSession, session, definition);
+                ScenarioAuthoringWindowContentContext contentContext = new ScenarioAuthoringWindowContentContext(
+                    state,
+                    editorSession,
+                    session,
+                    definition);
+                ScenarioAuthoringWorkspaceViewModel workspace = _workspaceComposer.Build(definitionEntry.ContentKind, contentContext);
+                if (workspace != null)
+                {
+                    window.WorkspaceBody = workspace;
+                    window.Sections = new ScenarioAuthoringInspectorSection[0];
+                }
+                else
+                {
+                    window.WorkspaceBody = null;
+                    window.Sections = BuildWindowSections(definitionEntry, contentContext);
+                }
                 windows.Add(window);
             }
         }
@@ -1508,19 +1525,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private ScenarioAuthoringInspectorSection[] BuildWindowSections(
             ScenarioAuthoringWindowDefinition windowDefinition,
-            ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession,
-            ScenarioAuthoringSession session,
-            ScenarioDefinition definition)
+            ScenarioAuthoringWindowContentContext context)
         {
-            if (IsWorldLoadingWindow(windowDefinition, state))
-                return BuildWorldLoadingSections(state);
+            if (IsWorldLoadingWindow(windowDefinition, context != null ? context.State : null))
+                return BuildWorldLoadingSections(context != null ? context.State : null);
 
             IScenarioAuthoringWindowContentBuilder builder;
             if (windowDefinition == null || !_windowSectionBuilders.TryGetValue(windowDefinition.ContentKind, out builder))
                 return BuildEmptyWindowSections();
 
-            return builder.Build(new ScenarioAuthoringWindowContentContext(state, editorSession, session, definition));
+            return builder.Build(context);
         }
 
         private static bool IsWorldLoadingWindow(ScenarioAuthoringWindowDefinition windowDefinition, ScenarioAuthoringState state)
