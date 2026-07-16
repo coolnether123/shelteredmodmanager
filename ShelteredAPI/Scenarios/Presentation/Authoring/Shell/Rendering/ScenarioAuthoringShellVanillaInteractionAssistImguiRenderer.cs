@@ -25,7 +25,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect buttonRect = new Rect(inner.xMax - buttonWidth, inner.y, buttonWidth, inner.height);
                 Rect textRect = new Rect(inner.x, inner.y, Math.Max(0f, buttonRect.x - inner.x - 12f), inner.height);
 
-                string title = "Vanilla " + FormatVanillaInteractionKind(state) + " active";
+                string title = FormatVanillaInteractionKind(state) + " Editor";
                 string note = ResolveVanillaInteractionAssistNote(state);
                 float titleWidth = Math.Min(textRect.width * 0.36f, ScenarioUiMeasuredLabel.Width(title, _textStyle, 18f));
                 if (titleWidth > 40f)
@@ -40,8 +40,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawButton(buttonRect, new ScenarioAuthoringInspectorAction
                 {
                     Id = ScenarioAuthoringActionIds.ActionVanillaInteractionReturnEditor,
-                    Label = "Editor",
-                    Hint = "Close the active vanilla menu or panel and return to the scenario editor.",
+                    Label = "Done",
+                    Hint = "Close this window and return to the scenario editor.",
                     Enabled = true,
                     Emphasized = false,
                     IconText = "ED"
@@ -63,7 +63,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             string kind = state != null ? state.VanillaInteractionKind : null;
             if (string.IsNullOrEmpty(kind))
-                return "Interaction";
+                return "Game";
             return kind;
         }
 
@@ -71,7 +71,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (state != null && !string.IsNullOrEmpty(state.VanillaInteractionAssistNote))
                 return state.VanillaInteractionAssistNote;
-            return "Changes sync to your scenario. Vanilla remains interactive while this window is open.";
+            return "Make your changes here. They will be saved to this scenario.";
         }
     }
 }

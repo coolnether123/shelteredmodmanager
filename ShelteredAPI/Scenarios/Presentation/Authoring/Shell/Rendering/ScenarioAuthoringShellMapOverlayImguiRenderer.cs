@@ -58,7 +58,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float y = inner.y + 34f;
             y = DrawModeTab(inner.x, y, inner.width, "Select", "SL", ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect, state == null || string.IsNullOrEmpty(state.MapAuthoringMode) || state.MapAuthoringMode == "select", true);
-            y = DrawModeTab(inner.x, y + 4f, inner.width, "Place POI", "PL", ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, state != null && state.MapAuthoringMode == "place", true);
+            y = DrawModeTab(inner.x, y + 4f, inner.width, "Add Location", "PL", ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, state != null && state.MapAuthoringMode == "place", true);
             bool canMove = selection != null && selection.Authored;
             y = DrawModeTab(inner.x, y + 4f, inner.width, "Move", "MV", ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, state != null && state.MapAuthoringMode == "move", canMove);
             DrawMapAuthoringLegend(inner, y + 16f);
@@ -68,7 +68,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Id = ScenarioAuthoringActionIds.ActionMapAuthoringClose,
                 Label = "Close",
-                Hint = "Close the vanilla map and return to the Map workshop page.",
+                Hint = "Close the map and return to the scenario editor.",
                 Enabled = true,
                 IconText = "CL"
             }, false);
@@ -84,7 +84,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Enabled = enabled,
                 Emphasized = active,
                 IconText = icon,
-                DisabledReason = enabled ? null : "Select an authored location before using Move mode."
+                DisabledReason = enabled ? null : "Select one of your custom locations before moving it."
             }, false);
             return y + 32f;
         }
@@ -93,7 +93,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             Rect inner = new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, rect.height - 20f);
-            GUI.Label(new Rect(inner.x, inner.y, inner.width, 22f), "Map tools", _smallTitleStyle);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 22f), "Map Tools", _smallTitleStyle);
 
             Rect body = new Rect(inner.x, inner.y + 30f, inner.width, inner.height - 30f);
             GUILayout.BeginArea(body);
@@ -118,21 +118,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             int size = state != null && state.MapTerrainBrushSize > 0 ? state.MapTerrainBrushSize : 3;
             string shape = state != null && !string.IsNullOrEmpty(state.MapTerrainBrushShape) ? state.MapTerrainBrushShape : "circle";
-            GUILayout.Label("Terrain Paintbrush", _textStyle);
+            GUILayout.Label("Terrain Brush", _textStyle);
             DrawMapOptionDropdown(
                 "map.terrain",
-                "Terrain",
+                "Paint With",
                 FormatTerrainDropdownValue(state),
                 new[]
                 {
                     MapDropdownAction(ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainTrees, "Trees", "TR", state != null && state.MapAuthoringMode == "terrain:Woodland"),
                     MapDropdownAction(ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainMountains, "Mountains", "MT", state != null && state.MapAuthoringMode == "terrain:Mountains"),
                     MapDropdownAction(ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainClear, "Clear", "ER", state != null && state.MapAuthoringMode == "terrain:NowhereSpecial"),
-                    MapDropdownAction(ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainGeneratedBlend, "Generated Blend", "GB", state != null && state.MapAuthoringMode == "terrain:" + ScenarioMapTerrainModes.GeneratedBlend)
+                    MapDropdownAction(ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainGeneratedBlend, "Blend Area", "GB", state != null && state.MapAuthoringMode == "terrain:" + ScenarioMapTerrainModes.GeneratedBlend)
                 });
             DrawMapOptionDropdown(
                 "map.shape",
-                "Shape",
+                "Brush Shape",
                 string.Equals(shape, "square", StringComparison.OrdinalIgnoreCase) ? "Square" : "Round",
                 new[]
                 {
@@ -141,7 +141,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 });
             DrawMapOptionDropdown(
                 "map.size",
-                "Size",
+                "Brush Size",
                 size.ToString(CultureInfo.InvariantCulture) + " x " + size.ToString(CultureInfo.InvariantCulture),
                 new[]
                 {
@@ -150,7 +150,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     MapDropdownAction(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize5, "5 x 5", "5", size == 5),
                     MapDropdownAction(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize7, "7 x 7", "7", size == 7)
                 });
-            GUILayout.Label("Blend follows generated and nearby manual terrain.", _mutedTextStyle);
+            GUILayout.Label("Blend fills an area to match the terrain around it.", _mutedTextStyle);
             GUILayout.Space(8f);
         }
 
@@ -210,14 +210,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (string.Equals(mode, "terrain:NowhereSpecial", StringComparison.OrdinalIgnoreCase))
                 return "Clear";
             if (string.Equals(mode, "terrain:" + ScenarioMapTerrainModes.GeneratedBlend, StringComparison.OrdinalIgnoreCase))
-                return "Generated Blend";
+                return "Blend Area";
             return "Choose terrain";
         }
 
         private void DrawMapAuthoringEmptySelection(ScenarioAuthoringState state)
         {
-            GUILayout.Label("Click the map to select a POI or paint terrain.", _textStyle);
-            GUILayout.Label("Mode: " + FormatOverlayMode(state), _mutedTextStyle);
+            GUILayout.Label("Choose a location or paint directly on the map.", _textStyle);
+            GUILayout.Label("Current tool: " + FormatOverlayMode(state), _mutedTextStyle);
         }
 
         private void DrawMapAuthoringSelectionEditor(ScenarioMapRegionSelection selection, ScenarioAuthoringState state)
@@ -225,32 +225,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string id = GetEditableLocationId(selection);
             GUILayout.Label(selection.DisplayName ?? "<unnamed>", _textStyle);
             GUILayout.Label(FormatSelectionStateLine(selection), _mutedTextStyle);
-            GUILayout.Label("Grid " + selection.GridX.ToString(CultureInfo.InvariantCulture) + "," + selection.GridY.ToString(CultureInfo.InvariantCulture) + "  " + SafeOverlay(selection.Topography), _mutedTextStyle);
+            GUILayout.Label("Position: " + selection.GridX.ToString(CultureInfo.InvariantCulture) + ", " + selection.GridY.ToString(CultureInfo.InvariantCulture) + " | Terrain: " + SafeOverlay(selection.Topography), _mutedTextStyle);
             GUILayout.Label(FormatOverlayFlags(selection), _mutedTextStyle);
             GUILayout.Space(8f);
-            DrawOverlayEditableProperty("Name", selection.DisplayName, "displayName", id, "Shown in the scenario map draft and later runtime projection.");
-            DrawOverlayEditableProperty("Kind", !string.IsNullOrEmpty(selection.Topography) ? selection.Topography : selection.Category, "kind", id, "Semantic category used by E5/E6 projection.");
-            DrawOverlayEditableProperty("Icon Id", selection.IconId, "iconId", id, "Must match a known map icon sprite id.");
+            DrawOverlayEditableProperty("Name", selection.DisplayName, "displayName", id, "The name players see on the map.");
+            DrawOverlayEditableProperty("Location Type", !string.IsNullOrEmpty(selection.Topography) ? selection.Topography : selection.Category, "kind", id, "The kind of place players will find here.");
+            DrawOverlayEditableProperty("Map Icon", selection.IconId, "iconId", id, "The icon players see for this location.");
             DrawButton(GUILayoutUtility.GetRect(116f, 28f, GUILayout.Width(116f), GUILayout.Height(28f)), new ScenarioAuthoringInspectorAction
             {
                 Id = ScenarioAuthoringActionCodec.BuildTokenActionId(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, id),
                 Label = "Next Icon",
-                Hint = "Cycle through the known map icon sprite ids.",
+                Hint = "Show the next available map icon.",
                 Enabled = true,
                 IconText = "IC"
             }, false);
-            GUILayout.Label("Known Icons: " + FormatKnownOverlayIconIds(), _mutedTextStyle);
-            DrawOverlayEditableProperty("Danger", selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture), "danger", id, "Basic encounter danger/risk value for later projection.");
-            DrawOverlayEditableProperty("Loot Table", selection.LootTableId, "lootTableId", id, "References an existing MapLootTableDefinition id.");
-            DrawOverlayToggle(selection, id, "replaceGeneratedLoot", "Replace Generated Loot", selection.ReplaceGeneratedLoot);
-            DrawOverlayEditableProperty("Encounter Table", selection.EncounterTableId, "encounterTableId", id, "References an existing MapEncounterTableDefinition id.");
-            DrawOverlayToggle(selection, id, "searchable", "Searchable", selection.Searchable);
-            DrawOverlayToggle(selection, id, "visibleAtStart", "Visible", selection.VisibleOnMap);
-            DrawOverlayToggle(selection, id, "discoveredAtStart", "Discovered", selection.Discovered);
-            DrawOverlayToggle(selection, id, "hiddenUntilDiscovered", "Hidden Until Discovery", selection.HiddenUntilDiscovered);
+            GUILayout.Label("Available icons: " + FormatKnownOverlayIconIds(), _mutedTextStyle);
+            DrawOverlayEditableProperty("Encounter Risk", selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture), "danger", id, "Higher values make encounters more likely here.");
+            DrawOverlayEditableProperty("Loot List", selection.LootTableId, "lootTableId", id, "The loot list used when players search this location.");
+            DrawOverlayToggle(selection, id, "replaceGeneratedLoot", "Replace Existing Loot", selection.ReplaceGeneratedLoot);
+            DrawOverlayEditableProperty("Encounter List", selection.EncounterTableId, "encounterTableId", id, "The encounter list used at this location.");
+            DrawOverlayToggle(selection, id, "searchable", "Players Can Search Here", selection.Searchable);
+            DrawOverlayToggle(selection, id, "visibleAtStart", "Show From Start", selection.VisibleOnMap);
+            DrawOverlayToggle(selection, id, "discoveredAtStart", "Start Discovered", selection.Discovered);
+            DrawOverlayToggle(selection, id, "hiddenUntilDiscovered", "Hide Until Found", selection.HiddenUntilDiscovered);
             DrawMapUxSelectionDetails(selection, state);
             GUILayout.Space(8f);
-            GUILayout.Label("Mode: " + FormatOverlayMode(state), _mutedTextStyle);
+            GUILayout.Label("Current tool: " + FormatOverlayMode(state), _mutedTextStyle);
         }
 
         private void DrawMapGenerationControls()
@@ -259,20 +259,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             bool fixedSeed = definition != null && definition.SeedOverride.HasValue;
             GUILayout.Space(10f);
-            GUILayout.Label("Base Map", _textStyle);
+            GUILayout.Label("Starting Map", _textStyle);
             string value = fixedSeed
-                ? "Fixed seed " + definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture)
-                : "Render normally";
+                ? "Random layout chosen"
+                : "Default random map";
             DrawMapOptionDropdown(
                 "map.generation",
-                "Generation",
+                "Map Layout",
                 value,
                 new[]
                 {
-                    MapDropdownAction(ScenarioAuthoringActionIds.ActionScenarioSeedRandom, "Render Normally", "VN", !fixedSeed),
-                    MapDropdownAction(ScenarioAuthoringActionIds.ActionScenarioSeedReroll, "Randomize Next Map", "RR", false)
+                    MapDropdownAction(ScenarioAuthoringActionIds.ActionScenarioSeedRandom, "Use Default Random Map", "VN", !fixedSeed),
+                    MapDropdownAction(ScenarioAuthoringActionIds.ActionScenarioSeedReroll, "Choose New Random Layout", "RR", false)
                 });
-            GUILayout.Label("Changes apply on reload or playtest.", _mutedTextStyle);
+            GUILayout.Label("Reload or start a playtest to see the new layout.", _mutedTextStyle);
         }
 
         private void DrawOverlayEditableProperty(string label, string value, string field, string locationId, string hint)
@@ -300,11 +300,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Id = ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix + field + "." + ScenarioAuthoringActionCodec.EncodeToken(locationId),
                 Label = label,
-                Hint = "Toggle " + label + " for this map location.",
+                Hint = "Turn " + label + " on or off for this location.",
                 Enabled = selection != null,
                 Emphasized = value,
                 IconText = value ? "ON" : "OFF",
-                Badge = value ? "Enabled" : "Disabled"
+                Badge = value ? "On" : "Off"
             }, false);
         }
 
@@ -324,8 +324,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (selection == null)
                 return string.Empty;
             return selection.Authored
-                ? "Authored"
-                : "Vanilla - edits will be saved to your scenario";
+                ? "Custom location"
+                : "Existing map location - changes are saved to this scenario";
         }
 
         private static string FormatKnownOverlayIconIds()
@@ -347,7 +347,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             string mode = state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select";
             string sourceId;
-            return ScenarioMapLocationDuplicateService.TryReadSourceId(mode, out sourceId) ? "duplicate — choose a new cell" : mode;
+            if (ScenarioMapLocationDuplicateService.TryReadSourceId(mode, out sourceId))
+                return "Copy Location - choose a new spot";
+            if (string.Equals(mode, "place", StringComparison.OrdinalIgnoreCase))
+                return "Add Location";
+            if (string.Equals(mode, "move", StringComparison.OrdinalIgnoreCase))
+                return "Move Location";
+            if (string.Equals(mode, "terrain:Woodland", StringComparison.OrdinalIgnoreCase))
+                return "Paint Trees";
+            if (string.Equals(mode, "terrain:Mountains", StringComparison.OrdinalIgnoreCase))
+                return "Paint Mountains";
+            if (string.Equals(mode, "terrain:NowhereSpecial", StringComparison.OrdinalIgnoreCase))
+                return "Clear Terrain";
+            if (string.Equals(mode, "terrain:" + ScenarioMapTerrainModes.GeneratedBlend, StringComparison.OrdinalIgnoreCase))
+                return "Blend Terrain";
+            return "Select";
         }
 
         private static string FormatOverlayFlags(ScenarioMapRegionSelection selection)
@@ -355,10 +369,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (selection == null)
                 return string.Empty;
 
-            string visible = selection.VisibleOnMap ? "visible" : "hidden";
-            string discovered = selection.Discovered ? "discovered" : "undiscovered";
-            string searchable = selection.Searchable ? "searchable" : "not searchable";
-            return visible + ", " + discovered + ", " + searchable;
+            string visible = selection.VisibleOnMap ? "Shown on map" : "Hidden from map";
+            string discovered = selection.Discovered ? "Discovered" : "Undiscovered";
+            string searchable = selection.Searchable ? "Searchable" : "Cannot be searched";
+            return visible + " | " + discovered + " | " + searchable;
         }
 
         private static string SafeOverlay(string value)

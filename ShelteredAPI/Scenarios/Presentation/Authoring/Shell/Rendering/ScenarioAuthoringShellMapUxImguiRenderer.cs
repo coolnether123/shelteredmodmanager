@@ -20,14 +20,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private float DrawMapAuthoringLegend(Rect inner, float y)
         {
-            GUI.Label(new Rect(inner.x, y, inner.width, 20f), "Legend + filters", _smallTitleStyle);
+            GUI.Label(new Rect(inner.x, y, inner.width, 20f), "Show on Map", _smallTitleStyle);
             y += 23f;
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.VanillaRegions, "Vanilla", "VN");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.AuthoredLocations, "Authored POI", "AU");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.HiddenUntilDiscovered, "Hidden", "HD");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.InvalidOrBlocked, "Invalid", "!!");
-            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.DependencyLocked, "Locked", "LK");
-            GUI.Label(new Rect(inner.x, y + 3f, inner.width, 34f), "Off filters dim matching markers.", _mutedTextStyle);
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.VanillaRegions, "World Locations", "WL");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.AuthoredLocations, "My Locations", "ML");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.HiddenUntilDiscovered, "Undiscovered", "UD");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.InvalidOrBlocked, "Needs Attention", "!!");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.DependencyLocked, "Unavailable", "NA");
+            GUI.Label(new Rect(inner.x, y + 3f, inner.width, 34f), "Turn off a group to fade those markers.", _mutedTextStyle);
             return y + 37f;
         }
 
@@ -47,8 +47,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             MapLocationDefinition location = FindSelectedMapLocation(definition, selection);
             GUILayout.Space(8f);
-            GUILayout.Label("Playtest effect", _smallTitleStyle);
-            GUILayout.Label("Core map fields and loot: Applies in game", _mutedTextStyle);
+            GUILayout.Label("In Playtests", _smallTitleStyle);
+            GUILayout.Label("Location details and loot are ready to use.", _mutedTextStyle);
             DrawEncounterProjectionHonesty();
 
             if (location == null)
@@ -61,8 +61,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 DrawButton(GUILayoutUtility.GetRect(0f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f)), new ScenarioAuthoringInspectorAction
                 {
                     Id = ScenarioAuthoringActionIds.ActionMapLocationDuplicatePrefix + ScenarioAuthoringActionCodec.EncodeToken(location.Id),
-                    Label = "Duplicate to New Cell",
-                    Hint = "Copy loot, encounter, and properties, then choose a different valid cell.",
+                    Label = "Copy to Another Spot",
+                    Hint = "Copy this location and then choose a new spot on the map.",
                     Enabled = true,
                     IconText = "CP"
                 }, false);
@@ -79,7 +79,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 if (field == null || string.Equals(previousGroup, field.Group, StringComparison.Ordinal))
                     continue;
                 previousGroup = field.Group;
-                GUILayout.Label(field.Group + ": " + field.StatusText, _mutedTextStyle);
+                GUILayout.Label(field.Group + ": " + (field.AppliesInGame ? "Ready for playtests" : "Saved, but not used in playtests yet"), _mutedTextStyle);
             }
         }
 
@@ -93,20 +93,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             }
 
             GUILayout.Space(8f);
-            GUILayout.Label("Loot roll preview", _smallTitleStyle);
+            GUILayout.Label("Loot Preview", _smallTitleStyle);
             if (_mapLootPreview == null || !string.IsNullOrEmpty(_mapLootPreview.Error))
             {
                 GUILayout.Label(_mapLootPreview != null ? _mapLootPreview.Error : "Preview unavailable.", _mutedTextStyle);
                 return;
             }
-            GUILayout.Label("Exact seed " + _mapLootPreview.FixedSeed.ToString(CultureInfo.InvariantCulture) + ": " + FormatOverlayExactRoll(_mapLootPreview), _textStyle);
-            GUILayout.Label("Across 1,000 deterministic samples", _mutedTextStyle);
+            GUILayout.Label("Example search result: " + FormatOverlayExactRoll(_mapLootPreview), _textStyle);
+            GUILayout.Label("Average results from 1,000 searches", _mutedTextStyle);
             for (int i = 0; i < _mapLootPreview.Distribution.Count; i++)
             {
                 ScenarioMapLootDistributionEntry entry = _mapLootPreview.Distribution[i];
                 GUILayout.Label(
                     (entry.Hidden ? "Hidden " : string.Empty) + entry.ItemId + " — "
-                    + entry.PercentOfRolls.ToString("0.0", CultureInfo.InvariantCulture) + "% • avg "
+                    + entry.PercentOfRolls.ToString("0.0", CultureInfo.InvariantCulture) + "% | average "
                     + entry.AverageQuantityPerRoll.ToString("0.00", CultureInfo.InvariantCulture),
                     _mutedTextStyle);
             }
