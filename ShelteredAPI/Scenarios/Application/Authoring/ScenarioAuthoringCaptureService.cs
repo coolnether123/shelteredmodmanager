@@ -6,6 +6,7 @@ using UnityEngine;
 
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
@@ -16,6 +17,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         private readonly IScenarioDraftMutationService _draftMutationService;
         private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
 
         public static ScenarioAuthoringCaptureService Instance
         {
@@ -24,10 +26,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         internal ScenarioAuthoringCaptureService(
             IScenarioDraftMutationService draftMutationService,
-            ScenarioActorResolver actorResolver)
+            ScenarioActorResolver actorResolver,
+            ScenarioObjectIdentityAssignmentService identityAssignmentService)
         {
             _draftMutationService = draftMutationService;
             _actorResolver = actorResolver;
+            _identityAssignmentService = identityAssignmentService;
         }
 
         public bool CaptureCurrentFamily(ScenarioEditorSession session, out string message)
@@ -174,7 +178,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             bunkerEdits.ObjectPlacements.Clear();
 
-            List<Obj_Base> liveObjects = objectManager.GetAllObjects();
+            List<Obj_Base> liveObjects = ScenarioLiveShelterObjectCatalog.Discover();
             List<ObjectPlacement> captured = new List<ObjectPlacement>(preserved);
             for (int i = 0; liveObjects != null && i < liveObjects.Count; i++)
             {
@@ -190,11 +194,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 bunkerEdits.ObjectPlacements.Add(captured[i]);
 
             session.WorkingDefinition.BunkerEdits = bunkerEdits;
+            AssignMissingObjectIdentities(session);
             _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
             int liveCapturedCount = Math.Max(0, captured.Count - preserved.Count);
             message = captured.Count > 0
-                ? "Captured " + liveCapturedCount + " live spawned shelter object placement(s)."
-                : "No eligible spawned shelter objects were found; captured placement list cleared.";
+                ? "Captured " + liveCapturedCount + " live shelter object placement(s)."
+                : "No eligible shelter objects were found; captured placement list cleared.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
@@ -237,6 +242,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             bunkerEdits.ObjectPlacements.Sort(ComparePlacements);
+            AssignMissingObjectIdentities(session);
             _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
@@ -533,13 +539,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             obj = gameObject != null ? gameObject.GetComponent<Obj_Base>() : null;
             if (obj == null)
             {
-                reason = "The selected target is not a spawned shelter object.";
-                return false;
-            }
-
-            if (obj.initialObject)
-            {
-                reason = "The selected object belongs to the bunker's initial layout. This first-pass editor only captures spawned shelter objects.";
+                reason = "The selected target is not a shelter object.";
                 return false;
             }
 
@@ -658,7 +658,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static bool ShouldCaptureObject(Obj_Base obj)
         {
-            if (obj == null || obj.initialObject || obj.gameObject == null || !obj.gameObject.activeInHierarchy)
+            if (obj == null || obj.gameObject == null)
                 return false;
 
             ObjectManager.ObjectType objectType = obj.GetObjectType();
@@ -674,6 +674,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
 
             return true;
+        }
+
+        private void AssignMissingObjectIdentities(ScenarioEditorSession session)
+        {
+            if (_identityAssignmentService != null)
+                _identityAssignmentService.AssignMissingIds(session);
         }
 
         private static bool ContainsAny(string value, params string[] parts)

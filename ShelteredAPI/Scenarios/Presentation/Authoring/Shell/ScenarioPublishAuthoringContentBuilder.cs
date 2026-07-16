@@ -54,7 +54,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringValidationSnapshot validation = EvaluateValidation(state, definition);
             List<ScenarioAuthoringInspectorItem> dependencyItems = BuildDependencyItems(definition);
             List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(compatibilityReport);
-            List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
+            List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder, true);
             List<ScenarioAuthoringInspectorItem> validationItems = BuildValidationItems(validation, state != null ? state.ActiveScenarioFilePath : null);
             bool showAdvanced = state != null
                 && state.Settings != null
@@ -508,18 +508,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        internal static List<ScenarioAuthoringInspectorItem> BuildTimelineItems(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, ScenarioTimelineBuilder timelineBuilder)
+        internal static List<ScenarioAuthoringInspectorItem> BuildTimelineItems(
+            ScenarioDefinition definition,
+            ScenarioRuntimeState runtimeState,
+            ScenarioTimelineBuilder timelineBuilder,
+            bool includeStoryRoutes)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             List<ScenarioTimelineEntry> entries = timelineBuilder != null ? timelineBuilder.BuildEntries(definition, runtimeState) : new List<ScenarioTimelineEntry>();
             for (int i = 0; entries != null && i < entries.Count && i < 12; i++)
             {
                 ScenarioTimelineEntry entry = entries[i];
+                if (!includeStoryRoutes && entry != null && string.Equals(entry.Source, "flow", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 if (entry != null)
                     items.Add(Item.Property("Day " + entry.When.Day + " " + Item.Safe(entry.Title), ScenarioScheduleFormatter.Format(entry.When) + " / " + entry.Kind + " / " + entry.Status));
             }
             if (items.Count == 0)
-                items.Add(Item.Text("No scheduled timeline entries are authored yet."));
+                items.Add(Item.Text(includeStoryRoutes
+                    ? "No scheduled timeline entries are authored yet."
+                    : "No pending or blocked exact-clock actions remain. Story dialogue and branches are tracked by the vanilla encounter flow."));
             return items;
         }
 
@@ -569,7 +577,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioPacingAuthoringSectionBuilder.AddPreflightGuidance(preflightItems, definition, _timelineBuilder);
             List<ScenarioAuthoringInspectorItem> resultItems = BuildPlaytestResultItems(editorSession);
             List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
-            List<ScenarioAuthoringInspectorItem> pendingItems = ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(definition, ScenarioPublishAuthoringContentBuilder.GetRuntimeState(), _timelineBuilder);
+            List<ScenarioAuthoringInspectorItem> pendingItems = ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(definition, ScenarioPublishAuthoringContentBuilder.GetRuntimeState(), _timelineBuilder, false);
             List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>
             {

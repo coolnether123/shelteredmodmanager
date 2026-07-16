@@ -20,6 +20,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioEditorSession session = context != null ? context.EditorSession : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
             ScenarioTestConsoleService console = Resolve();
+            ScenarioRuntimeState runtimeState = GetState();
             bool active = session != null && session.PlaytestState == ScenarioPlaytestState.Playtesting;
             if (console != null)
                 console.SetConsoleVisible(active);
@@ -27,9 +28,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(Section("test_console_status", "Status", BuildLiveItems(console, active), ScenarioAuthoringInspectorSectionLayout.Summary));
             // "Next authored events" remains the creator-language contract for this Upcoming instrument panel.
-            sections.Add(Section("test_console_upcoming", "Upcoming", BuildUpcomingItems(definition, active), ScenarioAuthoringInspectorSectionLayout.PropertyList));
+            sections.Add(Section("test_console_upcoming", "Upcoming", BuildUpcomingItems(definition, runtimeState, active), ScenarioAuthoringInspectorSectionLayout.PropertyList));
             sections.Add(Section("test_console_log", "Execution log (newest first)", BuildLogItems(console, active), ScenarioAuthoringInspectorSectionLayout.PropertyList));
-            sections.Add(Section("test_console_controls", "Controls", BuildControlItems(definition, active), ScenarioAuthoringInspectorSectionLayout.ActionStrip));
+            sections.Add(Section("test_console_controls", "Controls", BuildControlItems(definition, runtimeState, active), ScenarioAuthoringInspectorSectionLayout.ActionStrip));
             bool showAdvanced = context != null
                 && context.State != null
                 && context.State.Settings != null
@@ -61,22 +62,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return items;
         }
 
-        private static List<ScenarioAuthoringInspectorItem> BuildControlItems(ScenarioDefinition definition, bool active)
+        private static List<ScenarioAuthoringInspectorItem> BuildControlItems(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, bool active)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleHour, "+1 hour", "Advance through one bounded vanilla-clock hour; never changes Unity time scale.", active, false, "H+")));
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleDay, "+1 day", "Advance through 24 bounded vanilla-clock hour steps.", active, false, "D+")));
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleNextEvent, "Run until next authored event", "Advance no more than 72 hours to the next scheduled authored event.", active, true, "NX")));
-            items.AddRange(BuildFireNowItems(definition, active));
+            items.AddRange(BuildFireNowItems(definition, runtimeState, active));
             return items;
         }
 
-        private static List<ScenarioAuthoringInspectorItem> BuildUpcomingItems(ScenarioDefinition definition, bool active)
+        private static List<ScenarioAuthoringInspectorItem> BuildUpcomingItems(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, bool active)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             List<ScenarioScheduledActionDefinition> actions = new List<ScenarioScheduledActionDefinition>();
             for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
-                if (definition.ScheduledActions[i] != null) actions.Add(definition.ScheduledActions[i]);
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                if (action != null && !IsOnceConsumed(runtimeState, action))
+                    actions.Add(action);
+            }
             actions.Sort(delegate(ScenarioScheduledActionDefinition left, ScenarioScheduledActionDefinition right)
             {
                 long l = ToMinutes(left != null ? left.DueTime : null);
@@ -86,11 +91,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             for (int i = 0; i < actions.Count && i < 5; i++)
                 items.Add(Item.Property(FormatWhen(actions[i].DueTime), Display(actions[i]), actions[i].ActionType ?? "Scheduled action"));
             if (items.Count == 0)
-                items.Add(Item.Text(active ? "No direct scheduled actions are authored. Trigger and conversation schedules still appear in the execution log when evaluated." : "Start a playtest to see upcoming runtime events."));
+                items.Add(Item.Text(active ? "No pending direct scheduled actions remain. Trigger and conversation schedules still appear in the execution log when evaluated." : "Start a playtest to see upcoming runtime events."));
             return items;
         }
 
-        private static List<ScenarioAuthoringInspectorItem> BuildFireNowItems(ScenarioDefinition definition, bool active)
+        private static List<ScenarioAuthoringInspectorItem> BuildFireNowItems(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, bool active)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
@@ -103,7 +108,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action == null || string.IsNullOrEmpty(action.Id)) continue;
-                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleFirePrefix + ScenarioAuthoringActionCodec.EncodeToken(action.Id), "Fire now: " + Display(action), "Applies this safe scheduled action without changing Unity time scale.", active, false, "FX")));
+                bool consumed = IsOnceConsumed(runtimeState, action);
+                ScenarioAuthoringInspectorAction fire = Item.Action(
+                    ScenarioAuthoringActionIds.ActionTestConsoleFirePrefix + ScenarioAuthoringActionCodec.EncodeToken(action.Id),
+                    consumed ? "Fired: " + Display(action) : "Fire now: " + Display(action),
+                    consumed ? "This once-only action already succeeded in the current run." : "Applies this safe scheduled action without changing Unity time scale.",
+                    active && !consumed,
+                    false,
+                    consumed ? "OK" : "FX");
+                if (consumed)
+                    fire.DisabledReason = "Once-only action already consumed.";
+                items.Add(Item.ActionItem(fire));
             }
             for (int i = 0; definition != null && definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null && i < definition.ScenarioFlow.Stages.Count; i++)
             {
@@ -198,6 +213,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (string.IsNullOrEmpty(value)) return "Unnamed";
             string text = value.Replace('-', ' ').Replace('_', ' ').Trim();
             return text.Length == 0 ? "Unnamed" : char.ToUpperInvariant(text[0]) + text.Substring(1);
+        }
+
+        private static bool IsOnceConsumed(ScenarioRuntimeState state, ScenarioScheduledActionDefinition action)
+        {
+            if (state == null || action == null || string.IsNullOrEmpty(action.Id)
+                || (action.Policy != null && action.Policy.Repeatable)
+                || state.ExecutedActions == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < state.ExecutedActions.Count; i++)
+            {
+                ScenarioExecutedActionRecord record = state.ExecutedActions[i];
+                if (record != null
+                    && record.Status == ScenarioExecutedActionStatus.Succeeded
+                    && string.Equals(record.ActionKey, action.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static ScenarioAuthoringInspectorSection Section(string id, string title, List<ScenarioAuthoringInspectorItem> items, ScenarioAuthoringInspectorSectionLayout layout)

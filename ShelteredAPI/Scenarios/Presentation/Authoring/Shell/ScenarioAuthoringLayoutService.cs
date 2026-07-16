@@ -42,9 +42,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             state.Settings = state.Settings != null ? state.Settings.Copy() : _settingsService.Load();
             _settingsService.ApplyDefinitionDefaults(state.Settings);
             EnsureWindowStates(state);
-            bool layoutLoaded = LoadLayout(state);
-            if (!layoutLoaded)
-                HideStartupUtilityWindows(state);
+            LoadLayout(state);
+            // Floating utilities are transient work surfaces. Preserve their
+            // saved size and position, but never carry an open palette/editor
+            // from one authoring session into the next.
+            HideStartupUtilityWindows(state);
             ApplyStageWorkspace(state);
         }
 
@@ -563,6 +565,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.Hierarchy);
             SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.SelectionStack);
+            SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.TilesPalette);
+            SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.PixelEditor);
         }
 
         private static void SetStartupUtilityWindowHidden(ScenarioAuthoringState state, string windowId)

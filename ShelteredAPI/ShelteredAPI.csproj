@@ -58,6 +58,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Scenarios\Assets\Inventory\*.png" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Adapters\GameHelperExtensions.cs" />
     <Compile Include="Actors\ActorSystem.cs" />
     <Compile Include="Actors\Internal\ActorSystemImpl.cs" />
@@ -542,10 +545,12 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPlacementFeelVisualService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBunkerDraftService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioWorldObjectDisplayNameResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioCharacterAppearanceService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioObjectPlacementRuntimeBinding.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioObjectStatePropertyService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCaptureService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioLiveShelterObjectCatalog.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioDraftSnapshotService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringInventoryProjectionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCommandService.cs" />
@@ -643,6 +648,7 @@
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeContracts.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeDefinitionOverrideProvider.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeOrchestrator.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioCharacterRuntimeNameRegistry.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioAuthoring.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarios.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioRuntime.cs" />
@@ -693,6 +699,8 @@
     <Compile Include="Scenarios\Diagnostics\ScenarioValidatorImpl.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioWorldReady.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ShelteredCustomScenarioPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioModeSelectionFastHandoffPatch.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioSelectionPanelPrewarmCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioRngPatches.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ShelteredScenarioRuntimeBindingManager.cs" />
     <Compile Include="Scenarios\Registration\ScenarioEventHub.cs" />

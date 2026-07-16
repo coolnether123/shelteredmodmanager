@@ -398,7 +398,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GameObject selectedGameObject = ResolveGameObject(target);
             Obj_Base selectedObject = selectedGameObject != null ? selectedGameObject.GetComponent<Obj_Base>() : null;
             ScenarioStationUpgradeSnapshot stationSnapshot = ScenarioStationUpgradePropertyService.BuildSnapshot(selectedObject, objectPlacement);
-            int linkedTimelineEntries = CountLikelyTriggerReferences(definition, target);
             string scopeReason;
             bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason);
 
@@ -422,7 +421,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int i = 0; i < assetEditorSections.Count; i++)
                     sections.Add(assetEditorSections[i]);
             }
-            sections.Add(BuildScenarioBehaviorSection(target, objectPlacement, linkedTimelineEntries));
             sections.Add(BuildWarningsSection(scopeAllowed, target, objectPlacement, definition, captureReason));
 
             if (state != null && state.Settings != null && state.Settings.GetBool("debug.show_advanced_details", false))
@@ -558,28 +556,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Id = "pinned_facts",
                 Title = editPins ? "Pinned Facts (editing)" : "Pinned Facts",
                 Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = items.ToArray()
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildScenarioBehaviorSection(
-            ScenarioAuthoringTarget target,
-            ObjectPlacement objectPlacement,
-            int linkedTimelineEntries)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Property("Foundation", Safe(objectPlacement != null ? objectPlacement.RequiredFoundationId : null)));
-            items.Add(Property("Expansion", Safe(objectPlacement != null ? objectPlacement.RequiredBunkerExpansionId : null)));
-            items.Add(Property("Unlock Gate", Safe(objectPlacement != null ? objectPlacement.UnlockGateId : null)));
-            items.Add(Property("Activation", Safe(objectPlacement != null ? objectPlacement.ScheduledActivationId : null)));
-            items.Add(Property("Timeline Links", linkedTimelineEntries.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Property("Source", target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId) ? "Scenario authored" : "Vanilla or live object"));
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "scenario_behavior",
-                Title = "Scenario Rules",
-                Expanded = false,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = items.ToArray()
             };
@@ -736,7 +712,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
                 "Capture Placement",
-                "Store this live spawned shelter object as a scenario object placement.",
+                "Store this live shelter object as a scenario object placement.",
                 scopeAllowed && canCaptureTarget,
                 scopeAllowed && canCaptureTarget,
                 "CP",
@@ -807,18 +783,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (objectPlacement != null && string.IsNullOrEmpty(objectPlacement.ScenarioObjectId))
                 items.Add(Text("Missing scenario object id."));
             if (objectPlacement != null
-                && string.IsNullOrEmpty(objectPlacement.RequiredFoundationId)
-                && string.IsNullOrEmpty(objectPlacement.RequiredBunkerExpansionId))
-                items.Add(Text("Missing foundation or expansion support."));
+                && !string.IsNullOrEmpty(objectPlacement.RequiredFoundationId)
+                && !HasFoundation(definition, objectPlacement.RequiredFoundationId))
+                items.Add(Text("Referenced foundation is not present in the draft."));
             if (objectPlacement != null
-                && objectPlacement.StartState == ScenarioObjectStartState.StartsEnabled
-                && !HasSupport(definition, objectPlacement))
-                items.Add(Text("Object starts active but its support is not present in the draft."));
-            if (objectPlacement != null
-                && objectPlacement.StartState == ScenarioObjectStartState.StartsEnabled
                 && !string.IsNullOrEmpty(objectPlacement.RequiredBunkerExpansionId)
                 && !HasExpansion(definition, objectPlacement.RequiredBunkerExpansionId))
-                items.Add(Text("Object is inside a locked or missing expansion but starts enabled."));
+                items.Add(Text("Referenced bunker expansion is not present in the draft."));
+            if (objectPlacement != null
+                && objectPlacement.StartState == ScenarioObjectStartState.StartsEnabled
+                && (!string.IsNullOrEmpty(objectPlacement.RequiredFoundationId)
+                    || !string.IsNullOrEmpty(objectPlacement.RequiredBunkerExpansionId))
+                && !HasSupport(definition, objectPlacement))
+                items.Add(Text("Object starts active but its support is not present in the draft."));
             if (target != null && target.SupportsReplace && string.IsNullOrEmpty(target.ScenarioReferenceId) && objectPlacement == null)
                 items.Add(Text("Visual replacement may need an asset or object capture before it is portable."));
             if (!string.IsNullOrEmpty(captureReason))
@@ -1695,12 +1672,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             if (model != null && !string.IsNullOrEmpty(model.Guidance))
                 items.Add(Text(model.Guidance));
+            if (model != null && !string.IsNullOrEmpty(model.Detail))
+                items.Add(Text(model.Detail));
             if (model != null && model.PlacementActive)
             {
+                if (!string.IsNullOrEmpty(model.ObjectKind))
+                    items.Add(Property("Type", model.ObjectKind));
+                if (model.ObjectLevel.HasValue)
+                    items.Add(Property("Level", model.ObjectLevel.Value.ToString()));
+                if (!string.IsNullOrEmpty(model.DefinitionReference))
+                    items.Add(Property("Definition", model.DefinitionReference));
+                if (!string.IsNullOrEmpty(model.PlacementSurface))
+                    items.Add(Property("Placement", model.PlacementSurface));
+                if (!string.IsNullOrEmpty(model.Footprint))
+                    items.Add(Property("Footprint", model.Footprint));
                 if (!string.IsNullOrEmpty(model.TargetCell))
                     items.Add(Property("Target Cell", model.TargetCell));
                 if (model.CanPlace.HasValue)
-                    items.Add(Property("Placement", model.CanPlace.Value ? "Valid" : "Invalid"));
+                    items.Add(Property("Current Cell", model.CanPlace.Value ? "Valid" : "Invalid"));
                 if (!string.IsNullOrEmpty(model.ValidationReason))
                     items.Add(Text(model.ValidationReason));
             }
@@ -1981,7 +1970,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         string.Equals(currentItemId, entry.ItemId, StringComparison.OrdinalIgnoreCase),
                         "IT",
                         entry.Detail + " | " + category,
-                        category,
+                        entry.PreviewCreatedByCustomScenarioEditor ? "EDITOR ART" : category,
                         entry.PreviewSprite)));
                 }
 

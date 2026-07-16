@@ -42,12 +42,12 @@ namespace ShelteredAPI.UI.FieldManual.Textures
                 return GetOrCreate("white:2x2", delegate
                 {
                     Texture2D white = new Texture2D(2, 2, TextureFormat.ARGB32, false);
-                    Color[] px = new Color[4];
+                    Color32[] px = new Color32[4];
                     for (int i = 0; i < 4; i++) px[i] = Color.white;
-                    white.SetPixels(px);
+                    white.SetPixels32(px);
                     white.filterMode = FilterMode.Point;
                     white.wrapMode = TextureWrapMode.Clamp;
-                    white.Apply(false, false);
+                    white.Apply(false, true);
                     return white;
                 });
             }

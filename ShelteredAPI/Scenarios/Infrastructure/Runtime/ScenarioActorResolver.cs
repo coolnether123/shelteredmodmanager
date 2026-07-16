@@ -232,27 +232,52 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         private static bool TryResolveStartingCastMember(ScenarioActorRef actorRef, out FamilyMember member)
         {
             member = null;
-            if (actorRef == null
-                || !string.Equals(actorRef.BindingType, ScenarioCastBindingType, StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrEmpty(actorRef.BindingKey))
+            if (actorRef == null || string.IsNullOrEmpty(actorRef.BindingKey))
                 return false;
 
-            int marker = actorRef.BindingKey.LastIndexOf(":start:", StringComparison.OrdinalIgnoreCase);
-            int index;
-            if (marker < 0
-                || !int.TryParse(actorRef.BindingKey.Substring(marker + 7), out index)
-                || index < 0)
+            bool stableCastBinding = string.Equals(actorRef.BindingType, ScenarioCastBindingType, StringComparison.OrdinalIgnoreCase);
+            bool legacyFamilyBinding = string.Equals(actorRef.BindingType, "FamilyMember", StringComparison.OrdinalIgnoreCase);
+            if (!stableCastBinding && !legacyFamilyBinding)
                 return false;
 
             try
             {
                 FamilyManager familyManager = FamilyManager.Instance;
                 List<FamilyMember> members = familyManager != null ? familyManager.GetAllFamilyMembers() : null;
-                if (members == null || index >= members.Count)
+                if (members == null)
                     return false;
 
-                member = members[index];
-                return member != null;
+                if (stableCastBinding)
+                {
+                    int marker = actorRef.BindingKey.LastIndexOf(":start:", StringComparison.OrdinalIgnoreCase);
+                    int index;
+                    if (marker < 0
+                        || !int.TryParse(actorRef.BindingKey.Substring(marker + 7), out index)
+                        || index < 0
+                        || index >= members.Count)
+                        return false;
+
+                    member = members[index];
+                    return member != null;
+                }
+
+                for (int i = 0; i < members.Count; i++)
+                {
+                    FamilyMember candidate = members[i];
+                    if (candidate == null)
+                        continue;
+
+                    string fullName = JoinName(candidate.firstName, candidate.lastName);
+                    if (string.Equals(actorRef.BindingKey, candidate.firstName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(actorRef.BindingKey, fullName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(actorRef.DisplayNameFallback, fullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        member = candidate;
+                        return true;
+                    }
+                }
+
+                return false;
             }
             catch (Exception ex)
             {

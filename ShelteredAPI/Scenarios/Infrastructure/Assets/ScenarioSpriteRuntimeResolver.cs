@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ModAPI.Scenarios;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -9,6 +10,9 @@ using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class ScenarioSpriteRuntimeResolver
     {
+        private static readonly Dictionary<string, Transform> ExternalRootCache =
+            new Dictionary<string, Transform>(StringComparer.Ordinal);
+
         internal sealed class ResolvedTarget
         {
             public string TargetPath;
@@ -80,9 +84,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             if (string.IsNullOrEmpty(targetPath))
                 return false;
 
-            Transform transform = ResolveTransform(authoringTarget);
+            // TransformPath is the durable authoring identity. RuntimeObject can
+            // be a transient hit/renderer proxy below that logical target, so it
+            // is only a fallback when the persisted path is not currently live.
+            Transform transform = FindTransformByPath(targetPath);
             if (transform == null)
-                transform = FindTransformByPath(targetPath);
+            {
+                Transform runtimeTransform = ResolveTransform(authoringTarget);
+                Transform current = runtimeTransform;
+                while (current != null)
+                {
+                    if (string.Equals(BuildTransformPath(current), targetPath, StringComparison.Ordinal))
+                    {
+                        transform = current;
+                        break;
+                    }
+                    current = current.parent;
+                }
+
+                if (transform == null)
+                    transform = runtimeTransform;
+            }
 
             if (transform == null)
                 return false;
@@ -115,7 +137,45 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             ParticleSystemRenderer particleRenderer = null;
 
             if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.SpriteRenderer)
-                spriteRenderer = transform.GetComponent<SpriteRenderer>() ?? transform.GetComponentInChildren<SpriteRenderer>(true);
+            {
+                spriteRenderer = transform.GetComponent<SpriteRenderer>();
+                if (spriteRenderer == null)
+                {
+                    SpriteRenderer[] candidates = transform.GetComponentsInChildren<SpriteRenderer>(true);
+                    float largestActiveArea = -1f;
+                    int nearestActiveDepth = int.MaxValue;
+                    for (int i = 0; candidates != null && i < candidates.Length; i++)
+                    {
+                        SpriteRenderer candidate = candidates[i];
+                        if (candidate == null || !candidate.gameObject.activeInHierarchy || candidate.sprite == null)
+                            continue;
+
+                        int candidateDepth = 0;
+                        Transform candidateParent = candidate.transform;
+                        while (candidateParent != null && candidateParent != transform)
+                        {
+                            candidateDepth++;
+                            candidateParent = candidateParent.parent;
+                        }
+                        if (candidateParent == null)
+                            continue;
+
+                        Bounds candidateBounds = candidate.bounds;
+                        float candidateArea = Mathf.Abs(candidateBounds.size.x * candidateBounds.size.y);
+                        if (spriteRenderer == null
+                            || candidateDepth < nearestActiveDepth
+                            || (candidateDepth == nearestActiveDepth && candidateArea > largestActiveArea))
+                        {
+                            spriteRenderer = candidate;
+                            largestActiveArea = candidateArea;
+                            nearestActiveDepth = candidateDepth;
+                        }
+                    }
+
+                    if (spriteRenderer == null && candidates != null && candidates.Length > 0)
+                        spriteRenderer = candidates[0];
+                }
+            }
             if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.UI2DSprite)
                 ui2DSprite = transform.GetComponent<UI2DSprite>() ?? transform.GetComponentInChildren<UI2DSprite>(true);
             if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.ParticleSystemRenderer)
@@ -125,8 +185,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 return new ResolvedTarget
                 {
-                    TargetPath = targetPath,
-                    Transform = transform,
+                    TargetPath = BuildTransformPath(spriteRenderer.transform),
+                    Transform = spriteRenderer.transform,
                     Kind = ScenarioSpriteTargetComponentKind.SpriteRenderer,
                     SpriteRenderer = spriteRenderer
                 };
@@ -136,8 +196,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 return new ResolvedTarget
                 {
-                    TargetPath = targetPath,
-                    Transform = transform,
+                    TargetPath = BuildTransformPath(ui2DSprite.transform),
+                    Transform = ui2DSprite.transform,
                     Kind = ScenarioSpriteTargetComponentKind.UI2DSprite,
                     Ui2DSprite = ui2DSprite
                 };
@@ -147,8 +207,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 return new ResolvedTarget
                 {
-                    TargetPath = targetPath,
-                    Transform = transform,
+                    TargetPath = BuildTransformPath(particleRenderer.transform),
+                    Transform = particleRenderer.transform,
                     Kind = ScenarioSpriteTargetComponentKind.ParticleSystemRenderer,
                     ParticleRenderer = particleRenderer
                 };
@@ -215,6 +275,42 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 }
 
                 if (matched && current != null)
+                    return current;
+            }
+
+            // Sheltered keeps some live world roots outside the active scene
+            // (notably object_manager during authoring reloads). Locate each
+            // external root once, then traverse its children without repeating
+            // a global object/path scan for every authoring document build.
+            Transform externalRoot;
+            if (!ExternalRootCache.TryGetValue(segments[0], out externalRoot) || externalRoot == null)
+            {
+                externalRoot = null;
+                Transform[] loadedTransforms = Resources.FindObjectsOfTypeAll<Transform>();
+                for (int i = 0; loadedTransforms != null && i < loadedTransforms.Length; i++)
+                {
+                    Transform candidate = loadedTransforms[i];
+                    if (candidate == null
+                        || candidate.parent != null
+                        || !string.Equals(candidate.name, segments[0], StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    externalRoot = candidate;
+                    if (candidate.gameObject.activeInHierarchy)
+                        break;
+                }
+
+                ExternalRootCache[segments[0]] = externalRoot;
+            }
+
+            if (externalRoot != null)
+            {
+                Transform current = externalRoot;
+                for (int segmentIndex = 1; segmentIndex < segments.Length && current != null; segmentIndex++)
+                    current = FindChildByName(current, segments[segmentIndex]);
+                if (current != null)
                     return current;
             }
 

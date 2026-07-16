@@ -1083,7 +1083,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Transform transform = gameObject.transform;
                 ScenarioAuthoringTargetKind kind = Classify(gameObject);
                 string transformPath = BuildTransformPath(transform);
-                string displayName = !string.IsNullOrEmpty(gameObject.name) ? gameObject.name : kind.ToString();
+                string displayName = ScenarioWorldObjectDisplayNameResolver.Resolve(gameObject, kind);
                 string description = kind + " at " + transformPath;
 
                 target = new ScenarioAuthoringTarget
@@ -1120,6 +1120,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Obj_Base objBase = gameObject.GetComponentInParent<Obj_Base>();
                 if (objBase != null)
                     return objBase.gameObject;
+
+                GameObject logicalRoot = ScenarioWorldObjectDisplayNameResolver.ResolveLogicalRoot(gameObject);
+                if (logicalRoot != null)
+                    return logicalRoot;
 
                 FamilyMember familyMember = gameObject.GetComponentInParent<FamilyMember>();
                 if (familyMember != null)

@@ -15,8 +15,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioHierarchyAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
     {
         public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Hierarchy; } }
-        private static Obj_Base[] _cachedLiveObjects;
-        private static int _cachedLiveObjectsFrame = -1;
 
         public ScenarioAuthoringInspectorSection[] Build(ScenarioAuthoringWindowContentContext context)
         {
@@ -57,7 +55,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int placements = definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null ? definition.BunkerEdits.ObjectPlacements.Count : 0;
             items.Add(Item.Property("Authored Room Edits", roomChanges.ToString(CultureInfo.InvariantCulture)));
             items.Add(Item.Property("Authored Object Placements", placements.ToString(CultureInfo.InvariantCulture)));
-            for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count && i < 8; i++)
+            for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count; i++)
             {
                 ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
                 if (placement == null)
@@ -82,17 +80,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorSection BuildLiveObjectsSection(ScenarioAuthoringState state)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            Obj_Base[] objects = GetLiveObjects();
+            List<Obj_Base> objects = ScenarioLiveShelterObjectCatalog.Discover();
             int count = 0;
-            for (int i = 0; objects != null && i < objects.Length; i++)
+            for (int i = 0; objects != null && i < objects.Count; i++)
             {
                 Obj_Base obj = objects[i];
                 if (obj == null || obj.gameObject == null)
                     continue;
 
                 count++;
-                if (items.Count < 10)
-                    items.Add(Item.ActionItem(BuildTargetAction(state, obj.gameObject, ScenarioAuthoringTargetKind.PlaceableObject, "OB")));
+                items.Add(Item.ActionItem(BuildTargetAction(state, obj.gameObject, ScenarioAuthoringTargetKind.PlaceableObject, "OB")));
             }
 
             items.Insert(0, Item.Property("Live Shelter Objects", count.ToString(CultureInfo.InvariantCulture)));
@@ -111,21 +108,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         internal static void InvalidateLiveObjectCache()
         {
-            _cachedLiveObjects = null;
-            _cachedLiveObjectsFrame = -1;
-        }
-
-        private static Obj_Base[] GetLiveObjects()
-        {
-            if (_cachedLiveObjects != null
-                && (_cachedLiveObjectsFrame < 0 || Time.frameCount - _cachedLiveObjectsFrame < 60))
-            {
-                return _cachedLiveObjects;
-            }
-
-            _cachedLiveObjects = UnityEngine.Object.FindObjectsOfType<Obj_Base>();
-            _cachedLiveObjectsFrame = Time.frameCount;
-            return _cachedLiveObjects;
+            // Discovery is intentionally live so inactive base-layout objects and
+            // newly placed objects are reflected immediately in the hierarchy.
         }
 
         private static ScenarioAuthoringInspectorSection BuildCharactersSection(ScenarioAuthoringState state, ScenarioDefinition definition)
@@ -265,7 +249,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static ScenarioAuthoringInspectorAction BuildTargetAction(ScenarioAuthoringState state, GameObject gameObject, ScenarioAuthoringTargetKind kind, string badge, string scenarioReferenceId)
         {
-            string label = gameObject != null && !string.IsNullOrEmpty(gameObject.name) ? gameObject.name : kind.ToString();
+            string label = ScenarioWorldObjectDisplayNameResolver.Resolve(gameObject, kind);
             string id = kind + ":" + (gameObject != null && gameObject.transform != null ? gameObject.transform.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
             bool activeSelected = IsTargetSelected(state, id, scenarioReferenceId, gameObject);
             bool selected = activeSelected || IsTargetInMultiSelection(state, id, scenarioReferenceId, gameObject);

@@ -45,6 +45,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             public string Footprint;
             public bool? CanPlace;
             public string ValidationReason;
+            public string DefinitionReference;
+            public string ObjectKind;
+            public int? ObjectLevel;
+            public string PlacementSurface;
         }
 
         internal sealed class PlacementValidationResult
@@ -146,6 +150,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 model.CanCancel = true;
                 model.Title = "Placing: " + (_activePlacement.Label ?? "Item");
                 model.Guidance = "Left-click place - Right-click/Esc cancel";
+                model.Detail = "Placement settings and live validation for this "
+                    + (_activePlacement.Kind == PlacementSessionKind.Object ? "object" : "structure tool") + ".";
+                model.DefinitionReference = _activePlacement.DefinitionReference;
+                model.ObjectKind = _activePlacement.Kind == PlacementSessionKind.Object
+                    ? FormatObjectType(_activePlacement.ObjectType.ToString())
+                    : _activePlacement.Kind.ToString();
+                model.ObjectLevel = _activePlacement.Kind == PlacementSessionKind.Object
+                    ? (int?)_activePlacement.Level
+                    : null;
+                model.PlacementSurface = _activePlacement.Kind == PlacementSessionKind.Object
+                    ? (_activePlacement.PlaceableOnSurface ? "On shelter surfaces" : "On shelter floor")
+                    : "Shelter grid";
                 PlacementValidationResult validation = EvaluateActivePlacement();
                 _activePlacement.Validation = validation;
                 if (validation != null)

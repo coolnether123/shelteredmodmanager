@@ -47,11 +47,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             EnsureTimelineRibbonStyles();
             Rect labelRect = new Rect(rect.x + 10f, rect.y + 8f, TimelineRibbonLabelWidth - 18f, rect.height - 16f);
             string workspaceTitle = window != null ? window.Title ?? string.Empty : string.Empty;
+            float titleHeight = Mathf.Clamp(
+                _timelineRibbonTitleStyle.CalcHeight(new GUIContent(workspaceTitle), labelRect.width) + 2f,
+                24f,
+                28f);
             GUI.Label(
-                new Rect(labelRect.x, labelRect.y, labelRect.width, 21f),
+                new Rect(labelRect.x, labelRect.y, labelRect.width, titleHeight),
                 ShortenToFit(workspaceTitle, labelRect.width, _timelineRibbonTitleStyle),
                 _timelineRibbonTitleStyle);
-            GUI.Label(new Rect(labelRect.x, labelRect.y + 23f, labelRect.width, 16f), "DAY TIMELINE", _timelineRibbonCaptionStyle);
+            GUI.Label(new Rect(labelRect.x, labelRect.y + titleHeight + 1f, labelRect.width, 16f), "DAY TIMELINE", _timelineRibbonCaptionStyle);
 
             Rect trackRect = new Rect(rect.x + TimelineRibbonLabelWidth, rect.y + 4f, Math.Max(80f, rect.width - TimelineRibbonLabelWidth - 8f), rect.height - 8f);
             if (ribbon == null || ribbon.EntryCount == 0)

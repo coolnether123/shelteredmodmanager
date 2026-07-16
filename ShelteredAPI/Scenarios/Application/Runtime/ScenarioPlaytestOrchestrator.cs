@@ -230,7 +230,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             ScenarioDef scenarioDef;
             try
             {
-                scenarioDef = ScenarioDefinitionService.BuildScenarioDef(session.WorkingDefinition);
+                scenarioDef = ScenarioDefinitionService.BuildPlayableScenarioDef(session.WorkingDefinition);
             }
             catch (Exception ex)
             {

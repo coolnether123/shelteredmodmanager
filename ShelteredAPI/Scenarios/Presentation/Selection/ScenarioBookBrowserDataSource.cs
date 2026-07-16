@@ -28,8 +28,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly IScenarioSaveLibrary _saveLibrary;
-        private readonly ScenarioPackageImportService _importService;
+        private readonly Func<ScenarioPackageImportService> _importServiceFactory;
         private readonly ScenarioLibraryPreferenceStore _libraryPreferences;
+        private readonly object _importServiceSync = new object();
+        private volatile ScenarioPackageImportService _importService;
         private readonly object _saveRefreshSync = new object();
         private readonly object _draftFactsRefreshSync = new object();
         private readonly object _importRefreshSync = new object();
@@ -62,7 +64,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             IScenarioSelectionCatalogService catalog,
             IScenarioSaveLibrary saveLibrary,
             ScenarioPackageImportService importService)
-            : this(catalog, saveLibrary, importService, new ScenarioLibraryPreferenceStore())
+            : this(catalog, saveLibrary, delegate { return importService; }, new ScenarioLibraryPreferenceStore())
+        {
+            if (importService == null) throw new ArgumentNullException("importService");
+        }
+
+        internal ScenarioBookBrowserDataSource(
+            IScenarioSelectionCatalogService catalog,
+            IScenarioSaveLibrary saveLibrary,
+            Func<ScenarioPackageImportService> importServiceFactory)
+            : this(catalog, saveLibrary, importServiceFactory, new ScenarioLibraryPreferenceStore())
         {
         }
 
@@ -71,17 +82,48 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             IScenarioSaveLibrary saveLibrary,
             ScenarioPackageImportService importService,
             ScenarioLibraryPreferenceStore libraryPreferences)
+            : this(catalog, saveLibrary, delegate { return importService; }, libraryPreferences)
+        {
+            if (importService == null) throw new ArgumentNullException("importService");
+        }
+
+        internal ScenarioBookBrowserDataSource(
+            IScenarioSelectionCatalogService catalog,
+            IScenarioSaveLibrary saveLibrary,
+            Func<ScenarioPackageImportService> importServiceFactory,
+            ScenarioLibraryPreferenceStore libraryPreferences)
         {
             if (catalog == null) throw new ArgumentNullException("catalog");
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
-            if (importService == null) throw new ArgumentNullException("importService");
+            if (importServiceFactory == null) throw new ArgumentNullException("importServiceFactory");
             if (libraryPreferences == null) throw new ArgumentNullException("libraryPreferences");
 
             _catalog = catalog;
             _saveLibrary = saveLibrary;
-            _importService = importService;
+            _importServiceFactory = importServiceFactory;
             _libraryPreferences = libraryPreferences;
             ApplyLatestSnapshot();
+        }
+
+        private ScenarioPackageImportService ImportService
+        {
+            get
+            {
+                if (_importService == null)
+                {
+                    lock (_importServiceSync)
+                    {
+                        if (_importService == null)
+                        {
+                            _importService = _importServiceFactory();
+                            if (_importService == null)
+                                throw new InvalidOperationException("Deferred scenario package import service resolution returned null.");
+                        }
+                    }
+                }
+
+                return _importService;
+            }
         }
 
         public ScenarioLibrarySortMode LibrarySortMode
@@ -108,6 +150,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public void BeginImportRefreshAsync()
         {
+            // Resolve composition-backed dependencies on the caller (Unity UI)
+            // thread before mutating refresh state. A failed resolution must not
+            // leave the data source reporting a worker that was never queued.
+            ScenarioPackageImportService importService = ImportService;
+
             int requestVersion;
             lock (_importRefreshSync)
             {
@@ -115,25 +162,49 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _importRefreshRunning = true;
             }
 
-            ThreadPool.QueueUserWorkItem(delegate
+            bool queued;
+            try
             {
-                ScenarioPackageImportScanResult result;
-                try { result = _importService.Scan(); }
-                catch (Exception ex)
+                queued = ThreadPool.QueueUserWorkItem(delegate
                 {
-                    result = new ScenarioPackageImportScanResult { Error = "Could not scan downloaded scenarios: " + ex.Message };
-                }
-
-                lock (_importRefreshSync)
-                {
-                    if (!_cancelled && requestVersion == _importRefreshRequestVersion)
+                    ScenarioPackageImportScanResult result;
+                    try { result = importService.Scan(); }
+                    catch (Exception ex)
                     {
-                        _importResult = result ?? new ScenarioPackageImportScanResult();
-                        _importRefreshVersion++;
-                        _importRefreshRunning = false;
+                        result = new ScenarioPackageImportScanResult { Error = "Could not scan downloaded scenarios: " + ex.Message };
                     }
-                }
-            });
+
+                    lock (_importRefreshSync)
+                    {
+                        if (!_cancelled && requestVersion == _importRefreshRequestVersion)
+                        {
+                            _importResult = result ?? new ScenarioPackageImportScanResult();
+                            _importRefreshVersion++;
+                            _importRefreshRunning = false;
+                        }
+                    }
+                });
+            }
+            catch
+            {
+                ResetFailedImportRefresh(requestVersion);
+                throw;
+            }
+
+            if (!queued)
+            {
+                ResetFailedImportRefresh(requestVersion);
+                throw new InvalidOperationException("Could not queue the downloaded scenario scan.");
+            }
+        }
+
+        private void ResetFailedImportRefresh(int requestVersion)
+        {
+            lock (_importRefreshSync)
+            {
+                if (requestVersion == _importRefreshRequestVersion)
+                    _importRefreshRunning = false;
+            }
         }
 
         public bool ApplyLatestImportScan(out string error)
@@ -617,7 +688,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (view == ScenarioBookBrowserViewKind.DraftDetails)
                 return "Edit the local draft details or open the authoring save.";
             if (view == ScenarioBookBrowserViewKind.InstallScenarios)
-                return "Put downloaded scenario folders in " + _importService.StagingRoot + ", then click Install.";
+                return "Put downloaded scenario folders in " + ImportService.StagingRoot + ", then click Install.";
             if (selectedScenario != null)
                 return "Read the scenario notes, then choose a save slot.";
 
@@ -679,7 +750,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             {
                 Kind = ScenarioBookRowKind.OpenScenarioDownloadsFolder,
                 Title = "Open Download Folder",
-                Detail = _importService.StagingRoot,
+                Detail = ImportService.StagingRoot,
                 Badge = "Open Folder"
             });
 
@@ -1096,26 +1167,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void AddLibraryScenarioRows(List<ScenarioBookRowModel> rows)
         {
             ScenarioCatalogEntry[] all = _entries ?? new ScenarioCatalogEntry[0];
-            // Installed scenarios remain the primary library collection. The two
-            // vanilla modes follow them as clearly-labelled archive entries so
-            // their expanded save libraries stay reachable without looking like
-            // authored packages.
+            // The stock scenario book remains the single home for vanilla
+            // Surrounded and Stasis. This library contains authored scenarios
+            // only, while the shared catalog keeps its vanilla descriptors for
+            // save routing and launch compatibility.
             for (int i = 0; i < all.Length; i++)
             {
                 ScenarioCatalogEntry entry = all[i];
                 if (entry == null || entry.Source != ScenarioCatalogSource.Modded)
-                    continue;
-
-                AddLibraryScenarioRow(rows, entry);
-            }
-
-            for (int i = 0; i < all.Length; i++)
-            {
-                ScenarioCatalogEntry entry = all[i];
-                if (entry == null
-                    || entry.Source != ScenarioCatalogSource.Vanilla
-                    || (entry.BaseGameMode != ScenarioBaseGameMode.Surrounded
-                        && entry.BaseGameMode != ScenarioBaseGameMode.Stasis))
                     continue;
 
                 AddLibraryScenarioRow(rows, entry);
@@ -1190,7 +1249,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (entry == null || entry.BaseGameMode != mode)
                 return false;
 
-            return entry.Source == ScenarioCatalogSource.Modded || entry.Source == ScenarioCatalogSource.Vanilla;
+            return entry.Source == ScenarioCatalogSource.Modded;
         }
 
         private static string BuildScenarioDetail(ScenarioCatalogEntry entry)

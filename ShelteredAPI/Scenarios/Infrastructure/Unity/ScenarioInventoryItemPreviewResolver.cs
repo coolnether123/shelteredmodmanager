@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using ShelteredAPI.Content;
 using UnityEngine;
 
@@ -13,9 +15,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
     internal static class ScenarioInventoryItemPreviewResolver
     {
         private static readonly Dictionary<string, Sprite> SpriteCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<ItemManager.ItemType, Sprite> EmbeddedFallbackCache = new Dictionary<ItemManager.ItemType, Sprite>();
+        private const string EmbeddedFallbackPrefix = "ShelteredAPI.Scenarios.Assets.Inventory.";
 
-        public static Sprite Resolve(ItemManager.ItemType type, ItemDefinition definition)
+        public static Sprite Resolve(
+            ItemManager.ItemType type,
+            ItemDefinition definition,
+            out bool createdByCustomScenarioEditor)
         {
+            createdByCustomScenarioEditor = false;
             Sprite customIcon;
             if (ContentInjector.TryGetResolvedItemIcon(type, out customIcon))
                 return customIcon;
@@ -34,10 +42,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
                 ItemDefinition aliasDefinition = ItemManager.Instance != null
                     ? ItemManager.Instance.GetItemDefinition(nativeAlias)
                     : null;
-                return ResolveItemAtlasSprite(aliasDefinition);
+                Sprite aliasIcon = ResolveItemAtlasSprite(aliasDefinition);
+                if (aliasIcon != null)
+                    return aliasIcon;
             }
 
-            return null;
+            Sprite embeddedFallback = ResolveEmbeddedFallbackSprite(type);
+            createdByCustomScenarioEditor = embeddedFallback != null;
+            return embeddedFallback;
         }
 
         private static Sprite ResolveItemAtlasSprite(ItemDefinition definition)
@@ -163,6 +175,103 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
                     return true;
                 default:
                     alias = ItemManager.ItemType.Undefined;
+                    return false;
+            }
+        }
+
+        private static Sprite ResolveEmbeddedFallbackSprite(ItemManager.ItemType type)
+        {
+            Sprite cached;
+            if (EmbeddedFallbackCache.TryGetValue(type, out cached) && cached != null)
+                return cached;
+
+            string fileName;
+            if (!TryGetEmbeddedFallbackFileName(type, out fileName))
+                return null;
+
+            try
+            {
+                Assembly assembly = Assembly.GetExecutingAssembly();
+                using (Stream stream = assembly.GetManifestResourceStream(EmbeddedFallbackPrefix + fileName))
+                {
+                    if (stream == null || stream.Length <= 0L || stream.Length > int.MaxValue)
+                        return null;
+
+                    byte[] bytes = new byte[(int)stream.Length];
+                    int offset = 0;
+                    while (offset < bytes.Length)
+                    {
+                        int read = stream.Read(bytes, offset, bytes.Length - offset);
+                        if (read <= 0)
+                            return null;
+                        offset += read;
+                    }
+
+                    Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+                    if (!texture.LoadImage(bytes))
+                        return null;
+
+                    texture.name = "CustomScenarioEditor_InventoryFallback_" + type;
+                    texture.filterMode = FilterMode.Point;
+                    texture.wrapMode = TextureWrapMode.Clamp;
+                    Sprite sprite = Sprite.Create(
+                        texture,
+                        new Rect(0f, 0f, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f),
+                        32f);
+                    if (sprite == null)
+                        return null;
+
+                    sprite.name = texture.name;
+                    EmbeddedFallbackCache[type] = sprite;
+                    return sprite;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool TryGetEmbeddedFallbackFileName(ItemManager.ItemType type, out string fileName)
+        {
+            switch (type)
+            {
+                case ItemManager.ItemType.Object_Chair:
+                    fileName = "object_chair.png";
+                    return true;
+                case ItemManager.ItemType.Object_Cot:
+                    fileName = "object_cot.png";
+                    return true;
+                case ItemManager.ItemType.Object_SpikeTrap:
+                    fileName = "object_spike_trap.png";
+                    return true;
+                case ItemManager.ItemType.Object_StorageLocker:
+                    fileName = "object_storage_locker.png";
+                    return true;
+                case ItemManager.ItemType.Object_WorkBench:
+                    fileName = "object_work_bench.png";
+                    return true;
+                case ItemManager.ItemType.Object_MedicineCabinet:
+                    fileName = "object_medicine_cabinet.png";
+                    return true;
+                case ItemManager.ItemType.Object_SingleBed2:
+                    fileName = "object_single_bed_2.png";
+                    return true;
+                case ItemManager.ItemType.Object_LightSwitch:
+                    fileName = "object_light_switch.png";
+                    return true;
+                case ItemManager.ItemType.Object_ItemBin:
+                    fileName = "object_item_bin.png";
+                    return true;
+                case ItemManager.ItemType.Upgrade:
+                    fileName = "upgrade.png";
+                    return true;
+                case ItemManager.ItemType.Schmatic_Defib:
+                    fileName = "defib_schematic.png";
+                    return true;
+                default:
+                    fileName = null;
                     return false;
             }
         }

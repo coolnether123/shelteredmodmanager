@@ -194,15 +194,41 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (placement == null)
                 return null;
 
-            if (!forceMaterialize && !ScenarioObjectStartStateApplyService.ShouldMaterializeAtStart(placement))
-                return null;
-
             ObjectManager manager = ObjectManager.Instance;
             if (manager == null)
             {
                 AddBunkerMessage(result, "ObjectManager is not ready; object placement #" + index + " skipped.");
                 return null;
             }
+
+            // Base-layout objects and objects restored by the authoring backing save
+            // already exist in the world. Resolve them before deciding whether a
+            // placement should materialize so RemovedAtStart can remove an existing
+            // object instead of returning early and leaving it behind.
+            Obj_Base persisted = ScenarioObjectPlacementRuntimeBinding.FindExistingWorldObject(manager, placement);
+            if (persisted != null)
+            {
+                ObjectManager.ObjectType persistedType = persisted.GetObjectType();
+                ScenarioObjectPlacementRuntimeBinding.Attach(persisted.gameObject, placement, persisted, index);
+                ScenarioObjectStatePropertyService.Apply(persisted, placement);
+                ScenarioStationUpgradePropertyService.Apply(persisted, placement, result);
+                if (forceMaterialize)
+                {
+                    persisted.EnableObject();
+                    persisted.selectable = true;
+                    persisted.gameObject.SetActive(true);
+                }
+                else
+                {
+                    ScenarioObjectStartStateApplyService.ApplyToObject(persisted, placement, result);
+                }
+                AddBunkerMessage(result, "Object placement #" + index + " adopted existing "
+                    + persistedType + " and applied its captured state.");
+                return persisted;
+            }
+
+            if (!forceMaterialize && !ScenarioObjectStartStateApplyService.ShouldMaterializeAtStart(placement))
+                return null;
 
             if (!string.IsNullOrEmpty(placement.PrefabReference))
             {
@@ -222,29 +248,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             {
                 AddBunkerMessage(result, "Object placement #" + index + " skipped because ObjectManager has no prefab for " + objectType + ".");
                 return null;
-            }
-
-            // Authoring uses a real vanilla placement to give the author immediate
-            // feedback.  That object is consequently present when its backing save
-            // is loaded again.  Adopt it instead of replaying the same record: a
-            // replay here used to create a second, overlapping object after a mode
-            // round-trip.
-            Obj_Base persisted = ScenarioObjectPlacementRuntimeBinding.FindExistingWorldObject(manager, placement);
-            if (persisted != null)
-            {
-                ScenarioObjectPlacementRuntimeBinding.Attach(persisted.gameObject, placement, persisted, index);
-                if (forceMaterialize)
-                {
-                    persisted.EnableObject();
-                    persisted.selectable = true;
-                    persisted.gameObject.SetActive(true);
-                }
-                else
-                {
-                    ScenarioObjectStartStateApplyService.ApplyToObject(persisted, placement, result);
-                }
-                AddBunkerMessage(result, "Object placement #" + index + " adopted persisted " + objectType + " instead of spawning a duplicate.");
-                return persisted;
             }
 
             int level = ScenarioPropertyBag.GetInt(placement.CustomProperties, "level", 1);

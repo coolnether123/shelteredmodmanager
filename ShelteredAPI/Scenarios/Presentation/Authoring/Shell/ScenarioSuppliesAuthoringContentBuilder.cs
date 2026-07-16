@@ -86,7 +86,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     DisplayName = catalogEntry.DisplayName,
                     Detail = catalogEntry.Detail,
                     QuantityText = "x" + System.Math.Max(1, entry.Quantity).ToString(CultureInfo.InvariantCulture),
-                    Badge = "START",
+                    Badge = catalogEntry.PreviewCreatedByCustomScenarioEditor ? "START · EDITOR ART" : "START",
                     Emphasized = true,
                     PreviewSprite = catalogEntry.PreviewSprite,
                     PrimaryAction = ScenarioAuthoringPresentationUtilities.Action(

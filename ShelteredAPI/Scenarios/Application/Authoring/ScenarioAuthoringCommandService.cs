@@ -4,6 +4,7 @@ using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
@@ -40,7 +41,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioMapDraftService mapDraftService,
             ScenarioDraftSnapshotService snapshotService,
             ScenarioAssetInventoryMutationService assetInventoryMutations,
-            ScenarioAuthorTestChecklistService testChecklistService)
+            ScenarioAuthorTestChecklistService testChecklistService,
+            ScenarioObjectIdentityAssignmentService identityAssignmentService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -64,7 +66,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 mapDraftService,
                 snapshotService,
                 assetInventoryMutations,
-                testChecklistService));
+                testChecklistService,
+                identityAssignmentService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -119,7 +122,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioMapDraftService mapDraftService,
             ScenarioDraftSnapshotService snapshotService,
             ScenarioAssetInventoryMutationService assetInventoryMutations,
-            ScenarioAuthorTestChecklistService testChecklistService)
+            ScenarioAuthorTestChecklistService testChecklistService,
+            ScenarioObjectIdentityAssignmentService identityAssignmentService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -134,7 +138,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new ScenarioStorageAuthoringCommandHandler(storageAuthoringRuntimeService, layoutService),
                 new TutorialCommandHandler(tutorialService, editorService, layoutService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
-                new StationUpgradeCommandHandler(editorService, selectionScopeService),
+                new StationUpgradeCommandHandler(editorService, selectionScopeService, identityAssignmentService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
                 new ScenarioStoryFocusedEditorCommandHandler(storyAuthoringService, editorService),

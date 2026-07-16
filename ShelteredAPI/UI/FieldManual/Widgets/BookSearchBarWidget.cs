@@ -7,13 +7,29 @@ using UnityEngine;
 namespace ShelteredAPI.UI.FieldManual.Widgets
 {
     /// <summary>
+    /// Reusable geometry for book search controls. Callers can stack the scope
+    /// label above a compact input or retain the legacy horizontal arrangement
+    /// without reaching into the generated child hierarchy.
+    /// </summary>
+    internal sealed class BookSearchBarLayout
+    {
+        public Vector3 ScopeLabelPosition = new Vector3(-110f, 0f, 0f);
+        public int ScopeLabelWidth = 100;
+        public int ScopeLabelHeight = 24;
+        public NGUIText.Alignment ScopeLabelAlignment = NGUIText.Alignment.Right;
+        public UIWidget.Pivot ScopeLabelPivot = UIWidget.Pivot.Right;
+        public Vector3 InputPosition = new Vector3(60f, 0f, 0f);
+        public int InputWidth = 320;
+        public int InputHeight = 35;
+        public int InputTextPadding = 10;
+    }
+
+    /// <summary>
     /// Shared search bar for book-style Field Manual windows. It owns only input state
     /// and display; callers own filtering and page rebuilding.
     /// </summary>
     internal sealed class BookSearchBarWidget
     {
-        private const int DefaultInputWidth = 320;
-        private const int DefaultInputHeight = 35;
         private static readonly Color InputBackgroundColor = new Color(0.83f, 0.76f, 0.58f, 0.88f);
         private static readonly Color InputTextColor = new Color(0.16f, 0.12f, 0.08f, 1f);
         private static readonly Color PlaceholderColor = new Color(0.44f, 0.37f, 0.27f, 1f);
@@ -67,23 +83,46 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
         public GameObject Build(GameObject parent, string name, Vector3 localPosition, string scopeLabel, string placeholder)
         {
+            return Build(parent, name, localPosition, scopeLabel, placeholder, null);
+        }
+
+        public GameObject Build(
+            GameObject parent,
+            string name,
+            Vector3 localPosition,
+            string scopeLabel,
+            string placeholder,
+            BookSearchBarLayout layout)
+        {
+            BookSearchBarLayout resolvedLayout = layout ?? new BookSearchBarLayout();
+            int inputWidth = Math.Max(40, resolvedLayout.InputWidth);
+            int inputHeight = Math.Max(20, resolvedLayout.InputHeight);
+            int inputPadding = Math.Max(0, Math.Min(resolvedLayout.InputTextPadding, (inputWidth - 1) / 2));
             GameObject root = _ui.CreateChild(parent, name, localPosition);
 
             _scopeLabel = _ui.CreateLabel(root, "SearchLabel",
                 string.IsNullOrEmpty(scopeLabel) ? "SEARCH:" : scopeLabel,
-                new Vector3(-110f, 0f, 0f), 14, _palette.InkFaded,
-                100, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
+                resolvedLayout.ScopeLabelPosition, 14, _palette.InkFaded,
+                Math.Max(1, resolvedLayout.ScopeLabelWidth),
+                Math.Max(1, resolvedLayout.ScopeLabelHeight),
+                resolvedLayout.ScopeLabelAlignment,
+                resolvedLayout.ScopeLabelPivot,
+                _ui.NextDepth());
             _scopeLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
             _placeholder = placeholder;
 
-            _inputRoot = _ui.CreateChild(root, "SearchInput", new Vector3(60f, 0f, 0f));
+            _inputRoot = _ui.CreateChild(root, "SearchInput", resolvedLayout.InputPosition);
             _ui.CreateQuad(_inputRoot, "SearchInputPaper", _textures.White, Vector3.zero,
-                DefaultInputWidth, DefaultInputHeight, InputBackgroundColor, _ui.NextDepth());
-            _ui.AddClickCollider(_inputRoot, DefaultInputWidth, DefaultInputHeight, null);
+                inputWidth, inputHeight, InputBackgroundColor, _ui.NextDepth());
+            _ui.AddClickCollider(_inputRoot, inputWidth, inputHeight, null);
 
             _displayLabel = _ui.CreateLabel(_inputRoot, "SearchText", string.Empty,
-                new Vector3(-150f, 0f, 0f), 16, Color.white,
-                300, 28, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3((-inputWidth * 0.5f) + inputPadding, 0f, 0f), 16, Color.white,
+                Math.Max(1, inputWidth - (inputPadding * 2)),
+                Math.Max(1, inputHeight - 7),
+                NGUIText.Alignment.Left,
+                UIWidget.Pivot.Left,
+                _ui.NextDepth());
             _displayLabel.overflowMethod = UILabel.Overflow.ClampContent;
             _displayLabel.maxLineCount = 1;
 

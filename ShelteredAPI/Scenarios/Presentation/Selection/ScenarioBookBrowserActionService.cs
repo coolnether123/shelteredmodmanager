@@ -11,10 +11,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserActionService
     {
         private readonly ScenarioBrowserPanelAdapter _adapter;
-        private readonly ScenarioLaunchCoordinator _launchCoordinator;
+        private readonly Func<ScenarioLaunchCoordinator> _launchCoordinatorFactory;
         private readonly IScenarioSaveLibrary _saveLibrary;
-        private readonly ScenarioDraftMetadataEditService _draftMetadataEditService;
-        private readonly ScenarioPackageImportService _importService;
+        private readonly Func<ScenarioDraftMetadataEditService> _draftMetadataEditServiceFactory;
+        private readonly Func<ScenarioPackageImportService> _importServiceFactory;
+        private readonly object _dependencySync = new object();
+        private ScenarioLaunchCoordinator _launchCoordinator;
+        private ScenarioDraftMetadataEditService _draftMetadataEditService;
+        private ScenarioPackageImportService _importService;
 
         public ScenarioBookBrowserActionService(
             ScenarioBrowserPanelAdapter adapter,
@@ -22,33 +26,75 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             IScenarioSaveLibrary saveLibrary,
             ScenarioDraftMetadataEditService draftMetadataEditService,
             ScenarioPackageImportService importService)
+            : this(
+                adapter,
+                delegate { return launchCoordinator; },
+                saveLibrary,
+                delegate { return draftMetadataEditService; },
+                delegate { return importService; })
         {
-            if (adapter == null) throw new ArgumentNullException("adapter");
             if (launchCoordinator == null) throw new ArgumentNullException("launchCoordinator");
-            if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
             if (draftMetadataEditService == null) throw new ArgumentNullException("draftMetadataEditService");
             if (importService == null) throw new ArgumentNullException("importService");
+        }
+
+        internal ScenarioBookBrowserActionService(
+            ScenarioBrowserPanelAdapter adapter,
+            Func<ScenarioLaunchCoordinator> launchCoordinatorFactory,
+            IScenarioSaveLibrary saveLibrary,
+            Func<ScenarioDraftMetadataEditService> draftMetadataEditServiceFactory,
+            Func<ScenarioPackageImportService> importServiceFactory)
+        {
+            if (adapter == null) throw new ArgumentNullException("adapter");
+            if (launchCoordinatorFactory == null) throw new ArgumentNullException("launchCoordinatorFactory");
+            if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
+            if (draftMetadataEditServiceFactory == null) throw new ArgumentNullException("draftMetadataEditServiceFactory");
+            if (importServiceFactory == null) throw new ArgumentNullException("importServiceFactory");
 
             _adapter = adapter;
-            _launchCoordinator = launchCoordinator;
+            _launchCoordinatorFactory = launchCoordinatorFactory;
             _saveLibrary = saveLibrary;
-            _draftMetadataEditService = draftMetadataEditService;
-            _importService = importService;
+            _draftMetadataEditServiceFactory = draftMetadataEditServiceFactory;
+            _importServiceFactory = importServiceFactory;
+        }
+
+        private ScenarioLaunchCoordinator LaunchCoordinator
+        {
+            get
+            {
+                return ResolveDeferred(ref _launchCoordinator, _launchCoordinatorFactory, "scenario launch coordinator");
+            }
+        }
+
+        private ScenarioDraftMetadataEditService DraftMetadataEditService
+        {
+            get
+            {
+                return ResolveDeferred(ref _draftMetadataEditService, _draftMetadataEditServiceFactory, "draft metadata edit service");
+            }
+        }
+
+        private ScenarioPackageImportService ImportService
+        {
+            get
+            {
+                return ResolveDeferred(ref _importService, _importServiceFactory, "scenario package import service");
+            }
         }
 
         public bool OpenScenarioDownloadsFolder(out string status)
         {
-            return _importService.OpenFolder(_importService.StagingRoot, out status);
+            return ImportService.OpenFolder(ImportService.StagingRoot, out status);
         }
 
         public bool OpenExportFolder(string path, out string status)
         {
-            return _importService.OpenFolder(path, out status);
+            return ImportService.OpenFolder(path, out status);
         }
 
         public bool InstallPackage(ScenarioPackageImportCandidate candidate, out string status)
         {
-            ScenarioPackageImportResult result = _importService.Install(candidate);
+            ScenarioPackageImportResult result = ImportService.Install(candidate);
             status = result != null ? result.Message : "Install service is unavailable.";
             return result != null && result.Success;
         }
@@ -68,7 +114,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public bool UninstallPackage(ScenarioPackageImportCandidate candidate, out string status)
         {
-            ScenarioPackageImportResult result = _importService.Uninstall(candidate);
+            ScenarioPackageImportResult result = ImportService.Uninstall(candidate);
             status = result != null ? result.Message : "Uninstall service is unavailable.";
             return result != null && result.Success;
         }
@@ -123,12 +169,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 + " storageScenarioId=" + entry.StorageScenarioId
                 + " source=" + entry.Source
                 + " baseMode=" + entry.BaseGameMode
-                + " virtualSaveType=" + _launchCoordinator.GetVirtualSaveType(entry) + ".");
+                + " virtualSaveType=" + LaunchCoordinator.GetVirtualSaveType(entry) + ".");
 
             if (entry.IsVanilla && entry.BaseGameMode == ScenarioBaseGameMode.Survival)
             {
                 string vanillaError;
-                if (!_launchCoordinator.LaunchVanillaScenario(_adapter, entry, out vanillaError))
+                if (!LaunchCoordinator.LaunchVanillaScenario(_adapter, entry, out vanillaError))
                 {
                     status = "Start failed: " + Safe(vanillaError, "unknown error");
                     return false;
@@ -139,14 +185,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             ScenarioLaunchCoordinator.NewGamePreparation preparation;
             string prepareError;
-            if (!_launchCoordinator.PrepareNewGame(entry, entry.DisplayName, out preparation, out prepareError))
+            if (!LaunchCoordinator.PrepareNewGame(entry, entry.DisplayName, out preparation, out prepareError))
             {
                 status = "Start failed: " + Safe(prepareError, "unknown error");
                 return false;
             }
 
             string commitError;
-            if (!_launchCoordinator.CommitNewGame(_adapter, preparation, out commitError))
+            if (!LaunchCoordinator.CommitNewGame(_adapter, preparation, out commitError))
             {
                 status = "Start failed: " + Safe(commitError, "unknown error");
                 return false;
@@ -168,7 +214,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 + " storageScenarioId=" + entry.StorageScenarioId
                 + " source=" + entry.Source
                 + " baseMode=" + entry.BaseGameMode
-                + " virtualSaveType=" + _launchCoordinator.GetVirtualSaveType(entry) + ".");
+                + " virtualSaveType=" + LaunchCoordinator.GetVirtualSaveType(entry) + ".");
 
             SaveEntry draftStartupSave;
             string draftSaveLookupError;
@@ -189,7 +235,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return false;
             }
 
-            SaveManager.SaveType launchSaveType = _launchCoordinator.GetVirtualSaveType(entry);
+            SaveManager.SaveType launchSaveType = LaunchCoordinator.GetVirtualSaveType(entry);
             EnsureEditorRuntime("ScenarioBookBrowser OpenDraft");
             ScenarioAuthoringSession session = ScenarioAuthoringBootstrapService.Instance.QueueExistingDraft(entry.ScenarioId, launchSaveType);
             if (session == null)
@@ -201,7 +247,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             string error;
-            if (!_launchCoordinator.QueueAuthoringDraftLaunch(
+            if (!LaunchCoordinator.QueueAuthoringDraftLaunch(
                     _adapter,
                     ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                     draftStartupSave,
@@ -252,14 +298,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
                 string error;
                 bool queued = showBaselinePicker
-                    ? _launchCoordinator.QueueAuthoringDraftSceneReload(
+                    ? LaunchCoordinator.QueueAuthoringDraftSceneReload(
                         ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                         draftStartupSave,
                         launchSaveType,
                         "authoring draft '" + draft.DraftId + "'",
                         draft.BaseMode,
                         out error)
-                    : _launchCoordinator.QueueAuthoringDraftLaunch(
+                    : LaunchCoordinator.QueueAuthoringDraftLaunch(
                         _adapter,
                         ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                         draftStartupSave,
@@ -313,7 +359,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return true;
             }
 
-            if (!_draftMetadataEditService.TryUpdate(
+            if (!DraftMetadataEditService.TryUpdate(
                     entry.ScenarioId,
                     new ScenarioDraftMetadataUpdate
                     {
@@ -365,7 +411,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             MMLog.WriteInfo("[ScenarioBookBrowserActionService] Deleting draft '" + entry.ScenarioId + "'.");
-            _saveLibrary.ClearQueuedNewGameSave(_launchCoordinator.GetVirtualSaveType(entry));
+            _saveLibrary.ClearQueuedNewGameSave(LaunchCoordinator.GetVirtualSaveType(entry));
             bool deleted = ScenarioAuthoringDraftRepository.Instance.DeleteDraft(entry.ScenarioId, "Scenario browser draft delete.");
             if (deleted)
                 ScenarioBookBrowserDataSource.BeginSharedRefreshAsync(ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>());
@@ -422,7 +468,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             status = null;
             string error;
-            if (!_launchCoordinator.LoadSave(_adapter, entry, save, out error))
+            if (!LaunchCoordinator.LoadSave(_adapter, entry, save, out error))
             {
                 status = "Load failed: " + Safe(error, "unknown error");
                 return false;
@@ -434,7 +480,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public bool DeleteSave(ScenarioCatalogEntry entry, SaveEntry save, out string status)
         {
             status = null;
-            if (!_launchCoordinator.DeleteSave(entry, save))
+            if (!LaunchCoordinator.DeleteSave(entry, save))
             {
                 status = save != null ? "Delete failed for slot " + save.absoluteSlot + "." : "Delete failed.";
                 return false;
@@ -463,6 +509,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return string.IsNullOrEmpty(value) ? (fallback ?? string.Empty) : value;
         }
 
+        private static T Require<T>(T service, string name) where T : class
+        {
+            if (service == null)
+                throw new InvalidOperationException("Deferred " + name + " resolution returned null.");
+            return service;
+        }
+
+        private T ResolveDeferred<T>(ref T service, Func<T> factory, string name) where T : class
+        {
+            lock (_dependencySync)
+            {
+                if (service == null)
+                    service = Require(factory(), name);
+                return service;
+            }
+        }
+
         private static bool IsLaunchFlowPending()
         {
             try
@@ -478,7 +541,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private static void EnsureEditorRuntime(string trigger)
         {
-            ShelteredDeferredPatchTriggers.EnsureEditorRuntime(trigger);
+            ShelteredDeferredPatchTriggers.ApplyEditorDeferred(trigger);
         }
     }
 }

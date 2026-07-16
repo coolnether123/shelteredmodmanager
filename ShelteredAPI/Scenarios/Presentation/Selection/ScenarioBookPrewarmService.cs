@@ -3,6 +3,7 @@ using System.Diagnostics;
 using ModAPI.Core;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Infrastructure.Harmony;
 using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
 using UnityEngine;
@@ -119,6 +120,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         private bool _texturesComplete;
         private bool _catalogComplete;
         private bool _textureSkippedForOpen;
+        private int _scenarioSelectionPrewarmAttempts;
 
         private void Update()
         {
@@ -144,7 +146,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
 
                 if (_texturesComplete && _catalogComplete)
                 {
-                    ScenarioBookBrowserPanel.TryPrepareVisual();
+                    if (!ScenarioSelectionPanelPrewarmCache.TryPrepare()
+                        && ++_scenarioSelectionPrewarmAttempts < 60)
+                    {
+                        return;
+                    }
+
                     ScenarioBookPrewarmService.Complete(
                         _textureTimer.ElapsedMilliseconds,
                         _catalogTimer.ElapsedMilliseconds,

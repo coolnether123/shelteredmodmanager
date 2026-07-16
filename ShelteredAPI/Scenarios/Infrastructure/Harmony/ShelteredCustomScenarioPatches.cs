@@ -298,7 +298,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringGlobalUiIsolationPatches
     {
         [HarmonyPatch(typeof(UI_InputListener), "UpdateManager")]
@@ -322,7 +322,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringPauseOwnershipPatches
     {
         [HarmonyPatch(typeof(PauseManager), "Pause")]
@@ -379,6 +379,36 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
             try { return panelManager.IsPanelOnStack(panel); }
             catch { return false; }
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioCharacterRuntimeNames",
+        TargetBehavior = "Authored scenario-character display names are applied before vanilla creates scenario visitors.",
+        FailureMode = "Scenario dialogue uses a randomized vanilla visitor name instead of the authored character name.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario-character name patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
+    [HarmonyPatch(typeof(NpcVisitManager), "AddNewScenario")]
+    internal static class ScenarioCharacterRuntimeNamePatches
+    {
+        [HarmonyPrefix]
+        private static void AddNewScenarioPrefix(
+            List<QuestManager.QuestCharacterInfo> charInfo,
+            int scenarioId)
+        {
+            try
+            {
+                int applied = ScenarioCharacterRuntimeNameRegistry.ApplyToPendingStage(scenarioId, charInfo);
+                if (applied >= 0)
+                {
+                    MMLog.WriteInfo(
+                        "[ScenarioCharacterRuntimeNames] Applied " + applied
+                        + " authored visitor preset name(s) for scenario instance " + scenarioId + ".");
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioCharacterRuntimeNames] Could not apply authored visitor names: " + ex.Message);
+            }
         }
     }
 
@@ -517,7 +547,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringSimulationFreezePatches
     {
         [HarmonyPatch(typeof(UIPanelManager), nameof(UIPanelManager.timePaused), MethodType.Getter)]
@@ -685,7 +715,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioDynamicFamilyUiReadinessPatches
     {
         [HarmonyPatch(typeof(UI_CharacterInfo), "Update")]

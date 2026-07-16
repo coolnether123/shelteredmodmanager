@@ -30,18 +30,18 @@ namespace ShelteredAPI.Harmony
 
         public static void ApplyEditorDeferred(string trigger)
         {
-            if (!ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
-                return;
-
-            HarmonyBootstrap.ApplyDeferredPatchGroup(PatchStartupTiming.EditorDeferred, trigger);
             EnsureEditorRuntime(trigger);
         }
 
+        // Kept as the compatibility seam used by the in-game agent harness.
+        // Applying the deferred patch group here ensures older harness builds
+        // cannot start the runtime driver without the authoring patches it needs.
         public static void EnsureEditorRuntime(string trigger)
         {
             if (!ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 return;
 
+            HarmonyBootstrap.ApplyDeferredPatchGroup(PatchStartupTiming.EditorDeferred, trigger);
             ScenarioAuthoringInputActions.EnsureRegistered();
             ScenarioAuthoringRuntimeDriver.EnsureCreated();
         }

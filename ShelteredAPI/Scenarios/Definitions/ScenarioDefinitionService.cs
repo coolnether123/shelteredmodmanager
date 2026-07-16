@@ -4,6 +4,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Registration;
 using ShelteredAPI.UI.FieldManual.Textures;
 namespace ShelteredAPI.Scenarios.Definitions{
@@ -97,19 +98,26 @@ namespace ShelteredAPI.Scenarios.Definitions{
             if (!_definitionReader.TryLoad(scenarioId, out definition, out scenarioFilePath, out validation))
                 throw new InvalidOperationException("Scenario XML failed validation: " + FormatValidationIssues(validation));
 
-            return BuildScenarioDef(definition);
+            return BuildPlayableScenarioDef(definition);
         }
 
-        // Shared by installed-scenario launch and authoring playtest so both paths
-        // produce the same vanilla ScenarioDef carrier for completion handling.
-        //
-        // This definition is deliberately a zero-stage carrier, not a projection
-        // of ScenarioFlow. QuestManager starts every first ScenarioStage by calling
-        // NpcVisitManager.AddNewScenario; even an empty stage creates a random
-        // scenario visitor. The authored scheduler therefore owns all story flow,
-        // while ScenarioRuntimeOrchestrator completes the guarded loading handoff
-        // independently after the world has been applied.
+        // Builds the zero-stage carrier used by completion-only diagnostics and
+        // scenarios without a playable story flow.
         internal static ScenarioDef BuildScenarioDef(ScenarioDefinition definition)
+        {
+            return BuildScenarioDefCore(definition, false);
+        }
+
+        // Installed scenarios and authoring playtests need the authored vanilla
+        // ScenarioFlow projected into ScenarioStage objects. QuestManager then
+        // owns the intercom visitor, choices, dialogue, and branch transitions,
+        // while the exact-clock scheduler remains responsible for neutral actions.
+        internal static ScenarioDef BuildPlayableScenarioDef(ScenarioDefinition definition)
+        {
+            return BuildScenarioDefCore(definition, true);
+        }
+
+        private static ScenarioDef BuildScenarioDefCore(ScenarioDefinition definition, bool includeStoryFlow)
         {
             if (definition == null)
                 throw new ArgumentNullException("definition");
@@ -120,8 +128,20 @@ namespace ShelteredAPI.Scenarios.Definitions{
                 .SetDescriptionKey(definition.Description ?? string.Empty)
                 .ApplySelectionRules(definition.SelectionRules, definition.BaseGameMode);
 
+            ScenarioCharacterRuntimeNameRegistry.Register(definition);
+
             for (int i = 0; definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
                 builder.AddScenarioCharacter(definition.ScenarioCharacters[i]);
+
+            for (int i = 0; includeStoryFlow
+                && definition.ScenarioFlow != null
+                && definition.ScenarioFlow.Stages != null
+                && i < definition.ScenarioFlow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
+                if (stage != null && stage.IntercomStages != null && stage.IntercomStages.Count > 0)
+                    builder.AddFlowStage(stage);
+            }
 
             return builder.Build();
         }

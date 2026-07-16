@@ -206,7 +206,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect cardRect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
-                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick, true);
+                // The right-hand Selected Asset pane owns technical/source
+                // detail. Keeping it off the compact grid card prevents a
+                // wrapped title, duplicate source name, and OBJ badge from
+                // competing for the same vertical space.
+                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick, true, true);
                 count++;
                 if (count % columns == 0 && HasMoreVisibleAssetBrowserAction(section, i + 1))
                 {

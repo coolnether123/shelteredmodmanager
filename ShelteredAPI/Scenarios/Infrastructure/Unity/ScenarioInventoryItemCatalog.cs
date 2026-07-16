@@ -12,6 +12,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         public ItemManager.ItemType ItemType { get; set; }
         public ItemManager.ItemCategory Category { get; set; }
         public Sprite PreviewSprite { get; set; }
+        public bool PreviewCreatedByCustomScenarioEditor { get; set; }
     }
 
     internal static class ScenarioInventoryItemCatalog
@@ -153,14 +154,23 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 category = ItemManager.ItemCategory.Normal;
 
             string itemId = GetStableItemId(type);
+            bool previewCreatedByCustomScenarioEditor;
+            Sprite previewSprite = ScenarioInventoryItemPreviewResolver.Resolve(
+                type,
+                definition,
+                out previewCreatedByCustomScenarioEditor);
             return new ScenarioInventoryItemCatalogEntry
             {
                 ItemId = itemId,
                 DisplayName = ResolveDisplayName(definition, itemId, type),
-                Detail = itemId + " | " + category + (definition == null ? " | Enum-only game record" : string.Empty),
+                Detail = itemId
+                    + " | " + category
+                    + (definition == null ? " | Enum-only game record" : string.Empty)
+                    + (previewCreatedByCustomScenarioEditor ? " | Sprite made by Custom Scenario Editor" : string.Empty),
                 ItemType = type,
                 Category = category,
-                PreviewSprite = ScenarioInventoryItemPreviewResolver.Resolve(type, definition)
+                PreviewSprite = previewSprite,
+                PreviewCreatedByCustomScenarioEditor = previewCreatedByCustomScenarioEditor
             };
         }
 
