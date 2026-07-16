@@ -2060,6 +2060,13 @@ namespace Manager
                         return;
                     }
 
+                    // The in-game requester writes this file before asking Unity to quit.
+                    // Keep the request queued until the process has actually exited; consuming
+                    // it earlier would delete the request and LaunchWithMods would reject the
+                    // relaunch because the old game process is still alive.
+                    if (CheckGameRunning())
+                        return;
+
                     // Read Manifest
                     ManagerSlotManifest manifest = null;
                     try
