@@ -123,10 +123,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (string.IsNullOrEmpty(state.MapAuthoringMode))
                 state.MapAuthoringMode = "select";
             state.ShellVisible = false;
-            state.StatusMessage = "Map authoring active. Select or place authored locations on the real map.";
+            state.StatusMessage = "Map editor open. Choose a location or paint terrain.";
             ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
             if (vanillaInteraction != null)
-                vanillaInteraction.BeginPanelSession(state, ScenarioVanillaInteractionRuntimeService.KindMap, "Changes sync to your scenario. Map picks update authored location data.");
+                vanillaInteraction.BeginPanelSession(state, ScenarioVanillaInteractionRuntimeService.KindMap, "Choose locations or paint terrain. Your changes are saved to this scenario.");
             message = state.StatusMessage;
             return true;
         }
