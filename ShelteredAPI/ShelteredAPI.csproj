@@ -408,6 +408,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\FamilyApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\InventoryApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapProjectionApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapTerrainProjection.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapProjectionFieldCatalog.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapLootPreviewService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\RoomVisualRuntimeApplyService.cs" />
