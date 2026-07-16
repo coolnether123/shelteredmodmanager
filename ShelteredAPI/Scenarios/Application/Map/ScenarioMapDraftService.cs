@@ -157,6 +157,76 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             return map != null && Upsert(map.TerrainPatches, patch, GetId, patch != null ? patch.Id : null);
         }
 
+        public MapTerrainPatchDefinition PaintTerrainArea(
+            ScenarioEditorSession session,
+            int gridX,
+            int gridY,
+            string terrainId,
+            MapTerrainBrushShape shape,
+            int brushSize)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            if (map == null || string.IsNullOrEmpty(terrainId))
+                return null;
+
+            EnsureMapSize(map);
+            int size = brushSize < 1 ? 1 : (brushSize > 7 ? 7 : brushSize);
+            if (size % 2 == 0)
+                size++;
+            string rootId = "terrain-brush-" + gridX.ToString(CultureInfo.InvariantCulture)
+                + "-" + gridY.ToString(CultureInfo.InvariantCulture);
+            string id = rootId;
+            int suffix = 2;
+            bool idExists = true;
+            while (idExists)
+            {
+                idExists = false;
+                for (int i = 0; map.TerrainPatches != null && i < map.TerrainPatches.Count; i++)
+                {
+                    MapTerrainPatchDefinition existing = map.TerrainPatches[i];
+                    if (existing != null && string.Equals(existing.Id, id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        idExists = true;
+                        id = rootId + "-" + suffix.ToString(CultureInfo.InvariantCulture);
+                        suffix++;
+                        break;
+                    }
+                }
+            }
+
+            MapTerrainPatchDefinition patch = new MapTerrainPatchDefinition();
+            patch.Id = id;
+            patch.TerrainId = terrainId;
+            patch.Shape = shape == MapTerrainBrushShape.Circle ? MapTerrainBrushShape.Circle : MapTerrainBrushShape.Rectangle;
+            if (patch.Shape == MapTerrainBrushShape.Circle)
+            {
+                patch.X = gridX + 0.5f;
+                patch.Y = gridY + 0.5f;
+                patch.Width = 0f;
+                patch.Height = 0f;
+                patch.Radius = size * 0.5f;
+            }
+            else
+            {
+                int half = size / 2;
+                patch.X = gridX - half;
+                patch.Y = gridY - half;
+                patch.Width = size;
+                patch.Height = size;
+                patch.Radius = 0f;
+            }
+            patch.Priority = 100;
+            patch.BoundaryId = null;
+            SetProperty(patch.Properties, "authoring.createdFrom", "map-terrain-brush");
+            SetProperty(patch.Properties, "authoring.brushSize", size.ToString(CultureInfo.InvariantCulture));
+            SetProperty(patch.Properties, "authoring.renderMode",
+                string.Equals(terrainId, ScenarioMapTerrainModes.GeneratedBlend, StringComparison.OrdinalIgnoreCase)
+                    ? "generated-blend"
+                    : "manual");
+            map.TerrainPatches.Add(patch);
+            return patch;
+        }
+
         public bool UpsertLootTable(ScenarioEditorSession session, MapLootTableDefinition table)
         {
             MapAuthoringDefinition map = EnsureMap(session);

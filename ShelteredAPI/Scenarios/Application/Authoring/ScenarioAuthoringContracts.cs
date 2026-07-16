@@ -451,6 +451,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionMapAuthoringModeSelect = "scenario.map.mode.select";
         public const string ActionMapAuthoringModePlace = "scenario.map.mode.place";
         public const string ActionMapAuthoringModeMove = "scenario.map.mode.move";
+        public const string ActionMapAuthoringModeTerrainTrees = "scenario.map.mode.terrain.woodland";
+        public const string ActionMapAuthoringModeTerrainMountains = "scenario.map.mode.terrain.mountains";
+        public const string ActionMapAuthoringModeTerrainClear = "scenario.map.mode.terrain.clear";
+        public const string ActionMapAuthoringModeTerrainGeneratedBlend = "scenario.map.mode.terrain.generated_blend";
+        public const string ActionMapAuthoringBrushShapeCircle = "scenario.map.brush.shape.circle";
+        public const string ActionMapAuthoringBrushShapeSquare = "scenario.map.brush.shape.square";
+        public const string ActionMapAuthoringBrushSize1 = "scenario.map.brush.size.1";
+        public const string ActionMapAuthoringBrushSize3 = "scenario.map.brush.size.3";
+        public const string ActionMapAuthoringBrushSize5 = "scenario.map.brush.size.5";
+        public const string ActionMapAuthoringBrushSize7 = "scenario.map.brush.size.7";
         public const string ActionMapAuthoringSelectLocationPrefix = "scenario.map.select_location.";
         public const string ActionMapLocationEditPrefix = "scenario.map.location.edit.";
         public const string ActionMapLocationTogglePrefix = "scenario.map.location.toggle.";
@@ -668,6 +678,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             SetupState = new ScenarioAuthoringSetupState();
             HistoryRestoreCandidateIndex = -1;
             HistoryDeleteCandidateIndex = -1;
+            MapTerrainBrushSize = 3;
+            MapTerrainBrushShape = "circle";
         }
 
         public bool IsActive { get; set; }
@@ -707,6 +719,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool MapAuthoringActive { get; set; }
         public bool MapAuthoringPreviousShellVisible { get; set; }
         public string MapAuthoringMode { get; set; }
+        public int MapTerrainBrushSize { get; set; }
+        public string MapTerrainBrushShape { get; set; }
         public string MapSelectedLocationId { get; set; }
         public ScenarioMapRegionSelection MapSelection { get; set; }
         public bool StorageAuthoringActive { get; set; }
@@ -778,6 +792,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 MapAuthoringActive = MapAuthoringActive,
                 MapAuthoringPreviousShellVisible = MapAuthoringPreviousShellVisible,
                 MapAuthoringMode = MapAuthoringMode,
+                MapTerrainBrushSize = MapTerrainBrushSize,
+                MapTerrainBrushShape = MapTerrainBrushShape,
                 MapSelectedLocationId = MapSelectedLocationId,
                 MapSelection = MapSelection != null ? MapSelection.Copy() : null,
                 StorageAuthoringActive = StorageAuthoringActive,

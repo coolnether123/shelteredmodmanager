@@ -31,7 +31,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             {
                 ScenarioMapAuthoringRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
                 if (service != null)
-                    service.ObserveHoveredRegion(__instance, __result);
+                {
+                    Vector2 worldPosition;
+                    service.ObserveHoveredRegion(
+                        __instance,
+                        __result,
+                        TryGetWorldPositionUnderCursor(__instance, out worldPosition) ? (Vector2?)worldPosition : null);
+                }
             }
             catch (Exception ex)
             {

@@ -25,8 +25,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new[]
             {
                 BuildRuntimeNoticeSection(context != null ? context.State : null),
+                BuildGenerationSection(definition),
                 BuildSelectionSection(context != null ? context.State : null),
                 BuildSupportedActionsSection(context != null ? context.State : null),
+                BuildBrushOptionsSection(context != null ? context.State : null),
                 ScenarioMapLocationEditorSectionBuilder.Build(context != null ? context.State : null, definition, map),
                 BuildOverviewSection(definition, map),
                 BuildMarkerSection(map),
@@ -50,15 +52,56 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     ScenarioInspectorItemFactory.Text(
                         active ? "Real map authoring is active." : "Open the real Sheltered map to select vanilla regions.",
-                        active ? "The editor chrome is hidden while the vanilla map panel owns input. Escape or the map close button returns here." : "Open the map to select vanilla regions, place authored locations, or move selected authored locations.",
+                        active ? "The editor chrome is hidden while the vanilla map panel owns input. Escape or the map close button returns here." : "Use Open Map, or right-click the shelter radio, to edit the real expedition map.",
                         active ? "Active" : "Ready",
                         "MAP",
                         null,
                         true),
-                    Property("Supported Here", "Open the vanilla map, select towns/regions, edit selected regions directly, place authored locations, and click-move selected authored locations."),
+                    Property("Supported Here", "Open the vanilla map, select towns/regions, place POI assets, and paint tree, mountain, or clear terrain cells."),
                     Property("Selection Mode", active ? "MapAuthoringActive" : "Map workshop"),
                     Property("Map Click Mode", state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select"),
                     Property("Movement", "Click-to-move is used because vanilla mouse drag already pans the map and drags waypoints.")
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildGenerationSection(ScenarioDefinition definition)
+        {
+            bool fixedSeed = definition != null && definition.SeedOverride.HasValue;
+            string seed = fixedSeed
+                ? definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture)
+                : "Vanilla / any generated map";
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_generation",
+                Title = "Map Generation",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = new[]
+                {
+                    Property("Generation", seed),
+                    Text("Generation choices take effect the next time the scenario world is loaded. Manual terrain and POI edits are layered over that generated base map."),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionScenarioSeedRandom,
+                        "Render Normally",
+                        "Do not pin a seed; let Sheltered render its normal generated map for each new scenario.",
+                        definition != null,
+                        !fixedSeed,
+                        "VN")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionScenarioSeedFixed,
+                        "Keep Seed",
+                        "Pin a generated seed so this map layout can be reproduced.",
+                        definition != null,
+                        fixedSeed,
+                        "FX")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionScenarioSeedReroll,
+                        "Randomize Map",
+                        "Choose a new fixed scenario seed. Reload or start Playtest to render the new map.",
+                        definition != null,
+                        false,
+                        "RR"))
                 }
             };
         }
@@ -124,8 +167,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         "SL")),
                     ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionMapAuthoringModePlace,
-                        "Place",
-                        "The next map click creates an authored location on an empty authored grid cell.",
+                        "Place POI Asset",
+                        "The next map click creates an authored point-of-interest asset on an available generated region.",
                         true,
                         state != null && state.MapAuthoringMode == "place",
                         "PL")),
@@ -141,6 +184,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         null,
                         authoredSelected ? null : "Select an authored location first.")),
                     ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainTrees,
+                        "Paint Trees",
+                        "Paint Woodland across the active brush footprint.",
+                        true,
+                        state != null && state.MapAuthoringMode == "terrain:Woodland",
+                        "TR")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainMountains,
+                        "Paint Mountains",
+                        "Paint Mountains across the active brush footprint.",
+                        true,
+                        state != null && state.MapAuthoringMode == "terrain:Mountains",
+                        "MT")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainClear,
+                        "Clear Terrain",
+                        "Clear terrain across the active brush footprint.",
+                        true,
+                        state != null && state.MapAuthoringMode == "terrain:NowhereSpecial",
+                        "ER")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainGeneratedBlend,
+                        "Generated Blend",
+                        "Mark an area for deterministic procedural terrain that favors the generated base and adjoining manual terrain while preserving existing POIs.",
+                        true,
+                        state != null && state.MapAuthoringMode == "terrain:" + ScenarioMapTerrainModes.GeneratedBlend,
+                        "GB")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicMap,
                         "Map Help",
                         "Open a concrete guide for map-facing data and required source pages.",
@@ -154,6 +225,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         true,
                         false,
                         "ST"))
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildBrushOptionsSection(ScenarioAuthoringState state)
+        {
+            int size = state != null && state.MapTerrainBrushSize > 0 ? state.MapTerrainBrushSize : 3;
+            string shape = state != null && !string.IsNullOrEmpty(state.MapTerrainBrushShape) ? state.MapTerrainBrushShape : "circle";
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_terrain_brush",
+                Title = "Terrain Paintbrush",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = new[]
+                {
+                    Property("Brush", shape + " / " + size.ToString(CultureInfo.InvariantCulture) + " cells"),
+                    Text("Choose Trees, Mountains, Clear, or Generated Blend, then click the map to paint the marked area. Later brush strokes win where areas overlap."),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeCircle, "Round", "Use a round terrain brush.", true, shape == "circle", "O")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionMapAuthoringBrushShapeSquare, "Square", "Use a square terrain brush.", true, shape == "square", "[]")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize1, "1 x 1", "Paint one map cell.", true, size == 1, "1")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize3, "3 x 3", "Paint a small area.", true, size == 3, "3")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize5, "5 x 5", "Paint a medium area.", true, size == 5, "5")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionMapAuthoringBrushSize7, "7 x 7", "Paint a large area.", true, size == 7, "7"))
                 }
             };
         }
