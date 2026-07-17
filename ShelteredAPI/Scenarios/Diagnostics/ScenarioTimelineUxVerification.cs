@@ -90,6 +90,19 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                     ScenarioCastWorkspaceActions.FutureEntityId(null, 2),
                     StringComparison.Ordinal),
                 "Timeline survivor marker did not select the matching Cast workspace arrival.", result);
+
+            ScenarioTimelineEntry quest = new ScenarioTimelineEntry
+            {
+                Id = "quest.route",
+                Kind = ScenarioTimelineEntryKind.Quest,
+                Title = "Quest quest.armsdealer.name",
+                SourceId = "ArmsDealer",
+                TargetId = "ArmsDealer"
+            };
+            navigation.Navigate(state, quest, out message);
+            Assert(!string.IsNullOrEmpty(message)
+                    && message.IndexOf("quest.armsdealer.name", StringComparison.OrdinalIgnoreCase) < 0,
+                "Timeline quest navigation status exposed a raw localization key.", result);
         }
 
         private static void VerifyRibbonDayAndCacheContract(ScenarioValidationResult result)

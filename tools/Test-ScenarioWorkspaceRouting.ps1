@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $PSScriptRoot 'Test-AuthoringShellWorkspaceProjection.ps1')
 $managedRoot = 'D:\Epic Games Games\Sheltered\ShelteredWindows64_EOS_Data\Managed'
 $assemblies = @(
     (Join-Path $managedRoot 'UnityEngine.dll'),

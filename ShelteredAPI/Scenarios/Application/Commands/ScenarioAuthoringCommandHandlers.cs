@@ -96,13 +96,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix, StringComparison.Ordinal))
             {
+                bool breadcrumbSelection = actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix, StringComparison.Ordinal);
                 string prefix = actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix, StringComparison.Ordinal)
                     ? ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix
                     : (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix, StringComparison.Ordinal)
                         ? ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix
                         : ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix);
                 if (!TryWorkspacePayload(actionId, prefix, out workspaceId, out subtabId, out workspaceValue)
-                    || string.IsNullOrEmpty(workspaceValue))
+                    || (!breadcrumbSelection && string.IsNullOrEmpty(workspaceValue)))
                     return Invalid("Workspace selection action was malformed.", out message);
                 ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSubtab(workspaceId, subtabId);
                 ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSelection(workspaceId, subtabId, workspaceValue);

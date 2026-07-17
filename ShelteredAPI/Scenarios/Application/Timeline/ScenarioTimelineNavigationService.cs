@@ -46,8 +46,22 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 state.MultiSelection.Add(target.Copy());
             }
             state.ShellVisible = true;
+            string focusedTitle = entry.Title ?? entry.Id;
+            if (entry.Kind == ScenarioTimelineEntryKind.Quest)
+            {
+                const string questPrefix = "Quest ";
+                string authoredTitle = focusedTitle != null && focusedTitle.StartsWith(questPrefix, System.StringComparison.OrdinalIgnoreCase)
+                    ? focusedTitle.Substring(questPrefix.Length)
+                    : focusedTitle;
+                string displayTitle = ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                    authoredTitle,
+                    authoredTitle,
+                    entry.SourceId ?? entry.TargetId ?? entry.Id,
+                    "Quest").Text;
+                focusedTitle = questPrefix + displayTitle;
+            }
             message = target != null
-                ? "Focused " + (entry.Title ?? entry.Id) + " in " + stage + "."
+                ? "Focused " + focusedTitle + " in " + stage + "."
                 : "Timeline target is missing: " + (entry.TargetId ?? entry.Id) + ".";
             return true;
         }

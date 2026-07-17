@@ -34,6 +34,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
         public static void Verify(ScenarioValidationResult result)
         {
             VerifyRouting(result);
+            VerifyStoryBreadcrumbs(result);
             VerifyHistoryRestoresCreativeState(result);
         }
 
@@ -63,6 +64,8 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 delegate { return string.Equals(rendererState.GetWorkspaceSearch(workspaceId, subtabId), "find me", StringComparison.Ordinal); }, "search.set", result);
             DispatchAndRequire(dispatcher, authoredState, factory.CreateBreadcrumbAction(workspaceId, subtabId, "entity.root", "Root").Id,
                 delegate { return string.Equals(rendererState.GetWorkspaceSelection(workspaceId, subtabId), "entity.root", StringComparison.Ordinal); }, "breadcrumb.select", result);
+            DispatchAndRequire(dispatcher, authoredState, factory.CreateBreadcrumbAction(workspaceId, subtabId, string.Empty, "Workspace").Id,
+                delegate { return string.IsNullOrEmpty(rendererState.GetWorkspaceSelection(workspaceId, subtabId)); }, "breadcrumb.root", result);
             DispatchAndRequire(dispatcher, authoredState, factory.CreateBackAction(workspaceId, subtabId, "Back").Id,
                 delegate { return !rendererState.GetWorkspaceNarrowPane(workspaceId, subtabId, true); }, "back", result);
 
@@ -84,6 +87,51 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             ScenarioCommandDispatchResult dispatch = dispatcher.DispatchDetailed(state, actionId);
             if (!dispatch.Handled || !dispatch.Changed || !dispatch.Result || stateChanged == null || !stateChanged())
                 result.AddError("Workspace " + family + " did not dispatch as result:true with its expected renderer-state change: " + actionId);
+        }
+
+        private static void VerifyStoryBreadcrumbs(ScenarioValidationResult result)
+        {
+            ScenarioDefinition definition = new ScenarioDefinition();
+            ScenarioFlowStageDefinition stage = new ScenarioFlowStageDefinition { Id = "fixture_stage" };
+            ScenarioIntercomStageDefinition scene = new ScenarioIntercomStageDefinition { Id = "fixture_scene" };
+            scene.Dialogue.Add(new ScenarioDialogueLineDefinition { TextKey = "Fixture dialogue" });
+            scene.Options.Add(new ScenarioDialogueOptionDefinition { TextKey = "Fixture choice" });
+            stage.IntercomStages.Add(scene);
+            definition.ScenarioFlow.Stages.Add(stage);
+
+            ScenarioAuthoringRendererInteractionState interaction = ScenarioAuthoringRendererInteractionState.Instance;
+            ScenarioStoryFlowWorkspaceBuilder builder = new ScenarioStoryFlowWorkspaceBuilder();
+            ScenarioAuthoringWorkspaceViewModelFactory factory = new ScenarioAuthoringWorkspaceViewModelFactory();
+            ScenarioAuthoringWindowContentContext context = new ScenarioAuthoringWindowContentContext(null, null, null, definition);
+
+            interaction.SetWorkspaceSelection(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, null);
+            ScenarioAuthoringWorkspaceViewModel root = builder.Build(context, factory);
+            if (root == null || root.Document == null || root.Document.Breadcrumbs == null
+                || root.Document.Breadcrumbs.Length != 1 || !string.Equals(root.Document.Breadcrumbs[0].Label, "Story", StringComparison.Ordinal))
+            {
+                result.AddError("Story root breadcrumb must contain only the workspace name.");
+            }
+
+            interaction.SetWorkspaceSelection(
+                ScenarioStoryFocusedEditorActions.WorkspaceId,
+                ScenarioStoryFocusedEditorActions.FlowSubtabId,
+                ScenarioStoryFocusedEditorActions.SceneEntityId(definition, 0, 0));
+            ScenarioAuthoringWorkspaceViewModel selected = builder.Build(context, factory);
+            if (selected == null || selected.Document == null || selected.Document.Breadcrumbs == null
+                || selected.Document.Breadcrumbs.Length != 3
+                || !string.Equals(selected.Document.Breadcrumbs[0].Label, "Story", StringComparison.Ordinal)
+                || !string.Equals(selected.Document.Breadcrumbs[1].Label, "Stage 1", StringComparison.Ordinal)
+                || !string.Equals(selected.Document.Breadcrumbs[2].Label, "Scene 1", StringComparison.Ordinal))
+            {
+                result.AddError("Story scene breadcrumb must follow Workspace / Entity / Child.");
+            }
+            if (selected == null || selected.Document == null
+                || !string.Equals(selected.Document.Subtitle, "1 dialogue line · 1 choice", StringComparison.Ordinal))
+            {
+                result.AddError("Story scene singular count formatting regressed.");
+            }
+
+            interaction.SetWorkspaceSelection(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, null);
         }
 
         private static void VerifyHistoryRestoresCreativeState(ScenarioValidationResult result)

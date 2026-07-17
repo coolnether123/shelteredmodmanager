@@ -3,6 +3,7 @@ using System;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
 
@@ -30,6 +31,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     && overview.Navigator.Groups[0].Rows.Length > 0 && overview.Navigator.Groups[0].Rows[0].SelectAction != null
                     && overview.Navigator.Groups[0].Rows[0].SelectAction.Id.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal),
                 "Map location navigator row must reuse the overlay-select semantic action.", result);
+            Assert(overview != null && overview.Navigator != null && overview.Navigator.Groups != null
+                    && overview.Navigator.Groups.Length > 0 && overview.Navigator.Groups[0].CreateAction != null
+                    && string.Equals(overview.Navigator.Groups[0].CreateAction.Id, ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, StringComparison.Ordinal),
+                "Map Locations group must expose the existing semantic location-placement action.", result);
+            ScenarioAuthoringState activeMapState = new ScenarioAuthoringState { MapAuthoringActive = true };
+            ScenarioCommandDispatcher dispatcher = new ScenarioCommandDispatcher(new IScenarioCommandHandler[]
+            {
+                new ScenarioMapAuthoringCommandHandler(null, null, null)
+            });
+            ScenarioCommandDispatchResult placement = dispatcher.DispatchDetailed(activeMapState, overview.Navigator.Groups[0].CreateAction.Id);
+            Assert(placement.Handled && placement.Result && string.Equals(activeMapState.MapAuthoringMode, "place", StringComparison.Ordinal),
+                "Map Locations create action did not enter the existing semantic placement command path.", result);
             Assert(overview != null && overview.Document != null && IsAdvancedLast(overview.Document.Sections),
                 "Map overview must finish with Advanced.", result);
             AssertUniqueActions(overview, "overview", result);

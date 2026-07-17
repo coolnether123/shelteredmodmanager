@@ -762,7 +762,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (!string.IsNullOrEmpty(appearance.SkinColorHex)) count++;
             if (!string.IsNullOrEmpty(appearance.ShirtColorHex)) count++;
             if (!string.IsNullOrEmpty(appearance.PantsColorHex)) count++;
-            return count == 0 ? "default" : count.ToString(CultureInfo.InvariantCulture) + " custom choices";
+            return count == 0 ? "default" : count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " custom choice" : " custom choices");
         }
 
         private static string FormatTexture(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part)
