@@ -71,9 +71,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 spokeSomething = true;
 
                 string speaker = SpeakerName(definition, line.Character);
-                string spoken = !string.IsNullOrEmpty(line.TextKey) ? line.TextKey : "(no line written yet)";
+                ScenarioAuthoringDisplayName spokenName = ResolveText(
+                    line.TextKey,
+                    null,
+                    "Dialogue " + (d + 1).ToString(CultureInfo.InvariantCulture));
+                string spoken = spokenName.Text;
                 Sprite portrait = ResolveSpeakerPortrait(definition, line.Character);
-                string detail = string.IsNullOrEmpty(line.Character) ? "No speaker chosen" : ("Speaker id: " + line.Character);
+                string detail = string.IsNullOrEmpty(line.Character) ? "No speaker chosen" : ("Technical speaker id: " + line.Character);
+                if (!string.IsNullOrEmpty(spokenName.LocalizationKey))
+                    detail += ". Technical localization key: " + spokenName.LocalizationKey;
 
                 items.Add(ScenarioInspectorItemFactory.Property(speaker, spoken, detail, null, null, portrait));
                 items.Add(EditAction(stageIndex, "Edit line", "Open the focused editor to change what " + speaker + " says."));
@@ -89,7 +95,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (option == null)
                     continue;
 
-                string reply = !string.IsNullOrEmpty(option.TextKey) ? option.TextKey : "(empty reply)";
+                string reply = ResolveText(
+                    option.TextKey,
+                    null,
+                    "Reply " + (o + 1).ToString(CultureInfo.InvariantCulture)).Text;
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Reply " + (o + 1).ToString(CultureInfo.InvariantCulture),
                     reply,
@@ -157,9 +166,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string StepTitle(ScenarioIntercomStageDefinition step, int index)
         {
-            return !string.IsNullOrEmpty(step != null ? step.Id : null)
-                ? step.Id
-                : "Scene " + (index + 1).ToString(CultureInfo.InvariantCulture);
+            string fallback = "Scene " + (index + 1).ToString(CultureInfo.InvariantCulture);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                null,
+                null,
+                step != null ? step.Id : null,
+                fallback).Text;
         }
 
         private static string StepTitleById(ScenarioFlowStageDefinition stage, string stepId)
@@ -172,7 +184,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (step != null && string.Equals(step.Id, stepId, StringComparison.OrdinalIgnoreCase))
                     return StepTitle(step, i);
             }
-            return stepId + " (missing scene)";
+            return "Missing scene";
         }
 
         private static string StageTitleById(ScenarioDefinition definition, string stageId)
@@ -184,9 +196,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 ScenarioFlowStageDefinition stage = flow.Stages[i];
                 if (stage != null && string.Equals(stage.Id, stageId, StringComparison.OrdinalIgnoreCase))
-                    return !string.IsNullOrEmpty(stage.Id) ? stage.Id : "Stage " + (i + 1).ToString(CultureInfo.InvariantCulture);
+                    return DisplayStageTitle(stage, i);
             }
-            return stageId + " (missing stage)";
+            return "Missing stage";
         }
 
         private static string SpeakerName(ScenarioDefinition definition, string characterId)
@@ -197,9 +209,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 ScenarioNpcDefinition character = definition.ScenarioCharacters[i];
                 if (character != null && string.Equals(character.CharacterId, characterId, StringComparison.OrdinalIgnoreCase))
-                    return !string.IsNullOrEmpty(character.DisplayName) ? character.DisplayName : characterId;
+                    return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                        character.DisplayName,
+                        null,
+                        character.CharacterId,
+                        "Story character " + (i + 1).ToString(CultureInfo.InvariantCulture)).Text;
             }
-            return characterId;
+            return "Story character";
+        }
+
+        private static string DisplayStageTitle(ScenarioFlowStageDefinition stage, int index)
+        {
+            string key = null;
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition step = stage.IntercomStages[i];
+                if (step != null && !string.IsNullOrEmpty(step.StageDescriptionKey))
+                {
+                    key = step.StageDescriptionKey;
+                    break;
+                }
+            }
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                key,
+                key,
+                stage != null ? stage.Id : null,
+                "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static ScenarioAuthoringDisplayName ResolveText(string textOrKey, string storageId, string fallback)
+        {
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(textOrKey, textOrKey, storageId, fallback);
         }
 
         private static Sprite ResolveSpeakerPortrait(ScenarioDefinition definition, string characterId)

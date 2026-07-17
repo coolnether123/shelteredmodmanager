@@ -167,7 +167,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     BrowserAssetEntry browserEntry = new BrowserAssetEntry
                     {
                         SourceActionId = entry.ActionId,
-                        Label = ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(entry.Label),
+                        Label = ScenarioAssetDisplayNameProjection.Resolve(entry.Label, entry.ActionId, "Asset " + (i + 1).ToString()),
                         Category = !string.IsNullOrEmpty(model.Title) ? model.Title : category,
                         Descriptor = !string.IsNullOrEmpty(entry.Badge) ? entry.Badge : iconText,
                         Detail = entry.Source,
@@ -237,7 +237,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     BrowserAssetEntry entry = new BrowserAssetEntry
                     {
                         SourceActionId = ScenarioSceneSpritePlacementAuthoringService.BuildApplyActionId(candidate.Token),
-                        Label = ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(candidate.Label),
+                        Label = ScenarioAssetDisplayNameProjection.Resolve(candidate.Label, candidate.Token, "Sprite " + (i + 1).ToString()),
                         Category = title,
                         Descriptor = ScenarioAuthoringPresentationBuilder.BuildCandidateBadge(candidate),
                         Detail = candidate.SourceName,
@@ -289,7 +289,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     BrowserAssetEntry entry = new BrowserAssetEntry
                     {
                         SourceActionId = ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix + target.Target.Id,
-                        Label = ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(target.Target.DisplayName),
+                        Label = ScenarioAssetDisplayNameProjection.Resolve(target.Target.DisplayName, target.Target.Id, "Weather effect " + (i + 1).ToString()),
                         Category = "Weather & Effects",
                         Descriptor = "FX",
                         Detail = target.Group,
@@ -530,8 +530,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool showAdvancedDetails = ShowAdvancedDetails(state);
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioInspectorItemFactory.Property("Current Look", ScenarioInspectorItemFactory.Safe(model.Target.SpriteName)));
-            items.Add(ScenarioInspectorItemFactory.Property("Replacement", !string.IsNullOrEmpty(previewLabel) ? previewLabel : (model.HasActiveRule ? ScenarioInspectorItemFactory.Safe(model.ActiveRuleSummary) : "No replacement selected")));
+            items.Add(ScenarioInspectorItemFactory.Property("Current Look", ScenarioAssetDisplayNameProjection.Resolve(model.Target.SpriteName, model.Target.TextureName, "Current asset")));
+            items.Add(ScenarioInspectorItemFactory.Property("Replacement", !string.IsNullOrEmpty(previewLabel) ? ScenarioAssetDisplayNameProjection.Resolve(previewLabel, null, "Selected replacement") : (model.HasActiveRule ? "Custom replacement active" : "No replacement selected")));
             items.Add(ScenarioInspectorItemFactory.Property("Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString() + " vanilla / " + ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString() + " scenario"));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
@@ -554,6 +554,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Id = "sprite_swap_advanced",
                     Title = "Advanced Details",
+                    IsAdvanced = true,
                     Expanded = false,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]
@@ -690,7 +691,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         && string.Equals(state.SelectedTarget.Id, target.Target.Id, StringComparison.OrdinalIgnoreCase);
                     items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix + target.Target.Id,
-                        ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(target.Target.DisplayName),
+                        ScenarioAssetDisplayNameProjection.Resolve(target.Target.DisplayName, target.Target.Id, "Weather effect " + (i + 1).ToString()),
                         target.Source + " | Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
                         true,
                         active,
@@ -735,8 +736,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 true));
             items.Add(ScenarioInspectorItemFactory.Property("Anchor", ScenarioAuthoringPresentationBuilder.FormatTarget(target)));
             items.Add(ScenarioInspectorItemFactory.Property("Grid", target != null && target.GridX.HasValue && target.GridY.HasValue ? (target.GridX.Value + "," + target.GridY.Value) : "No grid anchor selected"));
-            items.Add(ScenarioInspectorItemFactory.Property("Active Placement", model.ActivePlacement != null ? ScenarioInspectorItemFactory.Safe(model.ActivePlacement.Id) : "No authored placement selected"));
-            items.Add(ScenarioInspectorItemFactory.Property("Active Sprite", !string.IsNullOrEmpty(model.ActiveCandidateLabel) ? ScenarioInspectorItemFactory.Safe(model.ActiveCandidateLabel) : "Choose a sprite below to start placement"));
+            items.Add(ScenarioInspectorItemFactory.Property("Active Placement", model.ActivePlacement != null ? "Selected authored placement" : "No authored placement selected"));
+            items.Add(ScenarioInspectorItemFactory.Property("Active Sprite", !string.IsNullOrEmpty(model.ActiveCandidateLabel) ? ScenarioAssetDisplayNameProjection.Resolve(model.ActiveCandidateLabel, model.ActiveCandidateToken, "Selected sprite") : "Choose a sprite below to start placement"));
             items.Add(ScenarioInspectorItemFactory.Property("Placement Preview", model.PlacementActive ? "Active" : "Inactive"));
             items.Add(ScenarioInspectorItemFactory.Property("Compatibility", ScenarioInspectorItemFactory.Safe(model.CompatibilitySummary)));
             items.Add(ScenarioInspectorItemFactory.Property("Vanilla Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
@@ -770,11 +771,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Id = "scene_sprite_advanced",
                     Title = "Advanced Details",
+                    IsAdvanced = true,
                     Expanded = false,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]
                     {
                         ScenarioInspectorItemFactory.Property("Stored As", ScenarioInspectorItemFactory.Safe(model.XmlPathHint)),
+                        ScenarioInspectorItemFactory.Property("Technical placement id", model.ActivePlacement != null ? ScenarioInspectorItemFactory.Safe(model.ActivePlacement.Id) : "None"),
                         ScenarioInspectorItemFactory.Property("Filtered People", model.BlockedPeople.ToString()),
                         ScenarioInspectorItemFactory.Property("Filtered Objects", model.BlockedInteractiveObjects.ToString()),
                         ScenarioInspectorItemFactory.Property("Filtered Pathing", model.BlockedPathfindingActors.ToString()),
@@ -849,6 +852,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return _runtimeResolver.TryResolve(target, out resolvedTarget) && resolvedTarget != null
                 ? resolvedTarget.CurrentSprite
                 : null;
+        }
+    }
+
+    internal static class ScenarioAssetDisplayNameProjection
+    {
+        public static string Resolve(string literalText, string storageId, string fallbackText)
+        {
+            string cleaned = ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(literalText);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                cleaned,
+                null,
+                storageId,
+                fallbackText).Text;
         }
     }
 

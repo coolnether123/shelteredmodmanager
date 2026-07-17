@@ -224,7 +224,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioConversationTriggerDefinition trigger = conversation != null ? conversation.Trigger : null;
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(ScenarioInspectorItemFactory.Text(FormatConversationSummary(definition, conversation), null, null, null, null, true));
-            items.Add(EditableProperty("Conversation id", conversation != null ? conversation.Id : null, ScenarioAuthoringActionIds.ActionStoryConversationIdPrefix + indexText + ".", "Stable id used by StartConversation effects."));
+            items.Add(EditableProperty("Technical conversation id", conversation != null ? conversation.Id : null, ScenarioAuthoringActionIds.ActionStoryConversationIdPrefix + indexText + ".", "Stable id used by StartConversation effects."));
             items.Add(ScenarioInspectorItemFactory.Property("Kind", "Conversation", "A timed sequence of shelter speech bubbles.", "CONVO"));
             items.Add(ScenarioInspectorItemFactory.Property("Validation", ValidateConversation(definition, conversation)));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionStoryConversationPreviewPrefix + indexText, "Run Preview", "Play this conversation now if live members resolve in the authoring world.", true, false, "PV")));
@@ -232,7 +232,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "story_conversation_" + indexText,
-                Title = "CONVERSATION " + (index + 1).ToString(CultureInfo.InvariantCulture) + " / " + Safe(conversation != null ? conversation.Id : null),
+                Title = "CONVERSATION " + (index + 1).ToString(CultureInfo.InvariantCulture),
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
@@ -420,7 +420,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = new[]
                 {
-                    ScenarioInspectorItemFactory.Text("These are flat QuestLibrary popups. They are separate from the vanilla scenario story flow above."),
+                    ScenarioInspectorItemFactory.Text("These are optional base-game quest popups. They are separate from the scenario story flow above."),
                     ScenarioInspectorItemFactory.Property("Authored popups", snapshot.AuthoredCount.ToString(CultureInfo.InvariantCulture))
                 }
             };
@@ -506,7 +506,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             string prefix = ScenarioStoryAuthoringActions.IntercomKey(stageIndex, intercomIndex);
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioInspectorItemFactory.Property("Step id", Safe(intercom.Id)));
+            items.Add(ScenarioInspectorItemFactory.Property("Technical step id", Safe(intercom.Id)));
             items.Add(ScenarioInspectorItemFactory.Property("Routes", "Next " + FormatStageTarget(intercom.NextId) + " / Alt " + FormatStageTarget(intercom.AlternateNextId)));
             items.Add(ScenarioInspectorItemFactory.Property("Stage change", intercom.StageChange != null ? FormatStageTarget(intercom.StageChange.Id) + " after " + intercom.StageChange.DelayDays.ToString(CultureInfo.InvariantCulture) + " day(s)" : "No delayed next-stage transition."));
             bool revealAdvancedRouting = ScenarioStoryStageDisclosure.ShouldRevealAdvancedRouting(stage);
@@ -549,7 +549,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "story_intercom_" + prefix.Replace('.', '_'),
-                Title = "Edit Scene " + (intercomIndex + 1).ToString(CultureInfo.InvariantCulture) + " / " + Safe(intercom.Id),
+                Title = "Edit " + DisplayIntercomTitle(intercom, intercomIndex),
                 Expanded = false,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = items.ToArray()
@@ -683,8 +683,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (snapshot.Catalog.Count == 0)
             {
                 items.Add(ScenarioInspectorItemFactory.Text(snapshot.CatalogReady
-                    ? "QuestLibrary returned no quests."
-                    : "QuestLibrary is not ready in this scene. Open a save or playtest first."));
+                    ? "No base-game quests are available."
+                    : "The base-game quest list is unavailable here. Open a save or start a playtest first."));
             }
             else
             {
@@ -699,11 +699,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         continue;
 
                     bool available = QuestAuthoringSnapshot.IsQuestAvailable(quest);
-                    string suffix = available ? string.Empty : "  (locked)";
+                    string suffix = available ? string.Empty : "  (locked until available in the base game)";
                     items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix + i.ToString(CultureInfo.InvariantCulture),
-                        "+ " + quest.id + "   " + quest.questType.ToString() + suffix,
-                        "Add this QuestLibrary quest to the scenario draft.",
+                        "+ " + ResolveQuestDefName(quest, i) + "   " + quest.questType.ToString() + suffix,
+                        "Add this base-game quest to the scenario draft.",
                         true,
                         false,
                         "Q+")));
@@ -714,7 +714,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(ScenarioInspectorItemFactory.Text(
                         "Showing " + max.ToString(CultureInfo.InvariantCulture)
                         + " of " + snapshot.Catalog.Count.ToString(CultureInfo.InvariantCulture)
-                        + " library quests. Use Cycle Quest Id on an authored quest to reach the rest."));
+                        + " base-game quests. Use the quest source controls on an authored quest to reach the rest."));
                 }
             }
 
@@ -743,16 +743,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 string state = quest.state.ToString();
                 if (quest.definition.IsScenario() && quest.stage != null)
-                    state += " / " + quest.stage.id;
+                    state += " / scenario stage";
                 items.Add(ScenarioInspectorItemFactory.Property(
-                    !string.IsNullOrEmpty(quest.definition.id) ? quest.definition.id : "Running quest with no id",
+                    ResolveQuestDefName(quest.definition, i),
                     state));
             }
 
             if (items.Count == 0)
             {
                 items.Add(ScenarioInspectorItemFactory.Text(
-                    "No quests are currently running in QuestManager."));
+                    "No quests are currently running."));
             }
 
             return new ScenarioAuthoringInspectorSection
@@ -841,7 +841,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddDialogueActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioFlowStageDefinition stage, ScenarioDialogueLineDefinition line, int stageIndex, int intercomIndex, int lineIndex)
         {
-            items.Add(ScenarioInspectorItemFactory.Property("Dialogue " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture), Safe(line != null ? line.TextKey : null), Safe(line != null ? FormatCharacterLabel(definition, line.Character) : null)));
+            items.Add(ScenarioInspectorItemFactory.Property(
+                "Dialogue " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture),
+                ResolveDisplayText(line != null ? line.TextKey : null, "Dialogue " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture)),
+                Safe(line != null ? FormatCharacterLabel(definition, line.Character) : null)));
             List<string> speakers = BuildCharacterIds(definition);
             for (int i = 0; i < speakers.Count; i++)
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.DialogueSpeaker(stageIndex, intercomIndex, lineIndex, speakers[i]), FormatCharacterLabel(definition, speakers[i]), "Set dialogue speaker.", true, line != null && string.Equals(line.Character, speakers[i], StringComparison.OrdinalIgnoreCase), "SP")));
@@ -852,7 +855,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddOptionActions(List<ScenarioAuthoringInspectorItem> items, ScenarioFlowStageDefinition stage, ScenarioDialogueOptionDefinition option, int stageIndex, int intercomIndex, int optionIndex)
         {
-            items.Add(ScenarioInspectorItemFactory.Property("Option " + (optionIndex + 1).ToString(CultureInfo.InvariantCulture), Safe(option != null ? option.TextKey : null), "Next " + FormatStageTarget(option != null ? option.NextId : null)));
+            items.Add(ScenarioInspectorItemFactory.Property(
+                "Option " + (optionIndex + 1).ToString(CultureInfo.InvariantCulture),
+                ResolveDisplayText(option != null ? option.TextKey : null, "Option " + (optionIndex + 1).ToString(CultureInfo.InvariantCulture)),
+                "Next " + FormatStageTarget(option != null ? option.NextId : null)));
             string key = option != null && !string.IsNullOrEmpty(option.TextKey) ? option.TextKey : "option";
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.OptionKey(stageIndex, intercomIndex, optionIndex, key + "_copy"), "Key " + key + "_copy", "Use the next option-key pattern.", true, false, "KY")));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.OptionNext(stageIndex, intercomIndex, optionIndex, null), "Next None", "Clear this option route.", true, option == null || string.IsNullOrEmpty(option.NextId), "NX")));
@@ -1129,7 +1135,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string FormatStageTarget(string value)
         {
-            return string.IsNullOrEmpty(value) ? "No route selected" : value;
+            return string.IsNullOrEmpty(value)
+                ? "No route selected"
+                : ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(null, null, value, "Selected route").Text;
         }
 
         private static string Safe(string value)
@@ -1169,15 +1177,54 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string DisplayStageTitle(ScenarioFlowStageDefinition stage, int index)
         {
+            string key = null;
             for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
             {
                 ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
                 if (intercom != null && !string.IsNullOrEmpty(intercom.StageDescriptionKey))
-                    return intercom.StageDescriptionKey;
+                {
+                    key = intercom.StageDescriptionKey;
+                    break;
+                }
             }
-            if (stage != null && !string.IsNullOrEmpty(stage.Id))
-                return stage.Id;
-            return "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                key,
+                key,
+                stage != null ? stage.Id : null,
+                "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static string DisplayIntercomTitle(ScenarioIntercomStageDefinition intercom, int index)
+        {
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                intercom != null ? intercom.StageDescriptionKey : null,
+                intercom != null ? intercom.StageDescriptionKey : null,
+                intercom != null ? intercom.Id : null,
+                "Scene " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static string ResolveDisplayText(string textOrKey, string fallback)
+        {
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(textOrKey, textOrKey, null, fallback).Text;
+        }
+
+        private static string ResolveQuestName(QuestDefinition quest, QuestDef libraryQuest, int index)
+        {
+            string libraryKey = libraryQuest != null ? libraryQuest.nameKey : null;
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                quest != null ? quest.Title : null,
+                !string.IsNullOrEmpty(libraryKey) ? libraryKey : (quest != null ? quest.Title : null),
+                quest != null ? quest.Id : null,
+                "Quest " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static string ResolveQuestDefName(QuestDefBase quest, int index)
+        {
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                quest != null ? quest.nameKey : null,
+                quest != null ? quest.nameKey : null,
+                quest != null ? quest.id : null,
+                "Quest " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
         }
 
         private static string EncounterBadge(ScenarioFlowStageDefinition stage)
@@ -1237,7 +1284,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (character == null || !string.Equals(character.CharacterId, characterId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                string label = !string.IsNullOrEmpty(character.DisplayName) ? character.DisplayName + " [" + characterId + "]" : characterId;
+                string label = ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                    character.DisplayName,
+                    null,
+                    characterId,
+                    "Story character " + (i + 1).ToString(CultureInfo.InvariantCulture)).Text;
 
                 if (character.ActorRef == null)
                     return label;
@@ -1245,7 +1296,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return label + " -> " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, label);
             }
 
-            return characterId;
+            return "Story character";
         }
 
         // === Per-quest builder ===
@@ -1277,7 +1328,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     sections.Add(BuildTriggerSection(quest, idPart));
                 else
                     sections.Add(BuildScheduleSection(quest, idPart));
-                sections.Add(BuildIdentitySection(quest, idPart, libraryQuest));
+                sections.Add(BuildIdentitySection(quest, idPart, index, libraryQuest));
                 sections.Add(BuildLifecycleSection(idPart, index, libraryQuest));
             }
 
@@ -1288,24 +1339,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 bool triggerStarted,
                 QuestDef libraryQuest)
             {
-                string title = !string.IsNullOrEmpty(quest.Title) ? quest.Title : quest.Id;
+                string title = ResolveQuestName(quest, libraryQuest, index);
                 string when = triggerStarted
-                    ? "On trigger '" + (!string.IsNullOrEmpty(quest.StartTriggerId) ? quest.StartTriggerId : "not selected") + "'"
+                    ? "When triggered"
                     : QuestAuthoringHelpers.FormatSchedule(quest.ScheduledStart);
                 string sectionTitle = "Quest #" + (index + 1).ToString(CultureInfo.InvariantCulture)
-                    + " / " + (!string.IsNullOrEmpty(title) ? title : "Untitled quest popup")
+                    + " / " + title
                     + " / " + when;
                 string validation = QuestAuthoringHelpers.FormatQuestValidation(quest, _snapshot.Definition);
 
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
                 items.Add(ScenarioInspectorItemFactory.Property(
-                    "Quest id",
-                    !string.IsNullOrEmpty(quest.Id) ? quest.Id : "No QuestLibrary id selected."));
+                    "Quest source",
+                    libraryQuest != null ? "Base-game quest selected" : "Choose a base-game quest"));
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Library",
                     libraryQuest != null
                         ? QuestAuthoringHelpers.BuildQuestLibrarySummary(libraryQuest)
-                        : "not found"));
+                        : "Base-game quest not found"));
                 items.Add(ScenarioInspectorItemFactory.Property("Validation", validation));
 
                 return new ScenarioAuthoringInspectorSection
@@ -1436,7 +1487,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     "TG+")));
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Trigger",
-                    !string.IsNullOrEmpty(quest.StartTriggerId) ? quest.StartTriggerId : "No trigger selected - this popup starts from its schedule."));
+                    !string.IsNullOrEmpty(quest.StartTriggerId) ? "Selected authored trigger" : "No trigger selected - this popup starts from its schedule."));
                 if (!_snapshot.HasAnyTriggers)
                 {
                     items.Add(ScenarioInspectorItemFactory.Text(
@@ -1456,34 +1507,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             private static ScenarioAuthoringInspectorSection BuildIdentitySection(
                 QuestDefinition quest,
                 string idPart,
+                int index,
                 QuestDef libraryQuest)
             {
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix + idPart + ".-1",
                     "< Prev id",
-                    "Switch this quest to the previous QuestLibrary id.",
+                    "Switch this quest to the previous base-game quest.",
                     true,
                     false,
                     "ID-")));
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix + idPart + ".1",
                     "Next id >",
-                    "Switch this quest to the next QuestLibrary id.",
+                    "Switch this quest to the next base-game quest.",
                     true,
                     false,
                     "ID+")));
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestTitleSyncPrefix + idPart,
                     "Sync Title",
-                    "Copy the QuestLibrary name key into this authored quest title.",
+                    "Copy the base-game quest name into this authored quest.",
                     libraryQuest != null,
                     false,
                     "NM")));
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestDescriptionSyncPrefix + idPart,
                     "Sync Desc",
-                    "Copy the QuestLibrary description key into this authored quest description.",
+                    "Copy the base-game quest description into this authored quest.",
                     libraryQuest != null,
                     false,
                     "DS")));
@@ -1494,7 +1546,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     true,
                     !string.IsNullOrEmpty(quest.CompletionConditionId),
                     "CC")));
-                items.Add(ScenarioInspectorItemFactory.Property("Title", !string.IsNullOrEmpty(quest.Title) ? quest.Title : "No title synced yet - use Sync Title when the library id is valid."));
+                items.Add(ScenarioInspectorItemFactory.Property("Title", ResolveQuestName(quest, libraryQuest, index)));
+                items.Add(ScenarioInspectorItemFactory.Property("Technical quest id", !string.IsNullOrEmpty(quest.Id) ? quest.Id : "Not selected"));
+                if (!string.IsNullOrEmpty(quest.StartTriggerId))
+                    items.Add(ScenarioInspectorItemFactory.Property("Technical start trigger id", quest.StartTriggerId));
+                if (libraryQuest != null && !string.IsNullOrEmpty(libraryQuest.nameKey))
+                    items.Add(ScenarioInspectorItemFactory.Property("Technical name key", libraryQuest.nameKey));
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Completion",
                     !string.IsNullOrEmpty(quest.CompletionConditionId) ? quest.CompletionConditionId : "No completion condition selected - quest completion is not gated."));
@@ -1503,6 +1560,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Id = "quest_authored_id_" + idPart,
                     Title = "Quest content",
+                    IsAdvanced = true,
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                     Items = items.ToArray()
@@ -1602,8 +1660,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     HasNextScheduled = true;
                     string label = QuestAuthoringHelpers.FormatSchedule(next.ScheduledStart);
-                    string title = !string.IsNullOrEmpty(next.Title) ? next.Title : next.Id;
-                    NextScheduledLabel = label + " - " + (!string.IsNullOrEmpty(title) ? title : "Untitled quest popup");
+                    QuestDef libraryQuest = FindQuestDef(next.Id);
+                    NextScheduledLabel = label + " - " + ResolveQuestName(next, libraryQuest, authored.IndexOf(next));
                 }
             }
 
@@ -1694,24 +1752,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             public static string FormatQuestValidation(QuestDefinition quest, ScenarioDefinition definition)
             {
                 if (quest == null)
-                    return "missing quest";
+                    return "Quest entry is missing";
                 if (string.IsNullOrEmpty(quest.Id))
-                    return "missing id";
+                    return "Choose a base-game quest";
                 if (QuestAuthoringSnapshot.FindQuestDef(quest.Id) == null)
-                    return "missing QuestLibrary definition";
+                    return "Base-game quest not found";
                 if (definition != null
                     && !string.IsNullOrEmpty(quest.StartTriggerId)
                     && !ScenarioDefinitionLookup.HasTrigger(definition, quest.StartTriggerId))
-                    return "missing trigger";
+                    return "Start trigger is missing";
                 if (definition != null
                     && !string.IsNullOrEmpty(quest.CompletionConditionId)
                     && !HasCompletionCondition(definition, quest.CompletionConditionId))
-                    return "missing completion condition";
+                    return "Completion condition is missing";
 
                 QuestDef libraryQuest = QuestAuthoringSnapshot.FindQuestDef(quest.Id);
                 return libraryQuest != null && QuestAuthoringSnapshot.IsQuestAvailable(libraryQuest)
-                    ? "available now"
-                    : "valid id, gated by vanilla availability";
+                    ? "Available in the base game"
+                    : "Locked until unlocked in the base game";
             }
 
             public static List<string> BuildQuestWarnings(ScenarioDefinition definition)
@@ -1725,30 +1783,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int i = 0; i < count; i++)
                 {
                     QuestDefinition quest = definition.Quests.Quests[i];
-                    string label = quest != null && !string.IsNullOrEmpty(quest.Id)
-                        ? quest.Id
-                        : "#" + (i + 1).ToString(CultureInfo.InvariantCulture);
+                    string label = "Quest " + (i + 1).ToString(CultureInfo.InvariantCulture);
                     if (quest == null)
                     {
                         warnings.Add("Quest #" + (i + 1).ToString(CultureInfo.InvariantCulture) + " is empty.");
                         continue;
                     }
                     if (string.IsNullOrEmpty(quest.Id))
-                        warnings.Add("Quest #" + (i + 1).ToString(CultureInfo.InvariantCulture) + " has no QuestLibrary id.");
+                        warnings.Add(label + " needs a base-game quest selection.");
                     else if (ids.ContainsKey(quest.Id))
-                        warnings.Add("Duplicate quest id in draft: " + quest.Id);
+                        warnings.Add(label + " uses the same base-game quest as another popup.");
                     else
                         ids[quest.Id] = true;
 
                     if (!string.IsNullOrEmpty(quest.Id) && QuestAuthoringSnapshot.FindQuestDef(quest.Id) == null)
-                        warnings.Add("Quest '" + quest.Id + "' is not present in QuestLibrary.");
+                        warnings.Add(label + " refers to a base-game quest that is not available.");
                     if (!string.IsNullOrEmpty(quest.StartTriggerId) && !ScenarioDefinitionLookup.HasTrigger(definition, quest.StartTriggerId))
-                        warnings.Add("Quest '" + label + "' references missing trigger '" + quest.StartTriggerId + "'.");
+                        warnings.Add(label + " refers to a start trigger that no longer exists.");
                     if (string.IsNullOrEmpty(quest.StartTriggerId) && quest.ScheduledStart == null)
-                        warnings.Add("Quest '" + label + "' has neither schedule nor trigger.");
+                        warnings.Add(label + " has neither a schedule nor a trigger.");
                     if (!string.IsNullOrEmpty(quest.CompletionConditionId)
                         && !HasCompletionCondition(definition, quest.CompletionConditionId))
-                        warnings.Add("Quest '" + label + "' references missing completion condition '" + quest.CompletionConditionId + "'.");
+                        warnings.Add(label + " refers to a completion condition that no longer exists.");
                 }
 
                 return warnings;
