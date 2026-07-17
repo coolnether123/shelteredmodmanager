@@ -18,6 +18,13 @@ using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringBackendService : IScenarioAuthoringBackend
     {
+        private enum CachedDocumentKind
+        {
+            Shell,
+            Inspector,
+            Hover
+        }
+
         private readonly object _sync = new object();
         private readonly ScenarioAuthoringSelectionService _selectionService;
         private readonly IScenarioEditorSessionStore _sessionStore;
@@ -43,6 +50,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private ScenarioEditorSession _cachedShellEditorSession;
         private ScenarioAuthoringSession _cachedShellAuthoringSession;
         private ScenarioAuthoringShellViewModel _cachedShellViewModel;
+        private ScenarioAuthoringInspectorDocument _cachedShellDocument;
+        private ScenarioAuthoringInspectorDocument _cachedInspectorDocument;
+        private ScenarioAuthoringInspectorDocument _cachedHoverDocument;
         private string _queuedReloadStatus;
 
         public static ScenarioAuthoringBackendService Instance
@@ -740,12 +750,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 presentationRevision = _presentationRevision;
                 authoringSession = _activeSession;
-                if (_cachedShellViewModel != null
-                    && _cachedShellPresentationRevision == presentationRevision
-                    && _cachedShellDraftRevision == draftRevision
-                    && _cachedShellContextMenuRevision == contextMenuRevision
-                    && object.ReferenceEquals(_cachedShellEditorSession, editorSession)
-                    && object.ReferenceEquals(_cachedShellAuthoringSession, authoringSession))
+                EnsurePresentationCacheIdentity(presentationRevision, draftRevision, contextMenuRevision, editorSession, authoringSession);
+                if (_cachedShellViewModel != null)
                     return _cachedShellViewModel;
 
                 state = _state.Copy();
@@ -757,29 +763,100 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             lock (_sync)
             {
-                _cachedShellPresentationRevision = presentationRevision;
-                _cachedShellDraftRevision = draftRevision;
-                _cachedShellContextMenuRevision = contextMenuRevision;
-                _cachedShellEditorSession = editorSession;
-                _cachedShellAuthoringSession = authoringSession;
-                _cachedShellViewModel = viewModel;
+                if (PresentationCacheIdentityMatches(presentationRevision, draftRevision, contextMenuRevision, editorSession, authoringSession))
+                    _cachedShellViewModel = viewModel;
             }
             return viewModel;
         }
 
         public ScenarioAuthoringInspectorDocument GetShellDocument()
         {
-            return _presentationBuilder.BuildShellDocument(BuildContext(CurrentState, GetActiveSession()));
+            return GetCachedDocument(CachedDocumentKind.Shell);
         }
 
         public ScenarioAuthoringInspectorDocument GetInspectorDocument()
         {
-            return _presentationBuilder.BuildInspectorDocument(BuildContext(CurrentState, GetActiveSession()));
+            return GetCachedDocument(CachedDocumentKind.Inspector);
         }
 
         public ScenarioAuthoringInspectorDocument GetHoverDocument()
         {
-            return _presentationBuilder.BuildHoverDocument(CurrentState);
+            return GetCachedDocument(CachedDocumentKind.Hover);
+        }
+
+        private ScenarioAuthoringInspectorDocument GetCachedDocument(CachedDocumentKind documentKind)
+        {
+            ScenarioEditorSession editorSession = _sessionStore.Current;
+            int draftRevision = editorSession != null ? editorSession.DraftRevision : -1;
+            int contextMenuRevision = _contextMenuService.Revision;
+            ScenarioAuthoringState state;
+            ScenarioAuthoringSession authoringSession;
+            int presentationRevision;
+            ScenarioAuthoringInspectorDocument cached;
+
+            lock (_sync)
+            {
+                presentationRevision = _presentationRevision;
+                authoringSession = _activeSession;
+                EnsurePresentationCacheIdentity(presentationRevision, draftRevision, contextMenuRevision, editorSession, authoringSession);
+                cached = documentKind == CachedDocumentKind.Shell
+                    ? _cachedShellDocument
+                    : documentKind == CachedDocumentKind.Inspector ? _cachedInspectorDocument : _cachedHoverDocument;
+                if (cached != null)
+                    return cached;
+                state = _state.Copy();
+            }
+
+            ScenarioAuthoringInspectorDocument document = documentKind == CachedDocumentKind.Shell
+                ? _presentationBuilder.BuildShellDocument(BuildContext(state, authoringSession))
+                : documentKind == CachedDocumentKind.Inspector
+                    ? _presentationBuilder.BuildInspectorDocument(BuildContext(state, authoringSession))
+                    : _presentationBuilder.BuildHoverDocument(state);
+            lock (_sync)
+            {
+                if (PresentationCacheIdentityMatches(presentationRevision, draftRevision, contextMenuRevision, editorSession, authoringSession))
+                {
+                    if (documentKind == CachedDocumentKind.Shell) _cachedShellDocument = document;
+                    else if (documentKind == CachedDocumentKind.Inspector) _cachedInspectorDocument = document;
+                    else _cachedHoverDocument = document;
+                }
+            }
+            return document;
+        }
+
+        private void EnsurePresentationCacheIdentity(
+            int presentationRevision,
+            int draftRevision,
+            int contextMenuRevision,
+            ScenarioEditorSession editorSession,
+            ScenarioAuthoringSession authoringSession)
+        {
+            if (PresentationCacheIdentityMatches(presentationRevision, draftRevision, contextMenuRevision, editorSession, authoringSession))
+                return;
+
+            _cachedShellPresentationRevision = presentationRevision;
+            _cachedShellDraftRevision = draftRevision;
+            _cachedShellContextMenuRevision = contextMenuRevision;
+            _cachedShellEditorSession = editorSession;
+            _cachedShellAuthoringSession = authoringSession;
+            _cachedShellViewModel = null;
+            _cachedShellDocument = null;
+            _cachedInspectorDocument = null;
+            _cachedHoverDocument = null;
+        }
+
+        private bool PresentationCacheIdentityMatches(
+            int presentationRevision,
+            int draftRevision,
+            int contextMenuRevision,
+            ScenarioEditorSession editorSession,
+            ScenarioAuthoringSession authoringSession)
+        {
+            return _cachedShellPresentationRevision == presentationRevision
+                && _cachedShellDraftRevision == draftRevision
+                && _cachedShellContextMenuRevision == contextMenuRevision
+                && object.ReferenceEquals(_cachedShellEditorSession, editorSession)
+                && object.ReferenceEquals(_cachedShellAuthoringSession, authoringSession);
         }
 
         private void RaiseStateChanged()

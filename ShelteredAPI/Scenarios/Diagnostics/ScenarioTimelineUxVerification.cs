@@ -53,6 +53,43 @@ namespace ShelteredAPI.Scenarios.Diagnostics
 
             VerifyPacingAnalysis(result);
             VerifyRibbonDayAndCacheContract(result);
+            VerifyMigratedWorkspaceRoutes(result);
+        }
+
+        private static void VerifyMigratedWorkspaceRoutes(ScenarioValidationResult result)
+        {
+            ScenarioTimelineNavigationService navigation = new ScenarioTimelineNavigationService(null, null);
+            ScenarioAuthoringRendererInteractionState interaction = ScenarioAuthoringRendererInteractionState.Instance;
+            ScenarioAuthoringState state = new ScenarioAuthoringState();
+            string message;
+
+            ScenarioTimelineEntry story = new ScenarioTimelineEntry
+            {
+                Id = "story.route",
+                Kind = ScenarioTimelineEntryKind.Story,
+                FocusActionId = ScenarioStoryFocusedEditorActions.ActionStageOpenPrefix + "1",
+                TargetId = "stage.1"
+            };
+            navigation.Navigate(state, story, out message);
+            Assert(string.Equals(
+                    interaction.GetWorkspaceSelection(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId),
+                    ScenarioStoryFocusedEditorActions.StageEntityId(null, 1),
+                    StringComparison.Ordinal),
+                "Timeline Story marker did not select the matching Story workspace stage.", result);
+
+            ScenarioTimelineEntry future = new ScenarioTimelineEntry
+            {
+                Id = "cast.route",
+                Kind = ScenarioTimelineEntryKind.Survivor,
+                FocusActionId = ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix + "2",
+                TargetId = "future.2"
+            };
+            navigation.Navigate(state, future, out message);
+            Assert(string.Equals(
+                    interaction.GetWorkspaceSelection(ScenarioCastWorkspaceActions.WorkspaceId, ScenarioCastWorkspaceActions.SubtabId),
+                    ScenarioCastWorkspaceActions.FutureEntityId(null, 2),
+                    StringComparison.Ordinal),
+                "Timeline survivor marker did not select the matching Cast workspace arrival.", result);
         }
 
         private static void VerifyRibbonDayAndCacheContract(ScenarioValidationResult result)

@@ -272,7 +272,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, "Back to Navigator");
             document.Breadcrumbs = new[]
             {
-                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story Flow", Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, string.Empty, "Story Flow") },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story", Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, string.Empty, "Story") },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Flow" },
                 new ScenarioAuthoringBreadcrumbViewModel { Label = title }
             };
             int warnings = CountIssues(issues, stageIndex, -1, false);
@@ -296,7 +297,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, "Back to Navigator");
             document.Breadcrumbs = new[]
             {
-                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story Flow", Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, string.Empty, "Story Flow") },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story", Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, string.Empty, "Story") },
                 new ScenarioAuthoringBreadcrumbViewModel { Label = stageTitle, Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, stageEntity, stageTitle) },
                 new ScenarioAuthoringBreadcrumbViewModel { Label = title }
             };
@@ -344,7 +345,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             string code = issue.Code ?? string.Empty;
             string problem = code.IndexOf("unreachable", StringComparison.OrdinalIgnoreCase) >= 0 ? "Cannot be reached"
                 : code.IndexOf("missing", StringComparison.OrdinalIgnoreCase) >= 0 ? "Missing route or reference"
-                : code.IndexOf("duplicate", StringComparison.OrdinalIgnoreCase) >= 0 ? "Duplicate internal identity"
+                : code.IndexOf("duplicate", StringComparison.OrdinalIgnoreCase) >= 0 ? "Duplicate stage identity"
                 : code.IndexOf("required", StringComparison.OrdinalIgnoreCase) >= 0 ? "Required value is missing"
                 : code.IndexOf("delay", StringComparison.OrdinalIgnoreCase) >= 0 ? "Timing needs attention"
                 : code.IndexOf("no_intercom", StringComparison.OrdinalIgnoreCase) >= 0 ? "Add the first scene"

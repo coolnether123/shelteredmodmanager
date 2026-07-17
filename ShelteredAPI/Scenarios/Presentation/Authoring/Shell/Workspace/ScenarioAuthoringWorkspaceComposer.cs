@@ -1,4 +1,8 @@
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Compatibility;
+using ShelteredAPI.Scenarios.Application.Timeline;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Presentation.Inspector;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
@@ -13,14 +17,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private readonly ScenarioCastWorkspaceViewModelBuilder _castBuilder;
         private readonly ScenarioSuppliesWorkspaceViewModelBuilder _suppliesBuilder;
         private readonly ScenarioMapWorkspaceViewModelBuilder _mapBuilder;
+        private readonly ScenarioTestStatusFlowWorkspaceBuilder _testBuilder;
+        private readonly ScenarioPublishStatusFlowWorkspaceBuilder _publishBuilder;
 
         public ScenarioAuthoringWorkspaceComposer()
+            : this(
+                new ScenarioRuntimeTestAuthoringContentBuilder(
+                    new ScenarioTimelineBuilder(),
+                    new ScenarioModDependencyDetector(),
+                    new ScenarioModCompatibilityViewModelBuilder()),
+                new ScenarioPublishAuthoringContentBuilder(
+                    new ScenarioTimelineBuilder(),
+                    new ScenarioModDependencyDetector(),
+                    new ScenarioModCompatibilityViewModelBuilder()))
+        {
+        }
+
+        public ScenarioAuthoringWorkspaceComposer(
+            ScenarioRuntimeTestAuthoringContentBuilder runtimeTestBuilder,
+            ScenarioPublishAuthoringContentBuilder publishBuilder)
         {
             _storyBuilder = new ScenarioStoryWorkspaceViewModelBuilder(
                 new ScenarioQuestPopupsWorkspaceBuilder());
             _castBuilder = new ScenarioCastWorkspaceViewModelBuilder();
             _suppliesBuilder = new ScenarioSuppliesWorkspaceViewModelBuilder();
             _mapBuilder = new ScenarioMapWorkspaceViewModelBuilder();
+            _testBuilder = new ScenarioTestStatusFlowWorkspaceBuilder(runtimeTestBuilder);
+            _publishBuilder = new ScenarioPublishStatusFlowWorkspaceBuilder(publishBuilder);
         }
 
         public ScenarioAuthoringWorkspaceViewModel Build(
@@ -39,7 +62,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 case ScenarioAuthoringWindowContentKind.Stockpile:
                     return _suppliesBuilder.Build(context);
                 case ScenarioAuthoringWindowContentKind.Map:
-                    return _mapBuilder.Build(context);
+                    return context.State != null && context.State.WorldLoading
+                        ? null
+                        : _mapBuilder.Build(context);
+                case ScenarioAuthoringWindowContentKind.Scenario:
+                    return context.State != null
+                        && context.State.ActiveStage == ScenarioStageKind.Test
+                        && !context.State.WorldLoading
+                            ? _testBuilder.Build(context)
+                            : null;
+                case ScenarioAuthoringWindowContentKind.Publish:
+                    return _publishBuilder.Build(context);
                 default:
                     return null;
             }

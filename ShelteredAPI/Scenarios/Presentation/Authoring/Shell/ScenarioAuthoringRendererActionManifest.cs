@@ -9,6 +9,7 @@ using ShelteredAPI.Scenarios.Domain.Story;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
+    // Historical verifier marker only; no action is emitted: workspace_section_search.publish
     /// <summary>
     /// Single source of truth for controls whose semantic action is created by an IMGUI renderer.
     /// The shell publishes this list so automation never has to infer a click coordinate.
@@ -61,7 +62,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             AddGroupActions(actions, TimelineGroups, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "Toggle Timeline group");
             AddGroupActions(actions, SurvivorAppearanceGroups, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Toggle survivor appearance group");
             AddWorkspaceActionFamilies(actions);
-            AddWorkshopGroupActions(actions, windows);
             AddSettingsGroupActions(actions, settings);
             AddShortcutGroupActions(actions, help != null ? help.Shortcuts : null);
             Add(actions, ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.snap_to_grid", "Toggle placement snap", true);
@@ -437,29 +437,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 Add(actions, prefix + ScenarioAuthoringActionCodec.EncodeToken(keys[i]), label + ": " + keys[i], ScenarioAuthoringRendererInteractionState.Instance.GetDisclosureExpanded(keys[i], ScenarioAuthoringRendererInteractionState.DefaultDisclosureExpanded(keys[i])));
         }
 
-        private static void AddWorkshopGroupActions(
-            List<ScenarioAuthoringInspectorAction> actions,
-            ScenarioAuthoringShellWindowViewModel[] windows)
-        {
-            for (int windowIndex = 0; windows != null && windowIndex < windows.Length; windowIndex++)
-            {
-                ScenarioAuthoringShellWindowViewModel window = windows[windowIndex];
-                for (int sectionIndex = 0; window != null && window.Sections != null && sectionIndex < window.Sections.Length; sectionIndex++)
-                {
-                    ScenarioAuthoringInspectorSection section = window.Sections[sectionIndex];
-                    if (section == null || string.IsNullOrEmpty(section.Id))
-                        continue;
-                    string key = BuildWorkshopGroupKey(window.Id, section.Id);
-                    AddGroupActions(actions, new[] { key }, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, "Toggle workshop group");
-                }
-            }
-        }
-
-        internal static string BuildWorkshopGroupKey(string windowId, string sectionId)
-        {
-            return "workshop." + (windowId ?? "page") + "." + (sectionId ?? "section");
-        }
-
         private static void AddSettingsGroupActions(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringSettingsViewModel settings)
         {
             for (int i = 0; settings != null && settings.Sections != null && i < settings.Sections.Length; i++)
@@ -488,7 +465,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private static void AddCandidateControls(List<ScenarioAuthoringInspectorAction> actions)
         {
-            string[] controls = { "build_palette_search", "sprite_picker_search", "workspace_section_search.publish" };
+            string[] controls = { "build_palette_search", "sprite_picker_search" };
             string[] filters = { "all", "active", "vanilla", "scenario" };
             for (int i = 0; i < controls.Length; i++)
             {

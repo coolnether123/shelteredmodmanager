@@ -100,12 +100,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
         private static bool Close(ScenarioAuthoringState state, bool cancel, ScenarioEditorSession session, out string message)
         {
-            if (IsStoryFocused(state))
-            {
-                state.FocusedEditorKind = null;
-                state.FocusedEditorIndex = -1;
-                state.FocusedEditorIsNew = false;
-            }
             message = "Story documents save changes immediately; this legacy close action made no changes.";
             return true;
         }
@@ -298,17 +292,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (_layoutService != null)
                 _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Quests, true);
             ScenarioStoryFocusedEditorActions.SelectStageDocument(definition, index);
-            if (string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
-                state.FocusedEditorKind = null;
             state.FocusedEditorIndex = -1;
             state.FocusedEditorIsNew = false;
             state.TimelineSelectedEntryId = ScenarioStoryFocusedEditorActions.FocusedEntryId(index);
-        }
-
-        private static bool IsStoryFocused(ScenarioAuthoringState state)
-        {
-            return state != null
-                && string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase);
         }
 
         private static int CountStages(ScenarioDefinition definition)

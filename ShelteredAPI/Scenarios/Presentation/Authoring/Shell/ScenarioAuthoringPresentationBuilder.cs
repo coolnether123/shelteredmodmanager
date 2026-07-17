@@ -135,7 +135,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineAuthoringContentBuilder = new ScenarioTimelineAuthoringContentBuilder(timelineBuilder, timelineViewModelBuilder);
             _timelineRibbonViewModelBuilder = new ScenarioDayTimelineRibbonViewModelBuilder(timelineBuilder);
             _windowSectionBuilders = CreateWindowSectionBuilders();
-            _workspaceComposer = new ScenarioAuthoringWorkspaceComposer();
+            _workspaceComposer = new ScenarioAuthoringWorkspaceComposer(
+                _runtimeTestAuthoringContentBuilder,
+                _publishAuthoringContentBuilder);
         }
 
         public ScenarioAuthoringShellViewModel BuildShellViewModel(
@@ -2132,9 +2134,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringCaptureService captureService)
         {
             if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind))
-                return null;
-
-            if (string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
                 return null;
 
             bool baseModeEditor = string.Equals(

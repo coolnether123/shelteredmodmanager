@@ -149,7 +149,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.ConversationsSubtabId, "Back to Navigator");
             document.Breadcrumbs = new[]
             {
-                new ScenarioAuthoringBreadcrumbViewModel { Label = "Conversations", Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.ConversationsSubtabId, string.Empty, "Conversations") },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story", Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.ConversationsSubtabId, string.Empty, "Story") },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Conversations" },
                 new ScenarioAuthoringBreadcrumbViewModel { Label = title }
             };
             document.StatusChips = new[]

@@ -740,8 +740,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
         public bool FocusedEditorIsNew { get; set; }
-        public FamilyMemberConfig FocusedSurvivorOriginal { get; set; }
-        public FutureSurvivorDefinition FocusedFutureSurvivorOriginal { get; set; }
         public string SurvivorColorPickerChannel { get; set; }
         public int SurvivorColorPickerRequestId { get; set; }
         public ScenarioAuthoringInspectorTab InspectorTab { get; set; }
@@ -813,8 +811,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,
                 FocusedEditorIsNew = FocusedEditorIsNew,
-                FocusedSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneMember(FocusedSurvivorOriginal),
-                FocusedFutureSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneFutureSurvivor(FocusedFutureSurvivorOriginal),
                 SurvivorColorPickerChannel = SurvivorColorPickerChannel,
                 SurvivorColorPickerRequestId = SurvivorColorPickerRequestId,
                 InspectorTab = InspectorTab,
@@ -1374,6 +1370,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         ModFieldList = 12
     }
 
+    internal enum ScenarioAuthoringInspectorSectionRendererKind
+    {
+        Default = 0,
+        MetadataForm = 1,
+        TestStatus = 2,
+        TestUpcoming = 3,
+        TestLog = 4,
+        TestControls = 5,
+        PackagePreview = 6,
+        PackageActions = 7,
+        AssetInventoryFilters = 8,
+        AssetInventoryRow = 9
+    }
+
     internal sealed class ScenarioAuthoringInspectorSection
     {
         public string Id { get; set; }
@@ -1382,6 +1392,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool IsAdvanced { get; set; }
         public ScenarioAuthoringStatusChipViewModel[] StatusChips { get; set; }
         public ScenarioAuthoringInspectorSectionLayout Layout { get; set; }
+        public ScenarioAuthoringInspectorSectionRendererKind RendererKind { get; set; }
+        public string RendererFilter { get; set; }
         public ScenarioAuthoringInspectorItem[] Items { get; set; }
         public ScenarioSurvivorEditorViewModel SurvivorEditor { get; set; }
         public ScenarioSurvivorModFieldRowViewModel[] ModFieldRows { get; set; }

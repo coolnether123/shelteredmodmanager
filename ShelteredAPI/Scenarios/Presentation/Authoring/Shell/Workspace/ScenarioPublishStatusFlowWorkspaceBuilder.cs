@@ -7,8 +7,7 @@ using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
     /// <summary>
-    /// Dark Slice 9 entry point for the document-only publish checklist. Composition
-    /// is intentionally deferred to the final integration slice.
+    /// Document-only checklist composed into the Publish workspace.
     /// </summary>
     internal sealed class ScenarioPublishStatusFlowWorkspaceBuilder
     {
@@ -63,7 +62,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         }
     }
 
-    /// <summary>Shared construction primitives for Slice 9 status-flow projections.</summary>
+    /// <summary>Shared construction primitives for document-only status flows.</summary>
     internal static class ScenarioAuthoringStatusFlowSupport
     {
         public static ScenarioAuthoringInspectorSection Section(

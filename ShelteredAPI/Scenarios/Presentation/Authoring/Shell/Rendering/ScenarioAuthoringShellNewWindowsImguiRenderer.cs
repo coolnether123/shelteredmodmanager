@@ -18,46 +18,36 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private bool TryDrawNewWindowsSection(ScenarioAuthoringInspectorSection section, bool compactInspector)
         {
-            string id = section != null ? section.Id ?? string.Empty : string.Empty;
-            if (string.Equals(id, "home_metadata", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(id, "publish_metadata", StringComparison.OrdinalIgnoreCase))
-            {
-                DrawMetadataFormSection(section);
-                return true;
-            }
+            if (section == null)
+                return false;
 
-            if (id.StartsWith("test_console_", StringComparison.OrdinalIgnoreCase))
+            switch (section.RendererKind)
             {
-                DrawTestConsoleSection(section);
-                return true;
+                case ScenarioAuthoringInspectorSectionRendererKind.MetadataForm:
+                    DrawMetadataFormSection(section);
+                    return true;
+                case ScenarioAuthoringInspectorSectionRendererKind.TestStatus:
+                case ScenarioAuthoringInspectorSectionRendererKind.TestUpcoming:
+                case ScenarioAuthoringInspectorSectionRendererKind.TestLog:
+                case ScenarioAuthoringInspectorSectionRendererKind.TestControls:
+                    DrawTestConsoleSection(section);
+                    return true;
+                case ScenarioAuthoringInspectorSectionRendererKind.PackagePreview:
+                    DrawPackagePreviewSection(section);
+                    return true;
+                case ScenarioAuthoringInspectorSectionRendererKind.PackageActions:
+                    DrawPackageActionsSection(section);
+                    return true;
+                case ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryFilters:
+                    DrawAssetInventoryFilters(section);
+                    return true;
+                case ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryRow:
+                    if (AssetRowMatchesFilter(section))
+                        DrawAssetInventoryRow(section);
+                    return true;
+                default:
+                    return false;
             }
-
-            if (string.Equals(id, "publish_package_preview", StringComparison.OrdinalIgnoreCase))
-            {
-                DrawPackagePreviewSection(section);
-                return true;
-            }
-
-            if (string.Equals(id, "publish_export", StringComparison.OrdinalIgnoreCase))
-            {
-                DrawPackageActionsSection(section);
-                return true;
-            }
-
-            if (string.Equals(id, "asset_inventory_filters", StringComparison.OrdinalIgnoreCase))
-            {
-                DrawAssetInventoryFilters(section);
-                return true;
-            }
-
-            if (id.StartsWith("asset_inventory_file_", StringComparison.OrdinalIgnoreCase))
-            {
-                if (AssetRowMatchesFilter(section))
-                    DrawAssetInventoryRow(section);
-                return true;
-            }
-
-            return false;
         }
 
         private void DrawMetadataFormSection(ScenarioAuthoringInspectorSection section)
@@ -205,21 +195,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private void DrawTestConsoleSection(ScenarioAuthoringInspectorSection section)
         {
-            string id = section.Id ?? string.Empty;
             GUILayout.BeginVertical(_uiContext.Styles.Section);
             if (!string.IsNullOrEmpty(section.Title)) GUILayout.Label(section.Title, _sectionTitleStyle);
-            if (string.Equals(id, "test_console_status", StringComparison.OrdinalIgnoreCase))
-                DrawTestStatus(section);
-            else if (string.Equals(id, "test_console_upcoming", StringComparison.OrdinalIgnoreCase))
-                DrawTestUpcoming(section);
-            else if (string.Equals(id, "test_console_log", StringComparison.OrdinalIgnoreCase))
-                DrawTestLog(section);
-            else if (string.Equals(id, "test_console_controls", StringComparison.OrdinalIgnoreCase))
-                DrawUniformActionGrid(section, 126f, 30f);
-            else
+            switch (section.RendererKind)
             {
-                for (int i = 0; section.Items != null && i < section.Items.Length; i++)
-                    DrawItem(section.Items[i]);
+                case ScenarioAuthoringInspectorSectionRendererKind.TestStatus:
+                    DrawTestStatus(section);
+                    break;
+                case ScenarioAuthoringInspectorSectionRendererKind.TestUpcoming:
+                    DrawTestUpcoming(section);
+                    break;
+                case ScenarioAuthoringInspectorSectionRendererKind.TestLog:
+                    DrawTestLog(section);
+                    break;
+                case ScenarioAuthoringInspectorSectionRendererKind.TestControls:
+                    DrawUniformActionGrid(section, 126f, 30f);
+                    break;
             }
             GUILayout.EndVertical();
         }
@@ -458,8 +449,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private bool AssetRowMatchesFilter(ScenarioAuthoringInspectorSection section)
         {
             if (string.Equals(_newWindowsAssetFilter, AssetFilterAll, StringComparison.OrdinalIgnoreCase)) return true;
-            string id = section != null ? section.Id ?? string.Empty : string.Empty;
-            if (id.IndexOf("_" + _newWindowsAssetFilter + "_", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (section != null && string.Equals(section.RendererFilter, _newWindowsAssetFilter, StringComparison.OrdinalIgnoreCase)) return true;
             if (string.Equals(_newWindowsAssetFilter, "large", StringComparison.OrdinalIgnoreCase))
             {
                 for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)

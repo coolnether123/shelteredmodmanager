@@ -361,6 +361,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId, "Back to Navigator");
             document.Breadcrumbs = new[]
             {
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story" },
                 new ScenarioAuthoringBreadcrumbViewModel
                 {
                     Label = "Authored",
@@ -384,7 +385,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringWorkspaceDocumentViewModel document = factory.CreateDocument("story.quest-popups.library", "Quest Library");
             document.Subtitle = "Browse a human-readable quest name, review availability, then add it with one click.";
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId, "Back to Navigator");
-            document.Breadcrumbs = new[] { new ScenarioAuthoringBreadcrumbViewModel { Label = "Library" } };
+            document.Breadcrumbs = new[]
+            {
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story" },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Quest Popups" },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Library" }
+            };
             document.StatusChips = new[]
             {
                 StatusChip(
@@ -435,6 +441,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId, "Back to Navigator");
             document.Breadcrumbs = new[]
             {
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story" },
                 new ScenarioAuthoringBreadcrumbViewModel
                 {
                     Label = "Library",
@@ -518,6 +525,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId, "Back to Navigator");
             document.Breadcrumbs = new[]
             {
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story" },
                 new ScenarioAuthoringBreadcrumbViewModel
                 {
                     Label = "Runtime",

@@ -505,7 +505,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (flow == null || flow.Stages == null || flow.Stages.Count == 0)
             {
                 items.Add(ScenarioInspectorItemFactory.Text("No starting stage is authored yet. Add a stage to create the vanilla ScenarioDef flow."));
-                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryFocusedEditorActions.ActionStageOpenNew, "Add First Stage", "Create the first story stage and open it in the focused editor.", true, true, "S+")));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryFocusedEditorActions.ActionStageOpenNew, "Add First Stage", "Create and select the first Story stage.", true, true, "S+")));
             }
             else
             {
@@ -543,7 +543,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             // the section id "story_map" and draws the carried model.
             ScenarioStoryGraphModel model = ScenarioStoryGraphBuilder.Build(definition, storyIssues);
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioInspectorItemFactory.Text("Story Map shows every stage and how it connects. Click a stage to open its focused editor."));
+            items.Add(ScenarioInspectorItemFactory.Text("Story Map shows every stage and how it connects. Select a stage to open its Story document."));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "story_map",
@@ -631,7 +631,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Stored topic keys",
                 FormatList(settings != null ? settings.SuppressedVanillaTopicKeys : null),
                 ScenarioAuthoringActionIds.ActionStoryConversationSuppressionTopicPrefix,
-                "Stored only unless a future transpiler maps individual vanilla localization keys."));
+                "Stored as authored metadata until a future compatibility layer supports it."));
             items.Add(ScenarioInspectorItemFactory.Property("Authored", count.ToString(CultureInfo.InvariantCulture)));
             items.Add(ScenarioInspectorItemFactory.Property("Random pool", random.ToString(CultureInfo.InvariantCulture)));
             items.Add(ScenarioInspectorItemFactory.Property("Event / Timeline", events.ToString(CultureInfo.InvariantCulture) + " / " + timeline.ToString(CultureInfo.InvariantCulture)));
@@ -881,12 +881,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             string indexText = index.ToString(CultureInfo.InvariantCulture);
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryFocusedEditorActions.StageOpen(index), "Open Focused Editor", "Edit this stage as a labeled vanilla scenario-stage form.", true, CountStageIssues(storyIssues, index) > 0, "ED")));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryFocusedEditorActions.StageOpen(index), "Open Stage", "Edit this stage in its Story document.", true, CountStageIssues(storyIssues, index) > 0, "ED")));
             items.Add(ScenarioInspectorItemFactory.Property("Stage title", DisplayStageTitle(stage, index)));
             items.Add(ScenarioInspectorItemFactory.Property("Advanced stage id", Safe(stage.Id)));
             items.Add(ScenarioInspectorItemFactory.Property("Warnings", CountStageIssues(storyIssues, index).ToString(CultureInfo.InvariantCulture), FirstStageIssue(storyIssues, index), CountStageIssues(storyIssues, index) > 0 ? "!" : "OK"));
             ScenarioStoryCharacterActorLinkSectionBuilder.AppendUsages(items, definition, ScenarioReferenceTargetKind.Stage, stage.Id, "Removing this stage is blocked while references exist.");
-            items.Add(ScenarioInspectorItemFactory.Property("Characters", stage.CharacterIds != null && stage.CharacterIds.Count > 0 ? string.Join(", ", stage.CharacterIds.ToArray()) : "No characters assigned - choose stage cast in the focused editor."));
+            items.Add(ScenarioInspectorItemFactory.Property("Characters", stage.CharacterIds != null && stage.CharacterIds.Count > 0 ? string.Join(", ", stage.CharacterIds.ToArray()) : "No characters assigned - choose the stage cast in its Story document."));
             items.Add(ScenarioInspectorItemFactory.Property("Unanswered", FormatStageTarget(stage.UnansweredNextStage) + " / " + stage.UnansweredNextDays.ToString(CultureInfo.InvariantCulture) + " day(s)"));
             AddStageIdActions(items, flow, index);
             AddStageRouteActions(items, flow, index, stage.UnansweredNextStage);

@@ -1168,7 +1168,66 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
 
                 builder.Append("|win").Append(window.Id).Append(window.Visible).Append(window.Collapsed).Append(window.Title);
                 AppendActions(builder, window.HeaderActions);
-                AppendSections(builder, window.Sections);
+                if (window.WorkspaceBody != null)
+                    AppendWorkspace(builder, window.WorkspaceBody);
+                else
+                    AppendSections(builder, window.Sections);
+            }
+        }
+
+        private static void AppendWorkspace(StringBuilder builder, ScenarioAuthoringWorkspaceViewModel workspace)
+        {
+            builder.Append("|workspace").Append(workspace.Id).Append(workspace.LayoutKind).Append(workspace.ActiveSubtabId);
+            for (int i = 0; workspace.Subtabs != null && i < workspace.Subtabs.Length; i++)
+            {
+                ScenarioAuthoringWorkspaceSubtabViewModel subtab = workspace.Subtabs[i];
+                if (subtab == null)
+                    continue;
+                builder.Append("|subtab").Append(subtab.Id).Append(subtab.Label).Append(subtab.Selected);
+                AppendActions(builder, new[] { subtab.SelectAction });
+            }
+
+            ScenarioAuthoringNavigatorViewModel navigator = workspace.Navigator;
+            builder.Append("|navigator").Append(navigator != null ? navigator.Id : null)
+                .Append(navigator != null ? navigator.SelectedEntityId : null)
+                .Append(navigator != null ? navigator.SearchText : null);
+            for (int i = 0; navigator != null && navigator.Groups != null && i < navigator.Groups.Length; i++)
+            {
+                ScenarioAuthoringNavigatorGroupViewModel group = navigator.Groups[i];
+                if (group == null)
+                    continue;
+                builder.Append("|group").Append(group.Id).Append(group.Label).Append(group.Expanded);
+                AppendActions(builder, new[] { group.ToggleAction, group.CreateAction });
+                AppendNavigatorRows(builder, group.Rows);
+            }
+
+            ScenarioAuthoringWorkspaceDocumentViewModel document = workspace.Document;
+            if (document == null)
+                return;
+            builder.Append("|workspace-doc").Append(document.Id).Append(document.Title).Append(document.Subtitle);
+            AppendActions(builder, new[] { document.BackAction });
+            AppendActions(builder, document.HeaderActions);
+            for (int i = 0; document.Breadcrumbs != null && i < document.Breadcrumbs.Length; i++)
+            {
+                ScenarioAuthoringBreadcrumbViewModel breadcrumb = document.Breadcrumbs[i];
+                if (breadcrumb == null)
+                    continue;
+                builder.Append("|crumb").Append(breadcrumb.Label);
+                AppendActions(builder, new[] { breadcrumb.Action });
+            }
+            AppendSections(builder, document.Sections);
+        }
+
+        private static void AppendNavigatorRows(StringBuilder builder, ScenarioAuthoringNavigatorRowViewModel[] rows)
+        {
+            for (int i = 0; rows != null && i < rows.Length; i++)
+            {
+                ScenarioAuthoringNavigatorRowViewModel row = rows[i];
+                if (row == null)
+                    continue;
+                builder.Append("|navrow").Append(row.EntityId).Append(row.Title).Append(row.Subtitle).Append(row.Selected).Append(row.Expanded);
+                AppendActions(builder, new[] { row.SelectAction, row.ToggleAction });
+                AppendNavigatorRows(builder, row.Children);
             }
         }
 
