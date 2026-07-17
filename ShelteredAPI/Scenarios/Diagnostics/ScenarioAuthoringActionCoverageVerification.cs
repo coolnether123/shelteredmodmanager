@@ -292,6 +292,16 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                     if (composed == null || composed.LayoutKind != ScenarioAuthoringWorkspaceLayoutKind.NavigatorDocument)
                         result.AddError("Cast content kind did not produce its navigator-document WorkspaceBody.");
                 }
+                else if (contentKind == ScenarioAuthoringWindowContentKind.Stockpile)
+                {
+                    if (composed == null || composed.LayoutKind != ScenarioAuthoringWorkspaceLayoutKind.NavigatorDocument)
+                        result.AddError("Supplies content kind did not produce its navigator-document WorkspaceBody.");
+                }
+                else if (contentKind == ScenarioAuthoringWindowContentKind.Map)
+                {
+                    if (composed == null || composed.LayoutKind != ScenarioAuthoringWorkspaceLayoutKind.NavigatorDocument)
+                        result.AddError("Map content kind did not produce its navigator-document WorkspaceBody.");
+                }
                 else if (composed != null)
                     result.AddError("Unmigrated window content kind '" + contentKind + "' unexpectedly produced a WorkspaceBody.");
             }
