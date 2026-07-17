@@ -206,7 +206,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             state.MapSelection = selection;
-            state.MapSelectedLocationId = null;
+            ScenarioMapWorkspaceSelection.ClearLocationSelection(state);
             message = "Selected map region " + selection.DisplayName + ".";
             state.StatusMessage = message;
             return true;
@@ -260,7 +260,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (_runtimeService != null && _runtimeService.TryCreateSelectionFromWorldPosition(worldX, worldY, ScenarioEditorController.Instance.CurrentSession, "click", out selection))
             {
                 state.MapSelection = selection;
-                state.MapSelectedLocationId = null;
+                ScenarioMapWorkspaceSelection.ClearLocationSelection(state);
                 message = "Selected vanilla map region " + selection.DisplayName + ".";
                 state.StatusMessage = message;
                 return true;
@@ -504,7 +504,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         {
             ScenarioMapRegionSelection selection = BuildAuthoredSelection(location);
             state.MapSelection = selection;
-            state.MapSelectedLocationId = location.Id;
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioMapWorkspaceSelection.SelectLocation(state, session != null ? session.WorkingDefinition : null, location);
             message = "Selected authored map location " + location.Id + ".";
             state.StatusMessage = message;
             return true;
@@ -674,7 +675,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             selection.Authored = true;
             selection.SelectionKind = "Authored";
             state.MapSelection = selection;
-            state.MapSelectedLocationId = location.Id;
+            ScenarioMapWorkspaceSelection.SelectLocation(state, session.WorkingDefinition, location);
             return true;
         }
 
@@ -720,7 +721,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             selection.Authored = true;
             selection.SelectionKind = "Authored";
             state.MapSelection = selection;
-            state.MapSelectedLocationId = location.Id;
+            ScenarioMapWorkspaceSelection.SelectLocation(state, session != null ? session.WorkingDefinition : null, location);
             message = wasExisting
                 ? "Updated captured map location " + location.Id + "."
                 : "Captured map location " + location.Id + ".";

@@ -74,6 +74,87 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             };
         }
 
+        internal static ScenarioAuthoringInspectorSection[] BuildWorkspaceDocumentSections(
+            ScenarioAuthoringState state,
+            ScenarioDefinition definition,
+            MapAuthoringDefinition map,
+            MapLocationDefinition location)
+        {
+            if (location == null)
+                return new[] { Build(state, definition, map) };
+
+            List<ScenarioAuthoringInspectorItem> locationItems = new List<ScenarioAuthoringInspectorItem>();
+            locationItems.Add(Editable("Name", location.DisplayName, "displayName", location.Id, "Shown on the expedition map."));
+            locationItems.Add(Editable("Kind / Category", location.Kind, "kind", location.Id, "Controls how the location behaves on the expedition map."));
+            locationItems.Add(Editable("Danger", location.Danger.ToString(CultureInfo.InvariantCulture), "danger", location.Id, "Fallback open-ground encounter chance."));
+            locationItems.Add(Action(Toggle(location, "searchable", "Searchable", location.Searchable)));
+            locationItems.Add(Action(Toggle(location, "visibleAtStart", "Visible At Start", location.VisibleAtStart)));
+            locationItems.Add(Action(Toggle(location, "discoveredAtStart", "Discovered At Start", location.DiscoveredAtStart)));
+            locationItems.Add(Action(Toggle(location, "hiddenUntilDiscovered", "Hidden Until Discovery", location.HiddenUntilDiscovered)));
+            locationItems.Add(Action(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionMapLocationDuplicatePrefix + ScenarioAuthoringActionCodec.EncodeToken(location.Id),
+                "Duplicate to New Cell",
+                "Copy this location, then choose a different target cell on the map.",
+                !string.IsNullOrEmpty(location.Id),
+                false,
+                "CP")));
+
+            List<ScenarioAuthoringInspectorItem> tableItems = new List<ScenarioAuthoringInspectorItem>();
+            tableItems.Add(ScenarioInspectorItemFactory.Property("Loot source", ResolveLootName(map, location.LootTableId)));
+            tableItems.Add(ScenarioInspectorItemFactory.Property("Generated loot", location.ReplaceGeneratedLoot
+                ? "Replaced by authored loot"
+                : "Kept and combined with authored loot"));
+            tableItems.Add(Action(Toggle(location, "replaceGeneratedLoot", "Replace Generated Loot", location.ReplaceGeneratedLoot)));
+            tableItems.Add(ScenarioInspectorItemFactory.Property("Encounter source", ResolveEncounterName(map, location.EncounterTableId)));
+
+            List<ScenarioAuthoringInspectorItem> advancedItems = new List<ScenarioAuthoringInspectorItem>();
+            advancedItems.Add(ScenarioInspectorItemFactory.Property("Storage ID", location.Id ?? string.Empty));
+            advancedItems.Add(ScenarioInspectorItemFactory.Property("Grid", location.GridX.ToString(CultureInfo.InvariantCulture) + "," + location.GridY.ToString(CultureInfo.InvariantCulture)));
+            advancedItems.Add(ScenarioInspectorItemFactory.Property("World position", location.X.ToString("0.##", CultureInfo.InvariantCulture) + "," + location.Y.ToString("0.##", CultureInfo.InvariantCulture)));
+            advancedItems.Add(Editable("Icon ID", location.IconId, "iconId", location.Id, "Must match a known map icon sprite ID."));
+            advancedItems.Add(Action(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionCodec.BuildTokenActionId(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, location.Id),
+                "Next Icon",
+                "Cycle through the known map icon sprite IDs.",
+                !string.IsNullOrEmpty(location.Id),
+                false,
+                "IC")));
+            advancedItems.Add(ScenarioInspectorItemFactory.Property("Known icon IDs", FormatKnownIconIds()));
+            advancedItems.Add(Editable("Loot Table ID", location.LootTableId, "lootTableId", location.Id, "References an authored loot table ID."));
+            advancedItems.Add(Editable("Encounter Table ID", location.EncounterTableId, "encounterTableId", location.Id, "References an authored encounter table ID."));
+            AddLootPreview(advancedItems, definition, location);
+            AddProjectionStatus(advancedItems);
+
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "map_location_details",
+                    Title = "LOCATION",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = locationItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "map_location_tables",
+                    Title = "LOOT & ENCOUNTERS",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = tableItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "map_location_advanced",
+                    Title = "ADVANCED",
+                    Expanded = true,
+                    IsAdvanced = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = advancedItems.ToArray()
+                }
+            };
+        }
+
         internal static void AddLootPreview(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, MapLocationDefinition location)
         {
             ScenarioMapLootPreview preview = ScenarioMapLootPreviewService.Build(
@@ -135,6 +216,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     parts.Add((entry.Hidden ? "hidden " : string.Empty) + entry.ItemId + " x" + entry.Quantity.ToString(CultureInfo.InvariantCulture));
             }
             return parts.Count == 0 ? "Nothing" : string.Join(", ", parts.ToArray());
+        }
+
+        private static string ResolveLootName(MapAuthoringDefinition map, string id)
+        {
+            for (int i = 0; !string.IsNullOrEmpty(id) && map != null && map.LootTables != null && i < map.LootTables.Count; i++)
+            {
+                MapLootTableDefinition table = map.LootTables[i];
+                if (table != null && string.Equals(table.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(table.DisplayName, null, table.Id, "Loot Table " + (i + 1).ToString(CultureInfo.InvariantCulture)).Text;
+            }
+            return string.IsNullOrEmpty(id) ? "No authored loot table" : "Missing loot table";
+        }
+
+        private static string ResolveEncounterName(MapAuthoringDefinition map, string id)
+        {
+            for (int i = 0; !string.IsNullOrEmpty(id) && map != null && map.EncounterTables != null && i < map.EncounterTables.Count; i++)
+            {
+                MapEncounterTableDefinition table = map.EncounterTables[i];
+                if (table != null && string.Equals(table.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(table.DisplayName, null, table.Id, "Encounter Table " + (i + 1).ToString(CultureInfo.InvariantCulture)).Text;
+            }
+            return string.IsNullOrEmpty(id) ? "Use vanilla encounters" : "Missing encounter table";
         }
 
         private static MapLocationDefinition ResolveSelectedLocation(ScenarioAuthoringState state, MapAuthoringDefinition map)
