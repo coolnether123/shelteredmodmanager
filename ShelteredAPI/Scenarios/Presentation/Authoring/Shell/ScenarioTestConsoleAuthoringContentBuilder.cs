@@ -26,11 +26,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 console.SetConsoleVisible(active);
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(Section("test_console_status", "Status", BuildLiveItems(console, active), ScenarioAuthoringInspectorSectionLayout.Summary));
+            sections.Add(Section("test_console_status", "Status", BuildLiveItems(console, active), ScenarioAuthoringInspectorSectionLayout.Summary, ScenarioAuthoringInspectorSectionRendererKind.TestStatus));
             // "Next authored events" remains the creator-language contract for this Upcoming instrument panel.
-            sections.Add(Section("test_console_upcoming", "Upcoming", BuildUpcomingItems(definition, runtimeState, active), ScenarioAuthoringInspectorSectionLayout.PropertyList));
-            sections.Add(Section("test_console_log", "Execution log (newest first)", BuildLogItems(console, active), ScenarioAuthoringInspectorSectionLayout.PropertyList));
-            sections.Add(Section("test_console_controls", "Controls", BuildControlItems(definition, runtimeState, active), ScenarioAuthoringInspectorSectionLayout.ActionStrip));
+            sections.Add(Section("test_console_upcoming", "Upcoming", BuildUpcomingItems(definition, runtimeState, active), ScenarioAuthoringInspectorSectionLayout.PropertyList, ScenarioAuthoringInspectorSectionRendererKind.TestUpcoming));
+            sections.Add(Section("test_console_log", "Execution log (newest first)", BuildLogItems(console, active), ScenarioAuthoringInspectorSectionLayout.PropertyList, ScenarioAuthoringInspectorSectionRendererKind.TestLog));
+            sections.Add(Section("test_console_controls", "Controls", BuildControlItems(definition, runtimeState, active), ScenarioAuthoringInspectorSectionLayout.ActionStrip, ScenarioAuthoringInspectorSectionRendererKind.TestControls));
             bool showAdvanced = context != null
                 && context.State != null
                 && context.State.Settings != null
@@ -42,7 +42,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 "test_console_advanced",
                 "Advanced diagnostics",
                 advancedItems,
-                ScenarioAuthoringInspectorSectionLayout.NoteList);
+                ScenarioAuthoringInspectorSectionLayout.NoteList,
+                ScenarioAuthoringInspectorSectionRendererKind.Default);
             advanced.IsAdvanced = true;
             sections.Add(advanced);
             return sections.ToArray();
@@ -240,9 +241,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return false;
         }
 
-        private static ScenarioAuthoringInspectorSection Section(string id, string title, List<ScenarioAuthoringInspectorItem> items, ScenarioAuthoringInspectorSectionLayout layout)
+        private static ScenarioAuthoringInspectorSection Section(
+            string id,
+            string title,
+            List<ScenarioAuthoringInspectorItem> items,
+            ScenarioAuthoringInspectorSectionLayout layout,
+            ScenarioAuthoringInspectorSectionRendererKind rendererKind)
         {
-            return new ScenarioAuthoringInspectorSection { Id = id, Title = title, Expanded = true, Layout = layout, Items = items.ToArray() };
+            return new ScenarioAuthoringInspectorSection { Id = id, Title = title, Expanded = true, Layout = layout, RendererKind = rendererKind, Items = items.ToArray() };
         }
 
         private static ScenarioTestConsoleService Resolve()

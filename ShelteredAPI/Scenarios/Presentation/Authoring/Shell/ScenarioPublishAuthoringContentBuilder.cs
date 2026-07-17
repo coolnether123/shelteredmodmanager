@@ -80,6 +80,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Title = "Scenario Metadata",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    RendererKind = ScenarioAuthoringInspectorSectionRendererKind.MetadataForm,
                     Items = metadataItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -110,6 +111,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Title = "Package Contents Preview",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackagePreview,
                     Items = packageItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -118,6 +120,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Title = "Export Package",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackageActions,
                     Items = exportItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -173,6 +176,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Review metadata",
                 metadataItems,
                 ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            metadata.RendererKind = ScenarioAuthoringInspectorSectionRendererKind.MetadataForm;
             metadata.StatusChips = new[]
             {
                 ScenarioAuthoringStatusFlowSupport.Chip("publish.metadata.review", "Review before export", ScenarioAuthoringStatusTone.Informational, null)
@@ -183,6 +187,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Review contents / dependencies",
                 BuildPackagePreviewItems(state, validation),
                 ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            contents.RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackagePreview;
             contents.StatusChips = new[]
             {
                 ScenarioAuthoringStatusFlowSupport.Chip(
@@ -197,6 +202,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Export",
                 BuildExportControlItems(definition, validation),
                 ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            export.RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackageActions;
             export.StatusChips = new[]
             {
                 ScenarioAuthoringStatusFlowSupport.Chip(
@@ -1228,7 +1234,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string domain = ResolveTimelineDomain(entry);
             string label = ScenarioTimelineCreatorText.TimelineSummary(definition, entry);
             string status = entry != null ? entry.Status.ToString() : "Pending";
-            string hint = label + ". Click to open its focused editor.";
+            string hint = label + ". Select it to open its workspace document.";
             if (entry != null && !string.IsNullOrEmpty(entry.Warning))
                 hint = hint + " " + entry.Warning;
 

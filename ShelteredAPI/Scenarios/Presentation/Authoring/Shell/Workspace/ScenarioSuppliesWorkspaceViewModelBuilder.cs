@@ -236,6 +236,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             ScenarioAuthoringWorkspaceDocumentViewModel document = CreateDocument(
                 "supplies.starting",
+                "Supply Setup",
                 "Starting Items",
                 "Author the exact item stacks available when the scenario begins.",
                 StartingStatus(inventory, "supplies.starting.document.status"));
@@ -251,6 +252,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             ScenarioAuthoringWorkspaceDocumentViewModel document = CreateDocument(
                 "supplies.presets",
+                "Supply Setup",
                 "Presets",
                 "Choose a preset beneath Presets in the navigator to review it inline.",
                 Chip("supplies.presets.document.status", "No changes until applied", ScenarioAuthoringStatusTone.Informational));
@@ -278,6 +280,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioSuppliesPresetCatalog.PresetInfo preset = ScenarioSuppliesPresetCatalog.ByIndex(presetIndex);
             ScenarioAuthoringWorkspaceDocumentViewModel document = CreateDocument(
                 "supplies.preset." + presetIndex.ToString(CultureInfo.InvariantCulture),
+                "Presets",
                 preset != null ? preset.DisplayName + " Loadout" : "Preset",
                 preset != null ? preset.Description : "Review this loadout before applying.",
                 Chip("supplies.preset.document.status", "Ready to apply", ScenarioAuthoringStatusTone.Ready));
@@ -296,6 +299,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             ScenarioAuthoringWorkspaceDocumentViewModel document = CreateDocument(
                 "supplies.balance",
+                "Supply Setup",
                 "Balance",
                 "Review approximate food, water, and medical coverage for the starting cast.",
                 BalanceStatus(definition, inventory, "supplies.balance.document.status"));
@@ -311,6 +315,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             ScenarioAuthoringWorkspaceDocumentViewModel document = CreateDocument(
                 "supplies.scheduled",
+                "Supply Setup",
                 "Scheduled",
                 "Add or remove stockpile items at authored scenario times.",
                 ScheduledStatus(inventory, "supplies.scheduled.document.status"));
@@ -335,6 +340,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             StorageSummary summary = BuildStorageSummary(inventory);
             ScenarioAuthoringWorkspaceDocumentViewModel document = CreateDocument(
                 "supplies.live-reference",
+                "Supply Setup",
                 "Live Reference",
                 "READ-ONLY: this document reports the current shelter inventory and does not edit stacks.",
                 Chip("supplies.live.document.status", "Read-only", ScenarioAuthoringStatusTone.Neutral));
@@ -369,6 +375,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private ScenarioAuthoringWorkspaceDocumentViewModel CreateDocument(
             string id,
+            string groupLabel,
             string title,
             string subtitle,
             ScenarioAuthoringStatusChipViewModel status)
@@ -379,6 +386,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 ScenarioSuppliesWorkspaceActions.WorkspaceId,
                 ScenarioSuppliesWorkspaceActions.SubtabId,
                 "Back to Navigator");
+            document.Breadcrumbs = new[]
+            {
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Supplies" },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = groupLabel },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = title }
+            };
             document.StatusChips = new[] { status };
             return document;
         }

@@ -11,7 +11,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string CharactersSubtabId = "characters";
         public const string ConversationsSubtabId = "conversations";
         public const string QuestPopupsSubtabId = "quest-popups";
-        public const string FocusedEditorKind = "story_stage";
         public const string FocusedEntryPrefix = "story_stage:";
         public const string ActionStageOpenPrefix = "scenario.story.focused_editor.stage.open.";
         public const string ActionStageOpenNew = "scenario.story.focused_editor.stage.open_new";

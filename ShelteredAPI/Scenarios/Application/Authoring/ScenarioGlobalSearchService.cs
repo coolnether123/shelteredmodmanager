@@ -6,6 +6,7 @@ using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     /// <summary>
@@ -15,15 +16,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal enum ScenarioGlobalSearchKind
     {
         Command = 0,
-        StoryStage = 1,
-        IntercomStep = 2,
-        Character = 3,
-        Conversation = 4,
-        TimelineEntry = 5,
-        CastMember = 6,
-        MapLocation = 7,
-        Version = 8,
-        Help = 9
+        WorkspaceSubtab = 1,
+        NavigatorEntity = 2,
+        StoryStage = 3,
+        IntercomStep = 4,
+        Character = 5,
+        Conversation = 6,
+        TimelineEntry = 7,
+        CastMember = 8,
+        MapLocation = 9,
+        Version = 10,
+        Help = 11
     }
 
     /// <summary>
@@ -79,10 +82,111 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             List<ScenarioGlobalSearchEntry> entries = new List<ScenarioGlobalSearchEntry>();
             CollectCommands(shell, entries);
+            CollectWorkspaceEntries(shell, entries);
             CollectElements(definition, entries);
             CollectVersions(namedVersions, entries);
             CollectHelp(entries);
+            DeduplicateExactRoutes(entries);
             return entries;
+        }
+
+        private static void DeduplicateExactRoutes(List<ScenarioGlobalSearchEntry> entries)
+        {
+            HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioGlobalSearchEntry entry = entries[i];
+                if (entry == null || entry.ActionIds == null || entry.ActionIds.Length < 2)
+                    continue;
+                string route = string.Join("\n", entry.ActionIds);
+                if (!seen.Add(route))
+                {
+                    entries.RemoveAt(i);
+                    i--;
+                }
+            }
+        }
+
+        private static void CollectWorkspaceEntries(ScenarioAuthoringShellViewModel shell, List<ScenarioGlobalSearchEntry> entries)
+        {
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int windowIndex = 0; shell != null && shell.Windows != null && windowIndex < shell.Windows.Length; windowIndex++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = shell.Windows[windowIndex];
+                ScenarioAuthoringWorkspaceViewModel workspace = window != null ? window.WorkspaceBody : null;
+                if (workspace == null)
+                    continue;
+
+                string openAction = WorkspaceOpenAction(workspace.Id);
+                for (int i = 0; workspace.Subtabs != null && i < workspace.Subtabs.Length; i++)
+                {
+                    ScenarioAuthoringWorkspaceSubtabViewModel subtab = workspace.Subtabs[i];
+                    if (subtab == null || subtab.SelectAction == null || string.IsNullOrEmpty(subtab.Label))
+                        continue;
+                    AddWorkspaceEntry(entries, seen, ScenarioGlobalSearchKind.WorkspaceSubtab, "Workspace", subtab.Label, window.Title, openAction, subtab.SelectAction.Id);
+                }
+
+                ScenarioAuthoringNavigatorViewModel navigator = workspace.Navigator;
+                for (int i = 0; navigator != null && navigator.Groups != null && i < navigator.Groups.Length; i++)
+                {
+                    ScenarioAuthoringNavigatorGroupViewModel group = navigator.Groups[i];
+                    CollectWorkspaceRows(entries, seen, group != null ? group.Rows : null, window.Title, group != null ? group.Label : null, openAction);
+                }
+            }
+        }
+
+        private static void CollectWorkspaceRows(
+            List<ScenarioGlobalSearchEntry> entries,
+            HashSet<string> seen,
+            ScenarioAuthoringNavigatorRowViewModel[] rows,
+            string workspaceLabel,
+            string groupLabel,
+            string openAction)
+        {
+            for (int i = 0; rows != null && i < rows.Length; i++)
+            {
+                ScenarioAuthoringNavigatorRowViewModel row = rows[i];
+                if (row == null)
+                    continue;
+                if (row.SelectAction != null && !string.IsNullOrEmpty(row.Title))
+                    AddWorkspaceEntry(entries, seen, ScenarioGlobalSearchKind.NavigatorEntity, "Navigator", row.Title, (workspaceLabel ?? "Workspace") + " / " + (groupLabel ?? "Items"), openAction, row.SelectAction.Id);
+                CollectWorkspaceRows(entries, seen, row.Children, workspaceLabel, row.Title, openAction);
+            }
+        }
+
+        private static void AddWorkspaceEntry(
+            List<ScenarioGlobalSearchEntry> entries,
+            HashSet<string> seen,
+            ScenarioGlobalSearchKind kind,
+            string kindLabel,
+            string name,
+            string context,
+            string openAction,
+            string selectAction)
+        {
+            string key = (openAction ?? string.Empty) + "\n" + (selectAction ?? string.Empty);
+            if (string.IsNullOrEmpty(selectAction) || !seen.Add(key))
+                return;
+            entries.Add(new ScenarioGlobalSearchEntry(
+                kind,
+                kindLabel,
+                name,
+                context,
+                true,
+                string.IsNullOrEmpty(openAction) ? new[] { selectAction } : new[] { openAction, selectAction }));
+        }
+
+        private static string WorkspaceOpenAction(string workspaceId)
+        {
+            if (string.Equals(workspaceId, ScenarioStoryFocusedEditorActions.WorkspaceId, StringComparison.Ordinal))
+                return ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests;
+            if (string.Equals(workspaceId, ScenarioCastWorkspaceActions.WorkspaceId, StringComparison.Ordinal))
+                return ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.People;
+            if (string.Equals(workspaceId, ScenarioSuppliesWorkspaceActions.WorkspaceId, StringComparison.Ordinal))
+                return ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.InventoryStorage;
+            if (string.Equals(workspaceId, ScenarioMapWorkspaceSelection.WorkspaceId, StringComparison.Ordinal))
+                return ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Map;
+            return null;
         }
 
         /// <summary>
@@ -186,6 +290,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             CollectStoryStages(definition, entries);
             CollectStoryCharacters(definition, entries);
             CollectConversations(definition, entries);
+            CollectQuests(definition, entries);
             CollectCast(definition, entries);
             CollectTimeline(definition, entries);
             CollectMapLocations(definition, entries);
@@ -205,16 +310,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     continue;
 
                 int stepCount = stage.IntercomStages != null ? stage.IntercomStages.Count : 0;
-                string name = TrimToNull(stage.Id) ?? ("Stage #" + (i + 1).ToString(CultureInfo.InvariantCulture));
-                // Opens the story surface, then the focused editor for this stage -- the same
-                // "open stage" seam that story validation issues navigate through.
+                string name = "Stage " + (i + 1).ToString(CultureInfo.InvariantCulture);
                 entries.Add(new ScenarioGlobalSearchEntry(
                     ScenarioGlobalSearchKind.StoryStage,
                     "Story stage",
                     name,
-                    "Story stage — " + Plural(stepCount, "intercom step"),
+                    "Story / Flow / " + Plural(stepCount, "scene"),
                     true,
-                    new[] { storyTab, ScenarioStoryFocusedEditorActions.StageOpen(i) }));
+                    new[] { storyTab, WorkspaceSelect(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, ScenarioStoryFocusedEditorActions.StageEntityId(definition, i)) }));
 
                 for (int s = 0; s < stepCount; s++)
                 {
@@ -223,14 +326,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         continue;
 
                     int lineCount = intercom.Dialogue != null ? intercom.Dialogue.Count : 0;
-                    string stepName = TrimToNull(intercom.Id) ?? ("Step #" + (s + 1).ToString(CultureInfo.InvariantCulture));
+                    string stepName = "Scene " + (s + 1).ToString(CultureInfo.InvariantCulture);
                     entries.Add(new ScenarioGlobalSearchEntry(
                         ScenarioGlobalSearchKind.IntercomStep,
-                        "Intercom step",
+                        "Scene",
                         stepName,
                         "In " + name + " — " + Plural(lineCount, "dialogue line"),
                         true,
-                        new[] { storyTab, ScenarioStoryFocusedEditorActions.StageOpen(i) }));
+                        new[] { storyTab, WorkspaceSelect(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, ScenarioStoryFocusedEditorActions.SceneEntityId(definition, i, s)) }));
                 }
             }
         }
@@ -248,15 +351,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (character == null)
                     continue;
 
-                string name = TrimToNull(character.DisplayName) ?? TrimToNull(character.CharacterId) ?? ("Character #" + (i + 1).ToString(CultureInfo.InvariantCulture));
-                string id = TrimToNull(character.CharacterId);
+                string name = PrimaryName(character.DisplayName, "Character " + (i + 1).ToString(CultureInfo.InvariantCulture));
+                string id = null;
                 entries.Add(new ScenarioGlobalSearchEntry(
                     ScenarioGlobalSearchKind.Character,
                     "Character",
                     name,
                     id != null ? "Story character — id '" + id + "'" : "Story character",
                     true,
-                    new[] { storyTab, ScenarioAuthoringActionIds.ActionStoryCharacterEditPrefix + i.ToString(CultureInfo.InvariantCulture) }));
+                    new[] { storyTab, WorkspaceSelect(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.CharactersSubtabId, ScenarioStoryFocusedEditorActions.CharacterEntityId(definition, i)) }));
             }
         }
 
@@ -274,14 +377,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     continue;
 
                 int lineCount = conversation.Lines != null ? conversation.Lines.Count : 0;
-                string name = TrimToNull(conversation.Id) ?? ("Conversation #" + (i + 1).ToString(CultureInfo.InvariantCulture));
+                string name = "Conversation " + (i + 1).ToString(CultureInfo.InvariantCulture);
                 entries.Add(new ScenarioGlobalSearchEntry(
                     ScenarioGlobalSearchKind.Conversation,
                     "Conversation",
                     name,
                     "Conversation — " + Plural(lineCount, "line"),
                     true,
-                    new[] { storyTab }));
+                    new[] { storyTab, WorkspaceSelect(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.ConversationsSubtabId, ScenarioStoryFocusedEditorActions.ConversationEntityId(definition, i)) }));
             }
         }
 
@@ -300,14 +403,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     if (member == null)
                         continue;
 
-                    string name = TrimToNull(member.Name) ?? ("Survivor #" + (i + 1).ToString(CultureInfo.InvariantCulture));
+                    string name = PrimaryName(member.Name, "Survivor " + (i + 1).ToString(CultureInfo.InvariantCulture));
                     entries.Add(new ScenarioGlobalSearchEntry(
                         ScenarioGlobalSearchKind.CastMember,
                         "Cast member",
                         name,
                         "Starting survivor",
                         true,
-                        new[] { peopleTab, ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix + i.ToString(CultureInfo.InvariantCulture) }));
+                        new[] { peopleTab, WorkspaceSelect(ScenarioCastWorkspaceActions.WorkspaceId, ScenarioCastWorkspaceActions.SubtabId, ScenarioCastWorkspaceActions.StartingEntityId(definition, i)) }));
                 }
             }
 
@@ -319,17 +422,39 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     if (future == null)
                         continue;
 
-                    string name = future.Survivor != null ? TrimToNull(future.Survivor.Name) : null;
+                    string name = future.Survivor != null ? PrimaryName(future.Survivor.Name, null) : null;
                     if (name == null)
-                        name = TrimToNull(future.Id) ?? ("Future survivor #" + (i + 1).ToString(CultureInfo.InvariantCulture));
+                        name = "Future survivor " + (i + 1).ToString(CultureInfo.InvariantCulture);
                     entries.Add(new ScenarioGlobalSearchEntry(
                         ScenarioGlobalSearchKind.CastMember,
                         "Cast member",
                         name,
                         "Future survivor",
                         true,
-                        new[] { peopleTab, ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix + i.ToString(CultureInfo.InvariantCulture) }));
+                        new[] { peopleTab, WorkspaceSelect(ScenarioCastWorkspaceActions.WorkspaceId, ScenarioCastWorkspaceActions.SubtabId, ScenarioCastWorkspaceActions.FutureEntityId(definition, i)) }));
                 }
+            }
+        }
+
+        private static void CollectQuests(ScenarioDefinition definition, List<ScenarioGlobalSearchEntry> entries)
+        {
+            if (definition.Quests == null || definition.Quests.Quests == null)
+                return;
+
+            string storyTab = ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests;
+            for (int i = 0; i < definition.Quests.Quests.Count; i++)
+            {
+                QuestDefinition quest = definition.Quests.Quests[i];
+                if (quest == null)
+                    continue;
+                string name = PrimaryName(quest.Title, "Quest " + (i + 1).ToString(CultureInfo.InvariantCulture));
+                entries.Add(new ScenarioGlobalSearchEntry(
+                    ScenarioGlobalSearchKind.NavigatorEntity,
+                    "Navigator",
+                    name,
+                    "Story / Quest Popups / Authored",
+                    true,
+                    new[] { storyTab, WorkspaceSelect(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId, ScenarioStoryFocusedEditorActions.QuestEntityId(definition, i)) }));
             }
         }
 
@@ -345,13 +470,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     if (trigger == null)
                         continue;
 
-                    string name = TrimToNull(trigger.Id) ?? ("Trigger #" + (i + 1).ToString(CultureInfo.InvariantCulture));
-                    string type = TrimToNull(trigger.Type);
+                    string name = "Trigger " + (i + 1).ToString(CultureInfo.InvariantCulture);
                     entries.Add(new ScenarioGlobalSearchEntry(
                         ScenarioGlobalSearchKind.TimelineEntry,
                         "Timeline",
                         name,
-                        type != null ? "Trigger — " + type : "Trigger",
+                        "Timeline / Triggers",
                         true,
                         new[] { eventsTab }));
                 }
@@ -362,12 +486,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     if (weather == null)
                         continue;
 
-                    string name = TrimToNull(weather.Id) ?? ("Weather #" + (i + 1).ToString(CultureInfo.InvariantCulture));
+                    string name = "Weather " + (i + 1).ToString(CultureInfo.InvariantCulture);
                     entries.Add(new ScenarioGlobalSearchEntry(
                         ScenarioGlobalSearchKind.TimelineEntry,
                         "Timeline",
                         name,
-                        "Weather event — " + (TrimToNull(weather.WeatherState) ?? "None"),
+                        "Timeline / Weather",
                         true,
                         new[] { eventsTab }));
                 }
@@ -381,7 +505,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     if (action == null)
                         continue;
 
-                    string name = TrimToNull(action.Id) ?? ("Scheduled action #" + (i + 1).ToString(CultureInfo.InvariantCulture));
+                    string name = "Scheduled action " + (i + 1).ToString(CultureInfo.InvariantCulture);
                     entries.Add(new ScenarioGlobalSearchEntry(
                         ScenarioGlobalSearchKind.TimelineEntry,
                         "Timeline",
@@ -406,16 +530,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (location == null)
                     continue;
 
-                string name = TrimToNull(location.DisplayName) ?? TrimToNull(location.Id) ?? ("Location #" + (i + 1).ToString(CultureInfo.InvariantCulture));
-                string kind = TrimToNull(location.Kind);
+                string name = PrimaryName(location.DisplayName, "Location " + (i + 1).ToString(CultureInfo.InvariantCulture));
                 entries.Add(new ScenarioGlobalSearchEntry(
                     ScenarioGlobalSearchKind.MapLocation,
                     "Map location",
                     name,
-                    kind != null ? "Map location — " + kind : "Map location",
+                    "Map / Locations",
                     true,
-                    new[] { mapTab }));
+                    new[] { mapTab, WorkspaceSelect(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, ScenarioMapWorkspaceSelection.LocationEntityId(map, i)) }));
             }
+        }
+
+        private static string WorkspaceSelect(string workspaceId, string subtabId, string entityId)
+        {
+            return ScenarioAuthoringWorkspaceViewModelFactory.BuildWorkspaceActionId(
+                ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix,
+                workspaceId,
+                subtabId,
+                entityId);
         }
 
         private static void CollectVersions(IList<string> namedVersions, List<ScenarioGlobalSearchEntry> entries)
@@ -538,6 +670,21 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return null;
             string trimmed = value.Trim();
             return trimmed.Length == 0 ? null : trimmed;
+        }
+
+        private static string PrimaryName(string value, string fallback)
+        {
+            string candidate = TrimToNull(value);
+            if (candidate == null
+                || candidate.IndexOf('.') >= 0
+                || candidate.IndexOf('_') >= 0
+                || candidate.IndexOf('/') >= 0
+                || candidate.IndexOf('\\') >= 0
+                || candidate.IndexOf(':') >= 0)
+            {
+                return fallback;
+            }
+            return candidate;
         }
 
         private sealed class Scored

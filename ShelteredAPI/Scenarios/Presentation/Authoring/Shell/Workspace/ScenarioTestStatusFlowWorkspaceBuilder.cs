@@ -6,8 +6,7 @@ using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
     /// <summary>
-    /// Dark Slice 9 entry point for the document-only playtest flow. Composition is
-    /// intentionally deferred to the final integration slice.
+    /// Document-only playtest flow composed into the Test workspace.
     /// </summary>
     internal sealed class ScenarioTestStatusFlowWorkspaceBuilder
     {

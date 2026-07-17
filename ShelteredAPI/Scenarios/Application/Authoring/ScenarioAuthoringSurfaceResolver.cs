@@ -67,8 +67,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (state.GlobalSearchOpen)
                 return Surface(ScenarioAuthoringSurfaceKind.Modal, "Search", ScenarioAuthoringActionIds.ActionShellCloseGlobalSearch, null);
-            if (!string.IsNullOrEmpty(state.FocusedEditorKind)
-                && !string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(state.FocusedEditorKind))
                 return Surface(ScenarioAuthoringSurfaceKind.Modal, "Focused editor", ResolveFocusedEditorCancelAction(state.FocusedEditorKind), null);
             if (state.SpriteSwapPicker != null && state.SpriteSwapPicker.IsOpen)
                 return Surface(ScenarioAuthoringSurfaceKind.Modal, "Asset picker", ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, null);
@@ -86,8 +85,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static string ResolveFocusedEditorCancelAction(string focusedEditorKind)
         {
-            if (string.Equals(focusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
-                return ScenarioStoryFocusedEditorActions.ActionCancel;
             if (string.Equals(focusedEditorKind, ScenarioBaseModeAuthoringActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
                 return ScenarioBaseModeAuthoringActions.ActionSwitchCancel;
 

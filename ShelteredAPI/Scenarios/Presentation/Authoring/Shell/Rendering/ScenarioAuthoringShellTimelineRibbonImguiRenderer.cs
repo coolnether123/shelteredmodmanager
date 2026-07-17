@@ -22,6 +22,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private bool _timelineRibbonDragging;
         private Vector2 _timelineRibbonDragStartMouse;
         private float _timelineRibbonDragStartDay;
+        private int _timelineRibbonPendingDayClick = -1;
         private GUIStyle _timelineRibbonCaptionStyle;
         private GUIStyle _timelineRibbonTitleStyle;
         private GUIStyle _timelineRibbonDayStyle;
@@ -73,6 +74,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             DrawTimelineRibbonDensity(trackRect, ribbon, pixelsPerDay);
             DrawTimelineRibbonAxis(trackRect, ribbon, pixelsPerDay);
             DrawTimelineRibbonMarkers(trackRect, ribbon, pixelsPerDay);
+            ExecutePendingTimelineRibbonDayClick(ribbon);
         }
 
         private void EnsureTimelineRibbonStyles()
@@ -133,6 +135,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
             if (current.type == EventType.MouseDown && current.button == 0 && trackRect.Contains(current.mousePosition))
             {
+                _timelineRibbonPendingDayClick = -1;
                 _timelineRibbonDragCandidate = true;
                 _timelineRibbonDragging = false;
                 _timelineRibbonDragStartMouse = current.mousePosition;
@@ -160,7 +163,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 _timelineRibbonDragging = false;
                 if (wasDragging)
                     current.Use();
+                else
+                {
+                    float dayPosition = _timelineRibbonFirstVisibleDay
+                        + ((current.mousePosition.x - trackRect.x) / Math.Max(1f, pixelsPerDay));
+                    _timelineRibbonPendingDayClick = Mathf.Clamp(
+                        Mathf.FloorToInt(dayPosition),
+                        ribbon.FirstDay,
+                        ribbon.LastDay);
+                }
             }
+        }
+
+        private void ExecutePendingTimelineRibbonDayClick(ScenarioDayTimelineRibbonViewModel ribbon)
+        {
+            if (_timelineRibbonPendingDayClick < 0)
+                return;
+            int day = _timelineRibbonPendingDayClick;
+            _timelineRibbonPendingDayClick = -1;
+            Event current = Event.current;
+            if (current == null || current.type == EventType.Used)
+                return;
+            ScenarioDayTimelineRibbonDayViewModel dayModel = GetTimelineRibbonDay(ribbon, day);
+            ScenarioAuthoringInspectorAction action = dayModel != null ? dayModel.HoverAction : null;
+            if (action == null || !action.Enabled)
+                return;
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+            current.Use();
         }
 
         private void AdvanceTimelineRibbonZoom(Rect trackRect, ScenarioDayTimelineRibbonViewModel ribbon)
@@ -383,6 +412,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             _timelineRibbonFirstVisibleDay = 1f;
             _timelineRibbonDragCandidate = false;
             _timelineRibbonDragging = false;
+            _timelineRibbonPendingDayClick = -1;
             _timelineTrackZoom = 0f;
             _timelineTrackTargetZoom = 0f;
             _timelineTrackZoomStart = 0f;

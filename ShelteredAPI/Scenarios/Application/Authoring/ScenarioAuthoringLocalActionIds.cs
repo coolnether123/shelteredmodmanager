@@ -18,8 +18,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSurvivorApplyColorCommandPrefix = "color_apply.";
 
         public const string FocusedKindCaptureFamily = "capture_family_preview";
-        public const string FocusedKindStartingSurvivor = "starting_survivor";
-        public const string FocusedKindFutureSurvivor = "future_survivor";
         public const string FocusedKindInventoryStartingPicker = "inventory_starting_picker";
         public const string FocusedKindInventorySchedulePicker = "inventory_schedule_picker";
         public const string FocusedKindWorldEvent = "world_event";

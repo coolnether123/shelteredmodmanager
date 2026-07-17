@@ -7,6 +7,7 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Story;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 
@@ -203,6 +204,10 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 RendererActions = new[] { searchAction },
                 Windows = new[] { fixtureWindow }
             };
+            List<ScenarioGlobalSearchEntry> searchEntries = ScenarioGlobalSearchService.BuildEntries(shell, null, null);
+            RequireSearchRoute(searchEntries, "Flow", subtabAction.Id, result);
+            RequireSearchRoute(searchEntries, "Stage 1", entityAction.Id, result);
+            RequireSearchRoute(searchEntries, "Scene 1", "fixture.child.select", result);
             HashSet<string> ids = CollectContractIds(ScenarioAuthoringRendererActionManifest.BuildContractWindow(shell));
             string[] expected =
             {
@@ -302,11 +307,80 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                     if (composed == null || composed.LayoutKind != ScenarioAuthoringWorkspaceLayoutKind.NavigatorDocument)
                         result.AddError("Map content kind did not produce its navigator-document WorkspaceBody.");
                 }
+                else if (contentKind == ScenarioAuthoringWindowContentKind.Publish)
+                {
+                    if (composed == null || composed.LayoutKind != ScenarioAuthoringWorkspaceLayoutKind.DocumentOnly)
+                        result.AddError("Publish content kind did not produce its document-only WorkspaceBody.");
+                }
                 else if (composed != null)
                     result.AddError("Unmigrated window content kind '" + contentKind + "' unexpectedly produced a WorkspaceBody.");
             }
+            VerifyTestPublishWorkspaces(result, composer);
             VerifyStoryWorkspace(result);
             VerifyCastWorkspace(result);
+        }
+
+        private static void VerifyTestPublishWorkspaces(
+            ScenarioValidationResult result,
+            ScenarioAuthoringWorkspaceComposer composer)
+        {
+            ScenarioDefinition definition = new ScenarioDefinition { Id = "storage.fixture", DisplayName = "Integration Fixture" };
+            ScenarioAuthoringState testState = new ScenarioAuthoringState { ActiveStage = ScenarioStageKind.Test };
+            ScenarioAuthoringWindowContentContext testContext = new ScenarioAuthoringWindowContentContext(testState, null, null, definition);
+            ScenarioAuthoringWorkspaceViewModel test = composer.Build(ScenarioAuthoringWindowContentKind.Scenario, testContext);
+            AssertDocumentOnlySections(
+                test,
+                "Test",
+                new[] { "test_preflight", "test_run_settings", "test_controls", "test_console_status", "test_console_log", "test_console_advanced" },
+                result);
+
+            testState.WorldLoading = true;
+            if (composer.Build(ScenarioAuthoringWindowContentKind.Scenario, testContext) != null)
+                result.AddError("World-loading Test content unexpectedly produced a document-only WorkspaceBody.");
+
+            ScenarioAuthoringWindowContentContext publishContext = new ScenarioAuthoringWindowContentContext(
+                new ScenarioAuthoringState(),
+                null,
+                null,
+                definition);
+            ScenarioAuthoringWorkspaceViewModel publish = composer.Build(ScenarioAuthoringWindowContentKind.Publish, publishContext);
+            AssertDocumentOnlySections(
+                publish,
+                "Publish",
+                new[] { "publish_validation", "publish_metadata", "publish_package_preview", "publish_export", "publish_result_status" },
+                result);
+        }
+
+        private static void AssertDocumentOnlySections(
+            ScenarioAuthoringWorkspaceViewModel workspace,
+            string label,
+            string[] expectedIds,
+            ScenarioValidationResult result)
+        {
+            if (workspace == null
+                || workspace.LayoutKind != ScenarioAuthoringWorkspaceLayoutKind.DocumentOnly
+                || workspace.Navigator != null
+                || workspace.Document == null
+                || workspace.Document.Sections == null
+                || workspace.Document.Sections.Length != expectedIds.Length)
+            {
+                result.AddError(label + " workspace did not expose the expected document-only status flow.");
+                return;
+            }
+
+            HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < expectedIds.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = workspace.Document.Sections[i];
+                if (section == null || !string.Equals(section.Id, expectedIds[i], StringComparison.Ordinal))
+                    result.AddError(label + " status-flow card order changed at " + expectedIds[i] + ".");
+                else if (!ids.Add(section.Id))
+                    result.AddError(label + " status flow repeated semantic section id '" + section.Id + "'.");
+            }
+            if (string.Equals(label, "Test", StringComparison.Ordinal)
+                && (workspace.Document.Sections[workspace.Document.Sections.Length - 1] == null
+                    || !workspace.Document.Sections[workspace.Document.Sections.Length - 1].IsAdvanced))
+                result.AddError("Test status-flow Advanced card is not last.");
         }
 
         private static void VerifyCastWorkspace(ScenarioValidationResult result)
@@ -406,7 +480,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             if (!string.IsNullOrEmpty(state.GetWorkspaceSelection(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId)))
                 result.AddError("Deleted Story stage did not reconcile selection to the overview.");
 
-            ScenarioAuthoringState authoredState = new ScenarioAuthoringState { IsActive = true, FocusedEditorKind = ScenarioStoryFocusedEditorActions.FocusedEditorKind };
+            ScenarioAuthoringState authoredState = new ScenarioAuthoringState { IsActive = true };
             authoredState.WindowStates.Add(new ScenarioAuthoringWindowState { Id = "quests", Visible = true, ZIndex = 1 });
             ScenarioAuthoringSurfaceState surface = new ScenarioAuthoringSurfaceResolver().Resolve(authoredState, null, false);
             if (surface != null && surface.Kind == ScenarioAuthoringSurfaceKind.Modal)
@@ -418,6 +492,23 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
                 if (section.Items[i] != null && section.Items[i].Kind == ScenarioAuthoringInspectorItemKind.Choice && section.Items[i].Choice != null) return true;
             return false;
+        }
+
+        private static void RequireSearchRoute(
+            IList<ScenarioGlobalSearchEntry> entries,
+            string name,
+            string actionId,
+            ScenarioValidationResult result)
+        {
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioGlobalSearchEntry entry = entries[i];
+                if (entry == null || !string.Equals(entry.Name, name, StringComparison.Ordinal))
+                    continue;
+                for (int actionIndex = 0; entry.ActionIds != null && actionIndex < entry.ActionIds.Length; actionIndex++)
+                    if (string.Equals(entry.ActionIds[actionIndex], actionId, StringComparison.Ordinal)) return;
+            }
+            result.AddError("Global search did not index the workspace route for '" + name + "'.");
         }
 
         private static void VerifyWorkspaceCommandState(

@@ -91,8 +91,6 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                     ScenarioStoryFocusedEditorActions.SelectStageDocument(
                         session != null ? session.WorkingDefinition : null,
                         storyStageIndex);
-                    if (string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, System.StringComparison.OrdinalIgnoreCase))
-                        state.FocusedEditorKind = null;
                     state.FocusedEditorIndex = -1;
                     state.FocusedEditorIsNew = false;
                     return;
@@ -109,9 +107,10 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 if (!int.TryParse(entry.FocusActionId.Substring(prefix.Length), out survivorIndex))
                     return;
 
-                state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor;
-                state.FocusedEditorIndex = survivorIndex;
-                state.FocusedEditorIsNew = false;
+                ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+                ScenarioCastWorkspaceActions.SelectFutureDocument(
+                    session != null ? session.WorkingDefinition : null,
+                    survivorIndex);
                 return;
             }
 

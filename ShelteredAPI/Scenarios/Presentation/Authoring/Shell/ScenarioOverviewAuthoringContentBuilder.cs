@@ -66,6 +66,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Title = "Scenario details",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                RendererKind = ScenarioAuthoringInspectorSectionRendererKind.MetadataForm,
                 Items = BuildDetailItems(definition)
             });
             sections.Add(new ScenarioAuthoringInspectorSection

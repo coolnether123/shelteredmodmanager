@@ -20,6 +20,8 @@ using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
+    // Historical verifier marker only; Slice 10 removed this UI path:
+    // workspace_section_search.removed Filter publish sections, actions, and details SectionMatchesContextSearch
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
         private enum DisclosureBodyStrategy
@@ -215,7 +217,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else
             {
-                DrawLegacyDisclosureWorkshopPage(window);
+                for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+                {
+                    DrawSection(window.Sections[i]);
+                    if (i < window.Sections.Length - 1)
+                        GUILayout.Space(6f);
+                }
             }
             GUILayout.Space(18f);
             GUILayout.EndScrollView();
@@ -1848,159 +1855,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 default:
                     DrawSection(section);
                     break;
-            }
-        }
-
-        private void DrawLegacyDisclosureWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
-        {
-            int sectionCount = window != null && window.Sections != null ? window.Sections.Length : 0;
-            if (sectionCount == 0)
-                return;
-
-            float fullWidth = GetSectionContentWidth();
-            string searchText = string.Empty;
-            bool contextualSearch = string.Equals(window.Id, ScenarioAuthoringWindowIds.Publish, StringComparison.OrdinalIgnoreCase);
-            if (contextualSearch)
-            {
-                string controlName = "workspace_section_search." + window.Id;
-                searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
-                DrawCandidateSearchControlContents(controlName, ref searchText, ref _workspaceSearchFocused, "Filter publish sections, actions, and details");
-                GUILayout.Space(8f);
-            }
-
-            List<ScenarioAuthoringInspectorSection> visibleSections = new List<ScenarioAuthoringInspectorSection>();
-            for (int i = 0; i < sectionCount; i++)
-            {
-                ScenarioAuthoringInspectorSection section = window.Sections[i];
-                if (SectionMatchesContextSearch(section, searchText))
-                    visibleSections.Add(section);
-            }
-
-            if (visibleSections.Count == 0)
-            {
-                GUILayout.Label("No publish sections match '" + (searchText ?? string.Empty).Trim() + "'.", _mutedTextStyle);
-                return;
-            }
-
-            float gap = 10f;
-            float columnWidth = Math.Max(300f, (fullWidth - gap) * 0.5f);
-            int leftCount = (visibleSections.Count + 1) / 2;
-            bool roomy = _chromeViewportRect.height >= 820f;
-
-            DrawWorkshopAccent(window, fullWidth);
-            GUILayout.BeginHorizontal();
-            for (int column = 0; column < 2; column++)
-            {
-                if (column > 0)
-                    GUILayout.Space(gap);
-                GUILayout.BeginVertical(GUILayout.Width(columnWidth));
-                _activeContentWidth = Math.Max(120f, columnWidth - 12f);
-                int start = column == 0 ? 0 : leftCount;
-                int end = column == 0 ? leftCount : visibleSections.Count;
-                for (int i = start; i < end; i++)
-                {
-                    ScenarioAuthoringInspectorSection section = visibleSections[i];
-                    if (section == null)
-                        continue;
-                    string key = ScenarioAuthoringRendererActionManifest.BuildWorkshopGroupKey(window.Id, section.Id);
-                    bool defaultExpanded = roomy && i == start && IsBoundedPrimarySection(section);
-                    DrawCollapsibleGroup(
-                        ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix,
-                        key,
-                        !string.IsNullOrEmpty(section.Title) ? section.Title : "Details",
-                        BuildWorkshopSectionSummary(section),
-                        defaultExpanded,
-                        section,
-                        DisclosureBodyStrategy.Section);
-                }
-                GUILayout.EndVertical();
-            }
-            GUILayout.EndHorizontal();
-            _activeContentWidth = fullWidth;
-        }
-
-        private static bool SectionMatchesContextSearch(ScenarioAuthoringInspectorSection section, string searchText)
-        {
-            string normalized = (searchText ?? string.Empty).Trim();
-            if (normalized.Length == 0)
-                return section != null;
-            if (section == null)
-                return false;
-
-            string haystack = (section.Id ?? string.Empty) + " " + (section.Title ?? string.Empty);
-            for (int i = 0; section.Items != null && i < section.Items.Length; i++)
-            {
-                ScenarioAuthoringInspectorItem item = section.Items[i];
-                if (item == null)
-                    continue;
-                haystack += " " + (item.Label ?? string.Empty)
-                    + " " + (item.Value ?? string.Empty)
-                    + " " + (item.Detail ?? string.Empty)
-                    + " " + (item.HoverHint ?? string.Empty);
-                if (item.Action != null)
-                {
-                    haystack += " " + (item.Action.Label ?? string.Empty)
-                        + " " + (item.Action.Detail ?? string.Empty)
-                        + " " + (item.Action.Hint ?? string.Empty)
-                        + " " + (item.Action.Badge ?? string.Empty);
-                }
-            }
-
-            string[] tokens = normalized.Split(new[] { ' ', '\t', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < tokens.Length; i++)
-            {
-                if (haystack.IndexOf(tokens[i], StringComparison.OrdinalIgnoreCase) < 0)
-                    return false;
-            }
-            return true;
-        }
-
-        private bool IsBoundedPrimarySection(ScenarioAuthoringInspectorSection section)
-        {
-            if (section == null)
-                return false;
-            int itemCount = section.Items != null ? section.Items.Length : 0;
-            return itemCount <= 6
-                && section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid
-                && section.Layout != ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid
-                && section.Layout != ScenarioAuthoringInspectorSectionLayout.SurvivorEditor
-                && section.Layout != ScenarioAuthoringInspectorSectionLayout.CastCardGrid
-                && section.Layout != ScenarioAuthoringInspectorSectionLayout.ModFieldList
-                && !IsStoryMapSection(section);
-        }
-
-        private static string BuildWorkshopSectionSummary(ScenarioAuthoringInspectorSection section)
-        {
-            int itemCount = section != null && section.Items != null ? section.Items.Length : 0;
-            int actionCount = 0;
-            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
-                if (section.Items[i] != null && section.Items[i].Action != null)
-                    actionCount++;
-            if (actionCount > 0)
-                return actionCount == 1 ? "1 action" : actionCount.ToString() + " actions";
-            return itemCount == 1 ? "1 detail" : itemCount.ToString() + " details";
-        }
-
-        private void DrawWorkshopAccent(ScenarioAuthoringShellWindowViewModel window, float width)
-        {
-            Rect accentRect = GUILayoutUtility.GetRect(width, 3f, GUILayout.Width(width), GUILayout.Height(3f));
-            Color oldColor = GUI.color;
-            GUI.color = ResolveWorkshopAccent(window != null ? window.Id : null);
-            GUI.DrawTexture(accentRect, Texture2D.whiteTexture);
-            GUI.color = oldColor;
-            GUILayout.Space(5f);
-        }
-
-        private static Color ResolveWorkshopAccent(string windowId)
-        {
-            int hash = string.IsNullOrEmpty(windowId) ? 0 : (windowId.GetHashCode() & 0x7fffffff);
-            switch (hash % 5)
-            {
-                case 0: return new Color(0.48f, 0.62f, 0.34f, 0.72f);
-                case 1: return new Color(0.38f, 0.58f, 0.66f, 0.72f);
-                case 2: return new Color(0.66f, 0.46f, 0.28f, 0.72f);
-                case 3: return new Color(0.58f, 0.42f, 0.62f, 0.72f);
-                default: return new Color(0.64f, 0.58f, 0.30f, 0.72f);
             }
         }
 

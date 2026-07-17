@@ -36,7 +36,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringWorkspaceDocumentViewModel document = factory.CreateDocument("cast.starting." + index.ToString(CultureInfo.InvariantCulture), title);
             document.Subtitle = "Starting survivor";
             document.BackAction = factory.CreateBackAction(ScenarioCastWorkspaceActions.WorkspaceId, ScenarioCastWorkspaceActions.SubtabId, "Back to Navigator");
-            document.Breadcrumbs = BuildBreadcrumbs(title, factory);
+            document.Breadcrumbs = BuildBreadcrumbs("Starting Survivors", title, factory);
             document.StatusChips = BuildDocumentStatus(member, entity, factory);
             document.HeaderActions = new[]
             {
@@ -65,7 +65,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringWorkspaceDocumentViewModel document = factory.CreateDocument("cast.future." + index.ToString(CultureInfo.InvariantCulture), title);
             document.Subtitle = "Future arrival";
             document.BackAction = factory.CreateBackAction(ScenarioCastWorkspaceActions.WorkspaceId, ScenarioCastWorkspaceActions.SubtabId, "Back to Navigator");
-            document.Breadcrumbs = BuildBreadcrumbs(title, factory);
+            document.Breadcrumbs = BuildBreadcrumbs("Future Arrivals", title, factory);
             document.StatusChips = BuildFutureDocumentStatus(survivor, entity, factory);
             document.HeaderActions = new[]
             {
@@ -111,6 +111,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         }
 
         private static ScenarioAuthoringBreadcrumbViewModel[] BuildBreadcrumbs(
+            string groupLabel,
             string title,
             ScenarioAuthoringWorkspaceViewModelFactory factory)
         {
@@ -121,6 +122,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     Label = "Cast",
                     Action = factory.CreateBreadcrumbAction(ScenarioCastWorkspaceActions.WorkspaceId, ScenarioCastWorkspaceActions.SubtabId, string.Empty, "Cast")
                 },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = groupLabel },
                 new ScenarioAuthoringBreadcrumbViewModel { Label = title }
             };
         }

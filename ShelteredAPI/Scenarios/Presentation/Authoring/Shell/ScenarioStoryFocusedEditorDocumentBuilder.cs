@@ -13,55 +13,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         private const int ItemPickerLimit = 6;
 
-        public static bool TryBuild(ScenarioAuthoringState state, ScenarioDefinition definition, out ScenarioAuthoringInspectorDocument document)
-        {
-            document = null;
-            if (state == null
-                || definition == null
-                || !string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            ScenarioFlowStageDefinition stage = GetStage(definition, state.FocusedEditorIndex);
-            if (stage == null)
-                return false;
-
-            ScenarioStoryFlowIssue[] issues = new ScenarioStoryFlowValidationAnalyzer().Analyze(definition);
-            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(BuildIdentitySection(definition, stage, state.FocusedEditorIndex, issues));
-            sections.Add(BuildWhenSection(definition, stage, state.FocusedEditorIndex));
-            sections.Add(BuildCastSection(definition, stage, state.FocusedEditorIndex));
-            ScenarioStoryCharacterActorLinkSectionBuilder.AppendSections(sections, definition);
-
-            if (stage.IntercomStages == null || stage.IntercomStages.Count == 0)
-                sections.Add(Section("story_focused_empty", "WHAT / ENCOUNTER STEPS", ScenarioAuthoringInspectorSectionLayout.ActionStrip, new List<ScenarioAuthoringInspectorItem>
-                {
-                    Text("No encounter steps yet - this stage has nothing to show the player."),
-                    ActionItem(Action(ScenarioStoryAuthoringActions.IntercomAdd(state.FocusedEditorIndex), "Add Encounter Step", "Write the first scene in this stage.", true, true, "I+"))
-                }));
-            for (int i = 0; stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
-            {
-                ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
-                sections.Add(BuildEncounterHeaderSection(definition, stage, intercom, state.FocusedEditorIndex, i, issues));
-                sections.Add(BuildDialogueSection(definition, stage, intercom, state.FocusedEditorIndex, i));
-                sections.Add(BuildConditionsSection(intercom, state.FocusedEditorIndex, i));
-                if (ScenarioStoryStageDisclosure.ShouldRevealAdvancedRouting(stage))
-                    sections.Add(BuildAdvancedRoutingSection(definition, stage, intercom, state.FocusedEditorIndex, i));
-                sections.Add(BuildOutcomeSection(definition, intercom, state.FocusedEditorIndex, i));
-            }
-
-            sections.Add(BuildAdvancedStageSection(definition, stage, state.FocusedEditorIndex));
-            sections.Add(BuildFooterSection(state.FocusedEditorIndex, stage));
-
-            document = new ScenarioAuthoringInspectorDocument
-            {
-                Title = "Story Stage - " + DisplayStageTitle(stage, state.FocusedEditorIndex),
-                Subtitle = "Edit one vanilla scenario stage, its encounter steps, and its next-stage outcomes.",
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
-                Sections = sections.ToArray()
-            };
-            return true;
-        }
-
         internal static ScenarioAuthoringInspectorSection[] BuildStageWorkspaceSections(
             ScenarioDefinition definition,
             int stageIndex,
@@ -323,20 +274,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!ScenarioStoryStageDisclosure.ShouldRevealAdvancedRouting(stage))
                 items.Add(Text("Advanced step routing appears after this stage has its first written dialogue line."));
             return AdvancedSection("story_focused_advanced", "ADVANCED", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildFooterSection(int stageIndex, ScenarioFlowStageDefinition stage)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomAdd(stageIndex), "Add Encounter Step", "Add another vanilla encounter step inside this stage.", true, false, "I+")));
-            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDuplicate(stageIndex), "Duplicate Stage", "Copy this stage and its encounter setup.", true, false, "CP")));
-            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDelete(stageIndex), "Remove Stage", "Remove this stage if nothing references it.", true, false, "RM")));
-            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
-            {
-                items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDuplicate(stageIndex, i), "Duplicate Step " + (i + 1).ToString(CultureInfo.InvariantCulture), "Copy this encounter step.", true, false, "CP")));
-                items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDelete(stageIndex, i), "Remove Step " + (i + 1).ToString(CultureInfo.InvariantCulture), "Remove this encounter step.", true, false, "RM")));
-            }
-            return Section("story_focused_footer", string.Empty, ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
         private static void AddDialogueItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)

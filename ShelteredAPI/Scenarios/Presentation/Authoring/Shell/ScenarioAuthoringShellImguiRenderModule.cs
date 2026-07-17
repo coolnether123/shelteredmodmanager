@@ -579,30 +579,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 _lastSurvivorColorPickerRequestKey = null;
             }
 
-            if (modalDocument != null
-                && shell.FocusedEditorDocument != null
-                && _snapshot != null
+            if (_snapshot != null
                 && _snapshot.State != null
                 && !string.IsNullOrEmpty(_snapshot.State.SurvivorColorPickerChannel))
             {
                 string requestedChannel = _snapshot.State.SurvivorColorPickerChannel;
-                string requestKey = (_snapshot.State.FocusedEditorKind ?? string.Empty)
-                    + ":"
-                    + _snapshot.State.FocusedEditorIndex.ToString()
-                    + ":"
-                    + requestedChannel
+                string requestKey = requestedChannel
                     + ":"
                     + _snapshot.State.SurvivorColorPickerRequestId.ToString();
                 if (!string.Equals(requestKey, _lastSurvivorColorPickerRequestKey, StringComparison.Ordinal))
                 {
                     ScenarioSurvivorColorRowViewModel requestedRow = null;
+                    ScenarioAuthoringInspectorSection[] survivorSections = shell.FocusedEditorDocument != null
+                        ? shell.FocusedEditorDocument.Sections
+                        : FindWorkspaceDocumentSections(shell.Windows, ScenarioAuthoringWindowIds.Survivors);
                     for (int sectionIndex = 0;
-                        shell.FocusedEditorDocument.Sections != null
+                        survivorSections != null
                         && requestedRow == null
-                        && sectionIndex < shell.FocusedEditorDocument.Sections.Length;
+                        && sectionIndex < survivorSections.Length;
                         sectionIndex++)
                     {
-                        ScenarioAuthoringInspectorSection section = shell.FocusedEditorDocument.Sections[sectionIndex];
+                        ScenarioAuthoringInspectorSection section = survivorSections[sectionIndex];
                         ScenarioSurvivorEditorViewModel editor = section != null ? section.SurvivorEditor : null;
                         for (int rowIndex = 0; editor != null && editor.ColorRows != null && rowIndex < editor.ColorRows.Length; rowIndex++)
                         {
@@ -693,6 +690,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 inputCapture.CompleteFrame();
                 GUI.matrix = oldMatrix;
             }
+        }
+
+        private static ScenarioAuthoringInspectorSection[] FindWorkspaceDocumentSections(
+            ScenarioAuthoringShellWindowViewModel[] windows,
+            string windowId)
+        {
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null
+                    && string.Equals(window.Id, windowId, StringComparison.OrdinalIgnoreCase)
+                    && window.WorkspaceBody != null
+                    && window.WorkspaceBody.Document != null)
+                {
+                    return window.WorkspaceBody.Document.Sections;
+                }
+            }
+            return null;
         }
 
         private void FinishHiddenRuntime()

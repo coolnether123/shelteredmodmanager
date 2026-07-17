@@ -238,7 +238,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 Label = label,
                 IconText = icon,
                 Expanded = state.GetWorkspaceExpanded(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, id, true),
-                StatusChips = new[] { Chip("map.group." + id, total.ToString(CultureInfo.InvariantCulture), ScenarioAuthoringStatusTone.Informational) },
+                StatusChips = new[] { Chip("map.group." + id, total.ToString(CultureInfo.InvariantCulture) + " " + label.ToLowerInvariant(), ScenarioAuthoringStatusTone.Informational) },
                 ToggleAction = _factory.CreateGroupToggleAction(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, id, "Toggle " + label),
                 CreateAction = createAction,
                 Rows = rows.ToArray()
@@ -352,7 +352,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             int index)
         {
             string title = LocationName(location, index);
-            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.location." + index.ToString(CultureInfo.InvariantCulture), title, "Authored expedition location");
+            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.location." + index.ToString(CultureInfo.InvariantCulture), "Locations", title, "Authored expedition location");
             document.HeaderActions = new[] { OpenMapAction(state) };
             document.StatusChips = new[]
             {
@@ -373,7 +373,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private ScenarioAuthoringWorkspaceDocumentViewModel BuildMarkerDocument(MapAuthoringDefinition map, MapMarkerDefinition marker, int index)
         {
             string title = MarkerName(marker, index);
-            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.marker." + index.ToString(CultureInfo.InvariantCulture), title, "Expedition map marker");
+            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.marker." + index.ToString(CultureInfo.InvariantCulture), "Markers", title, "Expedition map marker");
             document.StatusChips = new[] { Chip("map.marker.document.visibility", marker.VisibleAtStart ? "Visible" : "Hidden", marker.VisibleAtStart ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Neutral) };
             document.Sections = new[]
             {
@@ -393,7 +393,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             string title = LootName(table, index);
             int count = table.Entries != null ? table.Entries.Count : 0;
-            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.loot." + index.ToString(CultureInfo.InvariantCulture), title, "Expedition loot table");
+            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.loot." + index.ToString(CultureInfo.InvariantCulture), "Loot Tables", title, "Expedition loot table");
             document.StatusChips = new[] { Chip("map.loot.document.entries", count > 0 ? "Ready" : "Empty", count > 0 ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Warning) };
             document.Sections = new[]
             {
@@ -407,7 +407,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             string title = EncounterName(table, index);
             int count = table.Entries != null ? table.Entries.Count : 0;
-            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.encounter." + index.ToString(CultureInfo.InvariantCulture), title, "Expedition encounter table");
+            ScenarioAuthoringWorkspaceDocumentViewModel document = SelectedDocument("map.encounter." + index.ToString(CultureInfo.InvariantCulture), "Encounter Tables", title, "Expedition encounter table");
             document.StatusChips = new[] { Chip("map.encounter.document.entries", count > 0 ? "Ready" : "Empty", count > 0 ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Warning) };
             document.Sections = new[]
             {
@@ -417,7 +417,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return document;
         }
 
-        private ScenarioAuthoringWorkspaceDocumentViewModel SelectedDocument(string id, string title, string subtitle)
+        private ScenarioAuthoringWorkspaceDocumentViewModel SelectedDocument(string id, string groupLabel, string title, string subtitle)
         {
             ScenarioAuthoringWorkspaceDocumentViewModel document = _factory.CreateDocument(id, title);
             document.Subtitle = subtitle;
@@ -425,6 +425,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.Breadcrumbs = new[]
             {
                 new ScenarioAuthoringBreadcrumbViewModel { Label = "Map" },
+                new ScenarioAuthoringBreadcrumbViewModel { Label = groupLabel },
                 new ScenarioAuthoringBreadcrumbViewModel { Label = title }
             };
             return document;

@@ -75,6 +75,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 Title = "Filter",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                RendererKind = ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryFilters,
                 Items = new[]
                 {
                     ScenarioInspectorItemFactory.Text("all"),
@@ -168,6 +169,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 Title = asset.FileName ?? "Asset file",
                 Expanded = asset.State != ScenarioAssetInventoryState.Available,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                RendererKind = ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryRow,
+                RendererFilter = FilterToken(asset),
                 Items = items.ToArray()
             };
         }

@@ -191,7 +191,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             if (index < 0)
                 return;
-            ClearFocusedSurvivorState(state);
+            CloseColorPicker(state);
             ScenarioCastWorkspaceActions.SelectStartingDocument(definition, index);
         }
 
@@ -199,23 +199,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             if (index < 0)
                 return;
-            ClearFocusedSurvivorState(state);
+            CloseColorPicker(state);
             ScenarioCastWorkspaceActions.SelectFutureDocument(definition, index);
         }
 
-        private static void ClearFocusedSurvivorState(ScenarioAuthoringState state)
+        private static void CloseColorPicker(ScenarioAuthoringState state)
         {
             if (state == null)
                 return;
-            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, StringComparison.OrdinalIgnoreCase))
-            {
-                state.FocusedEditorKind = null;
-                state.FocusedEditorIndex = -1;
-                state.FocusedEditorIsNew = false;
-            }
-            state.FocusedSurvivorOriginal = null;
-            state.FocusedFutureSurvivorOriginal = null;
+            state.SurvivorColorPickerChannel = null;
         }
 
         private bool HandleFutureMemberCommand(
