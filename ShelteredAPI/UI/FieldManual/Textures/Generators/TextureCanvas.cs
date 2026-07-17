@@ -24,6 +24,29 @@ namespace ShelteredAPI.UI.FieldManual.Textures.Generators
             for (int i = 0; i < Pixels.Length; i++) Pixels[i] = color;
         }
 
+        public void FillOpaque(Color color)
+        {
+            Color32 opaque = new Color(color.r, color.g, color.b, 1f);
+            for (int i = 0; i < Pixels.Length; i++) Pixels[i] = opaque;
+        }
+
+        public void CutChamferedCorners(int cut)
+        {
+            int safeCut = Mathf.Max(0, cut);
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    bool outside = IsCornerCut(x, y, safeCut)
+                        || IsCornerCut(Width - x - 1, y, safeCut)
+                        || IsCornerCut(x, Height - y - 1, safeCut)
+                        || IsCornerCut(Width - x - 1, Height - y - 1, safeCut);
+                    if (outside)
+                        Pixels[(y * Width) + x] = new Color32(0, 0, 0, 0);
+                }
+            }
+        }
+
         public void SetPixel(int x, int y, Color color)
         {
             if (x < 0 || x >= Width || y < 0 || y >= Height) return;
@@ -109,6 +132,11 @@ namespace ShelteredAPI.UI.FieldManual.Textures.Generators
             // readable CPU copy keeps the shared process-lifetime cache GPU-only.
             tex.Apply(false, true);
             return tex;
+        }
+
+        private static bool IsCornerCut(int x, int y, int cut)
+        {
+            return x < cut && y < cut && x + y < cut;
         }
     }
 }

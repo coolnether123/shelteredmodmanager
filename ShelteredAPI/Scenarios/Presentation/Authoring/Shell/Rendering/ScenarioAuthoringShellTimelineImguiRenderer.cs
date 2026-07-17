@@ -235,7 +235,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 used += width + 4f;
             }
             GUILayout.EndHorizontal();
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
         }
 
         private void DrawTimelineTrackViewport(Rect viewportRect, TimelineDayInfo[] days, TimelineChipInfo[] chips, float dayWidth, float trackHeight)
@@ -553,23 +553,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return max;
         }
 
-        private static Color ResolveTimelineChipColor(string domain)
+        private Color ResolveTimelineChipColor(string domain)
         {
             if (string.Equals(domain, "weather", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.55f, 0.65f, 0.75f, 1f);
+                return _uiContext.Styles.Theme.Palette.SemanticInfoStrong;
             if (string.Equals(domain, "inventory", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.66f, 0.58f, 0.44f, 1f);
+                return _uiContext.Styles.Theme.Palette.WorkspaceSupplies;
             if (string.Equals(domain, "arrival", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.55f, 0.64f, 0.47f, 1f);
+                return _uiContext.Styles.Theme.Palette.SemanticReadyStrong;
             if (string.Equals(domain, "trigger", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.70f, 0.58f, 0.48f, 1f);
+                return _uiContext.Styles.Theme.Palette.SemanticWarningStrong;
             if (string.Equals(domain, "story", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.63f, 0.54f, 0.68f, 1f);
+                return _uiContext.Styles.Theme.Palette.WorkspaceStory;
             if (string.Equals(domain, "journal", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.50f, 0.62f, 0.58f, 1f);
+                return _uiContext.Styles.Theme.Palette.WorkspaceTest;
             if (string.Equals(domain, "world_event", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.68f, 0.52f, 0.42f, 1f);
-            return new Color(0.61f, 0.58f, 0.50f, 1f);
+                return _uiContext.Styles.Theme.Palette.WorkspaceMap;
+            return _uiContext.Styles.Theme.Palette.BorderDefault;
         }
 
         private static string ResolveTimelineIconRole(string domain)

@@ -39,11 +39,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             RegisterInteractiveRegion(rect);
             RegisterTourTarget("timeline:ribbon", rect);
 
-            Color oldColor = GUI.color;
-            GUI.color = new Color(0.74f, 0.66f, 0.51f, 0.24f);
-            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
-            GUI.color = oldColor;
-            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutShadow(rect, _uiContext.Styles.ShadowTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, _uiContext.Styles.ChromeTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderHighlightTexture, _uiContext.Styles.BorderStrongTexture);
 
             EnsureTimelineRibbonStyles();
             Rect labelRect = new Rect(rect.x + 10f, rect.y + 8f, TimelineRibbonLabelWidth - 18f, rect.height - 16f);
@@ -85,21 +83,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             _timelineRibbonTitleStyle = new GUIStyle(_smallTitleStyle);
             _timelineRibbonTitleStyle.wordWrap = false;
             _timelineRibbonTitleStyle.clipping = TextClipping.Clip;
-            _timelineRibbonCaptionStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonCaptionStyle = new GUIStyle(_uiContext.Styles.HeaderSubtitleText);
             _timelineRibbonCaptionStyle.fontSize = Math.Min(_timelineRibbonCaptionStyle.fontSize, 10);
-            _timelineRibbonDayStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonDayStyle = new GUIStyle(_uiContext.Styles.HeaderSubtitleText);
             _timelineRibbonDayStyle.alignment = TextAnchor.UpperCenter;
             _timelineRibbonDayStyle.fontSize = Math.Min(_timelineRibbonDayStyle.fontSize, 10);
-            _timelineRibbonOverflowStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonOverflowStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
             _timelineRibbonOverflowStyle.alignment = TextAnchor.MiddleCenter;
             _timelineRibbonOverflowStyle.fontSize = Math.Min(_timelineRibbonOverflowStyle.fontSize, 9);
-            _timelineRibbonEmptyStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonEmptyStyle = new GUIStyle(_uiContext.Styles.HeaderSubtitleText);
             _timelineRibbonEmptyStyle.alignment = TextAnchor.MiddleLeft;
-            _timelineRibbonGlyphStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonGlyphStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
             _timelineRibbonGlyphStyle.alignment = TextAnchor.MiddleCenter;
             _timelineRibbonGlyphStyle.fontStyle = FontStyle.Bold;
             _timelineRibbonGlyphStyle.fontSize = Math.Min(_timelineRibbonGlyphStyle.fontSize, 8);
-            _timelineRibbonChapterStyle = new GUIStyle(_mutedTextStyle);
+            _timelineRibbonChapterStyle = new GUIStyle(_uiContext.Styles.HeaderSubtitleText);
             _timelineRibbonChapterStyle.alignment = TextAnchor.MiddleLeft;
             _timelineRibbonChapterStyle.fontStyle = FontStyle.Bold;
             _timelineRibbonChapterStyle.fontSize = Math.Min(_timelineRibbonChapterStyle.fontSize, 9);
@@ -232,11 +230,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private void DrawTimelineRibbonAxis(Rect trackRect, ScenarioDayTimelineRibbonViewModel ribbon, float pixelsPerDay)
         {
-            Color oldColor = GUI.color;
             float lineY = trackRect.y + 37f;
-            GUI.color = new Color(0.34f, 0.27f, 0.18f, 0.58f);
-            GUI.DrawTexture(new Rect(trackRect.x, lineY, trackRect.width, 2f), Texture2D.whiteTexture);
-            GUI.color = oldColor;
+            GUI.DrawTexture(new Rect(trackRect.x, lineY, trackRect.width, 2f), _uiContext.Styles.BorderSubtleTexture);
 
             int interval = pixelsPerDay >= 38f ? 1 : pixelsPerDay >= 20f ? 2 : pixelsPerDay >= 10f ? 5 : 10;
             for (int day = ribbon.FirstDay; day <= ribbon.LastDay; day++)
@@ -246,9 +241,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 float x = TimelineRibbonDayCenterX(trackRect, day, pixelsPerDay);
                 if (x < trackRect.x - 12f || x > trackRect.xMax + 12f)
                     continue;
-                GUI.color = new Color(0.34f, 0.27f, 0.18f, 0.58f);
-                GUI.DrawTexture(new Rect(x, lineY - 2f, 1f, 6f), Texture2D.whiteTexture);
-                GUI.color = oldColor;
+                GUI.DrawTexture(new Rect(x, lineY - 2f, 1f, 6f), _uiContext.Styles.BorderSubtleTexture);
                 ScenarioDayTimelineRibbonDayViewModel dayModel = GetTimelineRibbonDay(ribbon, day);
                 GUI.Label(new Rect(x - 18f, lineY + 5f, 36f, 14f), dayModel != null ? dayModel.Label : string.Empty, _timelineRibbonDayStyle);
             }
@@ -267,12 +260,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 ScenarioDayTimelineRibbonDayViewModel dayModel = GetTimelineRibbonDay(ribbon, day);
                 int count = dayModel != null ? dayModel.MarkerCount : 0;
                 float density = Mathf.Clamp01(count / 5f);
-                Color old = GUI.color;
-                GUI.color = count > 0
-                    ? new Color(0.58f, 0.42f, 0.22f, 0.05f + (density * 0.15f))
-                    : new Color(0.44f, 0.38f, 0.29f, 0.025f);
-                GUI.DrawTexture(cellRect, Texture2D.whiteTexture);
-                GUI.color = old;
+                if (count > 0)
+                {
+                    float railHeight = Mathf.Clamp(Mathf.Round(density * 4f), 1f, 4f);
+                    GUI.DrawTexture(new Rect(cellRect.x, cellRect.yMax - railHeight, cellRect.width, railHeight), _uiContext.Styles.WorkspaceStoryTexture);
+                }
                 if (dayModel != null && dayModel.HoverAction != null)
                     RegisterRichHoverHelpSource(cellRect, dayModel.HoverAction);
             }
@@ -320,10 +312,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             RegisterInteractiveRegion(markerRect);
             RegisterRichHoverHelpSource(markerRect, marker.Action);
 
-            Color color = marker.IsChapter ? new Color(0.66f, 0.43f, 0.17f, 1f) : ResolveTimelineChipColor(marker.Domain);
-            float intensity = hovered ? 1.18f : pressed ? 0.9f : 1f;
+            Color color = marker.IsChapter ? _uiContext.Styles.Theme.Palette.AccentGold : ResolveTimelineChipColor(marker.Domain);
+            if (hovered)
+                color = _uiContext.Styles.Theme.Palette.SemanticWarning;
+            else if (pressed)
+                color = _uiContext.Styles.Theme.Palette.ControlPressed;
             Color oldColor = GUI.color;
-            GUI.color = new Color(color.r * intensity, color.g * intensity, color.b * intensity, marker.IsChapter ? 0.96f : 0.88f);
+            GUI.color = color;
             if (marker.IsChapter)
             {
                 GUI.DrawTexture(new Rect(markerRect.x + 2f, markerRect.y, 2f, markerRect.height), Texture2D.whiteTexture);
@@ -379,10 +374,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioDayTimelineRibbonDayViewModel day)
         {
             Rect overflowRect = new Rect(centerX + 7f, trackRect.y + 28f, 26f, 16f);
-            Color oldColor = GUI.color;
-            GUI.color = new Color(0.42f, 0.34f, 0.24f, 0.72f);
-            ScenarioUiAtlasSkin.DrawCornerCutTexture(overflowRect, Texture2D.whiteTexture);
-            GUI.color = oldColor;
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(overflowRect, _uiContext.Styles.InsetTexture);
             GUI.Label(overflowRect, day != null ? day.OverflowLabel : string.Empty, _timelineRibbonOverflowStyle);
             if (day != null && day.HoverAction != null)
                 RegisterRichHoverHelpSource(overflowRect, day.HoverAction);

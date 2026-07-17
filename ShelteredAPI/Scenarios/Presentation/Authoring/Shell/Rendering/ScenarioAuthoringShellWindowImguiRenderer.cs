@@ -144,7 +144,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawSection(window.Sections[i]);
                 if (i < window.Sections.Length - 1)
-                    GUILayout.Space(6f);
+                    GUILayout.Space(12f);
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -166,7 +166,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 contentRect.xMax + ScenarioAuthoringShellLayout.Margin,
                 contentRect.yMax);
             Color oldColor = GUI.color;
-            GUI.color = new Color(0.17f, 0.13f, 0.09f, 1f);
+            GUI.color = _uiContext.Styles.Theme.Palette.SurfacePage;
             GUI.DrawTexture(backdropRect, Texture2D.whiteTexture);
             GUI.color = oldColor;
 
@@ -221,7 +221,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     DrawSection(window.Sections[i]);
                     if (i < window.Sections.Length - 1)
-                        GUILayout.Space(6f);
+                        GUILayout.Space(12f);
                 }
             }
             GUILayout.Space(18f);
@@ -279,7 +279,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawSection(window.Sections[i], true);
                 if (i < window.Sections.Length - 1)
-                    GUILayout.Space(6f);
+                    GUILayout.Space(12f);
             }
             GUILayout.EndVertical();
             GUILayout.EndScrollView();
@@ -363,7 +363,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 DrawSection(section, !showDetailsPane, _buildPaletteSearchText, CandidateFilterAll);
-                GUILayout.Space(6f);
+                GUILayout.Space(12f);
                 drewCandidateGrid = true;
             }
             if (!drewCandidateGrid)
@@ -404,7 +404,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         continue;
 
                     DrawSection(section);
-                    GUILayout.Space(6f);
+                    GUILayout.Space(12f);
                 }
             }
             GUILayout.Space(24f);
@@ -432,7 +432,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         continue;
 
                     DrawSection(section);
-                    GUILayout.Space(6f);
+                    GUILayout.Space(12f);
                 }
                 GUILayout.Space(24f);
                 GUILayout.EndScrollView();
@@ -536,7 +536,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ref _spritePickerSearchText,
                     ref _spritePickerCandidateFilter,
                     ref _spritePickerSearchFocused);
-                GUILayout.Space(6f);
+                GUILayout.Space(8f);
             }
 
             for (int i = 0; document != null && document.Sections != null && i < document.Sections.Length; i++)
@@ -546,7 +546,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 else
                     DrawSection(document.Sections[i]);
                 if (i < document.Sections.Length - 1)
-                    GUILayout.Space(6f);
+                    GUILayout.Space(12f);
             }
 
             GUILayout.EndScrollView();
@@ -704,9 +704,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawCustomZoomToolbar(editor, contentWidth);
             GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
-            float saveWidth = (contentWidth - 6f) * 0.5f;
+            float saveWidth = (contentWidth - 8f) * 0.5f;
             DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, saveWidth, editor.IsAnimationEditor ? "Save edited animation frames. Ctrl+S" : "Save the current pixel edit. Ctrl+S");
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, "Discard", false, saveWidth, "Discard the current pixel edit.", editor.Dirty);
             GUILayout.EndHorizontal();
         }
@@ -736,9 +736,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (DrawPixelEditorGroupHeader("pixel_editor.group.animation.more", "More", false))
             {
                 GUILayout.BeginHorizontal();
-                DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertFrame, "Revert Frame", false, Math.Max(104f, (contentWidth - 6f) * 0.5f), "Revert the current frame.");
-                GUILayout.Space(6f);
-                DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertAll, "Revert Animation", false, Math.Max(126f, (contentWidth - 6f) * 0.5f), "Revert all edited frames.");
+                DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertFrame, "Revert Frame", false, Math.Max(104f, (contentWidth - 8f) * 0.5f), "Revert the current frame.");
+                GUILayout.Space(8f);
+                DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertAll, "Revert Animation", false, Math.Max(126f, (contentWidth - 8f) * 0.5f), "Revert all edited frames.");
                 GUILayout.EndHorizontal();
             }
         }
@@ -911,7 +911,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (editor == null || !editor.Visible)
                 return;
 
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             GUILayout.BeginVertical(_uiContext.Styles.Section);
             GUILayout.Label(editor.IsCharacterEditor ? "Character Pixel Editor" : "Pixel Editor", _sectionTitleStyle);
             GUILayout.Label(
@@ -929,14 +929,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (editor.IsCharacterEditor)
             {
                 DrawCharacterPartToolbar(editor, controlsWidth);
-                GUILayout.Space(6f);
+                GUILayout.Space(8f);
             }
             DrawCustomEditorToolbar(editor, controlsWidth);
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             DrawCustomClipboardToolbar(editor, controlsWidth);
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             DrawCustomZoomToolbar(editor, controlsWidth);
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             GUILayout.Label("Active Color", _smallTitleStyle);
             Rect colorRect = GUILayoutUtility.GetRect(112f, 44f, GUILayout.Width(112f), GUILayout.Height(44f));
             DrawColorPreview(colorRect, editor.ActiveColor);
@@ -955,13 +955,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUILayout.Space(4f);
             }
             GUILayout.EndHorizontal();
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
 
             DrawColorSlider("R", editor, 0);
             DrawColorSlider("G", editor, 1);
             DrawColorSlider("B", editor, 2);
             DrawColorSlider("A", editor, 3);
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             GUILayout.Label(BuildToolHint(editor.ActiveTool), _mutedTextStyle);
             GUILayout.EndVertical();
 
@@ -1616,8 +1616,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
             }
             DrawSearchPlaceholder(searchRect, searchText, "Filter choices");
-            if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
+            if (searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal))
                 DrawFieldFocusBorder(searchRect);
+            else if (searchTopmost && Event.current != null && searchRect.Contains(Event.current.mousePosition))
+                DrawFieldHoverBorder(searchRect);
 
             Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
@@ -1689,8 +1691,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 searchText = ScenarioAuthoringRendererInteractionState.Instance.GetCandidateSearch(controlName);
             }
             DrawSearchPlaceholder(searchRect, searchText, placeholder);
-            if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
+            if (searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal))
                 DrawFieldFocusBorder(searchRect);
+            else if (searchTopmost && Event.current != null && searchRect.Contains(Event.current.mousePosition))
+                DrawFieldHoverBorder(searchRect);
 
             Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
@@ -1742,7 +1746,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorSection advanced = FindSection(window, "home_advanced");
 
             float fullWidth = GetSectionContentWidth();
-            float gap = 10f;
+            float gap = 12f;
             float leftWidth = Mathf.Clamp(fullWidth * 0.38f, 390f, 560f);
             float rightWidth = Math.Max(320f, fullWidth - leftWidth - gap);
             GUILayout.BeginHorizontal();
@@ -1752,7 +1756,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (identity != null)
             {
                 DrawHomeIdentityHeader(identity);
-                GUILayout.Space(6f);
+                GUILayout.Space(12f);
             }
 
             // The setup checklist and next-issue callout retain their existing
@@ -1779,7 +1783,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawSection(quickActions);
             if (advanced != null)
             {
-                GUILayout.Space(6f);
+                GUILayout.Space(12f);
                 DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "home.group.advanced", "Advanced diagnostics", "Debug details", false, advanced, DisclosureBodyStrategy.Section);
             }
             GUILayout.EndVertical();
@@ -1865,7 +1869,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorSection logic = FindSection(window, "timeline_logic");
             bool roomy = _chromeViewportRect.height >= 820f;
             float fullWidth = GetSectionContentWidth();
-            float gap = 10f;
+            float gap = 12f;
             float leftWidth = Math.Max(360f, (fullWidth - gap) * 0.58f);
             float rightWidth = Math.Max(300f, fullWidth - leftWidth - gap);
 
@@ -1964,7 +1968,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
                 if (!rowOpen)
                 {
-                    GUILayout.Space(6f);
+                    GUILayout.Space(8f);
                     GUILayout.BeginHorizontal();
                     rowOpen = true;
                 }
@@ -1978,8 +1982,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
                 Rect rect = GUILayoutUtility.GetRect(width, 30f, GUILayout.Width(width), GUILayout.Height(30f));
                 DrawButton(rect, item.Action, false);
-                GUILayout.Space(6f);
-                rowWidth += width + 6f;
+                GUILayout.Space(8f);
+                rowWidth += width + 8f;
             }
             if (rowOpen)
                 GUILayout.EndHorizontal();
@@ -2284,7 +2288,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioUiAtlasSkin.DrawCornerCutTexture(barRect, _uiContext.Styles.PanelInsetTexture);
             float fillWidth = Mathf.Clamp01(row.Value / (float)Math.Max(1, row.Max)) * Math.Max(0f, barRect.width - 4f);
             Color oldColor = GUI.color;
-            GUI.color = new Color(0.45f, 0.61f, 0.32f, 1f);
+            GUI.color = _uiContext.Styles.Theme.Palette.SemanticReadyStrong;
             GUI.DrawTexture(new Rect(barRect.x + 2f, barRect.y + 2f, fillWidth, barRect.height - 4f), Texture2D.whiteTexture);
             GUI.color = oldColor;
 
@@ -2403,8 +2407,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.Box(searchRect, _survivorTraitPickerSearchText ?? string.Empty, _uiContext.Styles.SearchField);
             }
             DrawSearchPlaceholder(searchRect, _survivorTraitPickerSearchText, "Filter traits");
-            if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), "survivor_trait_picker_search", StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
+            if (searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), "survivor_trait_picker_search", StringComparison.Ordinal))
                 DrawFieldFocusBorder(searchRect);
+            else if (searchTopmost && Event.current != null && searchRect.Contains(Event.current.mousePosition))
+                DrawFieldHoverBorder(searchRect);
 
             float y = searchRect.yMax + 8f;
             int drawn = 0;
@@ -2622,11 +2628,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             DrawHomeHeadlineField(titleItem);
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             DrawHomeStatusChips(chips);
             if (pathItem != null || copyPath != null)
             {
-                GUILayout.Space(5f);
+                GUILayout.Space(8f);
                 bool showPath = pathItem != null && IsHomeAdvancedDetailsEnabled();
                 DrawHomeDraftPath(showPath ? pathItem : null, copyPath);
             }
@@ -2663,8 +2669,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _editableFieldDrafts[controlName] = next;
             bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
             _editableFieldFocused = _editableFieldFocused || focused;
-            if (focused || (fieldTopmost && Event.current != null && rect.Contains(Event.current.mousePosition)))
+            if (focused)
                 DrawFieldFocusBorder(rect);
+            else if (fieldTopmost && Event.current != null && rect.Contains(Event.current.mousePosition))
+                DrawFieldHoverBorder(rect);
             TryCommitEditableField(item, controlName, value, next, previouslyFocused, focused);
             TrackEditableFieldFocus(controlName, focused);
         }
@@ -2702,8 +2710,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _editableFieldDrafts[controlName] = next;
             bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
             _editableFieldFocused = _editableFieldFocused || focused;
-            if (focused || hovered)
+            if (focused)
                 DrawFieldFocusBorder(rect);
+            else if (hovered)
+                DrawFieldHoverBorder(rect);
             TryCommitEditableField(item, controlName, value ?? string.Empty, next, previouslyFocused, focused);
             TrackEditableFieldFocus(controlName, focused);
         }
@@ -2730,8 +2740,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 Rect rect = GUILayoutUtility.GetRect(width, 26f, GUILayout.Width(width), GUILayout.Height(26f));
                 DrawHomeStatusChip(rect, action);
-                GUILayout.Space(6f);
-                rowWidth += width + 6f;
+                GUILayout.Space(4f);
+                rowWidth += width + 4f;
             }
             GUILayout.EndHorizontal();
         }
@@ -2888,7 +2898,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(hint))
             {
-                GUILayout.Space(6f);
+                GUILayout.Space(8f);
                 GUILayout.Label(hint, _uiContext.Styles.PaperMutedText);
             }
             GUILayout.EndVertical();
@@ -3010,7 +3020,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     float pulse = 0.45f + (Mathf.Sin(Time.realtimeSinceStartup * 2.1f) * 0.20f);
                     Color oldColor = GUI.color;
-                    GUI.color = new Color(0.94f, 0.80f, 0.52f, pulse);
+                    Color pulseColor = _uiContext.Styles.Theme.Palette.AccentGold;
+                    pulseColor.a = pulse;
+                    GUI.color = pulseColor;
                     ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
                     GUI.color = oldColor;
                 }
@@ -3086,10 +3098,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (questions == null || questions.Count == 0)
                 return;
 
-            float availableWidth = GetSectionContentWidth();
-            float gap = 10f;
-            float cardHeight = _chromeViewportRect.height < 820f ? 90f : 104f;
-            int columns = availableWidth >= 700f ? 2 : 1;
+            float availableWidth = Math.Min(760f, GetSectionContentWidth());
+            float gap = 12f;
+            float cardHeight = 104f;
+            int columns = availableWidth >= 720f ? 2 : 1;
             float cardWidth = columns == 2 ? (availableWidth - gap) * 0.5f : availableWidth;
             for (int i = 0; i < questions.Count; i += columns)
             {
@@ -3109,7 +3121,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
                 GUILayout.EndHorizontal();
                 if (i + columns < questions.Count)
-                    GUILayout.Space(_chromeViewportRect.height < 820f ? 5f : 7f);
+                    GUILayout.Space(12f);
             }
         }
 
@@ -3148,9 +3160,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (TryDrawNewWindowsSection(section, compactInspector))
                 return;
 
-            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            bool specializedSurface = section.Layout == ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid
+                || section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid
+                || section.Layout == ScenarioAuthoringInspectorSectionLayout.CastCardGrid
+                || section.Layout == ScenarioAuthoringInspectorSectionLayout.SurvivorEditor;
+            float sectionMaxWidth = specializedSurface ? 1080f : 760f;
+            GUILayout.BeginVertical(_uiContext.Styles.Card, GUILayout.Width(Math.Min(sectionMaxWidth, GetSectionContentWidth())));
             if (!string.IsNullOrEmpty(section.Title))
-                GUILayout.Label(section.Title, _sectionTitleStyle);
+                GUILayout.Label(section.Title, _uiContext.Styles.PaperTitleText);
 
             if (IsHomeQuestionSection(section))
             {
@@ -3373,19 +3390,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 RegisterTourTarget("section:" + section.Id, rect);
             if (!string.IsNullOrEmpty(action.Id))
                 RegisterTourTarget("action:" + action.Id, rect);
+            ScenarioUiAtlasSkin.DrawCornerCutShadow(rect, _uiContext.Styles.ShadowTexture);
             bool clicked = DrawPlainButton(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card, action.Enabled);
             if (_uiContext != null && _uiContext.Styles != null)
             {
-                Color domainTint;
-                int domainSeed;
-                ResolveHomeDomainFace(section != null ? section.Id : null, out domainTint, out domainSeed);
+                int domainSeed = ResolveHomeDomainGrainSeed(section != null ? section.Id : null);
                 ScenarioUiParchment.PaintFace(
                     rect,
                     _uiContext.Styles.Textures,
-                    domainTint,
+                    Color.clear,
                     domainSeed,
-                    0.05f,
-                    1f,
+                    0.035f,
+                    0.45f,
                     _uiContext.Styles.BevelLightTexture,
                     _uiContext.Styles.BevelDarkTexture);
             }
@@ -3452,20 +3468,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect iconRect = new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f);
             string role = ResolveHomeIconRole(section);
             GUI.Box(rect, GUIContent.none, action != null && action.Emphasized ? _uiContext.Styles.ButtonActive : _uiContext.Styles.Field);
-            // Give each domain's glyph plate its own grain instance and faint
-            // tint so the tiles read as distinct stamped frames, not clones.
-            Color glyphTint;
-            int glyphSeed;
-            ResolveHomeDomainFace(section != null ? section.Id : null, out glyphTint, out glyphSeed);
+            int glyphSeed = ResolveHomeDomainGrainSeed(section != null ? section.Id : null);
             ScenarioUiParchment.PaintFace(
                 rect,
                 _uiContext.Styles.Textures,
-                new Color(glyphTint.r, glyphTint.g, glyphTint.b, glyphTint.a * 0.6f),
+                Color.clear,
                 glyphSeed + 101,
-                0.05f,
-                0.5f,
-                null,
-                null);
+                0.015f,
+                0.10f,
+                _uiContext.Styles.BorderStrongTexture,
+                _uiContext.Styles.BorderHighlightTexture);
             if (!string.IsNullOrEmpty(role) && ScenarioUiAtlasSkin.HasIcon(role) && ScenarioUiAtlasSkin.DrawIcon(iconRect, role))
                 return true;
 
@@ -3489,50 +3501,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return section.Id;
         }
 
-        /// <summary>
-        /// Maps a home question section to a subtle domain identity: a faint
-        /// colour wash and a distinct grain seed. Variations stay quiet (wash
-        /// alpha ~0.05) so the parchment set reads as one cohesive book, with
-        /// each page family only softly tinted (Cast warm, Supplies olive,
-        /// Timeline amber, Story burgundy, World sepia, Home/Ready neutral).
-        /// </summary>
-        private static void ResolveHomeDomainFace(string sectionId, out Color tint, out int grainSeed)
+        private static int ResolveHomeDomainGrainSeed(string sectionId)
         {
             string id = sectionId ?? string.Empty;
             if (string.Equals(id, "home_people", StringComparison.OrdinalIgnoreCase))
-            {
-                tint = new Color(0.60f, 0.32f, 0.20f, 0.055f); // Cast: warm terracotta
-                grainSeed = 34;
-                return;
-            }
+                return 34;
             if (string.Equals(id, "home_inventory", StringComparison.OrdinalIgnoreCase))
-            {
-                tint = new Color(0.42f, 0.44f, 0.22f, 0.055f); // Supplies: olive
-                grainSeed = 47;
-                return;
-            }
+                return 47;
             if (string.Equals(id, "home_events", StringComparison.OrdinalIgnoreCase))
-            {
-                tint = new Color(0.72f, 0.50f, 0.14f, 0.055f); // Timeline: amber
-                grainSeed = 58;
-                return;
-            }
+                return 58;
             if (string.Equals(id, "home_art", StringComparison.OrdinalIgnoreCase))
-            {
-                tint = new Color(0.52f, 0.18f, 0.22f, 0.05f); // Story/Art: burgundy
-                grainSeed = 63;
-                return;
-            }
+                return 63;
             if (string.Equals(id, "home_world", StringComparison.OrdinalIgnoreCase))
-            {
-                tint = new Color(0.46f, 0.34f, 0.20f, 0.055f); // World/Map: sepia
-                grainSeed = 21;
-                return;
-            }
-
-            // Home, Ready-to-test, Publish and anything else stay neutral.
-            tint = new Color(0f, 0f, 0f, 0f);
-            grainSeed = 12;
+                return 21;
+            return 12;
         }
 
         private static ScenarioUiPillEmphasis ResolveHomeBadgeEmphasis(string badge)
@@ -3678,7 +3660,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _editableFieldFocused = _editableFieldFocused || focused;
             if (focused || hovered)
             {
-                DrawFieldFocusBorder(fieldRect);
+                if (focused)
+                    DrawFieldFocusBorder(fieldRect);
+                else
+                    DrawFieldHoverBorder(fieldRect);
                 GUIStyle fieldStyle = _uiContext.Styles.Field;
                 Vector2 textSize = fieldStyle.CalcSize(new GUIContent(next ?? string.Empty));
                 float caretX = Mathf.Min(fieldRect.xMax - fieldStyle.padding.right - 2f, fieldRect.x + fieldStyle.padding.left + textSize.x + 1f);
@@ -3742,8 +3727,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Color oldColor = GUI.color;
             GUI.color = Color.white;
-            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderStrongTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.FocusBorderTexture, _uiContext.Styles.FocusBorderTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(new Rect(rect.x + 1f, rect.y + 1f, Math.Max(0f, rect.width - 2f), Math.Max(0f, rect.height - 2f)), _uiContext.Styles.FocusBorderTexture, _uiContext.Styles.FocusBorderTexture);
             GUI.color = oldColor;
+        }
+
+        private void DrawFieldHoverBorder(Rect rect)
+        {
+            if (_uiContext == null || _uiContext.Styles == null)
+                return;
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderStrongTexture);
         }
 
         private float CalculateKeyValueRowHeight(string label, string value)
@@ -3917,8 +3910,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             style.fontSize = 19;
             Color previous = GUI.color;
             Color starColor = favorite
-                ? _uiContext.Styles.Theme.Palette.TextTitle
-                : new Color(0.77f, 0.72f, 0.63f, 0.72f);
+                ? _uiContext.Styles.Theme.Palette.AccentGold
+                : _uiContext.Styles.Theme.Palette.TextSecondary;
             GUI.color = new Color(previous.r * starColor.r, previous.g * starColor.g, previous.b * starColor.b, previous.a * starColor.a);
             GUI.Label(starRect, new GUIContent(favorite ? "\u2605" : "\u2606", favorite ? "Remove from Favorites" : "Add to Favorites"), style);
             GUI.color = previous;
@@ -3986,15 +3979,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawFactGrid(ScenarioAuthoringInspectorSection section, bool compactInspector)
         {
             float availableWidth = GetSectionContentWidth();
-            float gap = 6f;
-            bool twoColumns = !compactInspector && availableWidth >= 420f;
-            float cellWidth = twoColumns ? (availableWidth - gap) * 0.5f : availableWidth;
+            int shortFieldCount = 0;
+            for (int itemIndex = 0; section != null && section.Items != null && itemIndex < section.Items.Length; itemIndex++)
+            {
+                ScenarioAuthoringInspectorItem candidate = section.Items[itemIndex];
+                if (candidate != null && candidate.Action == null && candidate.Kind != ScenarioAuthoringInspectorItemKind.Text)
+                    shortFieldCount++;
+            }
+            float columnGap = 16f;
+            float buttonGap = 8f;
+            bool twoColumns = !compactInspector && availableWidth >= 720f && shortFieldCount >= 4;
+            float cellWidth = twoColumns ? (availableWidth - columnGap) * 0.5f : availableWidth;
             float cellHeight = 64f;
             int column = 0;
             int actionColumn = 0;
             bool actionRow = false;
             int actionColumns = availableWidth >= 720f ? 4 : (availableWidth >= 460f ? 2 : 1);
-            float actionWidth = (availableWidth - (gap * (actionColumns - 1))) / actionColumns;
+            float actionWidth = (availableWidth - (buttonGap * (actionColumns - 1))) / actionColumns;
             GUILayout.BeginHorizontal();
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
             {
@@ -4060,7 +4061,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     DrawButton(actionRect, item.Action, false);
                     actionColumn++;
                     if (actionColumn < actionColumns)
-                        GUILayout.Space(gap);
+                        GUILayout.Space(buttonGap);
                     continue;
                 }
 
@@ -4078,7 +4079,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 column++;
                 if (twoColumns && column < 2)
                 {
-                    GUILayout.Space(gap);
+                    GUILayout.Space(columnGap);
                 }
                 else if (i + 1 < section.Items.Length)
                 {
@@ -4318,7 +4319,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             int count = Math.Min(stats.Length, 5);
-            float gap = 5f;
+            float gap = 4f;
             float columnWidth = (rect.width - (gap * (count - 1))) / count;
             for (int i = 0; i < count; i++)
             {
@@ -4344,7 +4345,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float fillWidth = Mathf.Clamp01(stat.Value / max) * Math.Max(0f, bar.width - 4f);
             Rect fill = new Rect(bar.x + 2f, bar.y + 2f, fillWidth, bar.height - 4f);
             Color oldColor = GUI.color;
-            GUI.color = new Color(0.45f, 0.61f, 0.32f, 1f);
+            GUI.color = _uiContext.Styles.Theme.Palette.SemanticReadyStrong;
             GUI.DrawTexture(fill, Texture2D.whiteTexture);
             GUI.color = oldColor;
         }
@@ -4574,7 +4575,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Color oldColor = GUI.color;
-            GUI.color = new Color(0.94f, 0.80f, 0.52f, 0.32f * pulse);
+            Color pulseColor = _uiContext.Styles.Theme.Palette.AccentGold;
+            pulseColor.a = 0.32f * pulse;
+            GUI.color = pulseColor;
             ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
             GUI.color = oldColor;
         }
@@ -4817,7 +4820,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Space(8f);
             int sectionCount = settings.Sections != null ? settings.Sections.Length : 0;
             int leftCount = (sectionCount + 1) / 2;
-            float gap = 10f;
+            float gap = 12f;
             float columnWidth = Math.Max(220f, (bodyRect.width - 18f - gap) * 0.5f);
             bool roomy = _chromeViewportRect.height >= 820f;
             GUILayout.BeginHorizontal();

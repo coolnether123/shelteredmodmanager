@@ -156,23 +156,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
+            ScenarioUiStyleSheet styles = _uiContext.Styles;
+            bool page = style == styles.Page || style == styles.PanelBase;
+            bool inset = style == styles.Inset || style == styles.PanelInset || style == styles.Field;
+            bool card = style == styles.Card || style == styles.Section || style == styles.PanelRaised;
+            bool chrome = style == styles.Chrome || style == _headerStyle || style == _statusStyle || style == styles.Menu;
             bool drewNative = style == _headerStyle
                 ? ScenarioUiAtlasSkin.DrawHeader(rect)
                 : (style == _statusStyle ? ScenarioUiAtlasSkin.DrawStatus(rect) : ScenarioUiAtlasSkin.DrawPanel(rect));
             if (!drewNative)
             {
-                ScenarioUiAtlasSkin.DrawCornerCutShadow(rect);
+                if (card || chrome)
+                    ScenarioUiAtlasSkin.DrawCornerCutShadow(rect, styles.ShadowTexture);
                 GUI.Box(rect, GUIContent.none, style ?? _rootPanelStyle);
                 ScenarioUiParchment.PaintFace(
                     rect,
-                    _uiContext.Styles.Textures,
-                    new Color(0f, 0f, 0f, 0f),
+                    styles.Textures,
+                    Color.clear,
                     ChromeGrainSeed,
-                    0.045f,
-                    0.7f,
-                    null,
-                    null);
-                ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
+                    page ? 0.018f : (inset ? 0.015f : 0.035f),
+                    page || inset ? 0.10f : 0.45f,
+                    page ? null : (inset ? styles.BorderStrongTexture : styles.BorderHighlightTexture),
+                    page ? null : (inset ? styles.BorderHighlightTexture : styles.BorderStrongTexture));
+                if (page)
+                    ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, styles.BorderStrongTexture, styles.BorderStrongTexture);
             }
         }
     }

@@ -83,13 +83,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 Rect rect = GUILayoutUtility.GetRect(width, 28f, GUILayout.Width(width), GUILayout.Height(28f));
                 DrawButton(rect, item.Action, false);
-                GUILayout.Space(6f);
-                rowWidth += width + 6f;
+                GUILayout.Space(8f);
+                rowWidth += width + 8f;
                 drewAction = true;
             }
             GUILayout.EndHorizontal();
             if (drewAction)
-                GUILayout.Space(6f);
+                GUILayout.Space(8f);
 
             for (int i = 0; i < section.Items.Length; i++)
             {
@@ -114,7 +114,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (primary != null && !readOnly && RegisterRichHoverHelpSource(slotRect, primary))
                 tooltip = string.Empty;
 
-            GUIStyle style = slot != null && slot.Emphasized ? _activeButtonStyle : _uiContext.Styles.Field;
+            GUIStyle style = _uiContext.Styles.Field;
             if (DrawPlainButton(slotRect, new GUIContent(string.Empty, tooltip), style, clickable))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(primary.Id);
@@ -128,6 +128,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawInventorySlotIcon(slotRect, slot);
             DrawInventorySlotBadge(slotRect, slot);
             DrawInventoryQuantityBadge(slotRect, slot);
+            if (slot != null && slot.Emphasized)
+            {
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(slotRect, _uiContext.Styles.FocusBorderTexture, _uiContext.Styles.FocusBorderTexture);
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(new Rect(slotRect.x + 1f, slotRect.y + 1f, Math.Max(0f, slotRect.width - 2f), Math.Max(0f, slotRect.height - 2f)), _uiContext.Styles.FocusBorderTexture, _uiContext.Styles.FocusBorderTexture);
+            }
             if (slot != null && slot.Empty && clickable)
                 DrawInventoryEmptyAddGlyph(slotRect);
             if (!clickable && readOnly)
@@ -135,7 +140,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioUiAtlasSkin.DrawCornerCutBorder(slotRect, _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderSubtleTexture);
 
             Rect labelRect = new Rect(cellRect.x, slotRect.yMax + 3f, cellRect.width, reserveScheduleSpace ? 32f : 30f);
-            GUIStyle labelStyle = new GUIStyle(_mutedTextStyle);
+            GUIStyle labelStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
             labelStyle.wordWrap = true;
             labelStyle.clipping = TextClipping.Clip;
             GUI.Label(labelRect, slot != null ? slot.DisplayName ?? string.Empty : string.Empty, labelStyle);

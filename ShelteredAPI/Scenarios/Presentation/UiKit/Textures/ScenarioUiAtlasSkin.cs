@@ -69,12 +69,14 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 
         public static void DrawCornerCutShadow(Rect rect)
         {
-            Color oldColor = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.42f);
+            DrawCornerCutShadow(rect, Texture2D.blackTexture);
+        }
+
+        public static void DrawCornerCutShadow(Rect rect, Texture shadowTexture)
+        {
             DrawCornerCutTexture(
                 new Rect(rect.x + ShadowOffset, rect.y + ShadowOffset, rect.width, rect.height),
-                Texture2D.whiteTexture);
-            GUI.color = oldColor;
+                shadowTexture != null ? shadowTexture : Texture2D.blackTexture);
         }
 
         public static void DrawCornerCutBorder(Rect rect, Texture strong, Texture subtle)

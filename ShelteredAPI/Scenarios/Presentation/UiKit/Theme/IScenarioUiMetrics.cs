@@ -11,10 +11,20 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     internal interface IScenarioUiMetrics
     {
         // Spacing scale
+        float Space0 { get; }
+        float Space1 { get; }
+        float Space2 { get; }
+        float Space3 { get; }
+        float Space4 { get; }
+        float Space5 { get; }
+        float Space6 { get; }
         float PaddingXs { get; }
         float PaddingSm { get; }
         float PaddingMd { get; }
         float PaddingLg { get; }
+        float PaddingXl { get; }
+        float PaddingXxl { get; }
+        float PaddingXxxl { get; }
         float Gutter { get; }
 
         // Window chrome
@@ -32,6 +42,30 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         float CompactRowHeight { get; }
         float PillHeight { get; }
         float PillPaddingX { get; }
+        float PanePadding { get; }
+        float InsetPadding { get; }
+        float NavigatorRowGap { get; }
+        float NavigatorGroupGap { get; }
+        float CardGap { get; }
+        float HeadingGap { get; }
+        float FieldRowGap { get; }
+        float FormGroupGap { get; }
+        float ButtonGap { get; }
+        float SubtabGap { get; }
+        float ButtonHeight { get; }
+        float SubtabHeight { get; }
+        float NavigatorRowHeight { get; }
+        float NavigatorTwoLineHeight { get; }
+        float SectionHeadingHeight { get; }
+        float MinimumCardHeight { get; }
+        float DocumentMaxWidth { get; }
+        float TextFieldMaxWidth { get; }
+        float SelectorMaxWidth { get; }
+        float NumericFieldMaxWidth { get; }
+        float NarrativeFieldMaxWidth { get; }
+        float ButtonMaxWidth { get; }
+        float CompactChoiceMaxWidth { get; }
+        float SpecializedSurfaceMaxWidth { get; }
 
         // Typography (point sizes)
         int FontSizeBrand { get; }
