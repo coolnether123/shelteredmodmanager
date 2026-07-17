@@ -190,6 +190,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (IsAssetBrowserWorkshopPage(window))
                 return DrawAssetBrowserWorkshopPage(bodyRect, window);
 
+            if (window.WorkspaceBody != null)
+                return DrawWorkspaceBody(bodyRect, window);
+
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
@@ -212,7 +215,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else
             {
-                DrawFittedWorkshopPage(window);
+                DrawLegacyDisclosureWorkshopPage(window);
             }
             GUILayout.Space(18f);
             GUILayout.EndScrollView();
@@ -1848,7 +1851,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private void DrawFittedWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
+        private void DrawLegacyDisclosureWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
         {
             int sectionCount = window != null && window.Sections != null ? window.Sections.Length : 0;
             if (sectionCount == 0)
@@ -3700,6 +3703,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (item == null)
                 return;
+
+            if (item.Kind == ScenarioAuthoringInspectorItemKind.Choice)
+            {
+                DrawCompactChoice(item.Choice);
+                return;
+            }
 
             if (item.PreviewSprite != null || !string.IsNullOrEmpty(item.Detail) || !string.IsNullOrEmpty(item.Badge))
             {
