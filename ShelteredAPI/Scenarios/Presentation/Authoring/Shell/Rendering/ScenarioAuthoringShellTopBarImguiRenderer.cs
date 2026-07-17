@@ -175,9 +175,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (tabs.Count == 0)
                 return;
 
-            if (Screen.width >= 1280)
-                FitAllStageTabs(tabs, rect.width);
-
             float moreWidth = Mathf.Clamp(ScenarioUiMeasuredLabel.Width("More >", _buttonStyle, 28f), 82f, 112f);
             List<StageTabLayout> visibleTabs;
             List<StageTabLayout> overflowLayouts;
@@ -231,17 +228,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawTopBarMoreButton(_topBarMoreButtonRect, moreAction);
             if (_topBarMoreMenuOpen)
                 DrawTopBarMoreMenu(_topBarMoreButtonRect, _topBarOverflowTabs);
-        }
-
-        private static void FitAllStageTabs(List<StageTabLayout> tabs, float availableWidth)
-        {
-            if (tabs == null || tabs.Count == 0 || MeasureStageTabRunWidth(tabs, null) <= availableWidth)
-                return;
-
-            float decorationWidth = (Math.Max(0, tabs.Count - 1) * 2f) + 10f;
-            float widthCap = Math.Max(42f, (availableWidth - decorationWidth) / tabs.Count);
-            for (int i = 0; i < tabs.Count; i++)
-                tabs[i].Width = Math.Min(tabs[i].Width, widthCap);
         }
 
         private List<StageTabLayout> BuildMeasuredStageTabList(ScenarioAuthoringInspectorAction[] actions, bool compact)
