@@ -10,11 +10,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
     internal sealed class ScenarioAuthoringWorkspaceComposer
     {
         private readonly ScenarioStoryWorkspaceViewModelBuilder _storyBuilder;
+        private readonly ScenarioCastWorkspaceViewModelBuilder _castBuilder;
 
         public ScenarioAuthoringWorkspaceComposer()
         {
             _storyBuilder = new ScenarioStoryWorkspaceViewModelBuilder(
                 new ScenarioQuestPopupsWorkspaceBuilder());
+            _castBuilder = new ScenarioCastWorkspaceViewModelBuilder();
         }
 
         public ScenarioAuthoringWorkspaceViewModel Build(
@@ -28,6 +30,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             {
                 case ScenarioAuthoringWindowContentKind.Quests:
                     return _storyBuilder.Build(context);
+                case ScenarioAuthoringWindowContentKind.Survivors:
+                    return _castBuilder.Build(context);
                 default:
                     return null;
             }
