@@ -259,7 +259,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new InspectorViewModelBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new StatusBarViewModelBuilder(resolver.Get<ScenarioSelectionScopeService>()); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineNavigationService(resolver.Get<ScenarioAuthoringLayoutService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineNavigationService(resolver.Get<ScenarioAuthoringLayoutService>(), resolver.Get<IScenarioEditorService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAssetAuthoringContentBuilder(

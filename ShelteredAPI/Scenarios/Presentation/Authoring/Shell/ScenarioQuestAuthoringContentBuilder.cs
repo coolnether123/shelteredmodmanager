@@ -36,12 +36,107 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AppendConversationSections(sections, definition);
             sections.Add(BuildStageFlowSection(definition, storyIssues));
             AppendStoryStageSections(sections, definition, storyIssues);
+            sections.AddRange(BuildQuestPopupSections(context));
+
+            return sections.ToArray();
+        }
+
+        internal ScenarioAuthoringInspectorSection[] BuildQuestPopupSections(ScenarioAuthoringWindowContentContext context)
+        {
+            QuestAuthoringSnapshot snapshot = QuestAuthoringSnapshot.From(context != null ? context.Definition : null);
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(BuildSideQuestIntroSection(snapshot));
             sections.Add(BuildToolsSection(snapshot));
             AppendAuthoredQuestSections(sections, snapshot);
             sections.Add(BuildPickerSection(snapshot));
             sections.Add(BuildRuntimeSection());
+            return sections.ToArray();
+        }
 
+        internal static ScenarioAuthoringInspectorSection[] BuildConversationWorkspaceDocumentSections(
+            ScenarioDefinition definition,
+            int conversationIndex)
+        {
+            ScenarioConversationAuthoringDefinition authored = definition != null ? definition.Conversations : null;
+            ScenarioConversationDefinition conversation = authored != null && authored.Conversations != null
+                && conversationIndex >= 0 && conversationIndex < authored.Conversations.Count
+                    ? authored.Conversations[conversationIndex]
+                    : null;
+            if (conversation == null)
+                return new ScenarioAuthoringInspectorSection[0];
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            AppendConversationParticipants(sections, definition, conversation, conversationIndex);
+            if (sections.Count > 0)
+                sections[0].Title = "PARTICIPANTS";
+            ScenarioAuthoringInspectorSection lines = BuildConversationLinesSection(conversation, conversationIndex);
+            lines.Title = "LINES";
+            sections.Add(lines);
+
+            ScenarioAuthoringInspectorSection triggering = BuildConversationWhenSection(conversation, conversationIndex);
+            triggering.Title = "TRIGGERING";
+            List<ScenarioAuthoringInspectorItem> triggerItems = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; triggering.Items != null && i < triggering.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = triggering.Items[i];
+                if (item == null || string.Equals(item.Label, "Event trigger id", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                triggerItems.Add(item);
+            }
+            triggering.Items = triggerItems.ToArray();
+            sections.Add(triggering);
+
+            string indexText = conversationIndex.ToString(CultureInfo.InvariantCulture);
+            List<ScenarioAuthoringInspectorItem> toolItems = new List<ScenarioAuthoringInspectorItem>();
+            toolItems.Add(ScenarioInspectorItemFactory.Text(FormatConversationSummary(definition, conversation)));
+            toolItems.Add(ScenarioInspectorItemFactory.Property("Validation", ValidateConversation(definition, conversation)));
+            toolItems.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionStoryConversationPreviewPrefix + indexText,
+                "Run Preview",
+                "Play this conversation now if its participants resolve in the authoring world.",
+                true,
+                true,
+                "PV")));
+            ScenarioAuthoringInspectorSection footer = BuildConversationFooterSection(
+                conversationIndex,
+                authored != null && authored.Conversations != null ? authored.Conversations.Count : 0);
+            for (int i = 0; footer.Items != null && i < footer.Items.Length; i++)
+                toolItems.Add(footer.Items[i]);
+            sections.Add(Section("story_conversation_tools_" + indexText, "PREVIEW / TOOLS", ScenarioAuthoringInspectorSectionLayout.ActionStrip, toolItems));
+
+            List<ScenarioAuthoringInspectorItem> advancedItems = new List<ScenarioAuthoringInspectorItem>();
+            advancedItems.Add(EditableProperty(
+                "Internal conversation id",
+                conversation.Id,
+                ScenarioAuthoringActionIds.ActionStoryConversationIdPrefix + indexText + ".",
+                "Stable routing id used by conversation effects."));
+            advancedItems.Add(EditableProperty(
+                "Event trigger key",
+                conversation.Trigger != null ? conversation.Trigger.TriggerId : null,
+                ScenarioAuthoringActionIds.ActionStoryConversationTriggerIdPrefix + indexText + ".",
+                "Stored event routing key."));
+            ScenarioConversationSuppressionDefinition settings = authored != null ? authored.Settings : null;
+            advancedItems.Add(EditableProperty(
+                "Suppressed topic keys",
+                FormatList(settings != null ? settings.SuppressedVanillaTopicKeys : null),
+                ScenarioAuthoringActionIds.ActionStoryConversationSuppressionTopicPrefix,
+                "Stored vanilla localization topic keys."));
+            for (int i = 0; conversation.Lines != null && i < conversation.Lines.Count; i++)
+            {
+                ScenarioConversationLineDefinition line = conversation.Lines[i];
+                if (line != null && !string.IsNullOrEmpty(line.TextKey))
+                    advancedItems.Add(ScenarioInspectorItemFactory.Property("Technical line key " + (i + 1).ToString(CultureInfo.InvariantCulture), line.TextKey));
+            }
+            ScenarioAuthoringInspectorSection existingAdvanced = BuildConversationAdvancedSection(conversation, conversationIndex);
+            for (int i = 0; existingAdvanced.Items != null && i < existingAdvanced.Items.Length; i++)
+                advancedItems.Add(existingAdvanced.Items[i]);
+            ScenarioAuthoringInspectorSection advanced = Section(
+                "story_conversation_advanced_" + indexText,
+                "ADVANCED",
+                ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                advancedItems);
+            advanced.IsAdvanced = true;
+            sections.Add(advanced);
             return sections.ToArray();
         }
 
@@ -321,7 +416,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioConversationParticipantDefinition participant = conversation.Participants[participantIndex];
             string pair = conversationIndex.ToString(CultureInfo.InvariantCulture) + "." + participantIndex.ToString(CultureInfo.InvariantCulture);
             items.Add(EditableProperty("Slot " + (participantIndex + 1).ToString(CultureInfo.InvariantCulture), participant != null ? participant.Slot : null, ScenarioAuthoringActionIds.ActionStoryConversationParticipantSlotPrefix + pair + ".", "Speaker slot referenced by lines."));
-            items.Add(ScenarioInspectorItemFactory.Property("Binding " + Safe(participant != null ? participant.Slot : null), FormatParticipant(participant)));
+            items.Add(ScenarioInspectorItemFactory.Property("Binding " + Safe(participant != null ? participant.Slot : null), FormatParticipant(definition, participant)));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionStoryConversationParticipantRequiredPrefix + pair, "Required", "Toggle whether unresolved participant blocks playback.", true, participant != null && participant.Required, "RQ")));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionStoryConversationParticipantDeletePrefix + pair, "Remove Slot", "Remove this participant slot.", true, false, "RM")));
 
@@ -353,7 +448,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioConversationLineDefinition line = conversation.Lines[lineIndex];
             string pair = conversationIndex.ToString(CultureInfo.InvariantCulture) + "." + lineIndex.ToString(CultureInfo.InvariantCulture);
-            items.Add(ScenarioInspectorItemFactory.Property("Line " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture), Safe(line != null ? line.RawText : null), "Speaker " + Safe(line != null ? line.SpeakerSlot : null) + ", delay " + (line != null ? line.DelaySeconds.ToString("0.##", CultureInfo.InvariantCulture) : "0") + "s"));
+            items.Add(ScenarioInspectorItemFactory.Property("Line " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture), ResolveConversationLine(line, lineIndex), "Speaker " + Safe(line != null ? line.SpeakerSlot : null) + ", delay " + (line != null ? line.DelaySeconds.ToString("0.##", CultureInfo.InvariantCulture) : "0") + "s"));
             items.Add(EditableProperty("Text " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture), line != null ? line.RawText : null, ScenarioAuthoringActionIds.ActionStoryConversationLineTextPrefix + pair + ".", "Raw authored text shown in the speech bubble."));
             for (int i = 0; conversation.Participants != null && i < conversation.Participants.Count; i++)
             {
@@ -891,6 +986,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static void AddStoryItemActions(List<ScenarioAuthoringInspectorItem> items, string title, List<ItemEntry> entries, bool removal, int stageIndex, int intercomIndex)
         {
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(removal ? ScenarioStoryAuthoringActions.RemovalAdd(stageIndex, intercomIndex) : ScenarioStoryAuthoringActions.RewardAdd(stageIndex, intercomIndex), "Add " + title, "Add an item row.", true, false, "I+")));
+            if (entries == null || entries.Count == 0)
+                return;
             List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
             int max = Math.Min(6, catalog.Count);
             for (int e = 0; entries != null && e < entries.Count; e++)
@@ -971,7 +1068,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioConversationParticipantFallback fallback = ParseFallback(values[i]);
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     actionPrefix + Uri.EscapeDataString(values[i]),
-                    "Fallback " + values[i],
+                    "Fallback " + SplitWords(values[i]),
                     "Use this selector when no explicit actor resolves.",
                     true,
                     participant != null && participant.Fallback == fallback,
@@ -1025,7 +1122,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (trigger == null)
                 return "No trigger settings";
             if (trigger.Source == ScenarioConversationTriggerSource.Event)
-                return "Event " + Safe(trigger.TriggerId);
+                return "Authored event trigger";
             if (trigger.Source == ScenarioConversationTriggerSource.Timeline)
                 return "Timeline " + ScenarioScheduleFormatter.Format(trigger.Time);
             return "Random weight " + trigger.Weight.ToString("0.##", CultureInfo.InvariantCulture)
@@ -1045,18 +1142,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return when + " - " + speaker + " says: " + line;
         }
 
-        private static string FormatParticipant(ScenarioConversationParticipantDefinition participant)
+        private static string FormatParticipant(ScenarioDefinition definition, ScenarioConversationParticipantDefinition participant)
         {
             if (participant == null)
                 return "Missing participant";
             List<string> parts = new List<string>();
             if (!string.IsNullOrEmpty(participant.StoryCharacterId))
-                parts.Add("story " + participant.StoryCharacterId);
+                parts.Add("story character " + FormatCharacterLabel(definition, participant.StoryCharacterId));
             if (participant.ActorRef != null)
-                parts.Add("actor " + ScenarioCastMemberReferenceCatalog.FormatActorRef(participant.ActorRef));
-            parts.Add("fallback " + participant.Fallback);
+                parts.Add("cast member " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, participant.ActorRef, true, true, "linked cast member"));
+            parts.Add("fallback " + SplitWords(participant.Fallback.ToString()).ToLowerInvariant());
             parts.Add(participant.Required ? "required" : "optional");
             return string.Join(", ", parts.ToArray());
+        }
+
+        private static string ResolveConversationLine(ScenarioConversationLineDefinition line, int index)
+        {
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                line != null ? line.RawText : null,
+                line != null ? line.TextKey : null,
+                null,
+                "Line " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static string SplitWords(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+            List<char> result = new List<char>();
+            for (int i = 0; i < value.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(value[i]) && char.IsLower(value[i - 1])) result.Add(' ');
+                result.Add(value[i]);
+            }
+            return new string(result.ToArray());
         }
 
         private static string FormatList(List<string> values)

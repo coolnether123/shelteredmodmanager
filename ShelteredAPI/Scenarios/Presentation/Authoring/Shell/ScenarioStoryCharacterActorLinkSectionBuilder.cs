@@ -10,6 +10,84 @@ using ShelteredAPI.Scenarios.Presentation.Inspector;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal static class ScenarioStoryCharacterActorLinkSectionBuilder
     {
+        internal static ScenarioAuthoringInspectorSection[] BuildWorkspaceDocumentSections(ScenarioDefinition definition, int characterIndex)
+        {
+            ScenarioNpcDefinition character = definition != null && definition.ScenarioCharacters != null
+                && characterIndex >= 0 && characterIndex < definition.ScenarioCharacters.Count
+                    ? definition.ScenarioCharacters[characterIndex]
+                    : null;
+            if (character == null)
+                return new ScenarioAuthoringInspectorSection[0];
+
+            string indexText = characterIndex.ToString(CultureInfo.InvariantCulture);
+            string displayName = FormatDisplayName(character, characterIndex);
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+
+            List<ScenarioAuthoringInspectorItem> identity = new List<ScenarioAuthoringInspectorItem>();
+            identity.Add(EditableProperty("Display name", displayName, "displayName", characterIndex, "The name shown throughout Story authoring."));
+            identity.Add(EditableProperty("Personality (optional)", character.Personality, "personality", characterIndex, "Leave blank to let the game choose a personality."));
+            identity.Add(EditableProperty("Species (optional)", character.Species, "species", characterIndex, "Leave blank for the default human character."));
+            sections.Add(Section("story_character_identity_" + indexText, "IDENTITY", ScenarioAuthoringInspectorSectionLayout.FactGrid, identity, false));
+
+            string linked = ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, "No cast member linked");
+            List<ScenarioAuthoringInspectorItem> cast = new List<ScenarioAuthoringInspectorItem>();
+            cast.Add(ScenarioInspectorItemFactory.Property("Cast link", character.ActorRef != null ? linked : "None", "Linking lets Story reuse an authored starting or arriving survivor."));
+            cast.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionStoryCharacterActorClearPrefix + indexText,
+                "Clear Cast Link",
+                "Keep this story character while removing the cast link.",
+                character.ActorRef != null,
+                false,
+                "CL")));
+            sections.Add(Section("story_character_cast_" + indexText, "CAST LINK", ScenarioAuthoringInspectorSectionLayout.ActionStrip, cast, false));
+            sections.Add(ScenarioCastMemberPickerBuilder.BuildSection(
+                "story_character_cast_picker_" + indexText,
+                "CHOOSE CAST MEMBER",
+                definition,
+                true,
+                true,
+                character.ActorRef,
+                ScenarioAuthoringActionIds.ActionStoryCharacterActorPrefix,
+                indexText,
+                "Add a starting or arriving survivor before linking this story character."));
+
+            List<ScenarioAuthoringInspectorItem> usage = new List<ScenarioAuthoringInspectorItem>();
+            List<ScenarioReferenceUsage> characterUsages = ScenarioReferenceIndex.FindUsages(definition, ScenarioReferenceTargetKind.StoryCharacter, character.CharacterId);
+            usage.Add(ScenarioInspectorItemFactory.Property(
+                "Usage",
+                ScenarioReferenceIndex.Summarize(characterUsages.Count),
+                characterUsages.Count > 0 ? "Clear these references before removing the character." : "Nothing references this character yet."));
+            for (int i = 0; i < characterUsages.Count && i < 8; i++)
+            {
+                ScenarioReferenceUsage reference = characterUsages[i];
+                if (reference == null || reference.NavStageIndex < 0)
+                    continue;
+                string stageTitle = ResolveStageTitle(definition, reference.NavStageIndex);
+                usage.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                    ScenarioStoryFocusedEditorActions.StageOpen(reference.NavStageIndex),
+                    "Go to " + stageTitle,
+                    "Open the stage that uses this character.",
+                    true,
+                    false,
+                    "->")));
+            }
+            usage.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                ScenarioStoryAuthoringActions.CharacterDelete(characterIndex),
+                "Remove Character",
+                "Remove this character when no Story references remain.",
+                true,
+                false,
+                "RM")));
+            sections.Add(Section("story_character_usage_" + indexText, "USAGE / TOOLS", ScenarioAuthoringInspectorSectionLayout.ActionStrip, usage, false));
+
+            List<ScenarioAuthoringInspectorItem> advanced = new List<ScenarioAuthoringInspectorItem>();
+            advanced.Add(ScenarioInspectorItemFactory.Property("Internal character id", FormatCharacterId(character, characterIndex), "Stable value used by routes, dialogue, and saved definitions."));
+            advanced.Add(EditableProperty("Vanilla actor preset", character.PresetId, "presetId", characterIndex, "Optional vanilla NPC preset implementation detail."));
+            advanced.Add(ScenarioInspectorItemFactory.Property("Actor reference", character.ActorRef != null ? ScenarioCastMemberReferenceCatalog.FormatActorRef(character.ActorRef) : "None"));
+            sections.Add(Section("story_character_advanced_" + indexText, "ADVANCED", ScenarioAuthoringInspectorSectionLayout.PropertyList, advanced, true));
+            return sections.ToArray();
+        }
+
         public static void AppendSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition)
         {
             if (sections == null || definition == null)
@@ -131,6 +209,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return item;
         }
 
+        private static ScenarioAuthoringInspectorSection Section(
+            string id,
+            string title,
+            ScenarioAuthoringInspectorSectionLayout layout,
+            List<ScenarioAuthoringInspectorItem> items,
+            bool advanced)
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = id,
+                Title = title,
+                Expanded = true,
+                Layout = layout,
+                IsAdvanced = advanced,
+                Items = items.ToArray()
+            };
+        }
+
         // Shared Find Usages affordance: a plain-language "Used in N places" line backed by the
         // reference index, plus a clickable "Go to" action per usage that reuses the focused-editor
         // navigation seam. Kept here so every editor surface renders references the same way.
@@ -188,9 +284,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string FormatDisplayName(ScenarioNpcDefinition character, int index)
         {
-            return !string.IsNullOrEmpty(character != null ? character.DisplayName : null)
-                ? character.DisplayName
-                : FormatCharacterId(character, index);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                character != null ? character.DisplayName : null,
+                null,
+                character != null ? character.CharacterId : null,
+                "Story Character " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static string ResolveStageTitle(ScenarioDefinition definition, int stageIndex)
+        {
+            ScenarioFlowStageDefinition stage = definition != null && definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null
+                && stageIndex >= 0 && stageIndex < definition.ScenarioFlow.Stages.Count
+                    ? definition.ScenarioFlow.Stages[stageIndex]
+                    : null;
+            string title = null;
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                if (stage.IntercomStages[i] != null && !string.IsNullOrEmpty(stage.IntercomStages[i].StageDescriptionKey))
+                {
+                    title = stage.IntercomStages[i].StageDescriptionKey;
+                    break;
+                }
+            }
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                title,
+                title,
+                stage != null ? stage.Id : null,
+                "Stage " + (stageIndex + 1).ToString(CultureInfo.InvariantCulture)).Text;
         }
 
     }

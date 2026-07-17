@@ -141,7 +141,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new StationUpgradeCommandHandler(editorService, selectionScopeService, identityAssignmentService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
-                new ScenarioStoryFocusedEditorCommandHandler(storyAuthoringService, editorService),
+                new ScenarioStoryFocusedEditorCommandHandler(storyAuthoringService, editorService, layoutService),
                 new StoryAuthoringCommandHandler(storyAuthoringService, editorService),
                 new ScenarioTestConsoleCommandHandler(editorService),
                 new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, baseModeReloadService),

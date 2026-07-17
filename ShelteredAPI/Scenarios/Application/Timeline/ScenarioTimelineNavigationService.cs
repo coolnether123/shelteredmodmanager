@@ -3,6 +3,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
@@ -12,10 +13,12 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
     internal sealed class ScenarioTimelineNavigationService
     {
         private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly IScenarioEditorService _editorService;
 
-        public ScenarioTimelineNavigationService(ScenarioAuthoringLayoutService layoutService)
+        public ScenarioTimelineNavigationService(ScenarioAuthoringLayoutService layoutService, IScenarioEditorService editorService)
         {
             _layoutService = layoutService;
+            _editorService = editorService;
         }
 
         public bool Navigate(ScenarioAuthoringState state, ScenarioTimelineEntry entry, out string message)
@@ -74,7 +77,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             }
         }
 
-        private static void ApplyFocusedEditorLink(ScenarioAuthoringState state, ScenarioTimelineEntry entry)
+        private void ApplyFocusedEditorLink(ScenarioAuthoringState state, ScenarioTimelineEntry entry)
         {
             if (state == null || entry == null)
                 return;
@@ -84,8 +87,13 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 int storyStageIndex = ResolveStoryStageIndex(entry);
                 if (storyStageIndex >= 0)
                 {
-                    state.FocusedEditorKind = ScenarioStoryFocusedEditorActions.FocusedEditorKind;
-                    state.FocusedEditorIndex = storyStageIndex;
+                    ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+                    ScenarioStoryFocusedEditorActions.SelectStageDocument(
+                        session != null ? session.WorkingDefinition : null,
+                        storyStageIndex);
+                    if (string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, System.StringComparison.OrdinalIgnoreCase))
+                        state.FocusedEditorKind = null;
+                    state.FocusedEditorIndex = -1;
                     state.FocusedEditorIsNew = false;
                     return;
                 }

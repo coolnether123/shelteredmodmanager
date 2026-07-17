@@ -1543,7 +1543,19 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             handled = true;
             ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
-            return _service.TryHandleAction(session, actionId, out message);
+            bool changed = _service.TryHandleAction(session, actionId, out message);
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (changed && string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryCharacterAdd, StringComparison.Ordinal)
+                && definition != null && definition.ScenarioCharacters != null && definition.ScenarioCharacters.Count > 0)
+            {
+                ScenarioStoryFocusedEditorActions.SelectCharacterDocument(definition, definition.ScenarioCharacters.Count - 1);
+            }
+            else if (changed && string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryConversationAdd, StringComparison.Ordinal)
+                && definition != null && definition.Conversations != null && definition.Conversations.Conversations.Count > 0)
+            {
+                ScenarioStoryFocusedEditorActions.SelectConversationDocument(definition, definition.Conversations.Conversations.Count - 1);
+            }
+            return changed;
         }
     }
 

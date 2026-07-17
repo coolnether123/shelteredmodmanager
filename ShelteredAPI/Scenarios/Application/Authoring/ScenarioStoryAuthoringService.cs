@@ -512,7 +512,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             character.PresetId = "Default";
             characters.Add(character);
             MarkDirty(session);
-            message = "Added story character '" + character.DisplayName + "' (" + character.CharacterId + ").";
+            message = "Added story character '" + character.DisplayName + "'.";
             return true;
         }
 
