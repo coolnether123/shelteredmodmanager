@@ -32,6 +32,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 "Map location navigator row must reuse the overlay-select semantic action.", result);
             Assert(overview != null && overview.Document != null && IsAdvancedLast(overview.Document.Sections),
                 "Map overview must finish with Advanced.", result);
+            AssertUniqueActions(overview, "overview", result);
 
             MapLocationDefinition location = definition.Map.Locations[0];
             ScenarioMapWorkspaceSelection.SelectLocation(state, definition, location);
@@ -52,6 +53,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 "Map location storage ID escaped into a primary document card.", result);
             Assert(AdvancedContains(locationWorkspace != null && locationWorkspace.Document != null ? locationWorkspace.Document.Sections : null, location.Id),
                 "Map location storage ID was not retained in Advanced.", result);
+            AssertUniqueActions(locationWorkspace, "location", result);
 
             string markerEntity = ScenarioMapWorkspaceSelection.MarkerEntityId(definition.Map, 0);
             rendererState.SetWorkspaceSelection(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, markerEntity);
@@ -60,6 +62,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     && string.Equals(markerWorkspace.Document.Title, "Marker 1", StringComparison.Ordinal)
                     && state.MapSelectedLocationId == null,
                 "Selecting a non-location Map document did not release the overlay location selection.", result);
+            AssertUniqueActions(markerWorkspace, "marker", result);
 
             rendererState.SetWorkspaceSelection(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, null);
             state.MapSelectedLocationId = location.Id;
@@ -159,6 +162,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             return !string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(value)
                 && text.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AssertUniqueActions(
+            ScenarioAuthoringWorkspaceViewModel workspace,
+            string documentName,
+            ScenarioValidationResult result)
+        {
+            try
+            {
+                ScenarioAuthoringRendererActionManifest.BuildContractWindow(new ScenarioAuthoringShellViewModel
+                {
+                    Windows = new[]
+                    {
+                        new ScenarioAuthoringShellWindowViewModel
+                        {
+                            Id = "map.verification",
+                            WorkspaceBody = workspace,
+                            Sections = new ScenarioAuthoringInspectorSection[0]
+                        }
+                    }
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                Assert(false, "Map " + documentName + " emitted duplicate semantic actions: " + ex.Message, result);
+            }
         }
 
         private static void Assert(bool condition, string message, ScenarioValidationResult result)
