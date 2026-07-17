@@ -208,7 +208,14 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             RequireSearchRoute(searchEntries, "Flow", subtabAction.Id, result);
             RequireSearchRoute(searchEntries, "Stage 1", entityAction.Id, result);
             RequireSearchRoute(searchEntries, "Scene 1", "fixture.child.select", result);
+            shell.RendererActions = ScenarioAuthoringRendererActionManifest.AppendGlobalSearchEntries(shell.RendererActions, searchEntries);
             HashSet<string> ids = CollectContractIds(ScenarioAuthoringRendererActionManifest.BuildContractWindow(shell));
+            for (int i = 0; i < searchEntries.Count; i++)
+            {
+                ScenarioGlobalSearchEntry entry = searchEntries[i];
+                if (entry != null && entry.ActionIds != null && entry.ActionIds.Length > 0)
+                    Require(ids, entry.ActionIds[0], "global-search result activation", result);
+            }
             string[] expected =
             {
                 subtabAction.Id,
@@ -505,8 +512,8 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 ScenarioGlobalSearchEntry entry = entries[i];
                 if (entry == null || !string.Equals(entry.Name, name, StringComparison.Ordinal))
                     continue;
-                for (int actionIndex = 0; entry.ActionIds != null && actionIndex < entry.ActionIds.Length; actionIndex++)
-                    if (string.Equals(entry.ActionIds[actionIndex], actionId, StringComparison.Ordinal)) return;
+                for (int actionIndex = 0; entry.TargetActionIds != null && actionIndex < entry.TargetActionIds.Length; actionIndex++)
+                    if (string.Equals(entry.TargetActionIds[actionIndex], actionId, StringComparison.Ordinal)) return;
             }
             result.AddError("Global search did not index the workspace route for '" + name + "'.");
         }

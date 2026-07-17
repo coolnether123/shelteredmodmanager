@@ -72,10 +72,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             Add(actions, ScenarioAuthoringActionIds.ActionRendererAssetSearchPrefix, "Set asset search (append base64 UTF-8 value)", true);
             Add(actions, ScenarioAuthoringActionIds.ActionRendererAssetSearchClear, "Clear asset search", true);
             Add(actions, ScenarioAuthoringActionIds.ActionRendererGlobalSearchQueryPrefix, "Set global search query (append base64 UTF-8 value)", false);
+            Add(
+                actions,
+                ScenarioGlobalSearchService.BuildActivationActionId(new[] { ScenarioAuthoringActionIds.ActionShellToggleGlobalSearch }),
+                "Activate global-search result",
+                false);
             AddAssetInventoryFilters(actions);
             AddCandidateControls(actions);
             AddAssetBrowserActions(actions, state, windows);
             AddPixelEditorActions(actions, editor);
+            return actions.ToArray();
+        }
+
+        public static ScenarioAuthoringInspectorAction[] AppendGlobalSearchEntries(
+            ScenarioAuthoringInspectorAction[] rendererActions,
+            IList<ScenarioGlobalSearchEntry> entries)
+        {
+            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            AddRange(actions, rendererActions);
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioGlobalSearchEntry entry = entries[i];
+                string activationId = entry != null && entry.ActionIds != null && entry.ActionIds.Length > 0
+                    ? entry.ActionIds[0]
+                    : null;
+                AddExisting(actions, new ScenarioAuthoringInspectorAction
+                {
+                    Id = activationId,
+                    Label = entry != null ? "Open search result: " + entry.Name : null,
+                    Hint = entry != null ? entry.Context : null,
+                    Detail = entry != null ? entry.KindLabel : null,
+                    Enabled = entry != null && entry.Enabled,
+                    Emphasized = false,
+                    DisabledReason = entry != null && !entry.Enabled ? "This search result is currently unavailable." : null
+                });
+            }
             return actions.ToArray();
         }
 

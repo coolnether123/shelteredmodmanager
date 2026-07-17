@@ -52,7 +52,15 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         {
             handled = false;
             message = null;
-            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith("shell.renderer.", StringComparison.Ordinal))
+            if (state == null || string.IsNullOrEmpty(actionId))
+                return false;
+
+            // Phase 9 LIVE-1 captured workspace actions without the renderer namespace.
+            // Accept that already-emitted compatibility shape at the same command seam,
+            // while retaining shell.renderer.workspace.* as the canonical contract ID.
+            if (actionId.StartsWith("workspace.", StringComparison.Ordinal))
+                actionId = "shell.renderer." + actionId;
+            if (!actionId.StartsWith("shell.renderer.", StringComparison.Ordinal))
                 return false;
 
             handled = true;

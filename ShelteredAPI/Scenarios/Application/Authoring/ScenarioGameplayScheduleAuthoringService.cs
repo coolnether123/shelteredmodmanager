@@ -195,6 +195,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static bool AddScheduledQuest(ScenarioEditorSession session, out string message)
         {
+            RecordQuestCreation(session, "Add quest popup");
             QuestAuthoringDefinition quests = EnsureQuests(session.WorkingDefinition);
             QuestDefinition quest = new QuestDefinition();
             QuestDef libraryQuest = FindFirstUnusedCatalogQuest(quests);
@@ -223,6 +224,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (!ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix, catalog.Count, out catalogIndex))
                 return false;
 
+            RecordQuestCreation(session, "Add library quest");
             QuestAuthoringDefinition quests = EnsureQuests(session.WorkingDefinition);
             QuestDefinition quest = new QuestDefinition();
             ApplyLibraryQuest(quest, catalog[catalogIndex]);
@@ -600,6 +602,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MarkQuestDirty(session);
             message = "Changed the selected quest library entry.";
             return true;
+        }
+
+        private static void RecordQuestCreation(ScenarioEditorSession session, string description)
+        {
+            if (session == null || session.WorkingDefinition == null)
+                return;
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null)
+                history.RecordAuthoringChange(
+                    session.WorkingDefinition,
+                    description,
+                    ScenarioDirtySection.Triggers,
+                    ScenarioEditCategory.Triggers);
         }
 
         private static bool SetQuestStartMode(

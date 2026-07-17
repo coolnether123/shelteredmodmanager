@@ -138,6 +138,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomAddPrefix, flow.Stages.Count, out stageIndex))
             {
                 ScenarioFlowStageDefinition stage = flow.Stages[stageIndex];
+                RecordUndo(session, "Add story scene");
                 stage.IntercomStages.Add(CreateIntercom(stage));
                 MarkDirty(session);
                 message = "Added intercom step.";
@@ -506,6 +507,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             while (HasCharacterId(definition, characterId));
 
+            RecordUndo(session, "Add story character");
             ScenarioNpcDefinition character = new ScenarioNpcDefinition();
             character.CharacterId = characterId;
             character.DisplayName = "Story Character " + (characters.Count + 1).ToString();
@@ -592,6 +594,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static bool AddStage(ScenarioEditorSession session, ScenarioFlowDefinition flow, out string message)
         {
+            RecordUndo(session, "Add story stage");
             ScenarioFlowStageDefinition stage = new ScenarioFlowStageDefinition();
             stage.Id = NextStageId(flow);
             stage.IntercomStages.Add(CreateIntercom(stage));
@@ -656,6 +659,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryConversationAdd, StringComparison.Ordinal))
             {
+                RecordUndo(session, "Add NPC conversation");
                 conversations.Conversations.Add(CreateConversation(definition));
                 MarkDirty(session);
                 message = "Added NPC conversation.";

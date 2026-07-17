@@ -268,12 +268,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             destination.Id = restored.Id;
             destination.DisplayName = restored.DisplayName;
             destination.Description = restored.Description;
+            destination.Goal = restored.Goal;
             destination.Author = restored.Author;
             destination.Version = restored.Version;
+            destination.Credits = restored.Credits;
+            destination.Tags.Clear();
+            if (restored.Tags != null)
+            {
+                for (int i = 0; i < restored.Tags.Count; i++)
+                    destination.Tags.Add(restored.Tags[i]);
+            }
             destination.BaseGameMode = restored.BaseGameMode;
             destination.BaseFamilyChoice = restored.BaseFamilyChoice;
             destination.SeedOverride = restored.SeedOverride;
             destination.SelectionRules = restored.SelectionRules;
+            destination.ScenarioCharacters.Clear();
+            if (restored.ScenarioCharacters != null)
+            {
+                for (int i = 0; i < restored.ScenarioCharacters.Count; i++)
+                    destination.ScenarioCharacters.Add(restored.ScenarioCharacters[i]);
+            }
+            destination.ScenarioFlow = restored.ScenarioFlow;
             destination.Dependencies.Clear();
             if (restored.Dependencies != null)
             {
@@ -310,6 +325,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 for (int i = 0; i < restored.ScheduledActions.Count; i++)
                     destination.ScheduledActions.Add(restored.ScheduledActions[i]);
             }
+            destination.Journal = restored.Journal;
+            destination.Conversations = restored.Conversations;
+            destination.VanillaSuppression = restored.VanillaSuppression;
+            destination.AuthorTestChecklist = restored.AuthorTestChecklist;
         }
 
         private sealed class DefinitionSnapshot

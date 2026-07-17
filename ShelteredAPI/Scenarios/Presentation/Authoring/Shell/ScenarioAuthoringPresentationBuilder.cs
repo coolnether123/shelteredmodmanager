@@ -174,6 +174,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
             viewModel.RendererActions = ScenarioAuthoringRendererActionManifest.Build(state, viewModel.Windows, viewModel.CustomSpriteEditor, viewModel.Settings, viewModel.Help);
+            if (state != null && state.GlobalSearchOpen)
+            {
+                viewModel.RendererActions = ScenarioAuthoringRendererActionManifest.AppendGlobalSearchEntries(
+                    viewModel.RendererActions,
+                    ScenarioGlobalSearchService.BuildShellActivationEntries(viewModel, definition));
+            }
             windows.Add(ScenarioAuthoringRendererActionManifest.BuildContractWindow(viewModel));
             viewModel.Windows = windows.ToArray();
             _shellChromeBuilder.ApplyShellChrome(viewModel, state, editorSession, session);
