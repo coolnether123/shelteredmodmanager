@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using ShelteredAPI.Scenarios.Application.Authoring;
@@ -39,7 +40,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildRuntimeNoticeSection(ScenarioAuthoringState state)
+        internal static ScenarioAuthoringInspectorSection BuildRuntimeNoticeSection(ScenarioAuthoringState state)
         {
             bool active = state != null && state.MapAuthoringActive;
             return new ScenarioAuthoringInspectorSection
@@ -58,14 +59,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         null,
                         true),
                     Property("Supported Here", "Open the vanilla map, select towns/regions, place POI assets, and paint tree, mountain, or clear terrain cells."),
-                    Property("Selection Mode", active ? "MapAuthoringActive" : "Map workshop"),
-                    Property("Map Click Mode", state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select"),
+                    Property("Selection Surface", active ? "Vanilla expedition map" : "Map workspace"),
+                    Property("Map Click Mode", FormatMapMode(state != null ? state.MapAuthoringMode : null)),
                     Property("Movement", "Click-to-move is used because vanilla mouse drag already pans the map and drags waypoints.")
                 }
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildGenerationSection(ScenarioDefinition definition)
+        internal static ScenarioAuthoringInspectorSection BuildGenerationSection(ScenarioDefinition definition)
         {
             bool fixedSeed = definition != null && definition.SeedOverride.HasValue;
             string seed = fixedSeed
@@ -106,7 +107,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildSelectionSection(ScenarioAuthoringState state)
+        internal static ScenarioAuthoringInspectorSection BuildSelectionSection(ScenarioAuthoringState state)
         {
             ScenarioMapRegionSelection selection = state != null ? state.MapSelection : null;
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -137,7 +138,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildSupportedActionsSection(ScenarioAuthoringState state)
+        internal static ScenarioAuthoringInspectorSection BuildSupportedActionsSection(ScenarioAuthoringState state)
         {
             ScenarioMapRegionSelection selection = state != null ? state.MapSelection : null;
             bool hasSelection = selection != null;
@@ -229,7 +230,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildBrushOptionsSection(ScenarioAuthoringState state)
+        internal static ScenarioAuthoringInspectorSection BuildBrushOptionsSection(ScenarioAuthoringState state)
         {
             int size = state != null && state.MapTerrainBrushSize > 0 ? state.MapTerrainBrushSize : 3;
             string shape = state != null && !string.IsNullOrEmpty(state.MapTerrainBrushShape) ? state.MapTerrainBrushShape : "circle";
@@ -253,7 +254,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildOverviewSection(ScenarioDefinition definition, MapAuthoringDefinition map)
+        internal static ScenarioAuthoringInspectorSection BuildOverviewSection(ScenarioDefinition definition, MapAuthoringDefinition map)
         {
             return new ScenarioAuthoringInspectorSection
             {
@@ -278,7 +279,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildMarkerSection(MapAuthoringDefinition map)
+        internal static ScenarioAuthoringInspectorSection BuildMarkerSection(MapAuthoringDefinition map)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             for (int i = 0; map.Locations != null && i < map.Locations.Count && items.Count < 8; i++)
@@ -316,7 +317,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildBoundaryTerrainSection(MapAuthoringDefinition map)
+        internal static ScenarioAuthoringInspectorSection BuildMarkerSection(MapAuthoringDefinition map, MapMarkerDefinition marker)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (marker == null)
+            {
+                items.Add(Text("Select a marker to review its map placement."));
+            }
+            else
+            {
+                items.Add(Property("Type", Humanize(marker.Kind.ToString())));
+                items.Add(Property("Position", FormatPoint(marker.X, marker.Y)));
+                items.Add(Property("Visibility", marker.VisibleAtStart ? "Visible from the start" : "Hidden at the start"));
+                items.Add(Property("Linked location", ResolveLocationName(map, marker.LocationId, "No linked location")));
+                items.Add(Property("Tags", marker.Tags != null && marker.Tags.Count > 0
+                    ? marker.Tags.Count.ToString(CultureInfo.InvariantCulture) + (marker.Tags.Count == 1 ? " tag" : " tags")
+                    : "No tags"));
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_marker_document",
+                Title = "MARKER",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = items.ToArray()
+            };
+        }
+
+        internal static ScenarioAuthoringInspectorSection BuildBoundaryTerrainSection(MapAuthoringDefinition map)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             for (int i = 0; map.Boundaries != null && i < map.Boundaries.Count && items.Count < 8; i++)
@@ -354,7 +383,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildLootSection(MapAuthoringDefinition map)
+        internal static ScenarioAuthoringInspectorSection BuildLootSection(MapAuthoringDefinition map)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             for (int i = 0; map.LootTables != null && i < map.LootTables.Count; i++)
@@ -379,7 +408,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildEncounterSection(MapAuthoringDefinition map)
+        internal static ScenarioAuthoringInspectorSection BuildLootSection(MapAuthoringDefinition map, MapLootTableDefinition table)
+        {
+            int entries = table != null && table.Entries != null ? table.Entries.Count : 0;
+            int locationUses = 0;
+            int boundaryUses = 0;
+            for (int i = 0; table != null && map != null && map.Locations != null && i < map.Locations.Count; i++)
+                if (map.Locations[i] != null && string.Equals(map.Locations[i].LootTableId, table.Id, StringComparison.OrdinalIgnoreCase)) locationUses++;
+            for (int i = 0; table != null && map != null && map.Boundaries != null && i < map.Boundaries.Count; i++)
+                if (map.Boundaries[i] != null && string.Equals(map.Boundaries[i].LootTableId, table.Id, StringComparison.OrdinalIgnoreCase)) boundaryUses++;
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_loot_document",
+                Title = "LOOT TABLE",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = new[]
+                {
+                    Property("Entries", entries.ToString(CultureInfo.InvariantCulture)),
+                    Property("Used by locations", locationUses.ToString(CultureInfo.InvariantCulture)),
+                    Property("Used by map areas", boundaryUses.ToString(CultureInfo.InvariantCulture)),
+                    Text(entries > 0
+                        ? "This table supplies weighted expedition rewards to its linked locations and map areas."
+                        : "This table has no loot entries yet.")
+                }
+            };
+        }
+
+        internal static ScenarioAuthoringInspectorSection BuildEncounterSection(MapAuthoringDefinition map)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             for (int i = 0; map.EncounterTables != null && i < map.EncounterTables.Count; i++)
@@ -404,7 +461,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildRouteSection(MapAuthoringDefinition map)
+        internal static ScenarioAuthoringInspectorSection BuildEncounterSection(MapAuthoringDefinition map, MapEncounterTableDefinition table)
+        {
+            int entries = table != null && table.Entries != null ? table.Entries.Count : 0;
+            int locationUses = 0;
+            int boundaryUses = 0;
+            for (int i = 0; table != null && map != null && map.Locations != null && i < map.Locations.Count; i++)
+                if (map.Locations[i] != null && string.Equals(map.Locations[i].EncounterTableId, table.Id, StringComparison.OrdinalIgnoreCase)) locationUses++;
+            for (int i = 0; table != null && map != null && map.Boundaries != null && i < map.Boundaries.Count; i++)
+                if (map.Boundaries[i] != null && string.Equals(map.Boundaries[i].EncounterTableId, table.Id, StringComparison.OrdinalIgnoreCase)) boundaryUses++;
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_encounter_document",
+                Title = "ENCOUNTER TABLE",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = new[]
+                {
+                    Property("Entries", entries.ToString(CultureInfo.InvariantCulture)),
+                    Property("Used by locations", locationUses.ToString(CultureInfo.InvariantCulture)),
+                    Property("Used by map areas", boundaryUses.ToString(CultureInfo.InvariantCulture)),
+                    Property("Open-ground chance", FormatChance(table != null ? table.OpenGroundChance : -1)),
+                    Property("Animal chance", FormatChance(table != null ? table.AnimalEncounterChance : -1)),
+                    Property("Faction chance", FormatChance(table != null ? table.FactionEncounterChance : -1))
+                }
+            };
+        }
+
+        internal static ScenarioAuthoringInspectorSection BuildRouteSection(MapAuthoringDefinition map)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             for (int i = 0; map.Routes != null && i < map.Routes.Count; i++)
@@ -430,6 +515,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
+        internal static ScenarioAuthoringInspectorSection BuildRouteSection(MapAuthoringDefinition map, MapLocationDefinition location)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; location != null && map != null && map.Routes != null && i < map.Routes.Count; i++)
+            {
+                ExpeditionRouteDefinition route = map.Routes[i];
+                if (route == null || (!string.Equals(route.FromLocationId, location.Id, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(route.ToLocationId, location.Id, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                string from = ResolveLocationName(map, route.FromLocationId, "Unknown origin");
+                string to = ResolveLocationName(map, route.ToLocationId, "Unknown destination");
+                string title = ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                    null,
+                    null,
+                    route.Id,
+                    "Route " + (i + 1).ToString(CultureInfo.InvariantCulture)).Text;
+                items.Add(Property(
+                    title,
+                    from + (route.OneWay ? " to " : " and ") + to + "; risk " + route.Risk.ToString(CultureInfo.InvariantCulture)));
+            }
+            if (items.Count == 0)
+                items.Add(Text("No expedition routes connect to this location."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_location_routes",
+                Title = "ROUTES",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
         private static string FormatLocationTables(MapLocationDefinition location)
         {
             List<string> parts = new List<string>();
@@ -442,6 +561,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "no tables";
         }
 
+        private static string ResolveLocationName(MapAuthoringDefinition map, string locationId, string fallback)
+        {
+            for (int i = 0; !string.IsNullOrEmpty(locationId) && map != null && map.Locations != null && i < map.Locations.Count; i++)
+            {
+                MapLocationDefinition location = map.Locations[i];
+                if (location != null && string.Equals(location.Id, locationId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                        location.DisplayName,
+                        null,
+                        location.Id,
+                        "Location " + (i + 1).ToString(CultureInfo.InvariantCulture)).Text;
+                }
+            }
+            return fallback;
+        }
+
+        private static string FormatChance(int value)
+        {
+            return value < 0 ? "Use the vanilla default" : value.ToString(CultureInfo.InvariantCulture) + "%";
+        }
+
+        private static string Humanize(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "Not set";
+            List<char> output = new List<char>();
+            for (int i = 0; i < value.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(value[i]) && !char.IsUpper(value[i - 1])) output.Add(' ');
+                output.Add(value[i]);
+            }
+            return new string(output.ToArray());
+        }
+
         private static string FormatSelectionFlags(ScenarioMapRegionSelection selection)
         {
             List<string> parts = new List<string>();
@@ -451,6 +605,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (selection.HiddenUntilDiscovered)
                 parts.Add("hidden until discovered");
             return string.Join(", ", parts.ToArray());
+        }
+
+        private static string FormatMapMode(string mode)
+        {
+            if (string.IsNullOrEmpty(mode) || string.Equals(mode, "select", StringComparison.OrdinalIgnoreCase)) return "Select locations";
+            if (string.Equals(mode, "place", StringComparison.OrdinalIgnoreCase)) return "Place a location";
+            if (string.Equals(mode, "move", StringComparison.OrdinalIgnoreCase)) return "Move the selected location";
+            if (mode.StartsWith("terrain:", StringComparison.OrdinalIgnoreCase))
+            {
+                string terrain = mode.Substring("terrain:".Length);
+                if (string.Equals(terrain, "Woodland", StringComparison.OrdinalIgnoreCase)) return "Paint trees";
+                if (string.Equals(terrain, "Mountains", StringComparison.OrdinalIgnoreCase)) return "Paint mountains";
+                if (string.Equals(terrain, "NowhereSpecial", StringComparison.OrdinalIgnoreCase)) return "Clear terrain";
+                if (string.Equals(terrain, ScenarioMapTerrainModes.GeneratedBlend, StringComparison.OrdinalIgnoreCase)) return "Paint generated blend";
+            }
+            return "Map tool active";
         }
 
         private static string FormatSelectionLoot(ScenarioMapRegionSelection selection)
