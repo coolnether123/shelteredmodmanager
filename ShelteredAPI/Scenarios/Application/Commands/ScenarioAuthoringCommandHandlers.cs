@@ -1622,11 +1622,25 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
-            bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            ScenarioEditorSession currentSession = _editorService.CurrentSession;
+            ScenarioDefinition currentDefinition = currentSession != null ? currentSession.WorkingDefinition : null;
+            QuestDefinition selectedQuest = ResolveSelectedQuest(currentDefinition);
+            int duplicateSourceIndex = -1;
+            int questCount = currentDefinition != null && currentDefinition.Quests != null && currentDefinition.Quests.Quests != null
+                ? currentDefinition.Quests.Quests.Count
+                : 0;
+            ScenarioAuthoringActionParser.TryIndex(
+                actionId,
+                ScenarioAuthoringActionIds.ActionQuestDuplicatePrefix,
+                questCount,
+                out duplicateSourceIndex);
+
+            bool changed = _service.TryHandleAction(currentSession, actionId, out message);
             if (changed)
             {
-                FocusGameplayEditor(state, _editorService.CurrentSession, actionId);
+                FocusGameplayEditor(state, currentSession, actionId);
                 CloseInventoryPickerAfterSelection(state, actionId);
+                ReconcileQuestSelection(currentDefinition, actionId, selectedQuest, duplicateSourceIndex);
                 if (actionId != null && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, StringComparison.Ordinal) && state != null)
                 {
                     state.FocusedEditorKind = null;
@@ -1699,6 +1713,89 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal)
                 && definition.FamilySetup != null)
                 SetFocusedEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, definition.FamilySetup.FutureSurvivors.Count - 1, true);
+        }
+
+        private static QuestDefinition ResolveSelectedQuest(ScenarioDefinition definition)
+        {
+            ScenarioAuthoringRendererInteractionState rendererState = ScenarioAuthoringRendererInteractionState.Instance;
+            string selected = rendererState.GetWorkspaceSelection(
+                ScenarioStoryFocusedEditorActions.WorkspaceId,
+                ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId);
+            int selectedIndex;
+            return ScenarioStoryFocusedEditorActions.TryResolveQuestEntity(definition, selected, out selectedIndex)
+                && definition != null && definition.Quests != null && definition.Quests.Quests != null
+                    ? definition.Quests.Quests[selectedIndex]
+                    : null;
+        }
+
+        private static void ReconcileQuestSelection(
+            ScenarioDefinition definition,
+            string actionId,
+            QuestDefinition previouslySelected,
+            int duplicateSourceIndex)
+        {
+            if (!IsQuestMutation(actionId) || definition == null || definition.Quests == null || definition.Quests.Quests == null)
+                return;
+
+            List<QuestDefinition> quests = definition.Quests.Quests;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionQuestScheduleAdd, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix, StringComparison.Ordinal))
+            {
+                if (quests.Count > 0)
+                    ScenarioStoryFocusedEditorActions.SelectQuestDocument(definition, quests.Count - 1);
+                return;
+            }
+
+            if (duplicateSourceIndex >= 0 && duplicateSourceIndex + 1 < quests.Count)
+            {
+                ScenarioStoryFocusedEditorActions.SelectQuestDocument(definition, duplicateSourceIndex + 1);
+                return;
+            }
+
+            if (previouslySelected != null)
+            {
+                for (int i = 0; i < quests.Count; i++)
+                {
+                    if (!object.ReferenceEquals(quests[i], previouslySelected))
+                        continue;
+                    ScenarioStoryFocusedEditorActions.SelectQuestDocument(definition, i);
+                    return;
+                }
+
+                ScenarioAuthoringRendererInteractionState rendererState = ScenarioAuthoringRendererInteractionState.Instance;
+                rendererState.SetWorkspaceSubtab(
+                    ScenarioStoryFocusedEditorActions.WorkspaceId,
+                    ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId);
+                rendererState.SetWorkspaceSelection(
+                    ScenarioStoryFocusedEditorActions.WorkspaceId,
+                    ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId,
+                    null);
+                rendererState.SetWorkspaceNarrowPane(
+                    ScenarioStoryFocusedEditorActions.WorkspaceId,
+                    ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId,
+                    true);
+            }
+        }
+
+        private static bool IsQuestMutation(string actionId)
+        {
+            return !string.IsNullOrEmpty(actionId)
+                && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionQuestCaptureActive, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionQuestScheduleAdd, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleMinutePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestStartModePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestTriggerCyclePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestCompletionCyclePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestTitleSyncPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestDescriptionSyncPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestDuplicatePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestMovePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestSpawnNowPrefix, StringComparison.Ordinal));
         }
 
         private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)

@@ -206,12 +206,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 quest.Id = "quest_" + (quests.Quests.Count + 1).ToString();
                 quest.Title = "Scheduled Quest " + (quests.Quests.Count + 1).ToString();
-                quest.Description = "Created from the scenario editor. Replace the id with a QuestLibrary id before playtesting.";
+                quest.Description = "Created in the scenario editor. Choose a quest from the library before playtesting.";
             }
             quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
             quests.Quests.Add(quest);
             MarkQuestDirty(session);
-            message = "Added quest '" + quest.Id + "' for " + ScenarioAuthoringSchedule.Format(quest.ScheduledStart) + ".";
+            message = "Added a quest popup for " + ScenarioAuthoringSchedule.Format(quest.ScheduledStart) + ".";
             return true;
         }
 
@@ -229,7 +229,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
             quests.Quests.Add(quest);
             MarkQuestDirty(session);
-            message = "Added quest '" + quest.Id + "' from QuestLibrary.";
+            message = "Added the selected library quest to Authored.";
             return true;
         }
 
@@ -238,7 +238,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             QuestManager manager = QuestManager.instance;
             if (manager == null)
             {
-                message = "QuestManager is not ready; active quest capture skipped.";
+                message = "Live quests are not available yet; nothing was captured.";
                 return true;
             }
 
@@ -467,12 +467,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 QuestDefinition copy = CopyQuest(quests.Quests[index], quests.Quests.Count + 1);
                 quests.Quests.Insert(index + 1, copy);
                 MarkQuestDirty(session);
-                message = "Duplicated quest '" + copy.Id + "'.";
+                message = "Duplicated the selected quest popup.";
                 return true;
             }
 
             if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix, quests.Quests.Count, out index, out delta))
                 return CycleQuestId(session, quests.Quests[index], delta, out message);
+
+            string startMode;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionQuestStartModePrefix, quests.Quests.Count, out index, out startMode))
+                return SetQuestStartMode(session, quests.Quests[index], session.WorkingDefinition, startMode, out message);
 
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionQuestStartModePrefix, quests.Quests.Count, out index))
                 return ToggleQuestStartMode(session, quests.Quests[index], session.WorkingDefinition, out message);
@@ -586,7 +590,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             List<QuestDef> catalog = GetQuestCatalog();
             if (catalog.Count == 0)
             {
-                message = "QuestLibrary is not ready; quest id cannot be cycled.";
+                message = "The quest library is not available yet, so the source could not be changed.";
                 return true;
             }
 
@@ -594,7 +598,42 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int next = current < 0 ? 0 : Wrap(current + delta, catalog.Count);
             ApplyLibraryQuest(quest, catalog[next]);
             MarkQuestDirty(session);
-            message = "Quest id changed to '" + quest.Id + "'.";
+            message = "Changed the selected quest library entry.";
+            return true;
+        }
+
+        private static bool SetQuestStartMode(
+            ScenarioEditorSession session,
+            QuestDefinition quest,
+            ScenarioDefinition definition,
+            string mode,
+            out string message)
+        {
+            message = null;
+            if (quest == null)
+                return true;
+
+            if (string.Equals(mode, "scheduled", StringComparison.OrdinalIgnoreCase))
+            {
+                quest.StartTriggerId = null;
+                if (quest.ScheduledStart == null)
+                    quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
+                MarkQuestDirty(session);
+                message = "Quest popup now starts on its schedule.";
+                return true;
+            }
+
+            if (string.Equals(mode, "triggered", StringComparison.OrdinalIgnoreCase))
+            {
+                quest.ScheduledStart = null;
+                if (string.IsNullOrEmpty(quest.StartTriggerId))
+                    quest.StartTriggerId = EnsureFirstTriggerId(definition);
+                MarkQuestDirty(session);
+                message = "Quest popup now starts from the selected authored trigger.";
+                return true;
+            }
+
+            message = "Unknown quest start option.";
             return true;
         }
 
@@ -608,14 +647,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 quest.ScheduledStart = null;
                 quest.StartTriggerId = EnsureFirstTriggerId(definition);
-                message = "Quest now starts from trigger '" + quest.StartTriggerId + "'.";
+                message = "Quest popup now starts from the selected authored trigger.";
             }
             else
             {
                 quest.StartTriggerId = null;
                 if (quest.ScheduledStart == null)
                     quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
-                message = "Quest now starts from its schedule.";
+                message = "Quest popup now starts from its schedule.";
             }
 
             MarkQuestDirty(session);
@@ -637,7 +676,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             quest.StartTriggerId = ids[next];
             quest.ScheduledStart = null;
             MarkQuestDirty(session);
-            message = "Quest trigger set to '" + quest.StartTriggerId + "'.";
+            message = "Selected a different authored trigger for this quest popup.";
             return true;
         }
 
@@ -654,8 +693,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             quest.CompletionConditionId = string.IsNullOrEmpty(ids[next]) ? null : ids[next];
             MarkQuestDirty(session);
             message = string.IsNullOrEmpty(quest.CompletionConditionId)
-                ? "Quest completion condition cleared."
-                : "Quest completion condition set to '" + quest.CompletionConditionId + "'.";
+                ? "Cleared the quest completion requirement."
+                : "Selected a quest completion requirement.";
             return true;
         }
 
@@ -664,13 +703,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             QuestDef def = FindQuestDef(quest != null ? quest.Id : null);
             if (quest == null || def == null)
             {
-                message = "QuestLibrary definition was not found for this quest id.";
+                message = "The selected quest library entry could not be found.";
                 return true;
             }
 
             quest.Title = BuildQuestTitle(def);
             MarkQuestDirty(session);
-            message = "Quest title synced from QuestLibrary.";
+            message = "Updated the popup title from the quest library.";
             return true;
         }
 
@@ -679,13 +718,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             QuestDef def = FindQuestDef(quest != null ? quest.Id : null);
             if (quest == null || def == null)
             {
-                message = "QuestLibrary definition was not found for this quest id.";
+                message = "The selected quest library entry could not be found.";
                 return true;
             }
 
             quest.Description = !string.IsNullOrEmpty(def.descriptionKey) ? def.descriptionKey : "QuestLibrary entry " + def.id;
             MarkQuestDirty(session);
-            message = "Quest description synced from QuestLibrary.";
+            message = "Updated the popup description from the quest library.";
             return true;
         }
 
@@ -693,20 +732,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             if (quest == null || string.IsNullOrEmpty(quest.Id))
             {
-                message = "Quest id is missing.";
+                message = "Choose a quest library entry before previewing this popup.";
                 return true;
             }
 
             if (QuestManager.instance == null)
             {
-                message = "QuestManager is not ready; quest was not spawned.";
+                message = "Live quest preview is not available yet.";
                 return true;
             }
 
             bool spawned = QuestManager.instance.SpawnQuestWithId(quest.Id);
             message = spawned
-                ? "Spawned quest '" + quest.Id + "' for preview."
-                : "QuestManager rejected quest '" + quest.Id + "'. Check availability, max active quests, and QuestLibrary id.";
+                ? "Opened the quest popup preview."
+                : "The game could not open this quest popup. Check availability and the number of active quests.";
             return true;
         }
 

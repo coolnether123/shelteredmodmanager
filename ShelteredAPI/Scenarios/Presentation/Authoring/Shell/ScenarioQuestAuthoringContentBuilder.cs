@@ -36,21 +36,353 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AppendConversationSections(sections, definition);
             sections.Add(BuildStageFlowSection(definition, storyIssues));
             AppendStoryStageSections(sections, definition, storyIssues);
-            sections.AddRange(BuildQuestPopupSections(context));
-
             return sections.ToArray();
         }
 
-        internal ScenarioAuthoringInspectorSection[] BuildQuestPopupSections(ScenarioAuthoringWindowContentContext context)
+        internal static ScenarioAuthoringInspectorSection[] BuildQuestWorkspaceDocumentSections(
+            QuestAuthoringSnapshot snapshot,
+            int questIndex)
         {
-            QuestAuthoringSnapshot snapshot = QuestAuthoringSnapshot.From(context != null ? context.Definition : null);
-            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(BuildSideQuestIntroSection(snapshot));
-            sections.Add(BuildToolsSection(snapshot));
-            AppendAuthoredQuestSections(sections, snapshot);
-            sections.Add(BuildPickerSection(snapshot));
-            sections.Add(BuildRuntimeSection());
-            return sections.ToArray();
+            QuestDefinition quest = snapshot != null && questIndex >= 0 && questIndex < snapshot.AuthoredCount
+                ? snapshot.Authored[questIndex]
+                : null;
+            if (quest == null)
+                return new ScenarioAuthoringInspectorSection[0];
+
+            QuestDef libraryQuest = QuestAuthoringSnapshot.FindQuestDef(quest.Id);
+            return new[]
+            {
+                BuildQuestWorkspaceStartCard(snapshot, quest, questIndex, libraryQuest),
+                BuildQuestWorkspaceScheduleCard(snapshot, quest, questIndex),
+                BuildQuestWorkspaceContentCard(snapshot, quest, questIndex, libraryQuest),
+                BuildQuestWorkspaceToolsCard(snapshot, questIndex, libraryQuest),
+                BuildQuestWorkspaceAdvancedCard(quest, questIndex, libraryQuest)
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildQuestWorkspaceStartCard(
+            QuestAuthoringSnapshot snapshot,
+            QuestDefinition quest,
+            int questIndex,
+            QuestDef libraryQuest)
+        {
+            string indexText = questIndex.ToString(CultureInfo.InvariantCulture);
+            bool triggered = !string.IsNullOrEmpty(quest.StartTriggerId);
+            string validation = QuestAuthoringHelpers.FormatQuestValidation(quest, snapshot != null ? snapshot.Definition : null);
+            ScenarioAuthoringCompactChoiceViewModel mode = new ScenarioAuthoringCompactChoiceViewModel
+            {
+                Id = "quest_start_mode_" + indexText,
+                Label = "Starts",
+                CurrentLabel = triggered ? "From an authored trigger" : "On a schedule",
+                ColumnCount = 2,
+                Options = new[]
+                {
+                    CompactOption(
+                        "quest_start_scheduled_" + indexText,
+                        "Scheduled",
+                        !triggered,
+                        ScenarioAuthoringActionIds.ActionQuestStartModePrefix + indexText + ".scheduled",
+                        "Start this popup at its scheduled day and time."),
+                    CompactOption(
+                        "quest_start_triggered_" + indexText,
+                        "Triggered",
+                        triggered,
+                        ScenarioAuthoringActionIds.ActionQuestStartModePrefix + indexText + ".triggered",
+                        "Start this popup when an authored trigger fires.")
+                }
+            };
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "quest_start_" + indexText,
+                Title = "Start",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                StatusChips = new[] { QuestValidationChip("quest_start_validation_" + indexText, validation) },
+                Items = new[]
+                {
+                    ScenarioInspectorItemFactory.Property("Quest", ResolveQuestName(quest, libraryQuest, questIndex)),
+                    ScenarioInspectorItemFactory.Property("Availability", validation),
+                    CompactChoiceItem(mode)
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildQuestWorkspaceScheduleCard(
+            QuestAuthoringSnapshot snapshot,
+            QuestDefinition quest,
+            int questIndex)
+        {
+            string indexText = questIndex.ToString(CultureInfo.InvariantCulture);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool triggered = !string.IsNullOrEmpty(quest.StartTriggerId);
+            if (triggered)
+            {
+                string triggerName = ResolveTriggerName(snapshot != null ? snapshot.Definition : null, quest.StartTriggerId);
+                items.Add(ScenarioInspectorItemFactory.Property("Starts when", triggerName));
+                items.Add(CompactChoiceItem(new ScenarioAuthoringCompactChoiceViewModel
+                {
+                    Id = "quest_trigger_choice_" + indexText,
+                    Label = "Authored trigger",
+                    CurrentLabel = triggerName,
+                    ColumnCount = 2,
+                    Options = new[]
+                    {
+                        CompactOption("quest_trigger_previous_" + indexText, "Previous", false, ScenarioAuthoringActionIds.ActionQuestTriggerCyclePrefix + indexText + ".-1", "Use the previous authored trigger."),
+                        CompactOption("quest_trigger_next_" + indexText, "Next", false, ScenarioAuthoringActionIds.ActionQuestTriggerCyclePrefix + indexText + ".1", "Use the next authored trigger.")
+                    }
+                }));
+                if (snapshot == null || !snapshot.HasAnyTriggers)
+                    items.Add(ScenarioInspectorItemFactory.Text("No authored triggers were available, so the editor will create a starter trigger when this mode is chosen."));
+            }
+            else
+            {
+                ScenarioScheduleTime time = quest.ScheduledStart;
+                if (time == null)
+                    time = new ScenarioScheduleTime { Day = 1, Hour = 8, Minute = 0 };
+                string current = QuestAuthoringHelpers.FormatSchedule(time);
+                items.Add(ScenarioInspectorItemFactory.Property("Popup time", current));
+                items.Add(CompactChoiceItem(new ScenarioAuthoringCompactChoiceViewModel
+                {
+                    Id = "quest_schedule_day_" + indexText,
+                    Label = "Day",
+                    CurrentLabel = "Day " + time.Day.ToString(CultureInfo.InvariantCulture),
+                    ColumnCount = 2,
+                    Options = new[]
+                    {
+                        CompactOption("quest_day_earlier_" + indexText, "Earlier", false, ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix + indexText + ".-1", "Move the popup one day earlier."),
+                        CompactOption("quest_day_later_" + indexText, "Later", false, ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix + indexText + ".1", "Move the popup one day later.")
+                    }
+                }));
+                items.Add(CompactChoiceItem(new ScenarioAuthoringCompactChoiceViewModel
+                {
+                    Id = "quest_schedule_time_" + indexText,
+                    Label = "Time",
+                    CurrentLabel = time.Hour.ToString("D2", CultureInfo.InvariantCulture) + ":" + time.Minute.ToString("D2", CultureInfo.InvariantCulture),
+                    ColumnCount = 4,
+                    Options = new[]
+                    {
+                        CompactOption("quest_hour_earlier_" + indexText, "-1 hour", false, ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix + indexText + ".-1", "Move the popup one hour earlier."),
+                        CompactOption("quest_hour_later_" + indexText, "+1 hour", false, ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix + indexText + ".1", "Move the popup one hour later."),
+                        CompactOption("quest_minute_earlier_" + indexText, "-15 min", false, ScenarioAuthoringActionIds.ActionQuestScheduleMinutePrefix + indexText + ".-15", "Move the popup fifteen minutes earlier."),
+                        CompactOption("quest_minute_later_" + indexText, "+15 min", false, ScenarioAuthoringActionIds.ActionQuestScheduleMinutePrefix + indexText + ".15", "Move the popup fifteen minutes later.")
+                    }
+                }));
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "quest_schedule_" + indexText,
+                Title = "Schedule",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                StatusChips = new[]
+                {
+                    new ScenarioAuthoringStatusChipViewModel
+                    {
+                        Id = "quest_schedule_status_" + indexText,
+                        Text = triggered ? "Trigger-started" : "Scheduled",
+                        Tone = ScenarioAuthoringStatusTone.Informational
+                    }
+                },
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildQuestWorkspaceContentCard(
+            QuestAuthoringSnapshot snapshot,
+            QuestDefinition quest,
+            int questIndex,
+            QuestDef libraryQuest)
+        {
+            string indexText = questIndex.ToString(CultureInfo.InvariantCulture);
+            string completion = ResolveCompletionStatus(quest, snapshot != null ? snapshot.Definition : null);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ScenarioInspectorItemFactory.Property("Title", ResolveQuestName(quest, libraryQuest, questIndex)));
+            items.Add(ScenarioInspectorItemFactory.Property(
+                "Description",
+                ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                    quest.Description,
+                    quest.Description,
+                    null,
+                    "No popup description is available.").Text));
+            items.Add(CompactChoiceItem(new ScenarioAuthoringCompactChoiceViewModel
+            {
+                Id = "quest_library_source_" + indexText,
+                Label = "Quest library entry",
+                CurrentLabel = libraryQuest != null ? "Selected" : "Needs a selection",
+                ColumnCount = 2,
+                Options = new[]
+                {
+                    CompactOption("quest_source_previous_" + indexText, "Previous", false, ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix + indexText + ".-1", "Use the previous quest from the library."),
+                    CompactOption("quest_source_next_" + indexText, "Next", false, ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix + indexText + ".1", "Use the next quest from the library.")
+                }
+            }));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionQuestTitleSyncPrefix + indexText,
+                "Use Library Title",
+                "Refresh this popup title from the selected quest library entry.",
+                libraryQuest != null,
+                false,
+                "NM")));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionQuestDescriptionSyncPrefix + indexText,
+                "Use Library Description",
+                "Refresh this popup description from the selected quest library entry.",
+                libraryQuest != null,
+                false,
+                "DS")));
+            items.Add(CompactChoiceItem(new ScenarioAuthoringCompactChoiceViewModel
+            {
+                Id = "quest_completion_choice_" + indexText,
+                Label = "Completion requirement",
+                CurrentLabel = completion,
+                ColumnCount = 2,
+                Options = new[]
+                {
+                    CompactOption("quest_completion_previous_" + indexText, "Previous", false, ScenarioAuthoringActionIds.ActionQuestCompletionCyclePrefix + indexText + ".-1", "Use the previous completion requirement."),
+                    CompactOption("quest_completion_next_" + indexText, "Next", false, ScenarioAuthoringActionIds.ActionQuestCompletionCyclePrefix + indexText + ".1", "Use the next completion requirement.")
+                }
+            }));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "quest_content_" + indexText,
+                Title = "Content",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                StatusChips = new[]
+                {
+                    new ScenarioAuthoringStatusChipViewModel
+                    {
+                        Id = "quest_completion_status_" + indexText,
+                        Text = completion,
+                        Tone = completion == "Completion requirement missing" ? ScenarioAuthoringStatusTone.Error : ScenarioAuthoringStatusTone.Neutral
+                    }
+                },
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildQuestWorkspaceToolsCard(
+            QuestAuthoringSnapshot snapshot,
+            int questIndex,
+            QuestDef libraryQuest)
+        {
+            string indexText = questIndex.ToString(CultureInfo.InvariantCulture);
+            int count = snapshot != null ? snapshot.AuthoredCount : 0;
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "quest_tools_" + indexText,
+                Title = "Tools",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                StatusChips = new ScenarioAuthoringStatusChipViewModel[0],
+                Items = new[]
+                {
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionQuestSpawnNowPrefix + indexText, "Preview Popup", "Ask the running game to show this quest popup now.", libraryQuest != null, false, "PV")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionQuestMovePrefix + indexText + ".-1", "Move Earlier", "Move this popup earlier in the authored list.", questIndex > 0, false, "UP")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionQuestMovePrefix + indexText + ".1", "Move Later", "Move this popup later in the authored list.", questIndex + 1 < count, false, "DN")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionQuestDuplicatePrefix + indexText, "Duplicate", "Copy this authored popup and select the copy.", true, false, "CP")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix + indexText, "Remove", "Remove this authored popup.", true, false, "RM"))
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildQuestWorkspaceAdvancedCard(
+            QuestDefinition quest,
+            int questIndex,
+            QuestDef libraryQuest)
+        {
+            string indexText = questIndex.ToString(CultureInfo.InvariantCulture);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ScenarioInspectorItemFactory.Property("QuestLibrary id", quest.Id ?? string.Empty));
+            items.Add(ScenarioInspectorItemFactory.Property("Authored title value", quest.Title ?? string.Empty));
+            items.Add(ScenarioInspectorItemFactory.Property("Authored description value", quest.Description ?? string.Empty));
+            items.Add(ScenarioInspectorItemFactory.Property("Start trigger id", quest.StartTriggerId ?? string.Empty));
+            items.Add(ScenarioInspectorItemFactory.Property("Completion condition id", quest.CompletionConditionId ?? string.Empty));
+            if (libraryQuest != null)
+            {
+                items.Add(ScenarioInspectorItemFactory.Property("Library name key", libraryQuest.nameKey ?? string.Empty));
+                items.Add(ScenarioInspectorItemFactory.Property("Library description key", libraryQuest.descriptionKey ?? string.Empty));
+            }
+            for (int i = 0; quest.Properties != null && i < quest.Properties.Count; i++)
+            {
+                ScenarioProperty property = quest.Properties[i];
+                if (property != null)
+                    items.Add(ScenarioInspectorItemFactory.Property("Raw property", (property.Key ?? string.Empty) + " = " + (property.Value ?? string.Empty)));
+            }
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "quest_advanced_" + indexText,
+                Title = "Advanced",
+                IsAdvanced = true,
+                Expanded = false,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                StatusChips = new ScenarioAuthoringStatusChipViewModel[0],
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorItem CompactChoiceItem(ScenarioAuthoringCompactChoiceViewModel choice)
+        {
+            return new ScenarioAuthoringInspectorItem
+            {
+                Kind = ScenarioAuthoringInspectorItemKind.Choice,
+                Choice = choice
+            };
+        }
+
+        private static ScenarioAuthoringCompactChoiceOptionViewModel CompactOption(
+            string id,
+            string label,
+            bool selected,
+            string actionId,
+            string hint)
+        {
+            return new ScenarioAuthoringCompactChoiceOptionViewModel
+            {
+                Id = id,
+                Label = label,
+                Selected = selected,
+                Action = ScenarioInspectorItemFactory.Action(actionId, label, hint, true, selected, null)
+            };
+        }
+
+        private static ScenarioAuthoringStatusChipViewModel QuestValidationChip(string id, string validation)
+        {
+            ScenarioAuthoringStatusTone tone = string.Equals(validation, "Available in the base game", StringComparison.Ordinal)
+                ? ScenarioAuthoringStatusTone.Ready
+                : validation != null && validation.StartsWith("Locked", StringComparison.Ordinal)
+                    ? ScenarioAuthoringStatusTone.Warning
+                    : ScenarioAuthoringStatusTone.Error;
+            return new ScenarioAuthoringStatusChipViewModel
+            {
+                Id = id,
+                Text = validation,
+                Tone = tone
+            };
+        }
+
+        private static string ResolveTriggerName(ScenarioDefinition definition, string triggerId)
+        {
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
+                if (trigger != null && string.Equals(trigger.Id, triggerId, StringComparison.OrdinalIgnoreCase))
+                    return "Trigger " + (i + 1).ToString(CultureInfo.InvariantCulture);
+            }
+            return string.IsNullOrEmpty(triggerId) ? "No trigger selected" : "Selected trigger is missing";
+        }
+
+        private static string ResolveCompletionStatus(QuestDefinition quest, ScenarioDefinition definition)
+        {
+            if (quest == null || string.IsNullOrEmpty(quest.CompletionConditionId))
+                return "No completion requirement";
+            string validation = QuestAuthoringHelpers.FormatQuestValidation(quest, definition);
+            return string.Equals(validation, "Completion condition is missing", StringComparison.Ordinal)
+                ? "Completion requirement missing"
+                : "Completion requirement ready";
         }
 
         internal static ScenarioAuthoringInspectorSection[] BuildConversationWorkspaceDocumentSections(
@@ -1327,7 +1659,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(textOrKey, textOrKey, null, fallback).Text;
         }
 
-        private static string ResolveQuestName(QuestDefinition quest, QuestDef libraryQuest, int index)
+        internal static string ResolveQuestName(QuestDefinition quest, QuestDef libraryQuest, int index)
         {
             string libraryKey = libraryQuest != null ? libraryQuest.nameKey : null;
             return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
@@ -1337,7 +1669,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Quest " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
         }
 
-        private static string ResolveQuestDefName(QuestDefBase quest, int index)
+        internal static string ResolveQuestDefName(QuestDefBase quest, int index)
         {
             return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
                 quest != null ? quest.nameKey : null,
@@ -1814,9 +2146,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             public static int CountLiveQuests()
             {
-                QuestManager manager = QuestManager.instance;
-                List<QuestInstance> quests = manager != null ? manager.GetCurrentQuests(true, true, true) : null;
+                List<QuestInstance> quests = GetLiveQuests();
                 return quests != null ? quests.Count : 0;
+            }
+
+            public static List<QuestInstance> GetLiveQuests()
+            {
+                QuestManager manager = QuestManager.instance;
+                return manager != null ? manager.GetCurrentQuests(true, true, true) : null;
             }
 
             public static QuestDef FindQuestDef(string id)

@@ -92,6 +92,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 : "conversation.index." + conversationIndex.ToString(CultureInfo.InvariantCulture);
         }
 
+        public static string QuestEntityId(ScenarioDefinition definition, int questIndex)
+        {
+            QuestDefinition quest = definition != null && definition.Quests != null && definition.Quests.Quests != null
+                && questIndex >= 0 && questIndex < definition.Quests.Quests.Count
+                    ? definition.Quests.Quests[questIndex]
+                    : null;
+            string id = TrimToNull(quest != null ? quest.Id : null);
+            return id != null && CountQuestIds(definition, id) == 1
+                ? "quest.authored.id." + ScenarioAuthoringActionCodec.EncodeToken(id)
+                : "quest.authored.index." + questIndex.ToString(CultureInfo.InvariantCulture);
+        }
+
         public static bool TryResolveStageEntity(ScenarioDefinition definition, string entityId, out int stageIndex)
         {
             stageIndex = -1;
@@ -169,6 +181,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
+        public static bool TryResolveQuestEntity(ScenarioDefinition definition, string entityId, out int questIndex)
+        {
+            questIndex = -1;
+            for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
+            {
+                if (string.Equals(QuestEntityId(definition, i), entityId, StringComparison.Ordinal))
+                {
+                    questIndex = i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         public static void SelectStageDocument(ScenarioDefinition definition, int stageIndex)
         {
             SelectDocument(FlowSubtabId, StageEntityId(definition, stageIndex));
@@ -187,6 +213,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public static void SelectConversationDocument(ScenarioDefinition definition, int conversationIndex)
         {
             SelectDocument(ConversationsSubtabId, ConversationEntityId(definition, conversationIndex));
+        }
+
+        public static void SelectQuestDocument(ScenarioDefinition definition, int questIndex)
+        {
+            SelectDocument(QuestPopupsSubtabId, QuestEntityId(definition, questIndex));
         }
 
         public static string StageTitle(int stageIndex, string title)
@@ -332,6 +363,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int count = 0;
             for (int i = 0; authored != null && authored.Conversations != null && i < authored.Conversations.Count; i++)
                 if (string.Equals(TrimToNull(authored.Conversations[i] != null ? authored.Conversations[i].Id : null), id, StringComparison.OrdinalIgnoreCase)) count++;
+            return count;
+        }
+
+        private static int CountQuestIds(ScenarioDefinition definition, string id)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
+                if (string.Equals(TrimToNull(definition.Quests.Quests[i] != null ? definition.Quests.Quests[i].Id : null), id, StringComparison.OrdinalIgnoreCase)) count++;
             return count;
         }
 
