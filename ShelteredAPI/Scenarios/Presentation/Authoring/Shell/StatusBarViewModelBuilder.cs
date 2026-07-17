@@ -41,7 +41,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string seamHealth = SeamGuard.BuildSystemHealthLine();
             if (!string.IsNullOrEmpty(seamHealth))
                 entries.Add(seamHealth);
-            if (!string.IsNullOrEmpty(state != null ? state.StatusMessage : null))
+            if (ShouldShowStatusMessage(state != null ? state.StatusMessage : null))
                 entries.Add(FormatStatusMessage(state.StatusMessage));
             return entries.ToArray();
         }
@@ -78,6 +78,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return statusMessage.Replace("Unknown", "current workspace");
 
             return statusMessage;
+        }
+
+        internal static bool ShouldShowStatusMessage(string statusMessage)
+        {
+            if (string.IsNullOrEmpty(statusMessage))
+                return false;
+
+            return !statusMessage.StartsWith("Disclosure toggled:", System.StringComparison.OrdinalIgnoreCase)
+                && !statusMessage.StartsWith("Candidate search updated:", System.StringComparison.OrdinalIgnoreCase)
+                && !statusMessage.StartsWith("Workspace subtab selected:", System.StringComparison.OrdinalIgnoreCase)
+                && !statusMessage.StartsWith("Workspace selection updated:", System.StringComparison.OrdinalIgnoreCase)
+                && !statusMessage.StartsWith("Workspace expansion toggled:", System.StringComparison.OrdinalIgnoreCase)
+                && !statusMessage.StartsWith("Workspace search updated:", System.StringComparison.OrdinalIgnoreCase)
+                && !statusMessage.StartsWith("Workspace pane changed:", System.StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -79,7 +79,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorSection BuildWhenSection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, int stageIndex)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Property("If the player never answers", FormatIgnoredCall(stage), "Vanilla can keep the stage active when no explicit route is selected."));
+            items.Add(Property("If the player never answers", FormatIgnoredCall(definition, stage), "Vanilla can keep the stage active when no explicit route is selected."));
             items.Add(Property("Delay", stage.UnansweredNextDays.ToString(CultureInfo.InvariantCulture) + " day(s)", "Vanilla checks stage start by scenario day."));
             items.Add(Property("Punishment", stage.PunishOnUnanswered ? "Punish after the NPC has visited" : "No explicit punishment", "Vanilla has an unanswered double-increment edge case; test ignored calls live."));
             AddStagePicker(items, definition, stageIndex, stage.UnansweredNextStage, true);
@@ -147,7 +147,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AddIntercomRoutePicker(items, stage, intercom, stageIndex, intercomIndex, false, "Success route");
             AddIntercomRoutePicker(items, stage, intercom, stageIndex, intercomIndex, true, "Failure / alternate route");
             AddStageChangePicker(items, definition, intercom, stageIndex, intercomIndex);
-            return Section("story_focused_advanced_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "ADVANCED / ROUTING", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+            return AdvancedSection("story_focused_advanced_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "ADVANCED / ROUTING", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
         private static ScenarioAuthoringInspectorSection BuildOutcomeSection(ScenarioDefinition definition, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)
@@ -171,10 +171,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(Property("Internal stage id", Empty(stage != null ? stage.Id : null, "Internal stage id is blank - assign one before publishing.")));
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition step = stage.IntercomStages[i];
+                if (step == null)
+                    continue;
+                if (!string.IsNullOrEmpty(step.StageDescriptionKey))
+                    items.Add(Property("Technical stage title key", step.StageDescriptionKey));
+                for (int d = 0; step.Dialogue != null && d < step.Dialogue.Count; d++)
+                    if (step.Dialogue[d] != null && !string.IsNullOrEmpty(step.Dialogue[d].TextKey))
+                        items.Add(Property("Technical dialogue key " + (d + 1).ToString(CultureInfo.InvariantCulture), step.Dialogue[d].TextKey));
+                for (int o = 0; step.Options != null && o < step.Options.Count; o++)
+                    if (step.Options[o] != null && !string.IsNullOrEmpty(step.Options[o].TextKey))
+                        items.Add(Property("Technical option key " + (o + 1).ToString(CultureInfo.InvariantCulture), step.Options[o].TextKey));
+            }
             AddStageIdActions(items, definition != null ? definition.ScenarioFlow : null, stageIndex);
             if (!ScenarioStoryStageDisclosure.ShouldRevealAdvancedRouting(stage))
                 items.Add(Text("Advanced step routing appears after this stage has its first written dialogue line."));
-            return Section("story_focused_advanced", "ADVANCED", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+            return AdvancedSection("story_focused_advanced", "ADVANCED", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
         private static ScenarioAuthoringInspectorSection BuildFooterSection(int stageIndex, ScenarioFlowStageDefinition stage)
@@ -206,7 +220,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < intercom.Dialogue.Count; i++)
             {
                 ScenarioDialogueLineDefinition line = intercom.Dialogue[i];
-                string textKey = line != null && !string.IsNullOrEmpty(line.TextKey) ? line.TextKey : "Dialogue text is blank - add a localization key.";
+                string textKey = ResolveText(line != null ? line.TextKey : null, "Dialogue " + (i + 1).ToString(CultureInfo.InvariantCulture));
                 string speaker = line != null && !string.IsNullOrEmpty(line.Character) ? FormatCharacterLabel(definition, line.Character) : "No speaker selected - choose a speaker.";
                 items.Add(Property("Dialogue " + (i + 1).ToString(CultureInfo.InvariantCulture), textKey, speaker));
                 for (int s = 0; s < speakers.Count; s++)
@@ -229,8 +243,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < intercom.Options.Count; i++)
             {
                 ScenarioDialogueOptionDefinition option = intercom.Options[i];
-                string textKey = option != null && !string.IsNullOrEmpty(option.TextKey) ? option.TextKey : "Option text is blank - add a localization key.";
-                items.Add(Property("Option " + (i + 1).ToString(CultureInfo.InvariantCulture), textKey, "Routes to " + FormatIntercomTarget(option != null ? option.NextId : null)));
+                string textKey = ResolveText(option != null ? option.TextKey : null, "Option " + (i + 1).ToString(CultureInfo.InvariantCulture));
+                items.Add(Property("Option " + (i + 1).ToString(CultureInfo.InvariantCulture), textKey, "Routes to " + FormatIntercomTarget(stage, option != null ? option.NextId : null)));
                 string key = option != null && !string.IsNullOrEmpty(option.TextKey) ? option.TextKey : "option_" + (i + 1).ToString(CultureInfo.InvariantCulture);
                 items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.OptionKey(stageIndex, intercomIndex, i, key + "_copy"), "Use Next Option Key", "Use the next option-key pattern.", true, false, "KY")));
                 AddOptionRoutePicker(items, stage, option, stageIndex, intercomIndex, i);
@@ -253,7 +267,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static void AddIntercomRoutePicker(List<ScenarioAuthoringInspectorItem> items, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex, bool alternate, string label)
         {
             string current = alternate ? intercom.AlternateNextId : intercom.NextId;
-            items.Add(Property(label, FormatIntercomTarget(current)));
+            items.Add(Property(label, FormatIntercomTarget(stage, current)));
             items.Add(ActionItem(Action(alternate ? ScenarioStoryAuthoringActions.IntercomAlternate(stageIndex, intercomIndex, null) : ScenarioStoryAuthoringActions.IntercomNext(stageIndex, intercomIndex, null), label + ": End Encounter", "Clear this route.", true, string.IsNullOrEmpty(current), "RT")));
             for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
             {
@@ -267,7 +281,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioStageChangeDefinition change = intercom != null ? intercom.StageChange : null;
             string current = change != null ? change.Id : null;
-            items.Add(Property("Next stage after outcome", FormatStageTarget(current), change != null ? change.DelayDays.ToString(CultureInfo.InvariantCulture) + " day delay" : "No delayed next-stage transition."));
+            items.Add(Property("Next stage after outcome", FormatStageTarget(definition, current), change != null ? change.DelayDays.ToString(CultureInfo.InvariantCulture) + " day delay" : "No delayed next-stage transition."));
             AddStagePicker(items, definition, stageIndex, current, false, intercomIndex);
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageChangeDelay(stageIndex, intercomIndex, 1), "Stage Delay +", "Increase next-stage delay by one day.", true, false, "SD+")));
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageChangeDelay(stageIndex, intercomIndex, -1), "Stage Delay -", "Decrease next-stage delay by one day.", true, false, "SD-")));
@@ -419,18 +433,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     break;
                 }
             }
-            if (!string.IsNullOrEmpty(title))
-                return title;
-            return !string.IsNullOrEmpty(stage != null ? stage.Id : null)
-                ? stage.Id
-                : "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                title,
+                title,
+                stage != null ? stage.Id : null,
+                "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
         }
 
         private static string DisplayIntercomTitle(ScenarioIntercomStageDefinition intercom, int index)
         {
-            return !string.IsNullOrEmpty(intercom != null ? intercom.Id : null)
-                ? intercom.Id
-                : "Step " + (index + 1).ToString(CultureInfo.InvariantCulture);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                intercom != null ? intercom.StageDescriptionKey : null,
+                intercom != null ? intercom.StageDescriptionKey : null,
+                intercom != null ? intercom.Id : null,
+                "Scene " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
         }
 
         private static string BuildStageSummary(ScenarioDefinition definition, ScenarioFlowStageDefinition stage)
@@ -457,21 +473,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return Empty(first != null ? first.Type : null, "No encounter step yet.");
         }
 
-        private static string FormatIgnoredCall(ScenarioFlowStageDefinition stage)
+        private static string FormatIgnoredCall(ScenarioDefinition definition, ScenarioFlowStageDefinition stage)
         {
             if (stage == null || string.IsNullOrEmpty(stage.UnansweredNextStage))
                 return "No explicit route - vanilla keeps this stage active.";
-            return "After delay, route to " + stage.UnansweredNextStage + ".";
+            return "After delay, route to " + FormatStageTarget(definition, stage.UnansweredNextStage) + ".";
         }
 
-        private static string FormatStageTarget(string value)
+        private static string FormatStageTarget(ScenarioDefinition definition, string value)
         {
-            return string.IsNullOrEmpty(value) ? "No next stage selected - this outcome stays in the current stage or ends." : value;
+            if (string.IsNullOrEmpty(value))
+                return "No next stage selected - this outcome stays in the current stage or ends.";
+            ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
+            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+                if (flow.Stages[i] != null && string.Equals(flow.Stages[i].Id, value, StringComparison.OrdinalIgnoreCase))
+                    return DisplayStageTitle(flow.Stages[i], i);
+            return "Missing stage";
         }
 
-        private static string FormatIntercomTarget(string value)
+        private static string FormatIntercomTarget(ScenarioFlowStageDefinition stage, string value)
         {
-            return string.IsNullOrEmpty(value) ? "No step selected - encounter can end or use end options." : value;
+            if (string.IsNullOrEmpty(value))
+                return "No step selected - encounter can end or use end options.";
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+                if (stage.IntercomStages[i] != null && string.Equals(stage.IntercomStages[i].Id, value, StringComparison.OrdinalIgnoreCase))
+                    return DisplayIntercomTitle(stage.IntercomStages[i], i);
+            return "Missing scene";
+        }
+
+        private static string ResolveText(string textOrKey, string fallback)
+        {
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(textOrKey, textOrKey, null, fallback).Text;
         }
 
         private static string Empty(string value, string emptyMessage)
@@ -566,6 +598,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = layout,
                 Items = items.ToArray()
             };
+        }
+
+        private static ScenarioAuthoringInspectorSection AdvancedSection(string id, string title, ScenarioAuthoringInspectorSectionLayout layout, List<ScenarioAuthoringInspectorItem> items)
+        {
+            ScenarioAuthoringInspectorSection section = Section(id, title, layout, items);
+            section.IsAdvanced = true;
+            return section;
         }
 
         private static ScenarioAuthoringInspectorItem Text(string value)

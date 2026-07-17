@@ -399,7 +399,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             string targetId = ScenarioPropertyBag.FirstString(condition.Properties, "questId", "survivorId", "name", "bunkerExpansionId", "triggerId", "targetId");
-            items.Add(Item.Property("Target Id", Item.Safe(targetId)));
+            items.Add(Item.Property("Technical target id", Item.Safe(targetId)));
             if (descriptor.RuntimeKind == ScenarioConditionKind.QuestCompleted
                 || descriptor.RuntimeKind == ScenarioConditionKind.QuestFailed
                 || descriptor.RuntimeKind == ScenarioConditionKind.QuestActive)
@@ -415,12 +415,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     questCount++;
                     items.Add(Item.ActionItem(Item.Action(
                         targetPrefix + index.ToString(CultureInfo.InvariantCulture) + "." + ScenarioAuthoringActionCodec.EncodeToken(quest.Id),
-                        "Quest " + quest.Id,
+                        ResolveQuestTargetName(quest, questIndex),
                         "Use this authored quest as the outcome target.",
                         true,
                         string.Equals(targetId, quest.Id, System.StringComparison.OrdinalIgnoreCase),
                         "Q",
-                        quest.Description)));
+                        "Authored quest popup")));
                 }
 
                 if (questCount == 0)
@@ -429,6 +429,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             items.Add(Item.Text("This target type is runtime-supported but does not yet have a catalog picker on this surface."));
+        }
+
+        private static string ResolveQuestTargetName(QuestDefinition quest, int index)
+        {
+            QuestDef libraryQuest = QuestLibrary.instance != null && quest != null && !string.IsNullOrEmpty(quest.Id)
+                ? QuestLibrary.instance.FindQuestDefinition(quest.Id)
+                : null;
+            string key = libraryQuest != null ? libraryQuest.nameKey : (quest != null ? quest.Title : null);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                quest != null ? quest.Title : null,
+                key,
+                quest != null ? quest.Id : null,
+                "Quest " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
         }
 
         private static void AddStepper(List<ScenarioAuthoringInspectorItem> items, string prefix, int index, string label, int small, int large)

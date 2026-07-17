@@ -19,6 +19,7 @@ using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 namespace ShelteredAPI.Scenarios.Diagnostics{
     /// <summary>
     /// Executable verification harness for the scenario framework. This follows the
@@ -63,6 +64,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 ScenarioLibraryOrganizationVerification.Verify(root, result);
                 ScenarioAuthoringActionCoverageVerification.Verify(result);
                 ScenarioAuthoringActionCoverageVerification.VerifyWorkspaceFoundation(result);
+                ScenarioAuthoringDisplayNameVerification.Verify(result);
             }
             catch (Exception ex)
             {

@@ -126,11 +126,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         missing = new ScenarioStoryGraphNode
                         {
                             Id = "missing:" + key,
-                            Label = "missing '" + targetId + "'",
+                            Label = "Missing stage",
                             Kind = ScenarioStoryGraphNodeKind.Terminal,
                             Status = ScenarioStoryGraphNodeStatus.Broken,
                             StageIndex = -1,
-                            Tooltip = "This route points at a stage id that does not exist."
+                            Tooltip = "This route points at a stage that no longer exists."
                         };
                         missingTargets[key] = missing;
                         nodes.Add(missing);
@@ -350,7 +350,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 parts.Add("When it ends: " + ScenarioStoryScriptViewBuilder.DescribeStepEnding(definition, stage, first));
 
             if (TrimToNull(stage.UnansweredNextStage) != null)
-                parts.Add("If ignored, continues to '" + stage.UnansweredNextStage + "'");
+                parts.Add("If ignored, continues to '" + DisplayStageTitleById(definition, stage.UnansweredNextStage) + "'");
 
             return string.Join(". ", parts.ToArray()) + ".";
         }
@@ -413,15 +413,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string DisplayStageTitle(ScenarioFlowStageDefinition stage, int index)
         {
+            string key = null;
             for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
             {
                 ScenarioIntercomStageDefinition step = stage.IntercomStages[i];
                 if (step != null && !string.IsNullOrEmpty(step.StageDescriptionKey))
-                    return step.StageDescriptionKey;
+                {
+                    key = step.StageDescriptionKey;
+                    break;
+                }
             }
-            if (stage != null && !string.IsNullOrEmpty(stage.Id))
-                return stage.Id;
-            return "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                key,
+                key,
+                stage != null ? stage.Id : null,
+                "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static string DisplayStageTitleById(ScenarioDefinition definition, string stageId)
+        {
+            ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
+            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition stage = flow.Stages[i];
+                if (stage != null && string.Equals(stage.Id, stageId, StringComparison.OrdinalIgnoreCase))
+                    return DisplayStageTitle(stage, i);
+            }
+            return "Missing stage";
         }
 
         private static string TrimToNull(string value)
