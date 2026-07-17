@@ -20,7 +20,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 return;
 
             Color previous = GUI.color;
-            GUI.color = new Color(0.73f, 0.61f, 0.40f, 0.20f);
+            GUI.color = _uiContext.Styles.Theme.Palette.WorkspaceMap;
             Vector3 origin = grid.transform.position;
             for (int x = 0; x <= grid.grid_width; x++)
             {
@@ -82,11 +82,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float x = Mathf.Clamp(pointer.x + 18f, 8f, Math.Max(8f, scaledWidth - width - 8f));
             float y = Mathf.Clamp(pointer.y + 18f, 8f, Math.Max(8f, scaledHeight - height - 8f));
             Rect rect = new Rect(x, y, width, height);
-            DrawChromePanel(rect, _rootPanelStyle);
+            DrawChromePanel(rect, _uiContext.Styles.Chrome);
             GUI.Label(new Rect(x + 9f, y + 5f, width - 18f, 20f), "Cell " + cell + "  |  Footprint " + footprint, _smallTitleStyle);
 
             Color previous = GUI.color;
-            GUI.color = canPlace ? new Color(0.82f, 0.90f, 0.72f, previous.a) : new Color(0.95f, 0.67f, 0.58f, previous.a);
+            GUI.color = canPlace ? _uiContext.Styles.Theme.Palette.SemanticReadyStrong : _uiContext.Styles.Theme.Palette.SemanticErrorStrong;
             GUI.Label(new Rect(x + 9f, y + 27f, width - 18f, 19f), ShortenToFit(reason ?? (canPlace ? "Valid target." : "Invalid target."), width - 18f, _mutedTextStyle), _mutedTextStyle);
             GUI.color = previous;
         }
@@ -131,11 +131,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             const float height = 24f;
             float y = scaledHeight - StatusHeight - height - 4f;
             Rect rect = new Rect((scaledWidth - width) * 0.5f, y, width, height);
-            Color previous = GUI.color;
-            GUI.color = new Color(previous.r, previous.g, previous.b, previous.a * 0.72f);
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
-            GUI.Label(rect, "Left: select  |  Right: interact  |  Esc: cancel", _mutedTextStyle);
-            GUI.color = previous;
+            DrawChromePanel(rect, _uiContext.Styles.Chrome);
+            GUI.Label(rect, "Left: select  |  Right: interact  |  Esc: cancel", _uiContext.Styles.HeaderSubtitleText);
         }
     }
 }

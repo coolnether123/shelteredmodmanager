@@ -43,7 +43,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 _assetBrowserDefaultResolved = true;
             }
 
-            Rect searchRect = new Rect(bodyRect.x, bodyRect.y, bodyRect.width, 32f);
+            Rect searchRect = new Rect(bodyRect.x, bodyRect.y, Math.Min(520f, bodyRect.width), 32f);
             DrawAssetBrowserSearch(searchRect);
 
             float contentY = searchRect.yMax + 8f;
@@ -55,7 +55,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             railWidth = Math.Min(railWidth, Math.Max(compact ? 138f : 172f, bodyRect.width - detailWidth - 250f));
             Rect railRect = new Rect(bodyRect.x, contentY, railWidth, contentHeight);
             Rect detailRect = new Rect(bodyRect.xMax - detailWidth, contentY, detailWidth, contentHeight);
-            Rect gridRect = new Rect(railRect.xMax + 10f, contentY, Math.Max(220f, detailRect.x - railRect.xMax - 20f), contentHeight);
+            Rect gridRect = new Rect(railRect.xMax + 12f, contentY, Math.Max(220f, detailRect.x - railRect.xMax - 24f), contentHeight);
 
             DrawAssetBrowserCategoryRail(railRect, window);
             DrawAssetBrowserGrid(gridRect, window, armPlacementOnCardClick);
@@ -67,7 +67,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(28f));
+            GUILayout.Label("Search", _uiContext.Styles.MutedText, GUILayout.Width(54f), GUILayout.Height(28f));
             Rect searchRect = GUILayoutUtility.GetRect(0f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
             bool searchTopmost = IsInteractiveVisualTopmost(searchRect);
             string nextSearchText;
@@ -89,8 +89,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             DrawSearchPlaceholder(searchRect, _assetBrowserSearchText, "Filter assets");
             Event current = Event.current;
-            if (searchTopmost && ((current != null && searchRect.Contains(current.mousePosition)) || string.Equals(GUI.GetNameOfFocusedControl(), "asset_browser_search", StringComparison.Ordinal)))
+            if (searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), "asset_browser_search", StringComparison.Ordinal))
                 DrawFieldFocusBorder(searchRect);
+            else if (searchTopmost && current != null && searchRect.Contains(current.mousePosition))
+                DrawFieldHoverBorder(searchRect);
 
             float clearWidth = ScenarioUiMeasuredLabel.Width("Clear", _buttonStyle, 18f);
             Rect clearRect = GUILayoutUtility.GetRect(clearWidth, 30f, GUILayout.Width(clearWidth), GUILayout.Height(30f));
@@ -106,9 +108,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawAssetBrowserCategoryRail(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            DrawChromePanel(rect, _rootPanelStyle);
-            GUILayout.BeginArea(new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f));
-            GUILayout.Label("Browse", _sectionTitleStyle);
+            DrawChromePanel(rect, _uiContext.Styles.Page);
+            GUILayout.BeginArea(new Rect(rect.x + 12f, rect.y + 12f, rect.width - 24f, rect.height - 24f));
+            GUILayout.Label("Browse", _smallTitleStyle);
             ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
             DrawAssetBrowserCategoryButton("Favorites", "Starred assets", ScenarioAssetBrowserUx.FavoritesFilter, ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.FavoritesFilter));
             DrawAssetBrowserCategoryButton("Recent", "Last 20 placed / used", ScenarioAssetBrowserUx.RecentFilter, ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.RecentFilter));
@@ -145,8 +147,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawAssetBrowserGrid(Rect rect, ScenarioAuthoringShellWindowViewModel window, bool armPlacementOnCardClick)
         {
-            DrawChromePanel(rect, _rootPanelStyle);
-            Rect inner = new Rect(rect.x + 10f, rect.y + 10f, rect.width - 20f, rect.height - 20f);
+            DrawChromePanel(rect, _uiContext.Styles.Page);
+            Rect inner = new Rect(rect.x + 12f, rect.y + 12f, rect.width - 24f, rect.height - 24f);
             GUILayout.BeginArea(inner);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, inner.width - 18f);
@@ -165,14 +167,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (sectionVisibleCount == 0)
                     continue;
 
-                GUILayout.Label(section.Title ?? "Assets", _sectionTitleStyle);
+                GUILayout.Label(section.Title ?? "Assets", _smallTitleStyle);
                 DrawAssetBrowserGridSection(section, armPlacementOnCardClick);
-                GUILayout.Space(10f);
+                GUILayout.Space(12f);
                 visibleCount += sectionVisibleCount;
             }
 
             if (visibleCount == 0)
-                GUILayout.Label("No assets match the current search and category.", _mutedTextStyle);
+                GUILayout.Label("No assets match the current search and category.", _uiContext.Styles.MutedText);
 
             GUILayout.Space(18f);
             GUILayout.EndScrollView();
@@ -228,8 +230,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawAssetBrowserDetailPane(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            DrawChromePanel(rect, _rootPanelStyle);
-            Rect inner = new Rect(rect.x + 10f, rect.y + 10f, rect.width - 20f, rect.height - 20f);
+            DrawChromePanel(rect, _uiContext.Styles.Card);
+            Rect inner = new Rect(rect.x + 12f, rect.y + 12f, rect.width - 24f, rect.height - 24f);
             ScenarioAuthoringInspectorSection selected = FindSection(window, "asset_browser_selected");
             GUILayout.BeginArea(inner);
             float previousContentWidth = _activeContentWidth;
@@ -275,7 +277,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Rect buttonRect = GUILayoutUtility.GetRect(120f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
                     DrawButton(buttonRect, item.Action, false);
-                    GUILayout.Space(5f);
+                    GUILayout.Space(8f);
                 }
                 else if (item.Kind == ScenarioAuthoringInspectorItemKind.Property)
                 {

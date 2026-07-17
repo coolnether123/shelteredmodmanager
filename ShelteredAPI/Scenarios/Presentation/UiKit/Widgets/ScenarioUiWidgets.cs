@@ -105,8 +105,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
             if (cells.Length < 2)
                 return;
 
-            GUI.Label(cells[0], label ?? string.Empty, styles.MutedText);
-            GUI.Label(cells[1], value ?? string.Empty, styles.BodyText);
+            GUI.Label(cells[0], label ?? string.Empty, styles.PaperMutedText);
+            GUI.Label(cells[1], value ?? string.Empty, styles.PaperBodyText);
         }
 
         /// <summary>

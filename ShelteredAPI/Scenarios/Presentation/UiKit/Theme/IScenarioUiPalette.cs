@@ -1,24 +1,65 @@
 using UnityEngine;
-namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
+
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme
+{
     /// <summary>
-    /// Color palette for a scenario authoring window theme. Roles describe the
-    /// material the surface represents (panel, panel-alt, accent, danger) rather
-    /// than a UI primitive. Implementations supply the values; the style sheet
-    /// composes them into <see cref="UnityEngine.GUIStyle"/> objects.
+    /// Phase 9 material and semantic design tokens for scenario authoring.
+    /// Material tokens are opaque; SurfaceScrim is the only translucent role.
     /// </summary>
     internal interface IScenarioUiPalette
     {
-        // Surfaces
+        // Surfaces and depth
+        Color SurfacePage { get; }
+        Color SurfaceCard { get; }
+        Color SurfaceCardHover { get; }
+        Color SurfaceCardSelected { get; }
+        Color SurfaceInset { get; }
+        Color SurfaceChrome { get; }
+        Color SurfaceDisabled { get; }
+        Color SurfaceViewport { get; }
+        Color SurfaceScrim { get; }
+        Color DepthShadow { get; }
+
+        // Borders
+        Color BorderDefault { get; }
+        Color BorderStrong { get; }
+        Color BorderHighlight { get; }
+        Color BorderFocus { get; }
+
+        // Text
+        Color TextPrimary { get; }
+        Color TextSecondary { get; }
+        Color TextMuted { get; }
+        Color TextInverse { get; }
+        Color TextInverseMuted { get; }
+        Color TextDisabled { get; }
+
+        // Accent and semantic states
+        Color AccentGold { get; }
+        Color SemanticReady { get; }
+        Color SemanticReadyStrong { get; }
+        Color SemanticWarning { get; }
+        Color SemanticWarningStrong { get; }
+        Color SemanticError { get; }
+        Color SemanticErrorStrong { get; }
+        Color SemanticInfo { get; }
+        Color SemanticInfoStrong { get; }
+        Color ControlPressed { get; }
+
+        // Workspace accents
+        Color WorkspaceStory { get; }
+        Color WorkspaceCast { get; }
+        Color WorkspaceSupplies { get; }
+        Color WorkspaceMap { get; }
+        Color WorkspaceTest { get; }
+        Color WorkspacePublish { get; }
+
+        // Temporary compatibility aliases.
         Color PanelBase { get; }
         Color PanelRaised { get; }
         Color PanelInset { get; }
         Color Viewport { get; }
-
-        // Borders / dividers
         Color BorderSubtle { get; }
-        Color BorderStrong { get; }
-
-        // Accents
         Color AccentActive { get; }
         Color AccentHover { get; }
         Color AccentDanger { get; }
@@ -27,13 +68,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         Color AccentWarning { get; }
         Color AccentNeutral { get; }
         Color DisabledSurface { get; }
-
-        // Text roles
         Color TextTitle { get; }
         Color TextSubtitle { get; }
         Color TextBody { get; }
-        Color TextMuted { get; }
-        Color TextDisabled { get; }
         Color TextOnAccent { get; }
         Color TextOnLight { get; }
     }

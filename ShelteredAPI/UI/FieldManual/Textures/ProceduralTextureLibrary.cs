@@ -16,6 +16,13 @@ namespace ShelteredAPI.UI.FieldManual.Textures
         Rivet = 4
     }
 
+    internal enum MaterialSurfaceTier
+    {
+        Page = 0,
+        RaisedCard = 1,
+        RecessedInset = 2
+    }
+
     /// <summary>
     /// ITextureLibrary implementation that delegates to the per-kind generators and
     /// caches results for the process lifetime keyed by generator inputs and palette.
@@ -28,6 +35,24 @@ namespace ShelteredAPI.UI.FieldManual.Textures
         private readonly IThemePalette _palette;
         private readonly string _paletteFingerprint;
         private static readonly Dictionary<string, Texture2D> SharedCache = new Dictionary<string, Texture2D>();
+
+        internal static Texture2D MaterialSurface(MaterialSurfaceTier tier, int width, int height, int cornerCut, Color fill)
+        {
+            Color32 opaque = new Color(fill.r, fill.g, fill.b, 1f);
+            string key = "material:" + (int)tier + ":" + width + "x" + height + ":" + cornerCut + ":"
+                + opaque.r + ":" + opaque.g + ":" + opaque.b + ":255";
+            Texture2D texture;
+            if (SharedCache.TryGetValue(key, out texture) && texture != null)
+                return texture;
+
+            TextureCanvas canvas = new TextureCanvas(width, height);
+            canvas.FillOpaque(opaque);
+            canvas.CutChamferedCorners(cornerCut);
+            texture = canvas.ToTexture(FilterMode.Point);
+            texture.hideFlags = HideFlags.HideAndDontSave;
+            SharedCache[key] = texture;
+            return texture;
+        }
 
         public ProceduralTextureLibrary(IThemePalette palette)
         {

@@ -20,10 +20,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         private const string StoryMapSectionId = "story_map";
 
-        private static readonly Color StoryMapGold = new Color(0.82f, 0.68f, 0.32f, 1f);
-        private static readonly Color StoryMapAmber = new Color(0.86f, 0.62f, 0.20f, 1f);
-        private static readonly Color StoryMapRed = new Color(0.74f, 0.28f, 0.24f, 1f);
-
         private bool IsStoryMapSection(ScenarioAuthoringInspectorSection section)
         {
             return section != null
@@ -54,9 +50,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float available = GetSectionContentWidth();
             Rect legend = GUILayoutUtility.GetRect(available, 22f, GUILayout.ExpandWidth(true), GUILayout.Height(22f));
             float x = legend.x;
-            x = DrawStoryMapLegendSwatch(x, legend.y, StoryMapGold, "route");
-            x = DrawStoryMapLegendSwatch(x, legend.y, StoryMapAmber, "unreachable");
-            x = DrawStoryMapLegendSwatch(x, legend.y, StoryMapRed, "broken / missing");
+            x = DrawStoryMapLegendSwatch(x, legend.y, _uiContext.Styles.Theme.Palette.AccentGold, "route");
+            x = DrawStoryMapLegendSwatch(x, legend.y, _uiContext.Styles.Theme.Palette.SemanticWarningStrong, "unreachable");
+            x = DrawStoryMapLegendSwatch(x, legend.y, _uiContext.Styles.Theme.Palette.SemanticErrorStrong, "broken / missing");
             GUI.Label(new Rect(x + 4f, legend.y + 2f, Math.Max(80f, legend.xMax - x - 4f), 18f), "!N = validation issues (hover for details)", _mutedTextStyle);
             GUILayout.Space(4f);
         }
@@ -81,10 +77,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterScrollRegion("story.map", viewport);
             RegisterInteractiveRegion(viewport);
 
-            Color panelColor = GUI.color;
-            GUI.color = new Color(0.20f, 0.16f, 0.11f, 0.24f);
-            ScenarioUiAtlasSkin.DrawCornerCutTexture(viewport, Texture2D.whiteTexture);
-            GUI.color = panelColor;
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(viewport, _uiContext.Styles.ViewportTexture);
             ScenarioUiAtlasSkin.DrawCornerCutBorder(viewport, _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderSubtleTexture);
 
             // Clip all immediate drawing to the canvas. The old rotated-line primitive also
@@ -115,7 +108,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (from == null || to == null)
                 return;
 
-            Color color = edge.Status == ScenarioStoryGraphEdgeStatus.Broken ? StoryMapRed : StoryMapGold;
+            Color color = edge.Status == ScenarioStoryGraphEdgeStatus.Broken
+                ? _uiContext.Styles.Theme.Palette.SemanticErrorStrong
+                : _uiContext.Styles.Theme.Palette.AccentGold;
             if (to.Y > from.Y + 1f)
             {
                 Vector2 start = new Vector2(canvas.x + from.X + (from.Width * 0.5f), canvas.y + from.Y + from.Height);
@@ -214,14 +209,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = ResolveStoryMapFill(node.Status, node.Kind, hovered);
             ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
             GUI.color = old;
-            ScenarioUiAtlasSkin.DrawCornerCutBorder(
-                rect,
-                node.Status == ScenarioStoryGraphNodeStatus.Ok ? _uiContext.Styles.BorderSubtleTexture : _uiContext.Styles.BorderStrongTexture,
-                _uiContext.Styles.BorderSubtleTexture);
+            Texture2D nodeBorder = node.Status == ScenarioStoryGraphNodeStatus.Broken
+                ? _uiContext.Styles.SemanticErrorStrongTexture
+                : node.Status == ScenarioStoryGraphNodeStatus.Unreachable
+                    ? _uiContext.Styles.SemanticWarningStrongTexture
+                    : _uiContext.Styles.BorderSubtleTexture;
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, nodeBorder, _uiContext.Styles.BorderSubtleTexture);
 
             float pad = 8f;
             Rect titleRect = new Rect(rect.x + pad, rect.y + 6f, rect.width - (pad * 2f) - 4f, 20f);
-            GUIStyle titleStyle = node.Kind == ScenarioStoryGraphNodeKind.Terminal ? _mutedTextStyle : _smallTitleStyle;
+            GUIStyle titleStyle = node.Kind == ScenarioStoryGraphNodeKind.Terminal ? _mutedTextStyle : _sectionTitleStyle;
             string tooltip = node.Tooltip ?? node.Label;
             GUI.Label(titleRect, new GUIContent(ShortenToFit(node.Label ?? string.Empty, titleRect.width, titleStyle), tooltip), titleStyle);
 
@@ -263,21 +260,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private static Color ResolveStoryMapFill(ScenarioStoryGraphNodeStatus status, ScenarioStoryGraphNodeKind kind, bool hovered)
+        private Color ResolveStoryMapFill(ScenarioStoryGraphNodeStatus status, ScenarioStoryGraphNodeKind kind, bool hovered)
         {
-            Color color;
-            if (kind == ScenarioStoryGraphNodeKind.Terminal && status != ScenarioStoryGraphNodeStatus.Broken)
-                color = new Color(0.58f, 0.54f, 0.46f, 0.52f);
-            else if (status == ScenarioStoryGraphNodeStatus.Broken)
-                color = new Color(0.72f, 0.28f, 0.24f, 0.46f);
-            else if (status == ScenarioStoryGraphNodeStatus.Unreachable)
-                color = new Color(0.84f, 0.60f, 0.20f, 0.42f);
-            else
-                color = new Color(0.80f, 0.72f, 0.55f, 0.58f);
-
             if (hovered)
-                color = new Color(color.r * 1.1f, color.g * 1.1f, color.b * 1.1f, Math.Min(1f, color.a + 0.12f));
-            return color;
+            {
+                if (status == ScenarioStoryGraphNodeStatus.Broken)
+                    return _uiContext.Styles.Theme.Palette.SemanticErrorStrong;
+                if (status == ScenarioStoryGraphNodeStatus.Unreachable)
+                    return _uiContext.Styles.Theme.Palette.SemanticWarningStrong;
+                return _uiContext.Styles.Theme.Palette.SurfaceCardHover;
+            }
+
+            if (kind == ScenarioStoryGraphNodeKind.Terminal && status != ScenarioStoryGraphNodeStatus.Broken)
+                return _uiContext.Styles.Theme.Palette.SurfaceDisabled;
+            if (status == ScenarioStoryGraphNodeStatus.Broken)
+                return _uiContext.Styles.Theme.Palette.SemanticError;
+            if (status == ScenarioStoryGraphNodeStatus.Unreachable)
+                return _uiContext.Styles.Theme.Palette.SemanticWarning;
+            return _uiContext.Styles.Theme.Palette.SurfaceCard;
         }
 
         private static ScenarioUiPillEmphasis ResolveStoryMapBadgeEmphasis(ScenarioStoryGraphNodeStatus status)

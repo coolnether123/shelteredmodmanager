@@ -73,7 +73,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 }
 
                 DrawMetadataField(section.Id, item, string.Equals(item.Label, "Description", StringComparison.OrdinalIgnoreCase));
-                GUILayout.Space(5f);
+                GUILayout.Space(4f);
             }
             for (int i = 0; section.Items != null && i < section.Items.Length; i++)
             {
@@ -97,8 +97,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float fieldY = stacked ? row.y + 28f : row.y;
             float fieldX = stacked ? row.x : labelRect.xMax + 8f;
             float buttonsWidth = 144f;
-            float fieldWidth = Math.Max(76f, row.xMax - fieldX - buttonsWidth - 8f);
-            DrawNewWindowsEditableControl(new Rect(fieldX, fieldY, fieldWidth, 28f), section.Id, version, false);
+            float fieldWidth = Math.Min(520f, Math.Max(76f, row.xMax - fieldX - buttonsWidth - 8f));
+            DrawNewWindowsEditableControl(new Rect(fieldX, fieldY, fieldWidth, 32f), section.Id, version, false);
 
             float buttonX = fieldX + fieldWidth + 8f;
             int buttonIndex = 0;
@@ -107,7 +107,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 ScenarioAuthoringInspectorItem item = section.Items[i];
                 if (item == null || item.Kind != ScenarioAuthoringInspectorItemKind.Action || item.Action == null)
                     continue;
-                Rect buttonRect = new Rect(buttonX + (buttonIndex * 72f), fieldY, 68f, 28f);
+                Rect buttonRect = new Rect(buttonX + (buttonIndex * 72f), fieldY, 68f, 32f);
                 DrawButton(buttonRect, item.Action, false);
                 buttonIndex++;
             }
@@ -120,14 +120,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float width = GetSectionContentWidth();
             bool stacked = width < 520f;
             string warning = MetadataWarning(item);
-            float controlHeight = multiline ? 70f : 28f;
+            float controlHeight = multiline ? 70f : 32f;
             float rowHeight = stacked ? controlHeight + 28f + (string.IsNullOrEmpty(warning) ? 0f : 18f) : controlHeight + (string.IsNullOrEmpty(warning) ? 0f : 18f);
             Rect row = GUILayoutUtility.GetRect(0f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
             float labelWidth = stacked ? row.width : 108f;
             GUI.Label(new Rect(row.x, row.y + 5f, labelWidth, 22f), item.Label ?? string.Empty, _mutedTextStyle);
             float fieldX = stacked ? row.x : row.x + labelWidth + 8f;
             float fieldY = stacked ? row.y + 26f : row.y;
-            Rect fieldRect = new Rect(fieldX, fieldY, Math.Max(80f, row.xMax - fieldX), controlHeight);
+            float maximumWidth = multiline ? 680f : 520f;
+            Rect fieldRect = new Rect(fieldX, fieldY, Math.Min(maximumWidth, Math.Max(80f, row.xMax - fieldX)), controlHeight);
             DrawNewWindowsEditableControl(fieldRect, sectionId, item, multiline);
             if (!string.IsNullOrEmpty(warning))
                 DrawMetadataWarning(new Rect(fieldRect.x, fieldRect.yMax, fieldRect.width, 18f), warning);
@@ -221,7 +222,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             int count = section.Items != null ? section.Items.Length : 0;
             int columns = width >= 620f ? Math.Min(4, count) : Math.Min(2, count);
             if (columns <= 0) return;
-            float gap = 6f;
+            float gap = 8f;
             float cardWidth = (width - (gap * (columns - 1))) / columns;
             for (int start = 0; start < count; start += columns)
             {
@@ -295,8 +296,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             for (int i = 0; section.Items != null && i < section.Items.Length; i++)
                 if (section.Items[i] != null && section.Items[i].Action != null) actions.Add(section.Items[i].Action);
             float available = GetSectionContentWidth();
-            int columns = Mathf.Clamp(Mathf.FloorToInt((available + 5f) / (minimumWidth + 5f)), 1, Math.Max(1, actions.Count));
-            float width = (available - ((columns - 1) * 5f)) / columns;
+            int columns = Mathf.Clamp(Mathf.FloorToInt((available + 4f) / (minimumWidth + 4f)), 1, Math.Max(1, actions.Count));
+            float width = (available - ((columns - 1) * 4f)) / columns;
             for (int start = 0; start < actions.Count; start += columns)
             {
                 GUILayout.BeginHorizontal();
@@ -304,10 +305,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 {
                     Rect rect = GUILayoutUtility.GetRect(width, height, GUILayout.Width(width), GUILayout.Height(height));
                     DrawButton(rect, actions[start + column], false);
-                    if (column < columns - 1) GUILayout.Space(5f);
+                    if (column < columns - 1) GUILayout.Space(4f);
                 }
                 GUILayout.EndHorizontal();
-                if (start + columns < actions.Count) GUILayout.Space(5f);
+                if (start + columns < actions.Count) GUILayout.Space(4f);
             }
         }
 
@@ -396,7 +397,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             GUILayout.BeginVertical(_uiContext.Styles.Section);
             GUILayout.Label(section.Title ?? "Export package", _sectionTitleStyle);
             DrawUniformActionGrid(section, 170f, 34f);
-            GUILayout.Space(6f);
+            GUILayout.Space(8f);
             for (int i = 0; section.Items != null && i < section.Items.Length; i++)
             {
                 ScenarioAuthoringInspectorItem item = section.Items[i];

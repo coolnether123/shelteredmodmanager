@@ -29,7 +29,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
             GUILayout.BeginArea(new Rect(rect.x + PopupMenuPadding, rect.y + PopupMenuPadding, rect.width - (PopupMenuPadding * 2f), rect.height - (PopupMenuPadding * 2f)));
-            GUILayout.Label(menu.Title ?? "Context", _sectionTitleStyle);
+            GUILayout.Label(menu.Title ?? "Context", _smallTitleStyle);
             if (!string.IsNullOrEmpty(menu.Detail))
                 GUILayout.Label(menu.Detail, _mutedTextStyle);
             GUILayout.Space(4f);
@@ -47,7 +47,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect BuildPopupRectCore(ScenarioAuthoringContextMenuModel menu, float width, float height, Rect hudReserveRect)
         {
-            float rectWidth = Math.Max(220f, ScenarioUiMeasuredLabel.Width(menu != null ? menu.Title : null, _sectionTitleStyle, 24f));
+            float rectWidth = Math.Max(220f, ScenarioUiMeasuredLabel.Width(menu != null ? menu.Title : null, _smallTitleStyle, 24f));
             for (int i = 0; menu.Actions != null && i < menu.Actions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = menu.Actions[i];
@@ -110,7 +110,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return 0f;
 
             if (IsMenuGroupAction(action))
-                return ScenarioUiMeasuredLabel.Width(action.Label, _sectionTitleStyle, 24f);
+                return ScenarioUiMeasuredLabel.Width(action.Label, _smallTitleStyle, 24f);
 
             return MeasureButtonWidth(action, false, 32f);
         }
@@ -122,7 +122,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (IsMenuGroupAction(action))
             {
-                GUI.Label(new Rect(rect.x + 4f, rect.y + 7f, rect.width - 8f, rect.height - 8f), action.Label ?? string.Empty, _sectionTitleStyle);
+                GUI.Label(new Rect(rect.x + 4f, rect.y + 7f, rect.width - 8f, rect.height - 8f), action.Label ?? string.Empty, _smallTitleStyle);
                 return;
             }
 
@@ -154,9 +154,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : (action.Hint ?? string.Empty)));
             if (RegisterRichHoverHelpSource(visualRect, action))
                 tooltip = string.Empty;
+            string actionIdentity = (action.Id ?? string.Empty) + " " + (action.Label ?? string.Empty);
+            bool danger = !tab
+                && (actionIdentity.IndexOf("delete", StringComparison.OrdinalIgnoreCase) >= 0
+                    || actionIdentity.IndexOf("remove", StringComparison.OrdinalIgnoreCase) >= 0
+                    || actionIdentity.IndexOf("discard", StringComparison.OrdinalIgnoreCase) >= 0);
             GUIStyle style = tab
                 ? (!action.Enabled ? _uiContext.Styles.TabDisabled : (action.Emphasized ? _activeTabStyle : _tabStyle))
-                : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));
+                : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (danger ? _uiContext.Styles.ButtonDanger : (action.Emphasized ? _activeButtonStyle : _buttonStyle)));
             bool nativeButton = ScenarioUiAtlasSkin.DrawButton(visualRect, action.Emphasized, action.Enabled, pressed, tab);
             GUIStyle drawStyle = nativeButton ? ResolveContentButtonStyle(action, tab) : style;
             bool chromeGlyph = IsWindowHeaderChromeGlyphAction(action, visualRect);

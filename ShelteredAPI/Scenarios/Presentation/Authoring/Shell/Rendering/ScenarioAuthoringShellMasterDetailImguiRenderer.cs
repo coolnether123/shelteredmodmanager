@@ -3,6 +3,7 @@ using UnityEngine;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
@@ -26,10 +27,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private const float WorkspaceSubtabHeight = 40f;
-        private const float WorkspacePanePadding = 10f;
+        private const float WorkspaceSubtabHeight = 36f;
+        private const float WorkspacePanePadding = 12f;
         private const float WorkspaceRowIndent = 16f;
         private const float WorkspaceRowGap = 4f;
+        private Texture2D _activeWorkspaceRailTexture;
 
         private Rect DrawWorkspaceBody(
             Rect bodyRect,
@@ -39,6 +41,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 return bodyRect;
 
             ScenarioAuthoringWorkspaceViewModel workspace = window.WorkspaceBody;
+            _activeWorkspaceRailTexture = ResolveWorkspaceRailTexture(workspace.Id);
             string subtabId = ResolveWorkspaceSubtabId(workspace);
             bool defaultDocumentPane = workspace.Document != null;
             bool narrowDocumentPane = ScenarioAuthoringRendererInteractionState.Instance.GetWorkspaceNarrowPane(
@@ -58,6 +61,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (plan.ShowsDocument)
                 DrawWorkspaceDocument(plan.DocumentRect, plan.DocumentScrollOwnerId, workspace, subtabId, !plan.Wide);
 
+            _activeWorkspaceRailTexture = null;
             return bodyRect;
         }
 
@@ -129,13 +133,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringWorkspaceViewModel workspace,
             string activeSubtabId)
         {
-            DrawChromePanel(rect, _rootPanelStyle);
+            DrawChromePanel(rect, _uiContext.Styles.Page);
             ScenarioAuthoringWorkspaceSubtabViewModel[] subtabs = workspace != null ? workspace.Subtabs : null;
             int count = subtabs != null ? subtabs.Length : 0;
             if (count == 0)
                 return;
 
-            float gap = 6f;
+            float gap = 4f;
             float innerWidth = Math.Max(80f, rect.width - (WorkspacePanePadding * 2f));
             float cellWidth = Math.Max(96f, (innerWidth - (gap * (count - 1))) / count);
             float x = rect.x + WorkspacePanePadding;
@@ -148,7 +152,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 float remainingWidth = rect.xMax - WorkspacePanePadding - x;
                 if (remainingWidth <= 0f)
                     break;
-                Rect cellRect = new Rect(x, rect.y + 5f, Math.Min(cellWidth, remainingWidth), rect.height - 10f);
+                Rect cellRect = new Rect(x, rect.y, Math.Min(cellWidth, remainingWidth), 36f);
                 float chipWidth = MeasureStatusChipsWidth(subtab.StatusChips, 2, cellRect.width * 0.34f);
                 float chipGap = chipWidth > 0f ? 4f : 0f;
                 Rect tabRect = new Rect(cellRect.x, cellRect.y, Math.Max(24f, cellRect.width - chipWidth - chipGap), cellRect.height);
@@ -165,6 +169,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     ExecuteWorkspaceAction(action);
                 }
 
+                if (selected)
+                    GUI.DrawTexture(new Rect(tabRect.x, tabRect.yMax - 4f, tabRect.width, 4f), ResolveWorkspaceRailTexture(workspace != null ? workspace.Id : null));
+
                 if (chipWidth > 0f)
                     DrawStatusChipRun(tabRect.xMax + chipGap, cellRect, subtab.StatusChips, 2, chipWidth);
                 x += cellWidth + gap;
@@ -179,13 +186,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringWorkspaceViewModel workspace,
             string subtabId)
         {
-            DrawChromePanel(rect, _rootPanelStyle);
+            DrawChromePanel(rect, _uiContext.Styles.Page);
             ScenarioAuthoringNavigatorViewModel navigator = workspace != null ? workspace.Navigator : null;
             if (navigator == null)
                 return;
 
             Rect inner = InsetWorkspaceRect(rect, WorkspacePanePadding);
-            GUI.Label(new Rect(inner.x, inner.y, inner.width, 22f), "Navigator", _sectionTitleStyle);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 22f), "Navigator", _smallTitleStyle);
             Rect searchRect = new Rect(inner.x, inner.y + 26f, inner.width, 30f);
             DrawWorkspaceSearch(searchRect, workspace, subtabId, navigator);
             Rect viewport = new Rect(inner.x, searchRect.yMax + 8f, inner.width, Math.Max(60f, inner.yMax - searchRect.yMax - 8f));
@@ -206,13 +213,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 if (group.Expanded)
                 {
                     for (int rowIndex = 0; group.Rows != null && rowIndex < group.Rows.Length; rowIndex++)
-                        DrawNavigatorRow(group.Rows[rowIndex], 0);
+                        DrawNavigatorRow(group.Rows[rowIndex], 0, workspace != null ? workspace.Id : null);
                 }
-                GUILayout.Space(7f);
+                GUILayout.Space(12f);
             }
             if (groupCount == 0)
-                GUILayout.Label(string.IsNullOrEmpty(navigator.EmptyMessage) ? "Nothing to show yet." : navigator.EmptyMessage, _mutedTextStyle);
-            GUILayout.Space(14f);
+                GUILayout.Label(string.IsNullOrEmpty(navigator.EmptyMessage) ? "Nothing to show yet." : navigator.EmptyMessage, _uiContext.Styles.MutedText);
+            GUILayout.Space(12f);
             GUILayout.EndScrollView();
             GUILayout.EndArea();
             _activeContentWidth = previousContentWidth;
@@ -294,7 +301,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             }
         }
 
-        private void DrawNavigatorRow(ScenarioAuthoringNavigatorRowViewModel row, int depth)
+        private void DrawNavigatorRow(ScenarioAuthoringNavigatorRowViewModel row, int depth, string workspaceId)
         {
             if (row == null)
                 return;
@@ -303,42 +310,69 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float indent = Math.Min(WorkspaceRowIndent * Math.Max(0, depth), estimatedWidth * 0.30f);
             bool hasSubtitle = !string.IsNullOrEmpty(row.Subtitle);
             float estimatedRowWidth = Math.Max(80f, estimatedWidth - indent);
-            float estimatedToggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 25f : 0f;
+            float estimatedToggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 28f : 0f;
             float estimatedChipsWidth = MeasureStatusChipsWidth(row.StatusChips, 2, estimatedRowWidth * 0.36f);
             float estimatedGaps = (estimatedToggleWidth > 0f ? 4f : 0f) + (estimatedChipsWidth > 0f ? 4f : 0f);
             float estimatedTextWidth = Math.Max(20f, estimatedRowWidth - estimatedToggleWidth - estimatedChipsWidth - estimatedGaps - 18f);
-            GUIStyle estimatedTitleStyle = row.Selected ? _sectionTitleStyle : _textStyle;
+            GUIStyle estimatedTitleStyle = row.Selected ? _uiContext.Styles.PaperTitleText : _uiContext.Styles.PaperBodyText;
             float titleHeight = estimatedTitleStyle != null
                 ? Math.Max(20f, estimatedTitleStyle.CalcHeight(new GUIContent(JoinIconLabel(row.IconText, row.Title)), estimatedTextWidth))
                 : 20f;
             float subtitleHeight = hasSubtitle && _mutedTextStyle != null
                 ? Math.Max(17f, _mutedTextStyle.CalcHeight(new GUIContent(row.Subtitle), estimatedTextWidth))
                 : 0f;
-            float height = Math.Max(34f, 8f + titleHeight + (hasSubtitle ? subtitleHeight + 1f : 0f));
+            float height = Math.Max(hasSubtitle ? 52f : 40f, 8f + titleHeight + (hasSubtitle ? subtitleHeight + 1f : 0f));
             Rect allocated = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
             Rect rowRect = new Rect(allocated.x + indent, allocated.y, Math.Max(80f, allocated.width - indent), allocated.height);
-            float toggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 25f : 0f;
+            float toggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 28f : 0f;
             float chipsWidth = MeasureStatusChipsWidth(row.StatusChips, 2, rowRect.width * 0.36f);
             float controlGaps = (toggleWidth > 0f ? 4f : 0f) + (chipsWidth > 0f ? 4f : 0f);
             float selectWidth = Math.Max(48f, rowRect.width - toggleWidth - chipsWidth - controlGaps);
             Rect selectRect = new Rect(rowRect.x, rowRect.y, selectWidth, rowRect.height);
             ScenarioAuthoringInspectorAction select = row.SelectAction;
             bool enabled = select != null && select.Enabled;
+            bool warning = false;
+            for (int statusIndex = 0; row.StatusChips != null && statusIndex < row.StatusChips.Length; statusIndex++)
+            {
+                ScenarioAuthoringStatusChipViewModel status = row.StatusChips[statusIndex];
+                if (status != null && status.Tone == ScenarioAuthoringStatusTone.Warning)
+                {
+                    warning = true;
+                    break;
+                }
+            }
+            GUIStyle rowStyle = warning
+                ? _uiContext.Styles.NavigatorRowWarning
+                : (row.Selected ? _uiContext.Styles.NavigatorRowSelected : _uiContext.Styles.NavigatorRow);
             if (DrawPlainButton(
                 selectRect,
                 GUIContent.none,
-                enabled ? (row.Selected ? _activeButtonStyle : _buttonStyle) : _uiContext.Styles.ButtonDisabled,
+                enabled ? rowStyle : _uiContext.Styles.ButtonDisabled,
                 enabled))
                 ExecuteWorkspaceAction(select);
+
+            bool rowHovered = enabled && IsInteractiveHoverAllowed(selectRect);
+            Texture2D rowBorder = warning
+                ? _uiContext.Styles.SemanticWarningStrongTexture
+                : (rowHovered ? _uiContext.Styles.BorderStrongTexture : _uiContext.Styles.BorderSubtleTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(selectRect, rowBorder, rowBorder);
+
+            if (row.Selected)
+                GUI.DrawTexture(new Rect(selectRect.x, selectRect.y, 4f, selectRect.height), ResolveWorkspaceRailTexture(workspaceId));
+            if (row.Selected)
+            {
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(selectRect, _uiContext.Styles.FocusBorderTexture, _uiContext.Styles.FocusBorderTexture);
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(new Rect(selectRect.x + 1f, selectRect.y + 1f, Math.Max(0f, selectRect.width - 2f), Math.Max(0f, selectRect.height - 2f)), _uiContext.Styles.FocusBorderTexture, _uiContext.Styles.FocusBorderTexture);
+            }
 
             float labelX = 10f;
             GUI.BeginGroup(selectRect);
             GUI.Label(
                 new Rect(labelX, hasSubtitle ? 4f : 7f, Math.Max(20f, selectRect.width - 18f), titleHeight),
                 JoinIconLabel(row.IconText, row.Title),
-                row.Selected ? _sectionTitleStyle : _textStyle);
+                row.Selected ? _uiContext.Styles.PaperTitleText : _uiContext.Styles.PaperBodyText);
             if (hasSubtitle)
-                GUI.Label(new Rect(labelX, 5f + titleHeight, Math.Max(20f, selectRect.width - 18f), subtitleHeight), row.Subtitle, _mutedTextStyle);
+                GUI.Label(new Rect(labelX, 5f + titleHeight, Math.Max(20f, selectRect.width - 18f), subtitleHeight), row.Subtitle, _uiContext.Styles.PaperMutedText);
             GUI.EndGroup();
 
             float x = selectRect.xMax + (toggleWidth > 0f || chipsWidth > 0f ? 4f : 0f);
@@ -362,7 +396,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (row.Expanded)
             {
                 for (int i = 0; row.Children != null && i < row.Children.Length; i++)
-                    DrawNavigatorRow(row.Children[i], depth + 1);
+                    DrawNavigatorRow(row.Children[i], depth + 1, workspaceId);
             }
         }
 
@@ -408,11 +442,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             string subtabId,
             bool narrow)
         {
-            DrawChromePanel(rect, _rootPanelStyle);
+            DrawChromePanel(rect, _uiContext.Styles.Page);
             ScenarioAuthoringWorkspaceDocumentViewModel document = workspace != null ? workspace.Document : null;
-            Rect inner = InsetWorkspaceRect(rect, WorkspacePanePadding + 2f);
+            Rect inner = InsetWorkspaceRect(rect, WorkspacePanePadding);
             if (document == null)
             {
+                GUI.Box(inner, GUIContent.none, _uiContext.Styles.Inset);
                 ScenarioUiWidgets.DrawEmptyState(inner, "Select an item to open its document.", _uiContext.Styles);
                 return;
             }
@@ -425,11 +460,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             {
                 float backWidth = Mathf.Clamp(MeasureButtonWidth(document.BackAction, false, 22f), 112f, Math.Max(112f, inner.width));
                 float backHeight = _buttonStyle != null
-                    ? Math.Max(30f, _buttonStyle.CalcHeight(new GUIContent(document.BackAction.Label ?? "< Back"), backWidth))
-                    : 30f;
+                    ? Math.Max(32f, _buttonStyle.CalcHeight(new GUIContent(document.BackAction.Label ?? "< Back"), backWidth))
+                    : 32f;
                 Rect backRect = new Rect(inner.x, y, Math.Min(backWidth, inner.width), backHeight);
                 DrawWorkspaceBack(backRect, document.BackAction);
-                y = backRect.yMax + 5f;
+                y = backRect.yMax + 8f;
             }
 
             if (document.Breadcrumbs != null && document.Breadcrumbs.Length > 0)
@@ -443,14 +478,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             y += 29f;
             if (!string.IsNullOrEmpty(document.Subtitle))
             {
-                GUI.Label(new Rect(inner.x, y, inner.width, 20f), document.Subtitle, _mutedTextStyle);
+                GUI.Label(new Rect(inner.x, y, inner.width, 20f), document.Subtitle, _uiContext.Styles.MutedText);
                 y += 22f;
             }
             if (document.StatusChips != null && document.StatusChips.Length > 0)
             {
                 Rect chipsRow = new Rect(inner.x, y, inner.width, 22f);
                 DrawStatusChipRun(chipsRow.x, chipsRow, document.StatusChips, 5, chipsRow.width);
-                y = chipsRow.yMax + 5f;
+                y = chipsRow.yMax + 8f;
             }
             if (document.HeaderActions != null && document.HeaderActions.Length > 0)
             {
@@ -460,17 +495,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     ScenarioAuthoringInspectorAction action = document.HeaderActions[i];
                     if (action == null)
                         continue;
-                    float width = Mathf.Clamp(MeasureButtonWidth(action, false, 22f), 72f, Math.Max(72f, inner.width * 0.42f));
+                    float width = Mathf.Clamp(MeasureButtonWidth(action, false, 16f), 72f, Math.Min(240f, Math.Max(72f, inner.width)));
                     if (actionX > inner.x && actionX + width > inner.xMax)
                     {
                         actionX = inner.x;
-                        y += 34f;
+                        y += 40f;
                     }
-                    Rect actionRect = new Rect(actionX, y, Math.Min(width, inner.xMax - actionX), 30f);
+                    Rect actionRect = new Rect(actionX, y, Math.Min(width, inner.xMax - actionX), 32f);
                     DrawButton(actionRect, action, false);
-                    actionX = actionRect.xMax + 5f;
+                    actionX = actionRect.xMax + 8f;
                 }
-                y += 35f;
+                y += 40f;
             }
 
             Rect viewport = new Rect(inner.x, y + 3f, inner.width, Math.Max(60f, inner.yMax - y - 3f));
@@ -492,8 +527,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
                     if (advancedPass && !drewAdvancedHeading)
                     {
-                        GUILayout.Space(8f);
-                        GUILayout.Label("Advanced", _mutedTextStyle);
+                        GUILayout.Space(16f);
+                        GUILayout.Label("Advanced", _uiContext.Styles.MutedText);
                         drewAdvancedHeading = true;
                     }
                     if (section.StatusChips != null && section.StatusChips.Length > 0)
@@ -503,22 +538,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                         GUILayout.Space(4f);
                     }
 
-                    Color previousColor = GUI.color;
                     if (advancedPass)
-                    {
-                        GUI.color = new Color(previousColor.r * 0.82f, previousColor.g * 0.82f, previousColor.b * 0.82f, previousColor.a * 0.90f);
-                        GUILayout.BeginVertical(_uiContext.Styles.PanelInset);
-                    }
+                        GUILayout.BeginVertical(_uiContext.Styles.Inset, GUILayout.Width(Math.Min(760f, GetSectionContentWidth())));
                     DrawSection(section);
                     if (advancedPass)
                         GUILayout.EndVertical();
-                    GUI.color = previousColor;
-                    GUILayout.Space(8f);
+                    GUILayout.Space(12f);
                 }
             }
             if (document.Sections == null || document.Sections.Length == 0)
-                GUILayout.Label("This document has no editable sections yet.", _mutedTextStyle);
-            GUILayout.Space(14f);
+                GUILayout.Label("This document has no editable sections yet.", _uiContext.Styles.MutedText);
+            GUILayout.Space(12f);
             GUILayout.EndScrollView();
             GUILayout.EndArea();
             _activeContentWidth = previousContentWidth;
@@ -535,7 +565,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     continue;
                 if (x > rect.x)
                 {
-                    GUI.Label(new Rect(x, rect.y + 2f, 16f, rect.height), ">", _mutedTextStyle);
+                    GUI.Label(new Rect(x, rect.y + 2f, 16f, rect.height), ">", _uiContext.Styles.BreadcrumbLinkText);
                     x += 16f;
                 }
                 bool tail = i == breadcrumbs.Length - 1;
@@ -544,12 +574,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 float width = tail
                     ? remaining
                     : Math.Min(
-                        ScenarioUiMeasuredLabel.Width(breadcrumb.Label ?? string.Empty, _mutedTextStyle, 12f),
+                        ScenarioUiMeasuredLabel.Width(breadcrumb.Label ?? string.Empty, _uiContext.Styles.BreadcrumbLinkText, 0f),
                         Math.Max(42f, remaining - laterReserve));
                 Rect crumbRect = new Rect(x, rect.y, Math.Min(width, rect.xMax - x), rect.height);
                 ScenarioAuthoringInspectorAction action = breadcrumb.Action;
                 string label = tail
-                    ? FitBreadcrumbTail(breadcrumb.Label, crumbRect.width, _mutedTextStyle)
+                    ? FitBreadcrumbTail(breadcrumb.Label, crumbRect.width, _uiContext.Styles.BreadcrumbCurrentText)
                     : breadcrumb.Label ?? string.Empty;
                 string tooltip = !string.Equals(label, breadcrumb.Label ?? string.Empty, StringComparison.Ordinal)
                     ? breadcrumb.Label ?? string.Empty
@@ -558,7 +588,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 {
                     ExecuteWorkspaceAction(action);
                 }
-                GUI.Label(crumbRect, new GUIContent(label, tooltip), _mutedTextStyle);
+                GUI.Label(crumbRect, new GUIContent(label, tooltip), tail ? _uiContext.Styles.BreadcrumbCurrentText : _uiContext.Styles.BreadcrumbLinkText);
                 x = crumbRect.xMax;
                 if (x >= rect.xMax)
                     break;
@@ -612,12 +642,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (count == 0)
                 return;
 
-            float availableWidth = GetSectionContentWidth();
-            float gap = 5f;
-            int columns = choice.ColumnCount > 0
-                ? Mathf.Clamp(choice.ColumnCount, 1, count)
-                : Mathf.Clamp(Mathf.FloorToInt((availableWidth + gap) / 142f), 1, Math.Min(4, count));
-            float optionWidth = Math.Max(72f, (availableWidth - (gap * (columns - 1))) / columns);
+            float availableWidth = Math.Min(720f, GetSectionContentWidth());
+            float gap = 8f;
+            int requested = choice.ColumnCount > 0 ? choice.ColumnCount : 4;
+            int capacity = Math.Max(1, Mathf.FloorToInt((availableWidth + 8f) / 120f));
+            int columns = Math.Min(requested, Math.Min(capacity, count));
+            float optionWidth = Mathf.Clamp((availableWidth - (gap * (columns - 1))) / columns, 112f, 176f);
             for (int row = 0; row < count; row += columns)
             {
                 GUILayout.BeginHorizontal();
@@ -627,11 +657,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     ScenarioAuthoringCompactChoiceOptionViewModel option = options[row + column];
                     if (option == null)
                         continue;
-                    Rect optionRect = GUILayoutUtility.GetRect(optionWidth, 30f, GUILayout.Width(optionWidth), GUILayout.Height(30f));
+                    Rect optionRect = GUILayoutUtility.GetRect(optionWidth, 36f, GUILayout.Width(optionWidth), GUILayout.Height(36f));
                     ScenarioAuthoringInspectorAction action = option.Action;
                     bool enabled = action != null && action.Enabled;
                     GUIStyle style = enabled
-                        ? (option.Selected ? _activeButtonStyle : _buttonStyle)
+                        ? (option.Selected ? _uiContext.Styles.CompactChoiceSelected : _uiContext.Styles.CompactChoice)
                         : _uiContext.Styles.ButtonDisabled;
                     if (DrawPlainButton(
                         optionRect,
@@ -640,6 +670,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                         enabled))
                     {
                         ExecuteWorkspaceAction(action);
+                    }
+                    Texture2D optionBorder = option.Selected
+                        ? _uiContext.Styles.SemanticInfoStrongTexture
+                        : (enabled && IsInteractiveHoverAllowed(optionRect) ? _uiContext.Styles.BorderStrongTexture : _uiContext.Styles.BorderSubtleTexture);
+                    ScenarioUiAtlasSkin.DrawCornerCutBorder(optionRect, optionBorder, optionBorder);
+                    if (option.Selected)
+                    {
+                        ScenarioUiAtlasSkin.DrawCornerCutBorder(new Rect(optionRect.x + 1f, optionRect.y + 1f, Math.Max(0f, optionRect.width - 2f), Math.Max(0f, optionRect.height - 2f)), optionBorder, optionBorder);
+                        GUI.DrawTexture(new Rect(optionRect.x, optionRect.yMax - 4f, optionRect.width, 4f), _activeWorkspaceRailTexture ?? _uiContext.Styles.WorkspaceStoryTexture);
                     }
                     if (column < rowCount - 1)
                         GUILayout.Space(gap);
@@ -710,16 +749,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             switch (tone)
             {
                 case ScenarioAuthoringStatusTone.Informational:
-                    return _uiContext.Styles.PillEmphasized;
+                    return _uiContext.Styles.ChipInformational;
                 case ScenarioAuthoringStatusTone.Ready:
-                    return _uiContext.Styles.PillSuccess;
+                    return _uiContext.Styles.ChipReady;
                 case ScenarioAuthoringStatusTone.Warning:
-                    return _uiContext.Styles.PillWarning;
+                    return _uiContext.Styles.ChipWarning;
                 case ScenarioAuthoringStatusTone.Error:
-                    return _uiContext.Styles.PillDanger;
+                    return _uiContext.Styles.ChipError;
                 default:
-                    return _uiContext.Styles.Pill;
+                    return _uiContext.Styles.ChipNeutral;
             }
+        }
+
+        private Texture2D ResolveWorkspaceRailTexture(string workspaceId)
+        {
+            string id = (workspaceId ?? string.Empty).ToLowerInvariant();
+            if (id.IndexOf("cast", StringComparison.Ordinal) >= 0)
+                return _uiContext.Styles.WorkspaceCastTexture;
+            if (id.IndexOf("suppl", StringComparison.Ordinal) >= 0)
+                return _uiContext.Styles.WorkspaceSuppliesTexture;
+            if (id.IndexOf("map", StringComparison.Ordinal) >= 0 || id.IndexOf("world", StringComparison.Ordinal) >= 0)
+                return _uiContext.Styles.WorkspaceMapTexture;
+            if (id.IndexOf("test", StringComparison.Ordinal) >= 0)
+                return _uiContext.Styles.WorkspaceTestTexture;
+            if (id.IndexOf("publish", StringComparison.Ordinal) >= 0)
+                return _uiContext.Styles.WorkspacePublishTexture;
+            return _uiContext.Styles.WorkspaceStoryTexture;
         }
 
         private static string ResolveWorkspaceSubtabId(ScenarioAuthoringWorkspaceViewModel workspace)

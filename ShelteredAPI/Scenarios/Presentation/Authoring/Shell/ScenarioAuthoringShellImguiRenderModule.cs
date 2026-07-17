@@ -1433,14 +1433,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _uiContext = ScenarioUiKit.Build(settings);
             _styleOpacity = panelOpacity;
             ScenarioUiStyleSheet styles = _uiContext.Styles;
-            _rootPanelStyle = styles.PanelBase;
+            _rootPanelStyle = styles.Page;
             _headerStyle = styles.Header;
             _statusStyle = styles.Status;
             _titleStyle = styles.BrandTitleText;
             _smallTitleStyle = styles.TitleText;
-            _sectionTitleStyle = styles.SectionTitleText;
-            _textStyle = styles.BodyText;
-            _mutedTextStyle = styles.MutedText;
+            _sectionTitleStyle = styles.PaperTitleText;
+            _textStyle = styles.PaperBodyText;
+            _mutedTextStyle = styles.PaperMutedText;
             _resizeGripStyle = new GUIStyle(_mutedTextStyle);
             _resizeGripStyle.alignment = TextAnchor.LowerRight;
             _resizeGripStyle.clipping = TextClipping.Clip;
@@ -1457,8 +1457,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _tabContentStyle = BuildContentOnlyStyle(styles.Tab);
             _activeTabContentStyle = BuildContentOnlyStyle(styles.TabActive);
             _disabledTabContentStyle = BuildContentOnlyStyle(styles.TabDisabled);
-            GUI.skin.settings.cursorColor = styles.Theme.Palette.TextTitle;
-            GUI.skin.settings.selectionColor = new Color(0.58f, 0.45f, 0.18f, 0.46f);
+            GUI.skin.settings.cursorColor = styles.Theme.Palette.TextPrimary;
+            GUI.skin.settings.selectionColor = styles.Theme.Palette.SemanticInfo;
         }
 
         private void DisposeUiContext()
