@@ -11,7 +11,7 @@ using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
-    internal sealed class ScenarioMapAuthoringRuntimeService
+    internal sealed class ScenarioMapAuthoringRuntimeService : IScenarioMapAuthoringRuntime
     {
         private readonly ScenarioMapDraftService _draftService;
         private UI_ExpeditionMap _hoveredMap;

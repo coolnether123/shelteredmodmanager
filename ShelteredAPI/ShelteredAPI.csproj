@@ -351,6 +351,7 @@
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />
+    <Compile Include="Scenarios\Application\Map\IScenarioMapAuthoringRuntime.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapAuthoringFilters.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapLocationDuplicateService.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapRegionSelection.cs" />

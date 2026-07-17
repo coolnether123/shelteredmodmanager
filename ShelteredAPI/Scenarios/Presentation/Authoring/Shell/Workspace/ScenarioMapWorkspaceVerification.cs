@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Commands;
+using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
 
@@ -12,6 +14,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
     /// <summary>Executable contract fixture for the dark Slice 8 Map workspace.</summary>
     internal static class ScenarioMapWorkspaceVerification
     {
+        public static string[] Run()
+        {
+            ScenarioValidationResult result = new ScenarioValidationResult();
+            Verify(result);
+            List<string> errors = new List<string>();
+            ScenarioValidationIssue[] issues = result.Issues;
+            for (int i = 0; issues != null && i < issues.Length; i++)
+            {
+                if (issues[i] != null && issues[i].Severity == ScenarioIssueSeverity.Error)
+                    errors.Add(issues[i].Message);
+            }
+            return errors.ToArray();
+        }
+
         public static void Verify(ScenarioValidationResult result)
         {
             ScenarioDefinition definition = BuildFixture();
@@ -38,7 +54,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringState activeMapState = new ScenarioAuthoringState { MapAuthoringActive = true };
             ScenarioCommandDispatcher dispatcher = new ScenarioCommandDispatcher(new IScenarioCommandHandler[]
             {
-                new ScenarioMapAuthoringCommandHandler(null, null, null)
+                new ScenarioMapAuthoringCommandHandler(null, null, null, null)
             });
             ScenarioCommandDispatchResult placement = dispatcher.DispatchDetailed(activeMapState, overview.Navigator.Groups[0].CreateAction.Id);
             Assert(placement.Handled && placement.Result && string.Equals(activeMapState.MapAuthoringMode, "place", StringComparison.Ordinal),
@@ -88,6 +104,82 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             Assert(state.MapSelectedLocationId == null
                     && rendererState.GetWorkspaceSelection(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId) == null,
                 "Clearing an in-world Map selection did not clear its navigator route.", result);
+
+            VerifyLocationCreationCommandPath(result);
+        }
+
+        private static void VerifyLocationCreationCommandPath(ScenarioValidationResult result)
+        {
+            ScenarioDefinition definition = new ScenarioDefinition();
+            ScenarioEditorSession session = new ScenarioEditorSession
+            {
+                WorkingDefinition = definition,
+                OriginalDefinition = new ScenarioDefinition()
+            };
+            ScenarioEditorSessionStore store = new ScenarioEditorSessionStore();
+            store.Set(session, null);
+            ScenarioEditorController editor = new ScenarioEditorController(
+                store,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+            FixtureMapRuntime runtime = new FixtureMapRuntime();
+            ScenarioMapDraftService drafts = new ScenarioMapDraftService();
+            ScenarioAuthoringState state = new ScenarioAuthoringState { MapAuthoringActive = true };
+            ScenarioAuthoringRendererInteractionState interaction = ScenarioAuthoringRendererInteractionState.Instance;
+            interaction.SetWorkspaceSubtab(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId);
+            interaction.SetWorkspaceSelection(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, null);
+
+            ScenarioMapWorkspaceViewModelBuilder builder = new ScenarioMapWorkspaceViewModelBuilder();
+            ScenarioAuthoringWindowContentContext context = new ScenarioAuthoringWindowContentContext(state, session, null, definition);
+            ScenarioAuthoringWorkspaceViewModel before = builder.Build(context);
+            ScenarioAuthoringInspectorAction createAction = before != null && before.Navigator != null
+                && before.Navigator.Groups != null && before.Navigator.Groups.Length > 0
+                ? before.Navigator.Groups[0].CreateAction
+                : null;
+            ScenarioCommandDispatcher dispatcher = new ScenarioCommandDispatcher(new IScenarioCommandHandler[]
+            {
+                new ScenarioMapAuthoringCommandHandler(runtime, drafts, null, editor)
+            });
+
+            ScenarioCommandDispatchResult arm = dispatcher.DispatchDetailed(state, createAction != null ? createAction.Id : null);
+            string worldClickAction = ScenarioAuthoringActionCodec.BuildTokenActionId(
+                ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix,
+                "125.5,240.25");
+            ScenarioCommandDispatchResult commit = dispatcher.DispatchDetailed(state, worldClickAction);
+
+            Assert(arm.Handled && arm.Result && commit.Handled && commit.Result,
+                "Map location semantic create and world-click commit actions did not both return result:true.", result);
+            Assert(definition.Map != null && definition.Map.Locations != null && definition.Map.Locations.Count == 1,
+                "Map location command path did not persist exactly one MapLocationDefinition.", result);
+            MapLocationDefinition created = definition.Map != null && definition.Map.Locations != null && definition.Map.Locations.Count == 1
+                ? definition.Map.Locations[0]
+                : null;
+            Assert(created != null && created.GridX == FixtureMapRuntime.GridX && created.GridY == FixtureMapRuntime.GridY
+                    && session.DirtyFlags.Contains(ScenarioDirtySection.Map),
+                "Map location command path did not mutate and dirty the active working definition.", result);
+
+            ScenarioAuthoringWorkspaceViewModel after = builder.Build(context);
+            string createdEntity = created != null ? ScenarioMapWorkspaceSelection.FindLocationEntityId(definition.Map, created.Id) : null;
+            Assert(after != null && after.Navigator != null && after.Navigator.Groups != null
+                    && after.Navigator.Groups.Length > 0 && after.Navigator.Groups[0].Rows != null
+                    && after.Navigator.Groups[0].Rows.Length == 1 && after.Navigator.Groups[0].Rows[0].Selected,
+                "Persisted map location did not appear as the selected Locations navigator row.", result);
+            Assert(created != null && string.Equals(state.MapSelectedLocationId, created.Id, StringComparison.Ordinal)
+                    && after != null && after.Navigator != null
+                    && string.Equals(after.Navigator.SelectedEntityId, createdEntity, StringComparison.Ordinal)
+                    && after.Document != null && after.Document.Id != null
+                    && after.Document.Id.StartsWith("map.location.", StringComparison.Ordinal),
+                "Map location creation did not land selection on the authored navigator document.", result);
+
+            ScenarioMapWorkspaceSelection.ClearLocationSelection(state);
         }
 
         private static ScenarioDefinition BuildFixture()
@@ -206,6 +298,62 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private static void Assert(bool condition, string message, ScenarioValidationResult result)
         {
             if (!condition && result != null) result.AddError(message);
+        }
+
+        private sealed class FixtureMapRuntime : IScenarioMapAuthoringRuntime
+        {
+            public const int GridX = 5;
+            public const int GridY = 8;
+
+            public bool OpenVanillaMap() { return true; }
+            public bool CloseVanillaMap() { return true; }
+            public void CleanupMarkers() { }
+
+            public bool TryCreateSelectionFromWorldPosition(
+                float worldX,
+                float worldY,
+                ScenarioEditorSession session,
+                string source,
+                out ScenarioMapRegionSelection selection)
+            {
+                selection = null;
+                return false;
+            }
+
+            public bool TryResolveGrid(
+                float worldX,
+                float worldY,
+                out int gridX,
+                out int gridY,
+                out float centreWorldX,
+                out float centreWorldY)
+            {
+                gridX = GridX;
+                gridY = GridY;
+                centreWorldX = worldX;
+                centreWorldY = worldY;
+                return true;
+            }
+
+            public bool CanAuthorLocationAtGrid(int gridX, int gridY, out string reason)
+            {
+                reason = null;
+                return gridX == GridX && gridY == GridY;
+            }
+
+            public bool CanPaintTerrainAtGrid(int gridX, int gridY, string terrainId, out string reason)
+            {
+                reason = null;
+                return true;
+            }
+
+            public bool PreviewTerrainDraft(ScenarioEditorSession session, out string reason)
+            {
+                reason = null;
+                return true;
+            }
+
+            public void RefreshMarkers(ScenarioAuthoringState state, ScenarioEditorSession session) { }
         }
     }
 }
