@@ -135,7 +135,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 {
                     EntityId = entity,
                     Title = title,
-                    Subtitle = Humanize(location.Kind, "Map location") + " | grid " + location.GridX.ToString(CultureInfo.InvariantCulture) + "," + location.GridY.ToString(CultureInfo.InvariantCulture),
+                    Subtitle = Humanize(location.Kind, "Map location") + " · grid " + location.GridX.ToString(CultureInfo.InvariantCulture) + "," + location.GridY.ToString(CultureInfo.InvariantCulture),
                     IconText = "LO",
                     Selected = string.Equals(selected, entity, StringComparison.Ordinal),
                     StatusChips = chips.ToArray(),
@@ -176,7 +176,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 rows.Add(Row(
                     entity,
                     title,
-                    Humanize(marker.Kind.ToString(), "Map marker") + " | " + (marker.VisibleAtStart ? "visible" : "hidden"),
+                    Humanize(marker.Kind.ToString(), "Map marker") + " · " + (marker.VisibleAtStart ? "visible" : "hidden"),
                     "MK",
                     selected,
                     new[] { Chip(entity + ".visibility", marker.VisibleAtStart ? "Visible" : "Hidden", marker.VisibleAtStart ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Neutral) }));

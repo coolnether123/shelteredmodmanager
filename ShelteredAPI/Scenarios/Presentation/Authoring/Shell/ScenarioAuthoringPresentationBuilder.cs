@@ -2007,7 +2007,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         true,
                         string.Equals(currentItemId, entry.ItemId, StringComparison.OrdinalIgnoreCase),
                         "IT",
-                        entry.Detail + " | " + category,
+                        entry.Detail + " · " + category,
                         entry.PreviewCreatedByCustomScenarioEditor ? "EDITOR ART" : category,
                         entry.PreviewSprite)));
                 }
@@ -2422,7 +2422,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                     Items = new[]
                     {
-                        Text((editor.SourceLabel ?? "<sprite>") + (editor.Dirty ? " | Unsaved changes" : " | Saved draft"))
+                        Text((editor.SourceLabel ?? "<sprite>") + (editor.Dirty ? " · Unsaved changes" : " · Saved draft"))
                     }
                 }
             };
@@ -2580,7 +2580,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Property(
                 change.Kind.ToString() + " timed change",
                 catalogEntry.DisplayName,
-                catalogEntry.Detail + " | " + FormatSchedule(change.When),
+                catalogEntry.Detail + " · " + FormatSchedule(change.When),
                 change.Kind + " x" + change.Quantity.ToString(CultureInfo.InvariantCulture),
                 null,
                 catalogEntry.PreviewSprite,

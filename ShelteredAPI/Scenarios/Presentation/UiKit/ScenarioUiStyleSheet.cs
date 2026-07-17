@@ -254,6 +254,10 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit
             NavigatorRowHover = BuildButton(cardHover, cardHover, cardSelected, p.TextPrimary, p.TextPrimary, p.TextPrimary, m, padX, padY);
             NavigatorRowSelected = BuildButton(cardSelected, cardHover, cardSelected, p.TextPrimary, p.TextPrimary, p.TextPrimary, m, padX, padY);
             NavigatorRowWarning = BuildButton(warning, warningStrong, warning, p.TextPrimary, p.TextPrimary, p.TextPrimary, m, padX, padY);
+            NavigatorRow.fixedHeight = 0f;
+            NavigatorRowHover.fixedHeight = 0f;
+            NavigatorRowSelected.fixedHeight = 0f;
+            NavigatorRowWarning.fixedHeight = 0f;
             CompactChoice = BuildButton(card, cardHover, cardSelected, p.TextPrimary, p.TextPrimary, p.TextPrimary, m, padX, padY);
             CompactChoiceSelected = BuildButton(info, infoStrong, info, p.TextPrimary, p.TextPrimary, p.TextPrimary, m, padX, padY);
         }

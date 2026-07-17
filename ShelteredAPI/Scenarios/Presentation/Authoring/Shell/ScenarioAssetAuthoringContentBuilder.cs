@@ -293,7 +293,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         Category = "Weather & Effects",
                         Descriptor = "FX",
                         Detail = target.Group,
-                        Hint = target.Source + " | Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
+                        Hint = target.Source + " · Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
                         PreviewSprite = target.PreviewSprite,
                         PreviewTint = target.PreviewTint,
                         HasPreviewTint = target.HasPreviewTint,
@@ -692,7 +692,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix + target.Target.Id,
                         ScenarioAssetDisplayNameProjection.Resolve(target.Target.DisplayName, target.Target.Id, "Weather effect " + (i + 1).ToString()),
-                        target.Source + " | Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
+                        target.Source + " · Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
                         true,
                         active,
                         "FX",
