@@ -147,6 +147,75 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
+        internal ScenarioAuthoringInspectorSection[] BuildStatusFlowSections(ScenarioAuthoringWindowContentContext context)
+        {
+            ScenarioAuthoringState state = context != null ? context.State : null;
+            ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioAuthoringValidationSnapshot validation = EvaluateValidation(state, definition);
+            bool showAdvanced = state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
+
+            List<ScenarioAuthoringInspectorItem> metadataItems = new List<ScenarioAuthoringInspectorItem>(
+                ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false));
+            metadataItems.AddRange(ScenarioMetadataAuthoringContent.BuildStatusItems(
+                state != null ? state.ActiveScenarioFilePath : null));
+
+            ScenarioAuthoringInspectorSection blockers = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_validation",
+                "Resolve blockers",
+                BuildValidationItems(validation, state != null ? state.ActiveScenarioFilePath : null),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            blockers.StatusChips = BuildBlockerStatusChips(validation);
+
+            ScenarioAuthoringInspectorSection metadata = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_metadata",
+                "Review metadata",
+                metadataItems,
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            metadata.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("publish.metadata.review", "Review before export", ScenarioAuthoringStatusTone.Informational, null)
+            };
+
+            ScenarioAuthoringInspectorSection contents = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_package_preview",
+                "Review contents / dependencies",
+                BuildPackagePreviewItems(state, validation),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            contents.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.contents.status",
+                    validation != null && !validation.IsBlocked ? "Package ready" : "Review package",
+                    validation != null && !validation.IsBlocked ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Warning,
+                    null)
+            };
+
+            ScenarioAuthoringInspectorSection export = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_export",
+                "Export",
+                BuildExportControlItems(definition, validation),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            export.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.export.status",
+                    validation != null && !validation.IsBlocked ? "Ready to export" : "Blocked",
+                    validation != null && !validation.IsBlocked ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Error,
+                    null)
+            };
+
+            ScenarioAuthoringInspectorSection result = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_result_status",
+                "Result / status",
+                BuildExportResultItems(showAdvanced),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            result.StatusChips = new[] { BuildLastExportStatusChip() };
+
+            return new[] { blockers, metadata, contents, export, result };
+        }
+
         internal static ScenarioAuthoringValidationSnapshot EvaluateValidation(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
             IScenarioDefinitionValidator validator = null;
@@ -232,6 +301,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         internal List<ScenarioAuthoringInspectorItem> BuildExportItems(ScenarioDefinition definition, ScenarioAuthoringValidationSnapshot validation, bool showAdvanced)
         {
+            List<ScenarioAuthoringInspectorItem> items = BuildExportControlItems(definition, validation);
+            items.AddRange(BuildExportResultItems(showAdvanced));
+            return items;
+        }
+
+        private List<ScenarioAuthoringInspectorItem> BuildExportControlItems(
+            ScenarioDefinition definition,
+            ScenarioAuthoringValidationSnapshot validation)
+        {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(_testChecklistSectionBuilder.BuildExportSummary(definition));
             int errors = validation != null ? validation.ErrorCount : 1;
@@ -257,6 +335,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     "HP")));
             }
 
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildExportResultItems(bool showAdvanced)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             ScenarioPublishExportResult last = GetLastExportResult();
             if (last == null)
             {
@@ -288,6 +372,69 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
+        private static ScenarioAuthoringStatusChipViewModel[] BuildBlockerStatusChips(
+            ScenarioAuthoringValidationSnapshot validation)
+        {
+            if (validation == null || !validation.ValidationAvailable)
+            {
+                return new[]
+                {
+                    ScenarioAuthoringStatusFlowSupport.Chip("publish.blockers.unavailable", "Validation unavailable", ScenarioAuthoringStatusTone.Error, null)
+                };
+            }
+
+            List<ScenarioAuthoringStatusChipViewModel> chips = new List<ScenarioAuthoringStatusChipViewModel>();
+            ScenarioValidationIssue[] issues = validation.Issues;
+            for (int i = 0; issues != null && i < issues.Length && chips.Count < 5; i++)
+            {
+                ScenarioValidationIssue issue = issues[i];
+                if (issue == null || issue.Severity != ScenarioIssueSeverity.Error)
+                    continue;
+                ScenarioAuthoringInspectorAction action = BuildIssueNavigationAction(issue);
+                chips.Add(ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.blocker." + i.ToString(CultureInfo.InvariantCulture),
+                    "Fix " + ResolveIssueWorkspaceLabel(issue.Message),
+                    ScenarioAuthoringStatusTone.Error,
+                    action));
+            }
+
+            if (chips.Count == 0)
+            {
+                chips.Add(ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.blockers.ready",
+                    validation.WarningCount > 0 ? "Warnings need review" : "No blockers",
+                    validation.WarningCount > 0 ? ScenarioAuthoringStatusTone.Warning : ScenarioAuthoringStatusTone.Ready,
+                    null));
+            }
+            return chips.ToArray();
+        }
+
+        private static string ResolveIssueWorkspaceLabel(string message)
+        {
+            ScenarioStageKind stage = ResolveIssueStage(message);
+            string label = ScenarioAuthoringWorkflowLabels.GetStageLabel(stage, false);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                label,
+                null,
+                stage.ToString(),
+                "scenario setup").Text;
+        }
+
+        private static ScenarioAuthoringStatusChipViewModel BuildLastExportStatusChip()
+        {
+            ScenarioPublishExportResult last = GetLastExportResult();
+            if (last == null)
+                return ScenarioAuthoringStatusFlowSupport.Chip("publish.result.none", "Not exported yet", ScenarioAuthoringStatusTone.Neutral, null);
+            if (last.Success)
+                return ScenarioAuthoringStatusFlowSupport.Chip("publish.result.ready", "Export validated", ScenarioAuthoringStatusTone.Ready, null);
+            return ScenarioAuthoringStatusFlowSupport.Chip(
+                "publish.result.failed",
+                last.Blocked ? "Export blocked" : "Export failed",
+                last.Blocked ? ScenarioAuthoringStatusTone.Warning : ScenarioAuthoringStatusTone.Error,
+                null);
+        }
+
+
         internal static List<ScenarioAuthoringInspectorItem> BuildPackagePreviewItems(ScenarioAuthoringState state, ScenarioAuthoringValidationSnapshot validation)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -311,7 +458,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < plan.Entries.Count; i++) items.Add(Item.Property("FILE", plan.Entries[i].RelativePath, FormatBytes(plan.Entries[i].Size)));
             items.Add(Item.Property("TOTAL", FormatBytes(plan.TotalSize)));
             if (plan.DeclaredMods.Count == 0) items.Add(Item.Property("DEPENDENCY", "No external mod dependencies declared"));
-            else for (int i = 0; i < plan.DeclaredMods.Count; i++) items.Add(Item.Property("DEPENDENCY", plan.DeclaredMods[i]));
+            else
+            {
+                for (int i = 0; i < plan.DeclaredMods.Count; i++)
+                {
+                    string dependencyId = plan.DeclaredMods[i];
+                    string dependencyName = ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                        null,
+                        null,
+                        dependencyId,
+                        null).Text;
+                    items.Add(Item.Property("DEPENDENCY", dependencyName));
+                }
+            }
             if (plan.Problems.Count == 0) items.Add(Item.Property("PREFLIGHT", "Ready", "Package contents are accounted for."));
             else for (int i = 0; i < plan.Problems.Count; i++) items.Add(Item.Property("PROBLEM", plan.Problems[i]));
             int accepted = validation != null ? preferences.CountAccepted(validation.Result) : 0;
@@ -644,6 +803,122 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return sections.ToArray();
         }
 
+        internal ScenarioAuthoringInspectorSection[] BuildStatusFlowSections(ScenarioAuthoringWindowContentContext context)
+        {
+            ScenarioAuthoringState authoringState = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
+            ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioAuthoringValidationSnapshot validation = ScenarioPublishAuthoringContentBuilder.EvaluateValidation(authoringState, definition);
+            bool active = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
+            bool showAdvanced = authoringState != null
+                && authoringState.Settings != null
+                && authoringState.Settings.GetBool("debug.show_advanced_details", false);
+
+            List<ScenarioAuthoringInspectorItem> readinessItems = ScenarioPublishAuthoringContentBuilder.BuildValidationItems(validation);
+            ScenarioPacingAuthoringSectionBuilder.AddPreflightGuidance(readinessItems, definition, _timelineBuilder);
+            ScenarioAuthoringInspectorSection checklist = _testChecklistSectionBuilder.BuildTestSection(definition);
+            if (checklist != null && checklist.Items != null)
+                readinessItems.AddRange(checklist.Items);
+            readinessItems.AddRange(_modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition)));
+
+            ScenarioAuthoringInspectorSection readiness = ScenarioAuthoringStatusFlowSupport.Section(
+                "test_preflight",
+                "Readiness",
+                readinessItems,
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            readiness.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip(
+                    "test.readiness.status",
+                    validation != null && !validation.IsBlocked ? "Ready to test" : "Fix blockers",
+                    validation != null && !validation.IsBlocked ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Error,
+                    null)
+            };
+
+            ScenarioAuthoringInspectorSection runSetup = ScenarioAuthoringStatusFlowSupport.Section(
+                "test_run_settings",
+                "Run setup",
+                BuildRunSettingItems(definition),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            runSetup.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.run_setup.status", definition != null && definition.SeedOverride.HasValue ? "Fixed seed" : "Random seed", ScenarioAuthoringStatusTone.Informational, null)
+            };
+
+            ScenarioAuthoringInspectorSection controls = ScenarioAuthoringStatusFlowSupport.Section(
+                "test_controls",
+                "Start-stop controls",
+                BuildPlaytestControlItems(editorSession, definition, validation),
+                ScenarioAuthoringInspectorSectionLayout.Summary);
+            controls.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.controls.status", active ? "Playtest running" : "Playtest stopped", active ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Neutral, null)
+            };
+
+            ScenarioAuthoringInspectorSection[] consoleSections = ScenarioTestConsoleAuthoringContentBuilder.Build(context);
+            ScenarioAuthoringInspectorSection liveStatus = FindSection(consoleSections, "test_console_status");
+            liveStatus.Title = "Live status";
+            liveStatus.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.live.status", active ? "Live" : "Waiting to start", active ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Neutral, null)
+            };
+
+            ScenarioAuthoringInspectorSection log = FindSection(consoleSections, "test_console_log");
+            log.Title = "Results / log";
+            List<ScenarioAuthoringInspectorItem> resultAndLogItems = BuildPlaytestResultItems(editorSession);
+            if (log.Items != null)
+                resultAndLogItems.AddRange(log.Items);
+            log.Items = resultAndLogItems.ToArray();
+            log.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.results.status", active ? "Run in progress" : "Latest run", active ? ScenarioAuthoringStatusTone.Informational : ScenarioAuthoringStatusTone.Neutral, null)
+            };
+
+            ScenarioAuthoringInspectorSection advanced = FindSection(consoleSections, "test_console_advanced");
+            if (showAdvanced)
+            {
+                List<ScenarioAuthoringInspectorItem> advancedItems = new List<ScenarioAuthoringInspectorItem>(
+                    advanced.Items ?? new ScenarioAuthoringInspectorItem[0]);
+                advancedItems.AddRange(BuildRuntimeJournalItems());
+                advancedItems.AddRange(ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(
+                    definition,
+                    ScenarioPublishAuthoringContentBuilder.GetRuntimeState(),
+                    _timelineBuilder,
+                    false));
+                advanced.Items = advancedItems.ToArray();
+            }
+            advanced.IsAdvanced = true;
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>
+            {
+                readiness,
+                runSetup,
+                controls,
+                liveStatus
+            };
+            if (active)
+            {
+                sections.Add(FindSection(consoleSections, "test_console_upcoming"));
+                sections.Add(FindSection(consoleSections, "test_console_controls"));
+            }
+            sections.Add(log);
+            sections.Add(advanced);
+            return sections.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorSection FindSection(
+            ScenarioAuthoringInspectorSection[] sections,
+            string id)
+        {
+            for (int i = 0; sections != null && i < sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = sections[i];
+                if (section != null && string.Equals(section.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return section;
+            }
+            return ScenarioAuthoringStatusFlowSupport.Section(id, string.Empty, new List<ScenarioAuthoringInspectorItem>(), ScenarioAuthoringInspectorSectionLayout.PropertyList);
+        }
+
         private static List<ScenarioAuthoringInspectorItem> BuildPlaytestControlItems(
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition,
@@ -779,7 +1054,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             items.Add(Item.Property("Latest Test State", editorSession.PlaytestState.ToString()));
             items.Add(Item.Property("Day Reached", "day " + state.LastProcessedDay.ToString(CultureInfo.InvariantCulture) + " " + state.LastProcessedHour.ToString("D2") + ":" + state.LastProcessedMinute.ToString("D2")));
-            items.Add(Item.Property("Outcome", string.IsNullOrEmpty(state.ScenarioOutcome) ? "Unresolved" : state.ScenarioOutcome));
+            items.Add(Item.Property(
+                "Outcome",
+                ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                    null,
+                    null,
+                    state.ScenarioOutcome,
+                    "Unresolved").Text));
             items.Add(Item.Property("World Changes", Count(state.ExecutedActions).ToString(CultureInfo.InvariantCulture) + " actions / " + Count(state.FiredTriggers).ToString(CultureInfo.InvariantCulture) + " triggers / " + Count(state.Flags).ToString(CultureInfo.InvariantCulture) + " flags / " + Count(state.UnlockedBunker).ToString(CultureInfo.InvariantCulture) + " unlocks / " + Count(state.ObjectStates).ToString(CultureInfo.InvariantCulture) + " object states"));
             int failed = CountRecords(state, ScenarioExecutedActionStatus.Failed);
             int blocked = CountRecords(state, ScenarioExecutedActionStatus.Blocked);

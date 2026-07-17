@@ -35,15 +35,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 && context.State != null
                 && context.State.Settings != null
                 && context.State.Settings.GetBool("debug.show_advanced_details", false);
-            sections.Add(Section(
-                "test_console_advanced_toggle",
-                string.Empty,
-                BuildAdvancedToggleItems(showAdvanced),
-                ScenarioAuthoringInspectorSectionLayout.ActionStrip));
+            List<ScenarioAuthoringInspectorItem> advancedItems = BuildAdvancedToggleItems(showAdvanced);
             if (showAdvanced)
-            {
-                sections.Add(Section("test_console_advanced", "Advanced diagnostics", BuildAdvancedItems(console, active), ScenarioAuthoringInspectorSectionLayout.NoteList));
-            }
+                advancedItems.AddRange(BuildAdvancedItems(console, active));
+            ScenarioAuthoringInspectorSection advanced = Section(
+                "test_console_advanced",
+                "Advanced diagnostics",
+                advancedItems,
+                ScenarioAuthoringInspectorSectionLayout.NoteList);
+            advanced.IsAdvanced = true;
+            sections.Add(advanced);
             return sections.ToArray();
         }
 
@@ -102,7 +103,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             {
                 TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
                 if (trigger == null || string.IsNullOrEmpty(trigger.Id)) continue;
-                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleFirePrefix + ScenarioAuthoringActionCodec.EncodeToken(trigger.Id), "Fire now: " + Humanize(trigger.Id), "Manually fires the selected scenario trigger and logs the authoring-only action.", active, false, "TR")));
+                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleFirePrefix + ScenarioAuthoringActionCodec.EncodeToken(trigger.Id), "Fire now: " + ResolvePrimaryName(null, trigger.Id, "Trigger"), "Manually fires the selected scenario trigger and logs the authoring-only action.", active, false, "TR")));
             }
             for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
             {
@@ -124,7 +125,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             {
                 ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
                 if (stage == null || string.IsNullOrEmpty(stage.Id)) continue;
-                ScenarioAuthoringInspectorAction jump = Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleStoryStagePrefix + ScenarioAuthoringActionCodec.EncodeToken(stage.Id), "Fire stage: " + Humanize(stage.Id), "Direct jumping is disabled until the vanilla encounter stage seam is live-verified.", false, false, "ST");
+                ScenarioAuthoringInspectorAction jump = Item.Action(ScenarioAuthoringActionIds.ActionTestConsoleStoryStagePrefix + ScenarioAuthoringActionCodec.EncodeToken(stage.Id), "Fire stage: " + ResolvePrimaryName(null, stage.Id, "Story stage"), "Direct jumping is disabled until the vanilla encounter stage seam is live-verified.", false, false, "ST");
                 jump.DisabledReason = "Vanilla encounter progression has no verified safe jump seam.";
                 items.Add(Item.ActionItem(jump));
             }
@@ -185,7 +186,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             string id = console != null ? console.ActiveStoryStageId : null;
             if (string.IsNullOrEmpty(id)) return "Waiting for encounter";
-            return Humanize(id);
+            return ResolvePrimaryName(null, id, "Story stage");
         }
 
         private static string OutcomeIcon(ScenarioRuntimeExecutionLogOutcome outcome)
@@ -208,11 +209,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return "FIRED";
         }
 
-        private static string Humanize(string value)
+        private static string ResolvePrimaryName(string literalText, string storageId, string fallbackText)
         {
-            if (string.IsNullOrEmpty(value)) return "Unnamed";
-            string text = value.Replace('-', ' ').Replace('_', ' ').Trim();
-            return text.Length == 0 ? "Unnamed" : char.ToUpperInvariant(text[0]) + text.Substring(1);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                literalText,
+                null,
+                storageId,
+                fallbackText).Text;
         }
 
         private static bool IsOnceConsumed(ScenarioRuntimeState state, ScenarioScheduledActionDefinition action)
@@ -262,7 +265,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return string.Join(", ", values.ToArray());
         }
 
-        private static string Display(ScenarioScheduledActionDefinition action) { return ScenarioTimelineCreatorText.ScheduledActionName(null, action); }
+        private static string Display(ScenarioScheduledActionDefinition action)
+        {
+            string literal = ScenarioTimelineCreatorText.ScheduledActionName(null, action);
+            return ResolvePrimaryName(literal, action != null ? action.Id : null, "Scheduled event");
+        }
         private static string FormatWhen(ScenarioScheduleTime time) { return time == null ? "Unscheduled" : "Day " + time.Day + " " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2"); }
         private static long ToMinutes(ScenarioScheduleTime time) { return time == null ? long.MaxValue : (((long)Math.Max(1, time.Day) * 24L + Math.Max(0, time.Hour)) * 60L + Math.Max(0, time.Minute)); }
     }
