@@ -3,6 +3,7 @@ using System.Globalization;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Stages;
@@ -13,18 +14,21 @@ using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Application.Commands{
     internal sealed class ScenarioMapAuthoringCommandHandler : IScenarioCommandHandler
     {
-        private readonly ScenarioMapAuthoringRuntimeService _runtimeService;
+        private readonly IScenarioMapAuthoringRuntime _runtimeService;
         private readonly ScenarioMapDraftService _draftService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly IScenarioEditorService _editorService;
 
         public ScenarioMapAuthoringCommandHandler(
-            ScenarioMapAuthoringRuntimeService runtimeService,
+            IScenarioMapAuthoringRuntime runtimeService,
             ScenarioMapDraftService draftService,
-            ScenarioAuthoringLayoutService layoutService)
+            ScenarioAuthoringLayoutService layoutService,
+            IScenarioEditorService editorService)
         {
             _runtimeService = runtimeService;
             _draftService = draftService;
             _layoutService = layoutService;
+            _editorService = editorService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -203,7 +207,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             ScenarioMapRegionSelection selection;
-            if (_runtimeService == null || !_runtimeService.TryCreateSelectionFromWorldPosition(worldX, worldY, ScenarioEditorController.Instance.CurrentSession, "action", out selection))
+            if (_runtimeService == null || !_runtimeService.TryCreateSelectionFromWorldPosition(worldX, worldY, CurrentSession, "action", out selection))
             {
                 message = "No vanilla map region exists at " + token + ".";
                 return false;
@@ -255,13 +259,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return DuplicateSelectedToGrid(state, duplicateSourceId, gridX, gridY, centreX, centreY, out message);
 
             MapLocationDefinition authored = _draftService != null
-                ? _draftService.FindLocationAtGrid(ScenarioEditorController.Instance.CurrentSession, gridX, gridY)
+                ? _draftService.FindLocationAtGrid(CurrentSession, gridX, gridY)
                 : null;
             if (authored != null)
                 return SelectAuthoredLocation(state, authored, out message);
 
             ScenarioMapRegionSelection selection;
-            if (_runtimeService != null && _runtimeService.TryCreateSelectionFromWorldPosition(worldX, worldY, ScenarioEditorController.Instance.CurrentSession, "click", out selection))
+            if (_runtimeService != null && _runtimeService.TryCreateSelectionFromWorldPosition(worldX, worldY, CurrentSession, "click", out selection))
             {
                 state.MapSelection = selection;
                 ScenarioMapWorkspaceSelection.ClearLocationSelection(state);
@@ -276,7 +280,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
         private bool PlaceAtGrid(ScenarioAuthoringState state, int gridX, int gridY, float worldX, float worldY, out string message)
         {
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             if (_draftService == null || session == null)
             {
                 message = "The map draft is not available.";
@@ -316,7 +320,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
         private bool PaintTerrainAtGrid(ScenarioAuthoringState state, int gridX, int gridY, string terrainId, out string message)
         {
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             if (_draftService == null || session == null)
             {
                 message = "The map draft is not available.";
@@ -363,7 +367,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
         private bool MoveSelectedToGrid(ScenarioAuthoringState state, int gridX, int gridY, float worldX, float worldY, out string message)
         {
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             if (_draftService == null || session == null)
             {
                 message = "The map draft is not available.";
@@ -421,7 +425,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 message = "The location to duplicate could not be decoded.";
                 return false;
             }
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             MapLocationDefinition source = _draftService != null ? _draftService.GetLocation(session, id) : null;
             if (source == null || state.MapSelection == null || !state.MapSelection.Authored)
             {
@@ -443,7 +447,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             float worldY,
             out string message)
         {
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             if (_draftService == null || session == null || session.WorkingDefinition == null)
             {
                 message = "The map draft is not available.";
@@ -493,7 +497,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             MapLocationDefinition location = _draftService != null
-                ? _draftService.GetLocation(ScenarioEditorController.Instance.CurrentSession, id)
+                ? _draftService.GetLocation(CurrentSession, id)
                 : null;
             if (location == null)
             {
@@ -508,7 +512,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         {
             ScenarioMapRegionSelection selection = BuildAuthoredSelection(location);
             state.MapSelection = selection;
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             ScenarioMapWorkspaceSelection.SelectLocation(state, session != null ? session.WorkingDefinition : null, location);
             message = "Selected authored map location " + location.Id + ".";
             state.StatusMessage = message;
@@ -527,7 +531,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
             }
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             MapLocationDefinition location;
             if (!TryResolveEditableLocation(state, session, id, "Edit map location " + id + " " + field, out location, out message))
                 return false;
@@ -567,7 +571,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
             }
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             MapLocationDefinition location;
             if (!TryResolveEditableLocation(state, session, id, "Toggle map location " + id + " " + field, out location, out message))
                 return false;
@@ -610,7 +614,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
             }
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             MapLocationDefinition location;
             if (!TryResolveEditableLocation(state, session, id, "Change map location icon " + id, out location, out message))
                 return false;
@@ -707,7 +711,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
             }
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = CurrentSession;
             RecordMapUndo(session, "Capture map region " + selection.DisplayName);
             MapLocationDefinition location;
             bool wasExisting;
@@ -745,6 +749,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             state.ActiveShellTab = ScenarioAuthoringShellTab.Map;
             if (_layoutService != null)
                 _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Map, true);
+        }
+
+        private ScenarioEditorSession CurrentSession
+        {
+            get { return _editorService != null ? _editorService.CurrentSession : null; }
         }
 
         private static bool IsMapAction(string actionId)

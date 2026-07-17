@@ -11,7 +11,7 @@ using ShelteredAPI.Scenarios.Shared;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
     [PatchPolicy(PatchDomain.Scenarios, "ScenarioMapAuthoringAdapter",
-        TargetBehavior = "Scenario map authoring observes vanilla expedition-map cursor regions and click presses without changing vanilla map behavior.",
+        TargetBehavior = "Scenario map authoring observes vanilla expedition-map cursor regions and map-button presses without changing vanilla map behavior.",
         FailureMode = "The map authoring page can open the vanilla map, but clicks will not select vanilla regions for capture.",
         RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario map authoring adapter patch host.",
         ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
@@ -45,23 +45,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             }
         }
 
-        [HarmonyPatch(typeof(UI_ExpeditionMap), "OnPress")]
+        [HarmonyPatch(typeof(MapButton), "OnPress")]
         [HarmonyPostfix]
-        private static void OnPressPostfix(UI_ExpeditionMap __instance, bool rightClick)
+        private static void MapButtonOnPressPostfix(MapButton __instance, bool isDown)
         {
-            if (rightClick)
+            if (!isDown || UICamera.currentTouchID >= 0 || UICamera.currentTouchID == -2)
                 return;
 
             try
             {
                 ScenarioMapAuthoringRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
+                FieldInfo mapField = AccessTools.Field(typeof(MapButton), "map_screen");
+                UI_ExpeditionMap map = mapField != null && __instance != null
+                    ? mapField.GetValue(__instance) as UI_ExpeditionMap
+                    : null;
                 Vector2 worldPosition;
-                if (service != null && TryGetWorldPositionUnderCursor(__instance, out worldPosition))
-                    service.ClickMap(__instance, worldPosition, "click");
+                if (service != null && TryGetWorldPositionUnderCursor(map, out worldPosition))
+                    service.ClickMap(map, worldPosition, "map-button");
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("ScenarioMapAuthoring.SelectHover", ex.Message);
+                MMLog.WarnOnce("ScenarioMapAuthoring.MapButtonPress", ex.Message);
             }
         }
 

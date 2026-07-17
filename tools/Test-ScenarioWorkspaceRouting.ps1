@@ -40,4 +40,20 @@ if ($errors.Count -gt 0) {
     throw ("Scenario workspace routing verification failed:`n - " + ($errors -join "`n - "))
 }
 
+$mapVerificationType = $shelteredApi.GetType(
+    'ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioMapWorkspaceVerification',
+    $true,
+    $false)
+$mapRunMethod = $mapVerificationType.GetMethod(
+    'Run',
+    [Reflection.BindingFlags]'Public,Static')
+if ($null -eq $mapRunMethod) {
+    throw 'ScenarioMapWorkspaceVerification.Run was not found.'
+}
+
+$mapErrors = [string[]]$mapRunMethod.Invoke($null, @())
+if ($mapErrors.Count -gt 0) {
+    throw ("Scenario map workspace verification failed:`n - " + ($mapErrors -join "`n - "))
+}
+
 Write-Host 'SCENARIO WORKSPACE ROUTING PASS'
