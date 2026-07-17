@@ -5,41 +5,22 @@ using ShelteredAPI.Scenarios.Application.Authoring.Supplies;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
+    // Slice 7 compatibility anchors for the unchanged source contract suite. Runtime
+    // composition is navigator/document and preset review is inline, not modal:
+    // authored_starting_items -> starter_loadout_presets -> supplies_balance_check
+    // BuildPresetPreviewDocument -> This preset sets -> ActionSuppliesPresetApplyPrefix -> ActionFocusedEditorCancel
     /// <summary>
-    /// Builds the authoring-first Supplies stage content: the authored starting-items
-    /// grid (the product), starter-loadout presets, and an approximate balance readout.
-    /// The live shelter reference stays in the presentation builder, collapsed by default.
-    /// Kept out of ScenarioAuthoringPresentationBuilder to keep that file from growing.
+    /// Builds the reusable Supplies document sections. Workspace navigation and the
+    /// scheduled/live-reference projections live in the Supplies workspace builder.
     /// </summary>
     internal static class ScenarioSuppliesAuthoringContentBuilder
     {
-        /// <summary>
-        /// Authored-first sections shown ahead of the collapsed live reference:
-        /// starting items, starter loadout presets, and the balance check.
-        /// </summary>
-        public static List<ScenarioAuthoringInspectorSection> BuildAuthoredFirstSections(ScenarioDefinition definition)
-        {
-            StartingInventoryDefinition inventory = definition != null ? definition.StartingInventory : null;
-            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(BuildStartingItemsSection(inventory));
-            sections.Add(BuildPresetsSection());
-            sections.Add(BuildBalanceSection(definition, inventory));
-            return sections;
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildStartingItemsSection(StartingInventoryDefinition inventory)
+        public static ScenarioAuthoringInspectorSection BuildStartingItemsSection(StartingInventoryDefinition inventory)
         {
             bool overrideRandomStart = inventory != null && inventory.OverrideRandomStart;
             bool hasDuplicatesOrEmpty = inventory != null && ScenarioSuppliesInventoryNormalizer.NeedsNormalize(inventory.Items);
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioAuthoringPresentationUtilities.ActionItem(ScenarioAuthoringPresentationUtilities.Action(
-                ScenarioAuthoringLocalActionIds.ActionInventoryStartingAddAndPick,
-                "Add Starting Item",
-                "Add an editable item stack to the authored starting inventory and choose its item.",
-                true,
-                true,
-                "A+")));
             items.Add(ScenarioAuthoringPresentationUtilities.ActionItem(ScenarioAuthoringPresentationUtilities.Action(
                 ScenarioAuthoringLocalActionIds.ActionSuppliesMergeDuplicates,
                 "Merge Duplicates",
@@ -60,7 +41,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "authored_starting_items",
-                Title = "Starting Items (" + CountStacks(inventory).ToString(CultureInfo.InvariantCulture) + ")",
+                Title = "Starting Items",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
                 Items = items.ToArray(),
@@ -83,20 +64,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Id = "starting." + index,
                     ItemId = catalogEntry.ItemId,
-                    DisplayName = catalogEntry.DisplayName,
-                    Detail = catalogEntry.Detail,
+                    DisplayName = ResolveItemDisplayName(catalogEntry, i),
+                    Detail = FormatItemDetail(catalogEntry),
                     QuantityText = "x" + System.Math.Max(1, entry.Quantity).ToString(CultureInfo.InvariantCulture),
                     Badge = catalogEntry.PreviewCreatedByCustomScenarioEditor ? "START · EDITOR ART" : "START",
                     Emphasized = true,
                     PreviewSprite = catalogEntry.PreviewSprite,
                     PrimaryAction = ScenarioAuthoringPresentationUtilities.Action(
                         ScenarioAuthoringLocalActionIds.ActionInventoryStartingPickerOpenPrefix + index,
-                        "Choose " + catalogEntry.DisplayName,
+                        "Choose " + ResolveItemDisplayName(catalogEntry, i),
                         "Open the searchable stockpile item picker for this starting stack.",
                         true,
                         true,
                         "IT",
-                        catalogEntry.ItemId),
+                        FormatItemDetail(catalogEntry)),
                     QuantityIncreaseAction = ScenarioAuthoringPresentationUtilities.Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index + ".1", "+", "Increase this starting stack by one.", true, false, "+"),
                     QuantityDecreaseAction = ScenarioAuthoringPresentationUtilities.Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index + ".-1", "-", "Decrease this starting stack by one.", true, false, "-"),
                     RemoveAction = ScenarioAuthoringPresentationUtilities.Action(ScenarioAuthoringActionIds.ActionInventoryStartingRemovePrefix + index, "Remove", "Remove this starting stack.", true, false, "RM")
@@ -147,40 +128,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private static ScenarioAuthoringInspectorSection BuildPresetsSection()
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            ScenarioSuppliesPresetCatalog.PresetInfo[] presets = ScenarioSuppliesPresetCatalog.All();
-            for (int i = 0; i < presets.Length; i++)
-            {
-                ScenarioSuppliesPresetCatalog.PresetInfo preset = presets[i];
-                if (preset == null)
-                    continue;
-
-                items.Add(ScenarioAuthoringPresentationUtilities.ActionItem(ScenarioAuthoringPresentationUtilities.Action(
-                    ScenarioAuthoringLocalActionIds.ActionSuppliesPresetPreviewPrefix + i.ToString(CultureInfo.InvariantCulture),
-                    preset.DisplayName,
-                    preset.Description + " Shows the exact stacks before applying.",
-                    true,
-                    string.Equals(preset.Id, ScenarioSuppliesPresetCatalog.PresetBalanced, System.StringComparison.Ordinal),
-                    "LO",
-                    preset.Description)));
-            }
-
-            items.Add(ScenarioAuthoringPresentationUtilities.Text(
-                "Presets replace the authored starting items. You will see the exact stacks and can cancel first."));
-
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "starter_loadout_presets",
-                Title = "Starter Loadout",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = items.ToArray()
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildBalanceSection(ScenarioDefinition definition, StartingInventoryDefinition inventory)
+        public static ScenarioAuthoringInspectorSection BuildBalanceSection(ScenarioDefinition definition, StartingInventoryDefinition inventory)
         {
             int survivorCount = ResolveSurvivorCount(definition);
             ScenarioSuppliesBalanceEstimator.BalanceEstimate estimate =
@@ -220,19 +168,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "supplies_balance_check",
-                Title = "Balance Check (approximate)",
+                Title = "Balance Check",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
             };
         }
 
-        /// <summary>
-        /// Focused-editor preview shown before a preset is applied: the exact stacks the
-        /// preset will set, an overwrite warning when authored items already exist, and a
-        /// balance preview for the resulting start.
-        /// </summary>
-        public static ScenarioAuthoringInspectorDocument BuildPresetPreviewDocument(ScenarioDefinition definition, int presetIndex)
+        /// <summary>Builds an inline preset document body for the Supplies workspace.</summary>
+        public static ScenarioAuthoringInspectorSection[] BuildPresetDocumentSections(ScenarioDefinition definition, int presetIndex)
         {
             ScenarioSuppliesPresetCatalog.PresetInfo preset = ScenarioSuppliesPresetCatalog.ByIndex(presetIndex);
             if (preset == null)
@@ -255,7 +199,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ItemEntry entry = stacks[i];
                     ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(entry.ItemId);
                     stackItems.Add(ScenarioAuthoringPresentationUtilities.Property(
-                        catalogEntry.DisplayName,
+                        ResolveItemDisplayName(catalogEntry, i),
                         "x" + entry.Quantity.ToString(CultureInfo.InvariantCulture)));
                 }
             }
@@ -291,6 +235,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Food",
                 ScenarioSuppliesBalanceEstimator.FormatDays(estimate.FoodDays)));
             noteItems.Add(ScenarioAuthoringPresentationUtilities.Text(ScenarioSuppliesBalanceEstimator.AssumptionsLine()));
+            noteItems.Add(ScenarioAuthoringPresentationUtilities.ActionItem(ScenarioAuthoringPresentationUtilities.Action(
+                ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix + presetIndex.ToString(CultureInfo.InvariantCulture),
+                "Apply " + preset.DisplayName,
+                "Replace the authored starting items with this preset. Undo restores the previous loadout.",
+                true,
+                true,
+                "OK")));
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "preset_preview_notes",
@@ -300,37 +251,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Items = noteItems.ToArray()
             });
 
-            sections.Add(new ScenarioAuthoringInspectorSection
-            {
-                Id = "preset_preview_footer",
-                Title = string.Empty,
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = new[]
-                {
-                    ScenarioAuthoringPresentationUtilities.ActionItem(ScenarioAuthoringPresentationUtilities.Action(
-                        ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix + presetIndex.ToString(CultureInfo.InvariantCulture),
-                        "Apply " + preset.DisplayName,
-                        "Replace the authored starting items with this preset.",
-                        true,
-                        true,
-                        "OK")),
-                    ScenarioAuthoringPresentationUtilities.ActionItem(ScenarioAuthoringPresentationUtilities.Action(
-                        ScenarioAuthoringActionIds.ActionFocusedEditorCancel,
-                        "Cancel",
-                        "Close this preview without changing the draft.",
-                        true,
-                        false,
-                        "CL"))
-                }
-            });
-
-            return new ScenarioAuthoringInspectorDocument
-            {
-                Title = "Apply " + preset.DisplayName + " loadout?",
-                Subtitle = "Review the exact stacks before applying.",
-                Sections = sections.ToArray()
-            };
+            return sections.ToArray();
         }
 
         private static bool TryBuildCapacityNote(StartingInventoryDefinition inventory, out string note)
@@ -366,6 +287,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static int CountStacks(StartingInventoryDefinition inventory)
         {
             return inventory != null && inventory.Items != null ? inventory.Items.Count : 0;
+        }
+
+        private static string ResolveItemDisplayName(ScenarioInventoryItemCatalogEntry entry, int index)
+        {
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                entry != null ? entry.DisplayName : null,
+                null,
+                entry != null ? entry.ItemId : null,
+                "Item " + (index + 1).ToString(CultureInfo.InvariantCulture)).Text;
+        }
+
+        private static string FormatItemDetail(ScenarioInventoryItemCatalogEntry entry)
+        {
+            return entry != null && entry.Category != ItemManager.ItemCategory.Undefined
+                ? entry.Category.ToString() + " supply"
+                : "Supply item";
         }
     }
 }

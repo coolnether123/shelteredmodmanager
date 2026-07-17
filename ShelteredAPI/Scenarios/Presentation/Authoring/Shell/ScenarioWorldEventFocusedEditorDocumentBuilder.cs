@@ -241,12 +241,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             });
         }
 
-        AddEmptyInventorySlots(
-            slots,
-            slots.Count == 0 ? 1 : Math.Max(0, 4 - (slots.Count % 4)),
-            Action(ResolveWorldEventItemSpecAddPrefix(listKey) + actionIndex.ToString(CultureInfo.InvariantCulture), "Add Row", "Add a valid item row.", true, true, "I+"),
-            "Empty",
-            "No authored item in this slot.");
+        int emptySlotCount = slots.Count == 0 ? 1 : Math.Max(0, 4 - (slots.Count % 4));
+        ScenarioAuthoringInspectorAction addAction = Action(
+            ResolveWorldEventItemSpecAddPrefix(listKey) + actionIndex.ToString(CultureInfo.InvariantCulture),
+            "Add Row",
+            "Add a valid item row.",
+            true,
+            true,
+            "I+");
+        for (int i = 0; i < emptySlotCount; i++)
+        {
+            slots.Add(new ScenarioInventorySlotViewModel
+            {
+                Id = "empty." + slots.Count.ToString(CultureInfo.InvariantCulture),
+                Empty = true,
+                Badge = "Empty",
+                DisplayName = addAction.Label,
+                Detail = "No authored item in this slot.",
+                PrimaryAction = addAction
+            });
+        }
         return new ScenarioInventorySlotGridViewModel
         {
             EmptyMessage = emptyMessage,
