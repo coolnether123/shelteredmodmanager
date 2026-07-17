@@ -9,7 +9,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
     /// </summary>
     internal sealed class ScenarioAuthoringWorkspaceComposer
     {
-        private readonly ScenarioStoryWorkspaceViewModelBuilder _storyBuilder = new ScenarioStoryWorkspaceViewModelBuilder();
+        private readonly ScenarioStoryWorkspaceViewModelBuilder _storyBuilder;
+
+        public ScenarioAuthoringWorkspaceComposer()
+        {
+            _storyBuilder = new ScenarioStoryWorkspaceViewModelBuilder(
+                new ScenarioQuestPopupsWorkspaceBuilder());
+        }
 
         public ScenarioAuthoringWorkspaceViewModel Build(
             ScenarioAuthoringWindowContentKind contentKind,

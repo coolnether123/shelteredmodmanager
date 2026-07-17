@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
-using ShelteredAPI.Scenarios.Presentation.Inspector;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
@@ -12,15 +10,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private readonly ScenarioStoryFlowWorkspaceBuilder _flowBuilder;
         private readonly ScenarioStoryCharactersWorkspaceBuilder _charactersBuilder;
         private readonly ScenarioStoryConversationsWorkspaceBuilder _conversationsBuilder;
-        private readonly ScenarioQuestAuthoringContentBuilder _questBuilder;
+        private readonly ScenarioQuestPopupsWorkspaceBuilder _questPopupsBuilder;
 
         public ScenarioStoryWorkspaceViewModelBuilder()
+            : this(new ScenarioQuestPopupsWorkspaceBuilder())
+        {
+        }
+
+        internal ScenarioStoryWorkspaceViewModelBuilder(ScenarioQuestPopupsWorkspaceBuilder questPopupsBuilder)
         {
             _factory = new ScenarioAuthoringWorkspaceViewModelFactory();
             _flowBuilder = new ScenarioStoryFlowWorkspaceBuilder();
             _charactersBuilder = new ScenarioStoryCharactersWorkspaceBuilder();
             _conversationsBuilder = new ScenarioStoryConversationsWorkspaceBuilder();
-            _questBuilder = new ScenarioQuestAuthoringContentBuilder();
+            _questPopupsBuilder = questPopupsBuilder ?? new ScenarioQuestPopupsWorkspaceBuilder();
         }
 
         public ScenarioAuthoringWorkspaceViewModel Build(ScenarioAuthoringWindowContentContext context)
@@ -41,38 +44,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             else if (string.Equals(activeSubtab, ScenarioStoryFocusedEditorActions.ConversationsSubtabId, StringComparison.Ordinal))
                 workspace = _conversationsBuilder.Build(context, _factory);
             else if (string.Equals(activeSubtab, ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId, StringComparison.Ordinal))
-                workspace = BuildQuestComingNext(context);
+                workspace = _questPopupsBuilder.Build(context, _factory);
             else
                 workspace = _flowBuilder.Build(context, _factory);
 
             workspace.ActiveSubtabId = activeSubtab;
             workspace.Subtabs = BuildSubtabs(activeSubtab);
-            return workspace;
-        }
-
-        private ScenarioAuthoringWorkspaceViewModel BuildQuestComingNext(ScenarioAuthoringWindowContentContext context)
-        {
-            ScenarioAuthoringWorkspaceViewModel workspace = _factory.CreateWorkspace(
-                ScenarioStoryFocusedEditorActions.WorkspaceId,
-                ScenarioAuthoringWorkspaceLayoutKind.DocumentOnly,
-                ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId);
-            ScenarioAuthoringWorkspaceDocumentViewModel document = _factory.CreateDocument("story.quest-popups.coming-next", "Quest Popups");
-            document.Subtitle = "Navigator and focused quest documents arrive in Slice 5.";
-            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(new ScenarioAuthoringInspectorSection
-            {
-                Id = "story_quest_popups_coming_next",
-                Title = "COMING NEXT",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
-                Items = new[]
-                {
-                    ScenarioInspectorItemFactory.Text("Quest Popup authoring remains available below while its dedicated navigator and documents are prepared for the next slice.")
-                }
-            });
-            sections.AddRange(_questBuilder.BuildQuestPopupSections(context));
-            document.Sections = sections.ToArray();
-            workspace.Document = document;
             return workspace;
         }
 
