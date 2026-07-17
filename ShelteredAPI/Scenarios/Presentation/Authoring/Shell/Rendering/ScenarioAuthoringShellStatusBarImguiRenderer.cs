@@ -210,10 +210,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawStatusLabel(Rect rect, string value, bool tooltipWhenTruncated)
         {
-            GUIStyle statusText = _uiContext != null && _uiContext.Styles != null
-                ? _uiContext.Styles.BodyText
-                : _mutedTextStyle;
-            string fitted = ShortenToFit(value, rect.width, statusText);
+            GUIStyle statusText = _statusTextStyle ?? _mutedTextStyle;
+            string fitted = value ?? string.Empty;
+            if (statusText != null && statusText.CalcSize(new GUIContent(fitted)).x > rect.width)
+            {
+                const string tail = "...";
+                int length = fitted.Length;
+                while (length > 0 && statusText.CalcSize(new GUIContent(fitted.Substring(0, length) + tail)).x > rect.width)
+                    length--;
+                fitted = length > 0 ? fitted.Substring(0, length) + tail : tail;
+            }
             string tooltip = tooltipWhenTruncated && !string.Equals(fitted, value ?? string.Empty, StringComparison.Ordinal)
                 ? value ?? string.Empty
                 : string.Empty;

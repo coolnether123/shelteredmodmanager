@@ -82,6 +82,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private GUIStyle _disabledTabContentStyle;
         private GUIStyle _sectionTitleStyle;
         private GUIStyle _statusStyle;
+        private GUIStyle _statusTextStyle;
         private float _styleOpacity = -1f;
         private bool _windowMenuOpen;
         private readonly Dictionary<string, Vector2> _windowScrollPositions = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
@@ -1455,6 +1456,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _rootPanelStyle = styles.Page;
             _headerStyle = styles.Header;
             _statusStyle = styles.Status;
+            _statusTextStyle = new GUIStyle(styles.BodyText);
+            _statusTextStyle.wordWrap = false;
+            _statusTextStyle.clipping = TextClipping.Clip;
+            _statusTextStyle.alignment = TextAnchor.MiddleLeft;
             _titleStyle = styles.BrandTitleText;
             _smallTitleStyle = styles.TitleText;
             _sectionTitleStyle = styles.PaperTitleText;
@@ -1505,6 +1510,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _disabledTabContentStyle = null;
             _sectionTitleStyle = null;
             _statusStyle = null;
+            _statusTextStyle = null;
             _timelineRibbonCaptionStyle = null;
             _timelineRibbonDayStyle = null;
             _timelineRibbonOverflowStyle = null;

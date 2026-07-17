@@ -45,18 +45,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 "Publish " + scenarioName);
             document.Subtitle = "Resolve blockers, review the package, then export it locally.";
             document.Sections = sections;
-            for (int i = 0; sections != null && i < sections.Length; i++)
-            {
-                ScenarioAuthoringInspectorSection section = sections[i];
-                if (section == null
-                    || !string.Equals(section.Id, "publish_validation", StringComparison.OrdinalIgnoreCase)
-                    || section.StatusChips == null)
-                    continue;
-                ScenarioAuthoringStatusChipViewModel[] chips = new ScenarioAuthoringStatusChipViewModel[section.StatusChips.Length];
-                Array.Copy(section.StatusChips, chips, chips.Length);
-                document.StatusChips = chips;
-                break;
-            }
             workspace.Document = document;
             return workspace;
         }

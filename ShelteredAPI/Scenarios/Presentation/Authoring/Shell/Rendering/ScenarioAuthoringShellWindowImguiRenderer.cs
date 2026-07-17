@@ -4789,7 +4789,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return secondary ?? string.Empty;
             if (string.IsNullOrEmpty(secondary))
                 return primary;
-            return primary + " | " + secondary;
+            return primary + " · " + secondary;
         }
 
         private static string Shorten(string value, int maxLength)

@@ -318,10 +318,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float titleHeight = estimatedTitleStyle != null
                 ? Math.Max(20f, estimatedTitleStyle.CalcHeight(new GUIContent(row.Title ?? string.Empty), estimatedTextWidth))
                 : 20f;
-            float subtitleHeight = hasSubtitle && _mutedTextStyle != null
-                ? Math.Max(17f, _mutedTextStyle.CalcHeight(new GUIContent(row.Subtitle), estimatedTextWidth))
+            float subtitleHeight = hasSubtitle && _uiContext.Styles.PaperMutedText != null
+                ? Math.Max(20f, _uiContext.Styles.PaperMutedText.CalcHeight(new GUIContent(row.Subtitle), estimatedTextWidth))
                 : 0f;
-            float height = Math.Max(hasSubtitle ? 56f : 40f, 12f + titleHeight + (hasSubtitle ? subtitleHeight + 2f : 0f));
+            float height = Math.Max(hasSubtitle ? 60f : 40f, 16f + titleHeight + (hasSubtitle ? subtitleHeight + 4f : 0f));
             Rect allocated = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
             Rect rowRect = new Rect(allocated.x + indent, allocated.y, Math.Max(80f, allocated.width - indent), allocated.height);
             float toggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 28f : 0f;
@@ -368,11 +368,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float labelX = 10f;
             GUI.BeginGroup(selectRect);
             GUI.Label(
-                new Rect(labelX, hasSubtitle ? 4f : 7f, Math.Max(20f, selectRect.width - 18f), titleHeight),
+                new Rect(labelX, hasSubtitle ? 6f : 7f, Math.Max(20f, selectRect.width - 18f), titleHeight),
                 row.Title ?? string.Empty,
                 row.Selected ? _uiContext.Styles.PaperTitleText : _uiContext.Styles.PaperBodyText);
             if (hasSubtitle)
-                GUI.Label(new Rect(labelX, 5f + titleHeight, Math.Max(20f, selectRect.width - 18f), subtitleHeight), row.Subtitle, _uiContext.Styles.PaperMutedText);
+                GUI.Label(new Rect(labelX, 8f + titleHeight, Math.Max(20f, selectRect.width - 18f), subtitleHeight), row.Subtitle, _uiContext.Styles.PaperMutedText);
             GUI.EndGroup();
 
             float x = selectRect.xMax + (toggleWidth > 0f || chipsWidth > 0f ? 4f : 0f);
@@ -445,6 +445,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             DrawChromePanel(rect, _uiContext.Styles.Page);
             ScenarioAuthoringWorkspaceDocumentViewModel document = workspace != null ? workspace.Document : null;
             Rect inner = InsetWorkspaceRect(rect, WorkspacePanePadding);
+            if (workspace != null && workspace.LayoutKind == ScenarioAuthoringWorkspaceLayoutKind.DocumentOnly)
+            {
+                float documentWidth = Math.Min(inner.width, ResolveLogicalPixelCap(760f));
+                inner = new Rect(inner.x + ((inner.width - documentWidth) * 0.5f), inner.y, documentWidth, inner.height);
+            }
             if (document == null)
             {
                 GUI.Box(inner, GUIContent.none, _uiContext.Styles.Inset);

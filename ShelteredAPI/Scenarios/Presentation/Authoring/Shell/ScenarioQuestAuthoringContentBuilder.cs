@@ -1721,7 +1721,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (intercom != null && intercom.StageChange != null && !string.IsNullOrEmpty(intercom.StageChange.Id))
                     routes.Add(source + " --outcome " + (i + 1).ToString(CultureInfo.InvariantCulture) + "--> " + intercom.StageChange.Id);
             }
-            return routes.Count > 0 ? string.Join(" | ", routes.ToArray()) : "No outgoing stage arrow - this stage stays active or ends here.";
+            return routes.Count > 0 ? string.Join(" · ", routes.ToArray()) : "No outgoing stage arrow - this stage stays active or ends here.";
         }
 
         private static string FormatCharacterLabel(ScenarioDefinition definition, string characterId)
