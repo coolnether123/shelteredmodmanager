@@ -11,6 +11,7 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Supplies;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Application.Objects;
@@ -1611,14 +1612,20 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
-            if (TryOpenIndexedFocusedEditor(
-                state,
+            if (ScenarioAuthoringActionParser.TryIndex(
                 actionId,
                 ScenarioAuthoringLocalActionIds.ActionSuppliesPresetPreviewPrefix,
-                ScenarioAuthoringLocalActionIds.FocusedKindSuppliesPreset,
+                ScenarioSuppliesPresetCatalog.Count,
                 out pickerIndex))
             {
-                message = "Review the starter loadout before applying.";
+                ScenarioSuppliesWorkspaceActions.SelectPresetDocument(pickerIndex);
+                if (state != null && string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindSuppliesPreset, StringComparison.OrdinalIgnoreCase))
+                {
+                    state.FocusedEditorKind = null;
+                    state.FocusedEditorIndex = -1;
+                    state.FocusedEditorIsNew = false;
+                }
+                message = "Opened the starter loadout in Supplies.";
                 return true;
             }
 
@@ -1643,12 +1650,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 CloseInventoryPickerAfterSelection(state, actionId);
                 ReconcileQuestSelection(currentDefinition, actionId, selectedQuest, duplicateSourceIndex);
                 ReconcileFutureSurvivorSelection(currentDefinition, actionId, selectedFutureSurvivor);
-                if (actionId != null && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, StringComparison.Ordinal) && state != null)
-                {
-                    state.FocusedEditorKind = null;
-                    state.FocusedEditorIndex = -1;
-                    state.FocusedEditorIsNew = false;
-                }
             }
             return changed;
         }
