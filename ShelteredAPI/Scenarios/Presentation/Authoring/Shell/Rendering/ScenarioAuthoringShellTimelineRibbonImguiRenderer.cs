@@ -44,6 +44,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderHighlightTexture, _uiContext.Styles.BorderStrongTexture);
 
             EnsureTimelineRibbonStyles();
+            if (ribbon == null || ribbon.EntryCount == 0)
+            {
+                Rect compactTitleRect = new Rect(rect.x + 10f, rect.y + 4f, TimelineRibbonLabelWidth - 18f, rect.height - 8f);
+                GUI.Label(compactTitleRect, ShortenToFit(window != null ? window.Title ?? string.Empty : string.Empty, compactTitleRect.width, _timelineRibbonTitleStyle), _timelineRibbonTitleStyle);
+                Rect compactMessageRect = new Rect(rect.x + TimelineRibbonLabelWidth, rect.y + 4f, Math.Max(80f, rect.width - TimelineRibbonLabelWidth - 8f), rect.height - 8f);
+                GUI.Label(compactMessageRect, ribbon != null ? ribbon.EmptyMessage ?? string.Empty : "No scheduled events yet - add some in Timeline or Story", _timelineRibbonEmptyStyle);
+                return;
+            }
+
             Rect labelRect = new Rect(rect.x + 10f, rect.y + 8f, TimelineRibbonLabelWidth - 18f, rect.height - 16f);
             string workspaceTitle = window != null ? window.Title ?? string.Empty : string.Empty;
             float titleHeight = Mathf.Clamp(
@@ -57,12 +66,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             GUI.Label(new Rect(labelRect.x, labelRect.y + titleHeight + 1f, labelRect.width, 16f), "DAY TIMELINE", _timelineRibbonCaptionStyle);
 
             Rect trackRect = new Rect(rect.x + TimelineRibbonLabelWidth, rect.y + 4f, Math.Max(80f, rect.width - TimelineRibbonLabelWidth - 8f), rect.height - 8f);
-            if (ribbon == null || ribbon.EntryCount == 0)
-            {
-                GUI.Label(trackRect, ribbon != null ? ribbon.EmptyMessage ?? string.Empty : "No scheduled events yet - add some in Timeline or Story", _timelineRibbonEmptyStyle);
-                return;
-            }
-
             float pixelsPerDay = ResolveTimelineRibbonPixelsPerDay(trackRect, ribbon);
             HandleTimelineRibbonInput(trackRect, ribbon, pixelsPerDay);
             AdvanceTimelineRibbonZoom(trackRect, ribbon);

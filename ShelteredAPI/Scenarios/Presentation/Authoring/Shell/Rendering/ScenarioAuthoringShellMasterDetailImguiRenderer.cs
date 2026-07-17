@@ -158,7 +158,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 Rect tabRect = new Rect(cellRect.x, cellRect.y, Math.Max(24f, cellRect.width - chipWidth - chipGap), cellRect.height);
                 bool selected = subtab.Selected || string.Equals(subtab.Id, activeSubtabId, StringComparison.Ordinal);
                 ScenarioAuthoringInspectorAction action = subtab.SelectAction;
-                string label = JoinIconLabel(subtab.IconText, subtab.Label);
+                string label = subtab.Label ?? string.Empty;
                 bool enabled = action != null && action.Enabled;
                 if (DrawPlainButton(
                     tabRect,
@@ -277,7 +277,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 + chipsWidth
                 + (chipsWidth > 0f ? 4f : 0f);
             Rect toggleRect = new Rect(rowRect.x, rowRect.y, Math.Max(58f, rowRect.width - rightWidth), rowRect.height);
-            string label = (group.Expanded ? "v " : "> ") + JoinIconLabel(group.IconText, group.Label);
+            string label = group.Label ?? string.Empty;
             ScenarioAuthoringInspectorAction toggle = group.ToggleAction;
             if (toggle != null && DrawPlainButton(
                 toggleRect,
@@ -316,12 +316,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float estimatedTextWidth = Math.Max(20f, estimatedRowWidth - estimatedToggleWidth - estimatedChipsWidth - estimatedGaps - 18f);
             GUIStyle estimatedTitleStyle = row.Selected ? _uiContext.Styles.PaperTitleText : _uiContext.Styles.PaperBodyText;
             float titleHeight = estimatedTitleStyle != null
-                ? Math.Max(20f, estimatedTitleStyle.CalcHeight(new GUIContent(JoinIconLabel(row.IconText, row.Title)), estimatedTextWidth))
+                ? Math.Max(20f, estimatedTitleStyle.CalcHeight(new GUIContent(row.Title ?? string.Empty), estimatedTextWidth))
                 : 20f;
             float subtitleHeight = hasSubtitle && _mutedTextStyle != null
                 ? Math.Max(17f, _mutedTextStyle.CalcHeight(new GUIContent(row.Subtitle), estimatedTextWidth))
                 : 0f;
-            float height = Math.Max(hasSubtitle ? 52f : 40f, 8f + titleHeight + (hasSubtitle ? subtitleHeight + 1f : 0f));
+            float height = Math.Max(hasSubtitle ? 56f : 40f, 12f + titleHeight + (hasSubtitle ? subtitleHeight + 2f : 0f));
             Rect allocated = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
             Rect rowRect = new Rect(allocated.x + indent, allocated.y, Math.Max(80f, allocated.width - indent), allocated.height);
             float toggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 28f : 0f;
@@ -369,7 +369,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             GUI.BeginGroup(selectRect);
             GUI.Label(
                 new Rect(labelX, hasSubtitle ? 4f : 7f, Math.Max(20f, selectRect.width - 18f), titleHeight),
-                JoinIconLabel(row.IconText, row.Title),
+                row.Title ?? string.Empty,
                 row.Selected ? _uiContext.Styles.PaperTitleText : _uiContext.Styles.PaperBodyText);
             if (hasSubtitle)
                 GUI.Label(new Rect(labelX, 5f + titleHeight, Math.Max(20f, selectRect.width - 18f), subtitleHeight), row.Subtitle, _uiContext.Styles.PaperMutedText);
@@ -406,7 +406,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 return;
 
             GUIStyle style = ResolveStatusChipStyle(chip.Tone);
-            string label = JoinIconLabel(chip.IconText, chip.Text);
+            string label = chip.Text ?? string.Empty;
             float availableTextWidth = Math.Max(0f, rect.width - (style.padding != null ? style.padding.left + style.padding.right : 0f));
             if (style.CalcSize(new GUIContent(label)).x > availableTextWidth)
             {
@@ -539,7 +539,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     }
 
                     if (advancedPass)
-                        GUILayout.BeginVertical(_uiContext.Styles.Inset, GUILayout.Width(Math.Min(760f, GetSectionContentWidth())));
+                        GUILayout.BeginVertical(_uiContext.Styles.Inset, GUILayout.Width(Math.Min(ResolveLogicalPixelCap(760f), GetSectionContentWidth())));
                     DrawSection(section);
                     if (advancedPass)
                         GUILayout.EndVertical();
@@ -642,7 +642,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (count == 0)
                 return;
 
-            float availableWidth = Math.Min(720f, GetSectionContentWidth());
+            float availableWidth = Math.Min(ResolveLogicalPixelCap(720f), GetSectionContentWidth());
             float gap = 8f;
             int requested = choice.ColumnCount > 0 ? choice.ColumnCount : 4;
             int capacity = Math.Max(1, Mathf.FloorToInt((availableWidth + 8f) / 120f));
@@ -741,7 +741,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (chip == null)
                 return 0f;
             GUIStyle style = ResolveStatusChipStyle(chip.Tone);
-            return Mathf.Clamp(ScenarioUiMeasuredLabel.Width(JoinIconLabel(chip.IconText, chip.Text), style, 12f), 28f, 280f);
+            return Mathf.Clamp(ScenarioUiMeasuredLabel.Width(chip.Text ?? string.Empty, style, 12f), 28f, 280f);
         }
 
         private GUIStyle ResolveStatusChipStyle(ScenarioAuthoringStatusTone tone)
@@ -812,15 +812,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 rect.y + inset,
                 Math.Max(0f, rect.width - (inset * 2f)),
                 Math.Max(0f, rect.height - (inset * 2f)));
-        }
-
-        private static string JoinIconLabel(string icon, string label)
-        {
-            if (string.IsNullOrEmpty(icon))
-                return label ?? string.Empty;
-            if (string.IsNullOrEmpty(label))
-                return icon;
-            return icon + "  " + label;
         }
 
         private static void ExecuteWorkspaceAction(ScenarioAuthoringInspectorAction action)
