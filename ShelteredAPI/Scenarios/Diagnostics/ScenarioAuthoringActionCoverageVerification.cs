@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
+using UnityEngine;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Commands;
@@ -175,32 +176,30 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             };
             workspace.Document.Sections = new[] { section };
 
-            ScenarioAuthoringShellViewModel shell = new ScenarioAuthoringShellViewModel
+            ScenarioAuthoringShellWindowViewModel fixtureWindow = new ScenarioAuthoringShellWindowViewModel
             {
-                RendererActions = new[] { searchAction },
-                Windows = new[]
+                Id = "fixture.window",
+                WorkspaceBody = workspace,
+                Sections = new[]
                 {
-                    new ScenarioAuthoringShellWindowViewModel
+                    new ScenarioAuthoringInspectorSection
                     {
-                        Id = "fixture.window",
-                        WorkspaceBody = workspace,
-                        Sections = new[]
+                        Id = "legacy.must.not.project",
+                        Items = new[]
                         {
-                            new ScenarioAuthoringInspectorSection
+                            new ScenarioAuthoringInspectorItem
                             {
-                                Id = "legacy.must.not.project",
-                                Items = new[]
-                                {
-                                    new ScenarioAuthoringInspectorItem
-                                    {
-                                        Kind = ScenarioAuthoringInspectorItemKind.Action,
-                                        Action = FixtureAction("fixture.legacy.must.not.collect")
-                                    }
-                                }
+                                Kind = ScenarioAuthoringInspectorItemKind.Action,
+                                Action = FixtureAction("fixture.legacy.must.not.collect")
                             }
                         }
                     }
                 }
+            };
+            ScenarioAuthoringShellViewModel shell = new ScenarioAuthoringShellViewModel
+            {
+                RendererActions = new[] { searchAction },
+                Windows = new[] { fixtureWindow }
             };
             HashSet<string> ids = CollectContractIds(ScenarioAuthoringRendererActionManifest.BuildContractWindow(shell));
             string[] expected =
@@ -227,6 +226,45 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 Require(ids, expected[i], "workspace fixture", result);
             if (ids.Contains("fixture.legacy.must.not.collect"))
                 result.AddError("Workspace contract projection also collected the legacy window Sections path.");
+
+            ScenarioAuthoringWorkspaceRenderPlan widePlan = ScenarioAuthoringShellImguiRenderModule.BuildWorkspaceRenderPlan(
+                new Rect(0f, 0f, 1440f, 680f),
+                fixtureWindow,
+                true);
+            if (!widePlan.Wide
+                || !widePlan.ShowsNavigator
+                || !widePlan.ShowsDocument
+                || widePlan.VisibleScrollOwnerCount != 2
+                || string.IsNullOrEmpty(widePlan.NavigatorScrollOwnerId)
+                || string.IsNullOrEmpty(widePlan.DocumentScrollOwnerId)
+                || string.Equals(widePlan.NavigatorScrollOwnerId, widePlan.DocumentScrollOwnerId, StringComparison.Ordinal)
+                || widePlan.NavigatorRect.width < ScenarioAuthoringShellLayout.MasterDetailNavigatorMinWidth
+                || widePlan.NavigatorRect.width > ScenarioAuthoringShellLayout.MasterDetailNavigatorMaxWidth
+                || widePlan.DocumentRect.x < widePlan.NavigatorRect.xMax + ScenarioAuthoringShellLayout.MasterDetailPaneGutter)
+            {
+                result.AddError("Wide workspace renderer fixture did not produce two independent navigator/document scroll panes.");
+            }
+
+            Rect compactTop = new Rect(0f, 0f, 1280f, ScenarioAuthoringShellLayout.TopBarHeight);
+            Rect compactStatus = ScenarioAuthoringShellLayout.BuildStatusRect(1280f, 720f);
+            Rect compactContent = ScenarioAuthoringShellLayout.BuildContentRect(1280f, compactTop, compactStatus);
+            Rect compactPage = ScenarioAuthoringShellLayout.BuildWorkshopPageRect(compactContent);
+            Rect compactBody = new Rect(
+                compactPage.x,
+                compactPage.y + ScenarioAuthoringShellLayout.WorkshopTimelineRibbonHeight + ScenarioAuthoringShellLayout.WorkshopTimelineRibbonBodyGutter,
+                compactPage.width,
+                compactPage.height - ScenarioAuthoringShellLayout.WorkshopTimelineRibbonHeight - ScenarioAuthoringShellLayout.WorkshopTimelineRibbonBodyGutter);
+            ScenarioAuthoringWorkspaceRenderPlan compactPlan = ScenarioAuthoringShellImguiRenderModule.BuildWorkspaceRenderPlan(
+                compactBody,
+                fixtureWindow,
+                true);
+            if (compactPlan.Wide
+                || compactPlan.ShowsNavigator
+                || !compactPlan.ShowsDocument
+                || compactPlan.VisibleScrollOwnerCount != 1)
+            {
+                result.AddError("1280x720 workspace renderer fixture did not select the one-pane document fallback.");
+            }
 
             VerifyWorkspaceCommandState(result, workspaceId, subtabId, subtabAction, entityAction, warningAction, groupAction, rowAction, searchAction, breadcrumbAction, backAction);
             VerifyDuplicateContractIds(result);

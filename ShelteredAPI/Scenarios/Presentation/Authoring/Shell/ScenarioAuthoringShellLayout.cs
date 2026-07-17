@@ -40,6 +40,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float WorkshopTimelineRibbonHeight = 64f;
         public const float WorkshopTimelineRibbonBodyGutter = 8f;
         public const float HomeWorkshopPageTopInset = 4f;
+        public const float MasterDetailWideMinWidth = 1240f;
+        public const float MasterDetailWideMinHeight = 520f;
+        public const float MasterDetailNavigatorMinWidth = 292f;
+        public const float MasterDetailNavigatorMaxWidth = 360f;
+        public const float MasterDetailPaneGutter = 12f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and
         // on the right for the HUD so labels never collide with the game UI.
