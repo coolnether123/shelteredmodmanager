@@ -2182,6 +2182,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind))
                 return null;
 
+            if (string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+                return null;
+
             bool baseModeEditor = string.Equals(
                 state.FocusedEditorKind,
                 ScenarioBaseModeAuthoringActions.FocusedEditorKind,
@@ -2207,10 +2210,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             string title = "Edit Timeline Entry";
             string subtitle = "Use the compact fields below, then save or cancel.";
-            ScenarioAuthoringInspectorDocument storyDocument;
-            if (ScenarioStoryFocusedEditorDocumentBuilder.TryBuild(state, definition, out storyDocument))
-                return storyDocument;
-
             if (baseModeEditor)
             {
                 if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), state.FocusedEditorIndex))

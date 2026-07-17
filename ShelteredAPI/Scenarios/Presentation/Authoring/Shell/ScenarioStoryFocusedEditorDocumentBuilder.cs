@@ -56,10 +56,144 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = "Story Stage - " + DisplayStageTitle(stage, state.FocusedEditorIndex),
                 Subtitle = "Edit one vanilla scenario stage, its encounter steps, and its next-stage outcomes.",
-                HeaderActions = new[] { Action(ScenarioStoryFocusedEditorActions.ActionCancel, "x", "Close this story editor.", true, false, "HD") },
+                HeaderActions = new ScenarioAuthoringInspectorAction[0],
                 Sections = sections.ToArray()
             };
             return true;
+        }
+
+        internal static ScenarioAuthoringInspectorSection[] BuildStageWorkspaceSections(
+            ScenarioDefinition definition,
+            int stageIndex,
+            ScenarioStoryFlowIssue[] issues)
+        {
+            ScenarioFlowStageDefinition stage = GetStage(definition, stageIndex);
+            if (stage == null)
+                return new ScenarioAuthoringInspectorSection[0];
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            List<ScenarioAuthoringInspectorItem> overview = new List<ScenarioAuthoringInspectorItem>();
+            overview.Add(Text(BuildStageSummary(definition, stage)));
+            overview.Add(Property("Title", DisplayStageTitle(stage, stageIndex)));
+            overview.Add(Property("Scenes", (stage.IntercomStages != null ? stage.IntercomStages.Count : 0).ToString(CultureInfo.InvariantCulture)));
+            overview.Add(Property("Warnings", CountStageIssues(issues, stageIndex).ToString(CultureInfo.InvariantCulture), "Use the Story Flow warning list to open each affected stage or scene."));
+            overview.Add(ActionItem(Action(ScenarioStoryFocusedEditorActions.StageTitle(stageIndex, "stage_" + (stageIndex + 1).ToString(CultureInfo.InvariantCulture) + "_title"), "Use Generated Title", "Create a stage-specific title value.", true, false, "TT")));
+            overview.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomAdd(stageIndex), "Add Scene", "Add another scene to this stage.", true, stage.IntercomStages == null || stage.IntercomStages.Count == 0, "S+")));
+            sections.Add(Section("story_stage_overview_" + stageIndex.ToString(CultureInfo.InvariantCulture), "OVERVIEW", ScenarioAuthoringInspectorSectionLayout.FactGrid, overview));
+
+            List<ScenarioAuthoringInspectorItem> timing = new List<ScenarioAuthoringInspectorItem>();
+            timing.Add(Property("Ignored-call delay", stage.UnansweredNextDays.ToString(CultureInfo.InvariantCulture) + " day(s)", "Vanilla Story stages advance in whole days."));
+            timing.Add(Property("Ignored-call consequence", stage.PunishOnUnanswered ? "Punish after the visitor arrives" : "No explicit punishment"));
+            timing.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageUnansweredDelay(stageIndex, 1), "Delay +1 Day", "Increase the ignored-call delay.", true, false, "D+")));
+            timing.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageUnansweredDelay(stageIndex, -1), "Delay -1 Day", "Decrease the ignored-call delay.", true, false, "D-")));
+            timing.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StagePunish(stageIndex), "Punish If Ignored", "Toggle the vanilla ignored-call punishment.", true, stage.PunishOnUnanswered, "PU")));
+            sections.Add(Section("story_stage_timing_" + stageIndex.ToString(CultureInfo.InvariantCulture), "TIMING", ScenarioAuthoringInspectorSectionLayout.ActionStrip, timing));
+
+            List<ScenarioAuthoringInspectorItem> cast = new List<ScenarioAuthoringInspectorItem>();
+            cast.Add(Property("Appearing characters", FormatStageCast(definition, stage)));
+            cast.Add(ChoiceItem(BuildCharacterChoice(definition, stage, stageIndex)));
+            sections.Add(Section("story_stage_cast_" + stageIndex.ToString(CultureInfo.InvariantCulture), "CAST", ScenarioAuthoringInspectorSectionLayout.ActionStrip, cast));
+
+            List<ScenarioAuthoringInspectorItem> routing = new List<ScenarioAuthoringInspectorItem>();
+            routing.Add(Property("If the call is ignored", FormatIgnoredCall(definition, stage)));
+            routing.Add(ChoiceItem(BuildStageRouteChoice(definition, stageIndex, stage.UnansweredNextStage, true, -1)));
+            sections.Add(Section("story_stage_routing_" + stageIndex.ToString(CultureInfo.InvariantCulture), "ROUTING", ScenarioAuthoringInspectorSectionLayout.ActionStrip, routing));
+
+            List<ScenarioAuthoringInspectorItem> advanced = new List<ScenarioAuthoringInspectorItem>();
+            advanced.Add(Property("Internal stage id", Empty(stage.Id, "Blank")));
+            advanced.Add(Property("Raw ignored-call route", Empty(stage.UnansweredNextStage, "None")));
+            for (int i = 0; stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition scene = stage.IntercomStages[i];
+                if (scene != null && !string.IsNullOrEmpty(scene.StageDescriptionKey))
+                    advanced.Add(Property("Technical title key " + (i + 1).ToString(CultureInfo.InvariantCulture), scene.StageDescriptionKey));
+            }
+            AddStageIdActions(advanced, definition != null ? definition.ScenarioFlow : null, stageIndex);
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageMove(stageIndex, -1), "Move Stage Up", "Move this stage earlier.", stageIndex > 0, false, "UP")));
+            int stageCount = definition != null && definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null ? definition.ScenarioFlow.Stages.Count : 0;
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageMove(stageIndex, 1), "Move Stage Down", "Move this stage later.", stageIndex + 1 < stageCount, false, "DN")));
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDuplicate(stageIndex), "Duplicate Stage", "Copy this stage and all of its scenes.", true, false, "CP")));
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDelete(stageIndex), "Remove Stage", "Remove this stage when no references remain.", true, false, "RM")));
+            sections.Add(AdvancedSection("story_stage_advanced_" + stageIndex.ToString(CultureInfo.InvariantCulture), "ADVANCED", ScenarioAuthoringInspectorSectionLayout.ActionStrip, advanced));
+            return sections.ToArray();
+        }
+
+        internal static ScenarioAuthoringInspectorSection[] BuildSceneWorkspaceSections(
+            ScenarioDefinition definition,
+            int stageIndex,
+            int sceneIndex,
+            ScenarioStoryFlowIssue[] issues)
+        {
+            ScenarioFlowStageDefinition stage = GetStage(definition, stageIndex);
+            ScenarioIntercomStageDefinition scene = stage != null && stage.IntercomStages != null && sceneIndex >= 0 && sceneIndex < stage.IntercomStages.Count
+                ? stage.IntercomStages[sceneIndex]
+                : null;
+            if (scene == null)
+                return new ScenarioAuthoringInspectorSection[0];
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            List<ScenarioAuthoringInspectorItem> dialogue = new List<ScenarioAuthoringInspectorItem>();
+            dialogue.Add(ActionItem(Action(ScenarioStoryAuthoringActions.DialogueAdd(stageIndex, sceneIndex), "Add Dialogue Line", "Add a line spoken during this scene.", true, scene.Dialogue == null || scene.Dialogue.Count == 0, "D+")));
+            if (scene.Dialogue == null || scene.Dialogue.Count == 0)
+                dialogue.Add(Text("No dialogue yet. Add the first line to begin this scene."));
+            for (int i = 0; scene.Dialogue != null && i < scene.Dialogue.Count; i++)
+            {
+                ScenarioDialogueLineDefinition line = scene.Dialogue[i];
+                dialogue.Add(Property("Dialogue " + (i + 1).ToString(CultureInfo.InvariantCulture), ResolveText(line != null ? line.TextKey : null, "Dialogue " + (i + 1).ToString(CultureInfo.InvariantCulture)), line != null && !string.IsNullOrEmpty(line.Character) ? FormatCharacterLabel(definition, line.Character) : "No speaker selected"));
+                dialogue.Add(ChoiceItem(BuildDialogueSpeakerChoice(definition, line, stageIndex, sceneIndex, i)));
+                dialogue.Add(ActionItem(Action(ScenarioStoryAuthoringActions.DialogueDelete(stageIndex, sceneIndex, i), "Remove Dialogue " + (i + 1).ToString(CultureInfo.InvariantCulture), "Remove this line.", true, false, "RM")));
+            }
+            sections.Add(Section("story_scene_dialogue_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture), "DIALOGUE", ScenarioAuthoringInspectorSectionLayout.ActionStrip, dialogue));
+
+            List<ScenarioAuthoringInspectorItem> choices = new List<ScenarioAuthoringInspectorItem>();
+            choices.Add(ActionItem(Action(ScenarioStoryAuthoringActions.OptionAdd(stageIndex, sceneIndex), "Add Player Choice", "Add a response choice and route.", true, scene.Options == null || scene.Options.Count == 0, "C+")));
+            if (scene.Options == null || scene.Options.Count == 0)
+                choices.Add(Text("No player choices. The scene can continue through its success or alternate route."));
+            for (int i = 0; scene.Options != null && i < scene.Options.Count; i++)
+            {
+                ScenarioDialogueOptionDefinition option = scene.Options[i];
+                choices.Add(Property("Choice " + (i + 1).ToString(CultureInfo.InvariantCulture), ResolveText(option != null ? option.TextKey : null, "Choice " + (i + 1).ToString(CultureInfo.InvariantCulture)), "Routes to " + FormatIntercomTarget(stage, option != null ? option.NextId : null)));
+                choices.Add(ChoiceItem(BuildSceneRouteChoice(stage, stageIndex, sceneIndex, option != null ? option.NextId : null, "Choice route", delegate(string target) { return ScenarioStoryAuthoringActions.OptionNext(stageIndex, sceneIndex, i, target); })));
+                choices.Add(ActionItem(Action(ScenarioStoryAuthoringActions.OptionDelete(stageIndex, sceneIndex, i), "Remove Choice " + (i + 1).ToString(CultureInfo.InvariantCulture), "Remove this response.", true, false, "RM")));
+            }
+            sections.Add(Section("story_scene_choices_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture), "CHOICES", ScenarioAuthoringInspectorSectionLayout.ActionStrip, choices));
+
+            List<ScenarioAuthoringInspectorItem> outcome = new List<ScenarioAuthoringInspectorItem>();
+            outcome.Add(ChoiceItem(BuildIntercomTypeChoice(stageIndex, sceneIndex, scene.Type)));
+            outcome.Add(ChoiceItem(BuildSceneRouteChoice(stage, stageIndex, sceneIndex, scene.NextId, "Success route", delegate(string target) { return ScenarioStoryAuthoringActions.IntercomNext(stageIndex, sceneIndex, target); })));
+            outcome.Add(ChoiceItem(BuildSceneRouteChoice(stage, stageIndex, sceneIndex, scene.AlternateNextId, "Alternate route", delegate(string target) { return ScenarioStoryAuthoringActions.IntercomAlternate(stageIndex, sceneIndex, target); })));
+            ScenarioEncounterEndOptionsDefinition end = scene.EndOptions;
+            outcome.Add(ChoiceItem(BuildEndTypeChoice(stageIndex, sceneIndex, end != null ? end.Type : null)));
+            outcome.Add(ChoiceItem(BuildStageRouteChoice(definition, stageIndex, scene.StageChange != null ? scene.StageChange.Id : null, false, sceneIndex)));
+            outcome.Add(Property("Stage-change delay", (scene.StageChange != null ? scene.StageChange.DelayDays : 0).ToString(CultureInfo.InvariantCulture) + " day(s)"));
+            outcome.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageChangeDelay(stageIndex, sceneIndex, 1), "Stage Delay +1 Day", "Increase the delayed stage transition.", true, false, "D+")));
+            outcome.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageChangeDelay(stageIndex, sceneIndex, -1), "Stage Delay -1 Day", "Decrease the delayed stage transition.", true, false, "D-")));
+            AddStoryItemActions(outcome, "Required items", scene.Items, false, stageIndex, sceneIndex);
+            AddStoryItemActions(outcome, "Swap/remove items", scene.ItemsToRemove, true, stageIndex, sceneIndex);
+            AddEndOptionItemActions(outcome, "Reward items", end != null ? end.RewardItems : null, true, stageIndex, sceneIndex);
+            AddEndOptionItemActions(outcome, "Trade items", end != null ? end.TradeItems : null, false, stageIndex, sceneIndex);
+            AddRecruitActions(outcome, definition, scene, stageIndex, sceneIndex);
+            sections.Add(Section("story_scene_outcome_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture), "OUTCOME", ScenarioAuthoringInspectorSectionLayout.ActionStrip, outcome));
+
+            List<ScenarioAuthoringInspectorItem> advanced = new List<ScenarioAuthoringInspectorItem>();
+            advanced.Add(Property("Internal scene id", Empty(scene.Id, "Blank")));
+            advanced.Add(Property("Technical scene title key", Empty(scene.StageDescriptionKey, "Blank")));
+            advanced.Add(Property("Raw branch type", Empty(scene.Type, "Default")));
+            advanced.Add(Property("Raw success route", Empty(scene.NextId, "None")));
+            advanced.Add(Property("Raw alternate route", Empty(scene.AlternateNextId, "None")));
+            advanced.Add(Property("Raw stage-change target", scene.StageChange != null ? Empty(scene.StageChange.Id, "None") : "None"));
+            advanced.Add(Property("Raw end type", end != null ? Empty(end.Type, "Default") : "Default"));
+            for (int i = 0; scene.Dialogue != null && i < scene.Dialogue.Count; i++)
+                if (scene.Dialogue[i] != null && !string.IsNullOrEmpty(scene.Dialogue[i].TextKey)) advanced.Add(Property("Technical dialogue key " + (i + 1).ToString(CultureInfo.InvariantCulture), scene.Dialogue[i].TextKey));
+            for (int i = 0; scene.Options != null && i < scene.Options.Count; i++)
+                if (scene.Options[i] != null && !string.IsNullOrEmpty(scene.Options[i].TextKey)) advanced.Add(Property("Technical choice key " + (i + 1).ToString(CultureInfo.InvariantCulture), scene.Options[i].TextKey));
+            advanced.Add(Property("Warnings", CountIntercomIssues(issues, stageIndex, sceneIndex).ToString(CultureInfo.InvariantCulture)));
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomMove(stageIndex, sceneIndex, -1), "Move Scene Up", "Move this scene earlier.", sceneIndex > 0, false, "UP")));
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomMove(stageIndex, sceneIndex, 1), "Move Scene Down", "Move this scene later.", sceneIndex + 1 < stage.IntercomStages.Count, false, "DN")));
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDuplicate(stageIndex, sceneIndex), "Duplicate Scene", "Copy this scene.", true, false, "CP")));
+            advanced.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDelete(stageIndex, sceneIndex), "Remove Scene", "Remove this scene.", true, false, "RM")));
+            sections.Add(AdvancedSection("story_scene_advanced_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture), "ADVANCED", ScenarioAuthoringInspectorSectionLayout.ActionStrip, advanced));
+            return sections.ToArray();
         }
 
         private static ScenarioAuthoringInspectorSection BuildIdentitySection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, int stageIndex, ScenarioStoryFlowIssue[] issues)
@@ -194,8 +328,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorSection BuildFooterSection(int stageIndex, ScenarioFlowStageDefinition stage)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ActionItem(Action(ScenarioStoryFocusedEditorActions.ActionSave, "Save", "Close this story editor and keep the stage.", true, true, "SV")));
-            items.Add(ActionItem(Action(ScenarioStoryFocusedEditorActions.ActionCancel, "Cancel", "Close this story editor. A newly-created stage is discarded.", true, false, "CL")));
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomAdd(stageIndex), "Add Encounter Step", "Add another vanilla encounter step inside this stage.", true, false, "I+")));
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDuplicate(stageIndex), "Duplicate Stage", "Copy this stage and its encounter setup.", true, false, "CP")));
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDelete(stageIndex), "Remove Stage", "Remove this stage if nothing references it.", true, false, "RM")));
@@ -335,14 +467,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddItemRows(List<ScenarioAuthoringInspectorItem> items, string title, List<ItemEntry> entries, bool removal, bool endReward, bool trade, int stageIndex, int intercomIndex)
         {
-            List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
-            int max = Math.Min(ItemPickerLimit, catalog.Count);
             if (entries == null || entries.Count == 0)
             {
                 items.Add(Text("No " + title.ToLowerInvariant() + " yet - use the add action to create an item row."));
                 return;
             }
 
+            List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
+            int max = Math.Min(ItemPickerLimit, catalog.Count);
             for (int e = 0; e < entries.Count; e++)
             {
                 ItemEntry entry = entries[e];
@@ -409,6 +541,216 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int count = flow != null && flow.Stages != null ? flow.Stages.Count + 1 : 1;
             string candidate = "stage_" + count.ToString(CultureInfo.InvariantCulture);
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageId(stageIndex, candidate), "Use Id " + candidate, "Rename using the next stage-id pattern.", true, false, "ID")));
+        }
+
+        private static ScenarioAuthoringCompactChoiceViewModel BuildCharacterChoice(
+            ScenarioDefinition definition,
+            ScenarioFlowStageDefinition stage,
+            int stageIndex)
+        {
+            ScenarioAuthoringCompactChoiceViewModel choice = NewChoice("story_stage_cast_choice_" + stageIndex.ToString(CultureInfo.InvariantCulture), "Stage cast", "Select everyone who appears", 3);
+            List<ScenarioAuthoringCompactChoiceOptionViewModel> options = new List<ScenarioAuthoringCompactChoiceOptionViewModel>();
+            List<string> ids = BuildCharacterIds(definition);
+            for (int i = 0; i < ids.Count; i++)
+            {
+                string id = ids[i];
+                options.Add(ChoiceOption(
+                    "character_" + i.ToString(CultureInfo.InvariantCulture),
+                    FormatCharacterLabel(definition, id),
+                    Contains(stage.CharacterIds, id),
+                    ScenarioStoryAuthoringActions.StageCharacterToggle(stageIndex, id),
+                    "Toggle this character in the stage cast."));
+            }
+            choice.Options = options.ToArray();
+            return choice;
+        }
+
+        private static ScenarioAuthoringCompactChoiceViewModel BuildDialogueSpeakerChoice(
+            ScenarioDefinition definition,
+            ScenarioDialogueLineDefinition line,
+            int stageIndex,
+            int sceneIndex,
+            int lineIndex)
+        {
+            ScenarioAuthoringCompactChoiceViewModel choice = NewChoice(
+                "story_scene_speaker_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture) + "_" + lineIndex.ToString(CultureInfo.InvariantCulture),
+                "Speaker",
+                line != null && !string.IsNullOrEmpty(line.Character) ? FormatCharacterLabel(definition, line.Character) : "Choose a speaker",
+                3);
+            List<string> ids = BuildCharacterIds(definition);
+            List<ScenarioAuthoringCompactChoiceOptionViewModel> options = new List<ScenarioAuthoringCompactChoiceOptionViewModel>();
+            for (int i = 0; i < ids.Count; i++)
+            {
+                string id = ids[i];
+                options.Add(ChoiceOption(
+                    "speaker_" + i.ToString(CultureInfo.InvariantCulture),
+                    FormatCharacterLabel(definition, id),
+                    line != null && string.Equals(line.Character, id, StringComparison.OrdinalIgnoreCase),
+                    ScenarioStoryAuthoringActions.DialogueSpeaker(stageIndex, sceneIndex, lineIndex, id),
+                    "Use this speaker."));
+            }
+            choice.Options = options.ToArray();
+            return choice;
+        }
+
+        private static ScenarioAuthoringCompactChoiceViewModel BuildStageRouteChoice(
+            ScenarioDefinition definition,
+            int stageIndex,
+            string current,
+            bool unanswered,
+            int sceneIndex)
+        {
+            string label = unanswered ? "Ignored-call route" : "Stage-change target";
+            ScenarioAuthoringCompactChoiceViewModel choice = NewChoice(
+                "story_stage_route_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture) + "_" + (unanswered ? "ignored" : "outcome"),
+                label,
+                FormatStageTarget(definition, current),
+                3);
+            List<ScenarioAuthoringCompactChoiceOptionViewModel> options = new List<ScenarioAuthoringCompactChoiceOptionViewModel>();
+            options.Add(ChoiceOption(
+                "none",
+                unanswered ? "Stay In This Stage" : "No Stage Change",
+                string.IsNullOrEmpty(current),
+                unanswered ? ScenarioStoryAuthoringActions.StageUnanswered(stageIndex, null) : ScenarioStoryAuthoringActions.StageChangeTarget(stageIndex, sceneIndex, null),
+                "Clear this route."));
+            ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
+            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition target = flow.Stages[i];
+                string id = target != null ? target.Id : null;
+                if (string.IsNullOrEmpty(id))
+                    continue;
+                options.Add(ChoiceOption(
+                    "stage_" + i.ToString(CultureInfo.InvariantCulture),
+                    DisplayStageTitle(target, i),
+                    string.Equals(current, id, StringComparison.OrdinalIgnoreCase),
+                    unanswered ? ScenarioStoryAuthoringActions.StageUnanswered(stageIndex, id) : ScenarioStoryAuthoringActions.StageChangeTarget(stageIndex, sceneIndex, id),
+                    "Route to this stage."));
+            }
+            options.Add(ChoiceOption(
+                "new",
+                "Add New Stage",
+                false,
+                unanswered ? ScenarioStoryFocusedEditorActions.UnansweredNewStage(stageIndex) : ScenarioStoryFocusedEditorActions.StageChangeNewStage(stageIndex, sceneIndex),
+                "Create a stage, route here, and select it."));
+            choice.Options = options.ToArray();
+            return choice;
+        }
+
+        private static ScenarioAuthoringCompactChoiceViewModel BuildSceneRouteChoice(
+            ScenarioFlowStageDefinition stage,
+            int stageIndex,
+            int sceneIndex,
+            string current,
+            string label,
+            Func<string, string> actionId)
+        {
+            ScenarioAuthoringCompactChoiceViewModel choice = NewChoice(
+                "story_scene_route_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture) + "_" + ScenarioAuthoringActionCodec.EncodeToken(label),
+                label,
+                FormatIntercomTarget(stage, current),
+                3);
+            List<ScenarioAuthoringCompactChoiceOptionViewModel> options = new List<ScenarioAuthoringCompactChoiceOptionViewModel>();
+            options.Add(ChoiceOption("end", "End Scene", string.IsNullOrEmpty(current), actionId(null), "Clear this scene route."));
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition target = stage.IntercomStages[i];
+                string id = target != null ? target.Id : null;
+                if (string.IsNullOrEmpty(id))
+                    continue;
+                options.Add(ChoiceOption(
+                    "scene_" + i.ToString(CultureInfo.InvariantCulture),
+                    DisplayIntercomTitle(target, i),
+                    string.Equals(current, id, StringComparison.OrdinalIgnoreCase),
+                    actionId(id),
+                    "Continue to this scene."));
+            }
+            choice.Options = options.ToArray();
+            return choice;
+        }
+
+        private static ScenarioAuthoringCompactChoiceViewModel BuildIntercomTypeChoice(int stageIndex, int sceneIndex, string current)
+        {
+            string[] values = { "Choice", "CheckItems", "CheckMilestone", "Randomizer", "EndEncounter", "EnterCode" };
+            string[] labels = { "Conversation", "Item Check", "Milestone Check", "Random Branch", "End Encounter", "Code Entry" };
+            ScenarioAuthoringCompactChoiceViewModel choice = NewChoice(
+                "story_scene_type_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture),
+                "Scene behavior",
+                HumanChoiceLabel(values, labels, current, "Vanilla default"),
+                3);
+            ScenarioAuthoringCompactChoiceOptionViewModel[] options = new ScenarioAuthoringCompactChoiceOptionViewModel[values.Length];
+            for (int i = 0; i < values.Length; i++)
+                options[i] = ChoiceOption("type_" + i.ToString(CultureInfo.InvariantCulture), labels[i], string.Equals(current, values[i], StringComparison.OrdinalIgnoreCase), ScenarioStoryAuthoringActions.IntercomType(stageIndex, sceneIndex, values[i]), "Set the scene behavior.");
+            choice.Options = options;
+            return choice;
+        }
+
+        private static ScenarioAuthoringCompactChoiceViewModel BuildEndTypeChoice(int stageIndex, int sceneIndex, string current)
+        {
+            string[] values = { "NothingHappens", "RewardItems", "EnterTrade", "EnterRecruit", "Combat", "CompleteQuest" };
+            string[] labels = { "Nothing Else", "Give Rewards", "Open Trade", "Recruit", "Start Combat", "Complete Quest" };
+            ScenarioAuthoringCompactChoiceViewModel choice = NewChoice(
+                "story_scene_end_type_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + sceneIndex.ToString(CultureInfo.InvariantCulture),
+                "End behavior",
+                HumanChoiceLabel(values, labels, current, "Nothing else"),
+                3);
+            ScenarioAuthoringCompactChoiceOptionViewModel[] options = new ScenarioAuthoringCompactChoiceOptionViewModel[values.Length];
+            for (int i = 0; i < values.Length; i++)
+                options[i] = ChoiceOption("end_" + i.ToString(CultureInfo.InvariantCulture), labels[i], string.Equals(current, values[i], StringComparison.OrdinalIgnoreCase), ScenarioStoryAuthoringActions.EndType(stageIndex, sceneIndex, values[i]), "Choose what happens when the scene ends.");
+            choice.Options = options;
+            return choice;
+        }
+
+        private static string HumanChoiceLabel(string[] values, string[] labels, string current, string fallback)
+        {
+            for (int i = 0; values != null && labels != null && i < values.Length && i < labels.Length; i++)
+                if (string.Equals(current, values[i], StringComparison.OrdinalIgnoreCase)) return labels[i];
+            return fallback;
+        }
+
+        private static string FormatStageCast(ScenarioDefinition definition, ScenarioFlowStageDefinition stage)
+        {
+            List<string> names = new List<string>();
+            for (int i = 0; stage != null && stage.CharacterIds != null && i < stage.CharacterIds.Count; i++)
+                names.Add(FormatCharacterLabel(definition, stage.CharacterIds[i]));
+            return names.Count > 0 ? string.Join(", ", names.ToArray()) : "No characters assigned";
+        }
+
+        private static ScenarioAuthoringCompactChoiceViewModel NewChoice(string id, string label, string current, int columns)
+        {
+            return new ScenarioAuthoringCompactChoiceViewModel
+            {
+                Id = id,
+                Label = label,
+                CurrentLabel = current,
+                ColumnCount = columns,
+                Options = new ScenarioAuthoringCompactChoiceOptionViewModel[0]
+            };
+        }
+
+        private static ScenarioAuthoringCompactChoiceOptionViewModel ChoiceOption(
+            string id,
+            string label,
+            bool selected,
+            string actionId,
+            string hint)
+        {
+            return new ScenarioAuthoringCompactChoiceOptionViewModel
+            {
+                Id = id,
+                Label = label,
+                Selected = selected,
+                Action = Action(actionId, label, hint, true, selected, null)
+            };
+        }
+
+        private static ScenarioAuthoringInspectorItem ChoiceItem(ScenarioAuthoringCompactChoiceViewModel choice)
+        {
+            return new ScenarioAuthoringInspectorItem
+            {
+                Kind = ScenarioAuthoringInspectorItemKind.Choice,
+                Choice = choice
+            };
         }
 
         private static ScenarioFlowStageDefinition GetStage(ScenarioDefinition definition, int index)
@@ -569,7 +911,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (character == null || !string.Equals(character.CharacterId, characterId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                string label = !string.IsNullOrEmpty(character.DisplayName) ? character.DisplayName + " [" + characterId + "]" : characterId;
+                string label = ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                    character.DisplayName,
+                    null,
+                    characterId,
+                    "Story character " + (i + 1).ToString(CultureInfo.InvariantCulture)).Text;
 
                 if (character.ActorRef == null)
                     return label;
@@ -577,7 +923,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return label + " -> " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, label);
             }
 
-            return characterId;
+            string[] vanillaLabels = { "Lead NPC", "NPC 2", "NPC 3", "NPC 4", "Background NPC", "Player" };
+            string[] vanillaIds = { "LeadNpc", "Npc2", "Npc3", "Npc4", "BackgroundNpc", "Player" };
+            for (int i = 0; i < vanillaIds.Length; i++)
+                if (string.Equals(characterId, vanillaIds[i], StringComparison.OrdinalIgnoreCase)) return vanillaLabels[i];
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(null, null, characterId, "Story character").Text;
         }
 
         private static bool Contains(List<string> values, string value)

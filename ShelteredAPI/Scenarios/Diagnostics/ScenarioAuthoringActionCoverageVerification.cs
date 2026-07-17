@@ -5,6 +5,7 @@ using UnityEngine;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Commands;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Story;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 
@@ -279,9 +280,95 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             for (int i = 0; i < contentKinds.Length; i++)
             {
                 ScenarioAuthoringWindowContentKind contentKind = (ScenarioAuthoringWindowContentKind)contentKinds.GetValue(i);
-                if (composer.Build(contentKind, context) != null)
+                ScenarioAuthoringWorkspaceViewModel composed = composer.Build(contentKind, context);
+                if (contentKind == ScenarioAuthoringWindowContentKind.Quests)
+                {
+                    if (composed == null || composed.Subtabs == null || composed.Subtabs.Length != 4)
+                        result.AddError("Story content kind did not produce its four-tab WorkspaceBody.");
+                }
+                else if (composed != null)
                     result.AddError("Unmigrated window content kind '" + contentKind + "' unexpectedly produced a WorkspaceBody.");
             }
+            VerifyStoryWorkspace(result);
+        }
+
+        private static void VerifyStoryWorkspace(ScenarioValidationResult result)
+        {
+            ScenarioDefinition definition = new ScenarioDefinition();
+            ScenarioFlowStageDefinition stage = new ScenarioFlowStageDefinition { Id = "opening_stage" };
+            ScenarioIntercomStageDefinition scene = new ScenarioIntercomStageDefinition
+            {
+                Id = "first_scene",
+                StageDescriptionKey = "First Contact"
+            };
+            scene.Dialogue.Add(new ScenarioDialogueLineDefinition { Character = "LeadNpc", TextKey = "Welcome to the shelter" });
+            stage.IntercomStages.Add(scene);
+            definition.ScenarioFlow.Stages.Add(stage);
+            definition.ScenarioCharacters.Add(new ScenarioNpcDefinition { CharacterId = "guide", DisplayName = "The Guide" });
+            ScenarioConversationDefinition conversation = new ScenarioConversationDefinition { Id = "welcome_chat" };
+            conversation.Participants.Add(new ScenarioConversationParticipantDefinition { Slot = "Guide", StoryCharacterId = "guide" });
+            conversation.Lines.Add(new ScenarioConversationLineDefinition { SpeakerSlot = "Guide", RawText = "We should get moving." });
+            definition.Conversations.Conversations.Add(conversation);
+
+            ScenarioAuthoringRendererInteractionState state = ScenarioAuthoringRendererInteractionState.Instance;
+            state.SetWorkspaceSubtab(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId);
+            state.SetWorkspaceSelection(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, null);
+            ScenarioStoryWorkspaceViewModelBuilder builder = new ScenarioStoryWorkspaceViewModelBuilder();
+            ScenarioAuthoringWorkspaceViewModel workspace = builder.Build(new ScenarioAuthoringWindowContentContext(null, null, null, definition));
+            string[] labels = { "Flow", "Characters", "Conversations", "Quest Popups" };
+            if (workspace == null || workspace.Subtabs == null || workspace.Subtabs.Length != labels.Length)
+            {
+                result.AddError("Story workspace did not expose the four fixed local tabs.");
+                return;
+            }
+            for (int i = 0; i < labels.Length; i++)
+                if (!string.Equals(workspace.Subtabs[i].Label, labels[i], StringComparison.Ordinal)) result.AddError("Story workspace tab label/order changed: expected " + labels[i] + ".");
+            if (workspace.Navigator == null || workspace.Navigator.Groups == null || workspace.Navigator.Groups.Length != 2
+                || !string.Equals(workspace.Navigator.Groups[0].Label, "Stages", StringComparison.Ordinal)
+                || !string.Equals(workspace.Navigator.Groups[1].Label, "Endings", StringComparison.Ordinal))
+                result.AddError("Story Flow navigator is not Stages-to-Scenes plus Endings.");
+            if (workspace.Document == null || workspace.Document.Sections == null || workspace.Document.Sections.Length < 2
+                || workspace.Document.Sections[0].StoryMap == null
+                || !string.Equals(workspace.Document.Sections[1].Title, "STORY FACTS", StringComparison.Ordinal))
+                result.AddError("Story Flow overview is missing Story Map or Story facts.");
+
+            ScenarioStoryFocusedEditorActions.SelectSceneDocument(definition, 0, 0);
+            workspace = builder.Build(new ScenarioAuthoringWindowContentContext(null, null, null, definition));
+            string[] sceneSections = { "DIALOGUE", "CHOICES", "OUTCOME", "ADVANCED" };
+            if (workspace.Document == null || workspace.Document.Sections == null || workspace.Document.Sections.Length != sceneSections.Length)
+                result.AddError("Selected Story scene did not produce its four document cards.");
+            else
+            {
+                for (int i = 0; i < sceneSections.Length; i++)
+                    if (!string.Equals(workspace.Document.Sections[i].Title, sceneSections[i], StringComparison.Ordinal)) result.AddError("Story scene card order changed at " + sceneSections[i] + ".");
+                if (!workspace.Document.Sections[workspace.Document.Sections.Length - 1].IsAdvanced)
+                    result.AddError("Story scene Advanced card is not last.");
+                if (!ContainsCompactChoice(workspace.Document.Sections[2]))
+                    result.AddError("Story scene outcome did not project compact branch/end/route choices.");
+            }
+
+            stage.IntercomStages.RemoveAt(0);
+            workspace = builder.Build(new ScenarioAuthoringWindowContentContext(null, null, null, definition));
+            string expectedStage = ScenarioStoryFocusedEditorActions.StageEntityId(definition, 0);
+            if (!string.Equals(state.GetWorkspaceSelection(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId), expectedStage, StringComparison.Ordinal))
+                result.AddError("Deleted Story scene did not reconcile selection to its parent stage.");
+            definition.ScenarioFlow.Stages.RemoveAt(0);
+            workspace = builder.Build(new ScenarioAuthoringWindowContentContext(null, null, null, definition));
+            if (!string.IsNullOrEmpty(state.GetWorkspaceSelection(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId)))
+                result.AddError("Deleted Story stage did not reconcile selection to the overview.");
+
+            ScenarioAuthoringState authoredState = new ScenarioAuthoringState { IsActive = true, FocusedEditorKind = ScenarioStoryFocusedEditorActions.FocusedEditorKind };
+            authoredState.WindowStates.Add(new ScenarioAuthoringWindowState { Id = "quests", Visible = true, ZIndex = 1 });
+            ScenarioAuthoringSurfaceState surface = new ScenarioAuthoringSurfaceResolver().Resolve(authoredState, null, false);
+            if (surface != null && surface.Kind == ScenarioAuthoringSurfaceKind.Modal)
+                result.AddError("Legacy Story focused-editor state still resolves as a modal surface.");
+        }
+
+        private static bool ContainsCompactChoice(ScenarioAuthoringInspectorSection section)
+        {
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+                if (section.Items[i] != null && section.Items[i].Kind == ScenarioAuthoringInspectorItemKind.Choice && section.Items[i].Choice != null) return true;
+            return false;
         }
 
         private static void VerifyWorkspaceCommandState(

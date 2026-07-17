@@ -6,19 +6,24 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 
 namespace ShelteredAPI.Scenarios.Application.Commands{
     internal sealed class ScenarioStoryFocusedEditorCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioStoryAuthoringService _storyService;
         private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
 
         public ScenarioStoryFocusedEditorCommandHandler(
             ScenarioStoryAuthoringService storyService,
-            IScenarioEditorService editorService)
+            IScenarioEditorService editorService,
+            ScenarioAuthoringLayoutService layoutService)
         {
             _storyService = storyService;
             _editorService = editorService;
+            _layoutService = layoutService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -46,9 +51,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             int stageIndex;
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioStoryFocusedEditorActions.ActionStageOpenPrefix, CountStages(definition), out stageIndex))
-                return OpenExistingStage(state, stageIndex, out message);
+                return OpenExistingStage(state, definition, stageIndex, out message);
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioStoryFocusedEditorActions.ActionUnansweredNewStagePrefix, CountStages(definition), out stageIndex))
-                return AddStageAndRoute(session, definition, stageIndex, -1, true, out message);
+                return AddStageAndRoute(state, session, definition, stageIndex, -1, true, out message);
 
             string token;
             if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioStoryFocusedEditorActions.ActionStageTitlePrefix, CountStages(definition), out stageIndex, out token))
@@ -56,7 +61,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             int intercomIndex;
             if (ScenarioAuthoringActionParser.TryPairIndex(actionId, ScenarioStoryFocusedEditorActions.ActionStageChangeNewStagePrefix, CountStages(definition), out stageIndex, out intercomIndex))
-                return AddStageAndRoute(session, definition, stageIndex, intercomIndex, false, out message);
+                return AddStageAndRoute(state, session, definition, stageIndex, intercomIndex, false, out message);
 
             if (TryHandleEndOptionItemAction(session, definition, actionId, out message))
                 return true;
@@ -75,49 +80,33 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             string addMessage;
-            _storyService.TryHandleAction(session, ScenarioAuthoringActionIds.ActionStoryStageAdd, out addMessage);
+            if (!_storyService.TryHandleAction(session, ScenarioAuthoringActionIds.ActionStoryStageAdd, out addMessage))
+            {
+                message = string.IsNullOrEmpty(addMessage) ? "A new Story stage could not be created." : addMessage;
+                return true;
+            }
             int index = CountStages(definition) - 1;
-            OpenFocusedStage(state, index, true);
-            message = "New story stage opened.";
+            SelectStageDocument(state, definition, index);
+            message = "Added and selected a new story stage. Use Undo to reverse this creation.";
             return true;
         }
 
-        private static bool OpenExistingStage(ScenarioAuthoringState state, int stageIndex, out string message)
+        private bool OpenExistingStage(ScenarioAuthoringState state, ScenarioDefinition definition, int stageIndex, out string message)
         {
-            OpenFocusedStage(state, stageIndex, false);
-            message = "Story stage opened.";
+            SelectStageDocument(state, definition, stageIndex);
+            message = "Story stage selected.";
             return true;
         }
 
         private static bool Close(ScenarioAuthoringState state, bool cancel, ScenarioEditorSession session, out string message)
         {
-            message = null;
-            if (!IsStoryFocused(state))
+            if (IsStoryFocused(state))
             {
-                message = "No story stage editor is open.";
-                return true;
+                state.FocusedEditorKind = null;
+                state.FocusedEditorIndex = -1;
+                state.FocusedEditorIsNew = false;
             }
-
-            bool discard = cancel && state.FocusedEditorIsNew;
-            int index = state.FocusedEditorIndex;
-            if (discard && session != null && session.WorkingDefinition != null)
-            {
-                ScenarioFlowDefinition flow = session.WorkingDefinition.ScenarioFlow;
-                if (flow != null && flow.Stages != null && index >= 0 && index < flow.Stages.Count)
-                {
-                    string label = flow.Stages[index] != null ? flow.Stages[index].Id : null;
-                    flow.Stages.RemoveAt(index);
-                    ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
-                    message = "New story stage discarded" + (!string.IsNullOrEmpty(label) ? ": " + label : string.Empty) + ".";
-                }
-            }
-
-            state.TimelineSelectedEntryId = discard ? null : ScenarioStoryFocusedEditorActions.FocusedEntryId(index);
-            state.FocusedEditorKind = null;
-            state.FocusedEditorIndex = -1;
-            state.FocusedEditorIsNew = false;
-            if (string.IsNullOrEmpty(message))
-                message = cancel ? "Story stage editor closed." : "Story stage saved.";
+            message = "Story documents save changes immediately; this legacy close action made no changes.";
             return true;
         }
 
@@ -137,7 +126,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return true;
         }
 
-        private bool AddStageAndRoute(ScenarioEditorSession session, ScenarioDefinition definition, int stageIndex, int intercomIndex, bool unanswered, out string message)
+        private bool AddStageAndRoute(ScenarioAuthoringState state, ScenarioEditorSession session, ScenarioDefinition definition, int stageIndex, int intercomIndex, bool unanswered, out string message)
         {
             if (_storyService == null)
             {
@@ -151,10 +140,21 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 message = "Story stage is missing.";
                 return true;
             }
+            ScenarioIntercomStageDefinition sourceIntercom = unanswered ? null : GetIntercom(definition, stageIndex, intercomIndex);
+            if (!unanswered && sourceIntercom == null)
+            {
+                message = "Story scene is missing.";
+                return true;
+            }
 
             string addMessage;
-            _storyService.TryHandleAction(session, ScenarioAuthoringActionIds.ActionStoryStageAdd, out addMessage);
-            ScenarioFlowStageDefinition target = GetStage(definition, CountStages(definition) - 1);
+            if (!_storyService.TryHandleAction(session, ScenarioAuthoringActionIds.ActionStoryStageAdd, out addMessage))
+            {
+                message = string.IsNullOrEmpty(addMessage) ? "A new Story stage could not be created." : addMessage;
+                return true;
+            }
+            int targetIndex = CountStages(definition) - 1;
+            ScenarioFlowStageDefinition target = GetStage(definition, targetIndex);
             string targetId = target != null ? target.Id : null;
             if (string.IsNullOrEmpty(targetId))
             {
@@ -165,23 +165,18 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (unanswered)
             {
                 source.UnansweredNextStage = targetId;
-                message = "Created and selected ignored-call stage '" + targetId + "'.";
+                message = "Created and selected the ignored-call stage.";
             }
             else
             {
-                ScenarioIntercomStageDefinition intercom = GetIntercom(definition, stageIndex, intercomIndex);
-                if (intercom == null)
-                {
-                    message = "Encounter step is missing.";
-                    return true;
-                }
-                if (intercom.StageChange == null)
-                    intercom.StageChange = new ScenarioStageChangeDefinition();
-                intercom.StageChange.Id = targetId;
-                message = "Created and selected next stage '" + targetId + "'.";
+                if (sourceIntercom.StageChange == null)
+                    sourceIntercom.StageChange = new ScenarioStageChangeDefinition();
+                sourceIntercom.StageChange.Id = targetId;
+                message = "Created and selected the next stage.";
             }
 
             MarkDirty(session);
+            SelectStageDocument(state, definition, targetIndex);
             return true;
         }
 
@@ -298,11 +293,15 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return true;
         }
 
-        private static void OpenFocusedStage(ScenarioAuthoringState state, int index, bool isNew)
+        private void SelectStageDocument(ScenarioAuthoringState state, ScenarioDefinition definition, int index)
         {
-            state.FocusedEditorKind = ScenarioStoryFocusedEditorActions.FocusedEditorKind;
-            state.FocusedEditorIndex = index;
-            state.FocusedEditorIsNew = isNew;
+            if (_layoutService != null)
+                _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Quests, true);
+            ScenarioStoryFocusedEditorActions.SelectStageDocument(definition, index);
+            if (string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+                state.FocusedEditorKind = null;
+            state.FocusedEditorIndex = -1;
+            state.FocusedEditorIsNew = false;
             state.TimelineSelectedEntryId = ScenarioStoryFocusedEditorActions.FocusedEntryId(index);
         }
 

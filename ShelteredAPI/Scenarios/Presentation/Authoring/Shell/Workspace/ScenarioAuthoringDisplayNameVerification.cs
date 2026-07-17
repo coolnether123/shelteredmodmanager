@@ -33,24 +33,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 "Renderer search state escaped into the author-facing status bar.", result);
 
             ScenarioDefinition definition = BuildFixture();
-            ScenarioAuthoringInspectorSection[] sections = new ScenarioQuestAuthoringContentBuilder().Build(
+            ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSubtab(
+                ScenarioStoryFocusedEditorActions.WorkspaceId,
+                ScenarioStoryFocusedEditorActions.FlowSubtabId);
+            ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSelection(
+                ScenarioStoryFocusedEditorActions.WorkspaceId,
+                ScenarioStoryFocusedEditorActions.FlowSubtabId,
+                null);
+            ScenarioAuthoringWorkspaceViewModel workspace = new ScenarioStoryWorkspaceViewModelBuilder().Build(
                 new ScenarioAuthoringWindowContentContext(null, null, null, definition));
-            AssertNoRawPrimaryText(sections, result);
-
-            ScenarioAuthoringState state = new ScenarioAuthoringState
+            Assert(workspace != null && workspace.Document != null,
+                "Display-name verification could not build the Story workspace fixture.", result);
+            if (workspace != null && workspace.Document != null)
             {
-                FocusedEditorKind = ScenarioStoryFocusedEditorActions.FocusedEditorKind,
-                FocusedEditorIndex = 0
-            };
-            ScenarioAuthoringInspectorDocument focused;
-            Assert(ScenarioStoryFocusedEditorDocumentBuilder.TryBuild(state, definition, out focused),
-                "Display-name verification could not build the focused Story fixture.", result);
-            if (focused != null)
-            {
-                AssertNoRawPrimaryText(focused.Sections, result);
-                Assert(AdvancedContains(focused.Sections, RawFixtureValues[0])
-                        && AdvancedContains(focused.Sections, RawFixtureValues[1])
-                        && AdvancedContains(focused.Sections, RawFixtureValues[2]),
+                AssertNoRawPrimaryText(workspace.Document.Sections, result);
+                ScenarioStoryFocusedEditorActions.SelectStageDocument(definition, 0);
+                workspace = new ScenarioStoryWorkspaceViewModelBuilder().Build(
+                    new ScenarioAuthoringWindowContentContext(null, null, null, definition));
+                Assert(workspace != null && workspace.Document != null
+                        && AdvancedContains(workspace.Document.Sections, RawFixtureValues[1]),
+                    "Raw Story stage ids were not retained in Advanced rows.", result);
+                ScenarioStoryFocusedEditorActions.SelectSceneDocument(definition, 0, 0);
+                workspace = new ScenarioStoryWorkspaceViewModelBuilder().Build(
+                    new ScenarioAuthoringWindowContentContext(null, null, null, definition));
+                Assert(workspace != null && workspace.Document != null
+                        && AdvancedContains(workspace.Document.Sections, RawFixtureValues[0])
+                        && AdvancedContains(workspace.Document.Sections, RawFixtureValues[2])
+                        && AdvancedContains(workspace.Document.Sections, RawFixtureValues[3]),
                     "Raw Story ids and localization keys were not retained in Advanced rows.", result);
             }
         }

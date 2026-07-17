@@ -257,7 +257,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
                 count++;
                 if (first == null)
-                    first = issue.Message;
+                    first = "Story routing needs attention. Open this stage to review its warnings.";
                 if (issue.Severity == ScenarioIssueSeverity.Error)
                     hasError = true;
                 if (!string.IsNullOrEmpty(issue.Code) && issue.Code.IndexOf("unreachable", StringComparison.OrdinalIgnoreCase) >= 0)
