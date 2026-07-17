@@ -181,7 +181,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else
             {
-                Rect ribbonRect = new Rect(pageRect.x, pageRect.y, pageRect.width, ScenarioAuthoringShellLayout.WorkshopTimelineRibbonHeight);
+                ScenarioDayTimelineRibbonViewModel ribbon = _snapshot != null && _snapshot.ShellViewModel != null
+                    ? _snapshot.ShellViewModel.TimelineRibbon
+                    : null;
+                float ribbonHeight = ribbon == null || ribbon.EntryCount == 0
+                    ? 44f
+                    : ScenarioAuthoringShellLayout.WorkshopTimelineRibbonHeight;
+                Rect ribbonRect = new Rect(pageRect.x, pageRect.y, pageRect.width, ribbonHeight);
                 DrawWorkshopTimelineRibbon(ribbonRect, window);
                 bodyRect = new Rect(
                     pageRect.x,
@@ -3098,7 +3104,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (questions == null || questions.Count == 0)
                 return;
 
-            float availableWidth = Math.Min(760f, GetSectionContentWidth());
+            float availableWidth = Math.Min(ResolveLogicalPixelCap(760f), GetSectionContentWidth());
             float gap = 12f;
             float cardHeight = 104f;
             int columns = availableWidth >= 720f ? 2 : 1;
@@ -3164,8 +3170,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.CastCardGrid
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.SurvivorEditor;
-            float sectionMaxWidth = specializedSurface ? 1080f : 760f;
-            GUILayout.BeginVertical(_uiContext.Styles.Card, GUILayout.Width(Math.Min(sectionMaxWidth, GetSectionContentWidth())));
+            float sectionMaxWidth = ResolveLogicalPixelCap(specializedSurface ? 1080f : 760f);
+            if (section.Layout == ScenarioAuthoringInspectorSectionLayout.FactGrid)
+            {
+                int factCount = 0;
+                bool hasWideFact = false;
+                for (int itemIndex = 0; section.Items != null && itemIndex < section.Items.Length; itemIndex++)
+                {
+                    ScenarioAuthoringInspectorItem fact = section.Items[itemIndex];
+                    if (fact == null || fact.Action != null || fact.Kind == ScenarioAuthoringInspectorItemKind.Text)
+                        continue;
+                    factCount++;
+                    int numericValue;
+                    if (!int.TryParse(fact.Value ?? string.Empty, out numericValue))
+                        hasWideFact = true;
+                }
+                float factContentWidth = factCount >= 4
+                    ? ((hasWideFact ? 240f : 160f) * 2f) + 24f
+                    : (hasWideFact ? 520f : 160f);
+                sectionMaxWidth = Math.Min(sectionMaxWidth, ResolveLogicalPixelCap(factContentWidth + 24f));
+            }
+            float sectionWidth = Math.Min(sectionMaxWidth, GetSectionContentWidth());
+            GUILayout.BeginVertical(_uiContext.Styles.Card, GUILayout.Width(sectionWidth));
+            float previousSectionContentWidth = _activeContentWidth;
+            _activeContentWidth = sectionWidth;
             if (!string.IsNullOrEmpty(section.Title))
                 GUILayout.Label(section.Title, _uiContext.Styles.PaperTitleText);
 
@@ -3305,6 +3333,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int i = 0; section.Items != null && i < section.Items.Length; i++)
                     DrawItem(section.Items[i], compactInspector);
             }
+            _activeContentWidth = previousSectionContentWidth;
             GUILayout.EndVertical();
         }
 
@@ -3952,6 +3981,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return Math.Max(120f, _activeContentWidth - 24f);
         }
 
+        private float ResolveLogicalPixelCap(float physicalPixels)
+        {
+            float scale = _activeUiScale > 0.001f ? _activeUiScale : 1f;
+            return Math.Max(1f, physicalPixels / scale);
+        }
+
         private static string BuildFullLabelTooltip(ScenarioAuthoringInspectorAction action)
         {
             if (action == null)
@@ -3988,8 +4023,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             float columnGap = 16f;
             float buttonGap = 8f;
-            bool twoColumns = !compactInspector && availableWidth >= 720f && shortFieldCount >= 4;
-            float cellWidth = twoColumns ? (availableWidth - columnGap) * 0.5f : availableWidth;
+            bool hasWideField = false;
+            for (int itemIndex = 0; section != null && section.Items != null && itemIndex < section.Items.Length; itemIndex++)
+            {
+                ScenarioAuthoringInspectorItem candidate = section.Items[itemIndex];
+                if (candidate == null || candidate.Action != null || candidate.Kind == ScenarioAuthoringInspectorItemKind.Text)
+                    continue;
+                int numericValue;
+                if (!int.TryParse(candidate.Value ?? string.Empty, out numericValue))
+                    hasWideField = true;
+            }
+            bool twoColumns = !compactInspector
+                && availableWidth >= ResolveLogicalPixelCap(330f)
+                && shortFieldCount >= 4;
+            float preferredCellWidth = ResolveLogicalPixelCap(hasWideField ? (twoColumns ? 240f : 520f) : 160f);
+            float cellWidth = twoColumns
+                ? Math.Min(preferredCellWidth, (availableWidth - columnGap) * 0.5f)
+                : Math.Min(preferredCellWidth, availableWidth);
             float cellHeight = 64f;
             int column = 0;
             int actionColumn = 0;
@@ -4074,7 +4124,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     column = 0;
                 }
 
-                Rect cellRect = GUILayoutUtility.GetRect(cellWidth, cellHeight, GUILayout.Width(cellWidth), GUILayout.Height(cellHeight));
+                float resolvedCellWidth = cellWidth;
+                if (!twoColumns)
+                {
+                    int numericValue;
+                    bool numericField = int.TryParse(item.Value ?? string.Empty, out numericValue);
+                    float itemCap = ResolveLogicalPixelCap(numericField ? 160f : 520f);
+                    resolvedCellWidth = Math.Min(itemCap, availableWidth);
+                }
+                Rect cellRect = GUILayoutUtility.GetRect(resolvedCellWidth, cellHeight, GUILayout.Width(resolvedCellWidth), GUILayout.Height(cellHeight));
                 DrawFactCell(cellRect, item);
                 column++;
                 if (twoColumns && column < 2)

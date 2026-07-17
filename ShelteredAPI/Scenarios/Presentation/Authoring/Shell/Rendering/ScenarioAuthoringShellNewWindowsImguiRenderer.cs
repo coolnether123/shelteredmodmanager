@@ -21,33 +21,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (section == null)
                 return false;
 
+            bool supported = section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.MetadataForm
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.TestStatus
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.TestUpcoming
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.TestLog
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.TestControls
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.PackagePreview
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.PackageActions
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryFilters
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryRow;
+            if (!supported)
+                return false;
+
+            bool wideAssetSurface = section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryFilters
+                || section.RendererKind == ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryRow;
+            float boundedWidth = Math.Min(ResolveLogicalPixelCap(wideAssetSurface ? 1080f : 760f), GetSectionContentWidth());
+            GUILayout.BeginVertical(GUILayout.Width(boundedWidth));
+            float previousContentWidth = _activeContentWidth;
+            _activeContentWidth = boundedWidth;
             switch (section.RendererKind)
             {
                 case ScenarioAuthoringInspectorSectionRendererKind.MetadataForm:
                     DrawMetadataFormSection(section);
-                    return true;
+                    break;
                 case ScenarioAuthoringInspectorSectionRendererKind.TestStatus:
                 case ScenarioAuthoringInspectorSectionRendererKind.TestUpcoming:
                 case ScenarioAuthoringInspectorSectionRendererKind.TestLog:
                 case ScenarioAuthoringInspectorSectionRendererKind.TestControls:
                     DrawTestConsoleSection(section);
-                    return true;
+                    break;
                 case ScenarioAuthoringInspectorSectionRendererKind.PackagePreview:
                     DrawPackagePreviewSection(section);
-                    return true;
+                    break;
                 case ScenarioAuthoringInspectorSectionRendererKind.PackageActions:
                     DrawPackageActionsSection(section);
-                    return true;
+                    break;
                 case ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryFilters:
                     DrawAssetInventoryFilters(section);
-                    return true;
+                    break;
                 case ScenarioAuthoringInspectorSectionRendererKind.AssetInventoryRow:
                     if (AssetRowMatchesFilter(section))
                         DrawAssetInventoryRow(section);
-                    return true;
-                default:
-                    return false;
+                    break;
             }
+            _activeContentWidth = previousContentWidth;
+            GUILayout.EndVertical();
+            return true;
         }
 
         private void DrawMetadataFormSection(ScenarioAuthoringInspectorSection section)
@@ -97,7 +116,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float fieldY = stacked ? row.y + 28f : row.y;
             float fieldX = stacked ? row.x : labelRect.xMax + 8f;
             float buttonsWidth = 144f;
-            float fieldWidth = Math.Min(520f, Math.Max(76f, row.xMax - fieldX - buttonsWidth - 8f));
+            float fieldWidth = Math.Min(ResolveLogicalPixelCap(520f), Math.Max(76f, row.xMax - fieldX - buttonsWidth - 8f));
             DrawNewWindowsEditableControl(new Rect(fieldX, fieldY, fieldWidth, 32f), section.Id, version, false);
 
             float buttonX = fieldX + fieldWidth + 8f;
@@ -127,7 +146,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             GUI.Label(new Rect(row.x, row.y + 5f, labelWidth, 22f), item.Label ?? string.Empty, _mutedTextStyle);
             float fieldX = stacked ? row.x : row.x + labelWidth + 8f;
             float fieldY = stacked ? row.y + 26f : row.y;
-            float maximumWidth = multiline ? 680f : 520f;
+            float maximumWidth = ResolveLogicalPixelCap(multiline ? 680f : 520f);
             Rect fieldRect = new Rect(fieldX, fieldY, Math.Min(maximumWidth, Math.Max(80f, row.xMax - fieldX)), controlHeight);
             DrawNewWindowsEditableControl(fieldRect, sectionId, item, multiline);
             if (!string.IsNullOrEmpty(warning))

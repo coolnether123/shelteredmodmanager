@@ -284,7 +284,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (_snapshot.State != null)
                 _windowMenuOpen = _snapshot.State.WindowMenuOpen;
             _topBarMoreMenuOpen = ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen;
-            _rootAlpha = _animations.GetBinaryProgress(ShellRootAnimationKey, _visible, 0.18f, ScenarioUiEasing.EaseOut, true);
+            // A presentation snapshot can briefly report the shell as blocked while the
+            // editor remains on screen.  Feeding that oscillation back into GUI.color
+            // leaves every opaque material (including paper and chrome) permanently
+            // composited at roughly half strength.  Visible editor frames are material
+            // surfaces, not a modal fade; keep them fully opaque and retain the tween
+            // only for the closing transition.
+            float rootTransitionAlpha = _animations.GetBinaryProgress(ShellRootAnimationKey, _visible, 0.18f, ScenarioUiEasing.EaseOut, true);
+            _rootAlpha = _visible ? 1f : rootTransitionAlpha;
             if (!_visible && _rootAlpha <= 0.001f)
             {
                 FinishHiddenRuntime();
@@ -292,6 +299,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             Matrix4x4 oldMatrix = GUI.matrix;
+            Color oldGuiColor = GUI.color;
+            Color oldContentColor = GUI.contentColor;
+            Color oldBackgroundColor = GUI.backgroundColor;
+            bool oldGuiEnabled = GUI.enabled;
+            GUI.color = Color.white;
+            GUI.contentColor = Color.white;
+            GUI.backgroundColor = Color.white;
+            GUI.enabled = true;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(uiScale, uiScale, 1f));
             try
             {
@@ -689,6 +704,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 inputCapture.CompleteFrame();
                 GUI.matrix = oldMatrix;
+                GUI.color = oldGuiColor;
+                GUI.contentColor = oldContentColor;
+                GUI.backgroundColor = oldBackgroundColor;
+                GUI.enabled = oldGuiEnabled;
             }
         }
 
