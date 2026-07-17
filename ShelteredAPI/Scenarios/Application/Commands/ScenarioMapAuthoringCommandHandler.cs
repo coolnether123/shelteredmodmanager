@@ -47,7 +47,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect, StringComparison.Ordinal))
                 return SetMode(state, "select", out message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, StringComparison.Ordinal))
+            {
+                if (!state.MapAuthoringActive && !OpenMapAuthoring(state, out message))
+                    return false;
                 return SetMode(state, "place", out message);
+            }
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, StringComparison.Ordinal))
                 return SetMode(state, "move", out message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeTerrainTrees, StringComparison.Ordinal))

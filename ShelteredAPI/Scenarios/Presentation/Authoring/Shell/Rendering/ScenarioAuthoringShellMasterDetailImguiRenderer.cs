@@ -538,28 +538,47 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     GUI.Label(new Rect(x, rect.y + 2f, 16f, rect.height), ">", _mutedTextStyle);
                     x += 16f;
                 }
-                float width = Mathf.Clamp(
-                    ScenarioUiMeasuredLabel.Width(breadcrumb.Label ?? string.Empty, _mutedTextStyle, 12f),
-                    42f,
-                    Math.Max(42f, rect.xMax - x));
+                bool tail = i == breadcrumbs.Length - 1;
+                float remaining = Math.Max(0f, rect.xMax - x);
+                float laterReserve = tail ? 0f : 42f + (16f * Math.Max(0, breadcrumbs.Length - i - 1));
+                float width = tail
+                    ? remaining
+                    : Math.Min(
+                        ScenarioUiMeasuredLabel.Width(breadcrumb.Label ?? string.Empty, _mutedTextStyle, 12f),
+                        Math.Max(42f, remaining - laterReserve));
                 Rect crumbRect = new Rect(x, rect.y, Math.Min(width, rect.xMax - x), rect.height);
                 ScenarioAuthoringInspectorAction action = breadcrumb.Action;
-                if (action != null && DrawPlainButton(
-                    crumbRect,
-                    new GUIContent(breadcrumb.Label ?? string.Empty, action.Hint ?? action.Detail ?? string.Empty),
-                    action.Enabled ? _tabStyle : _uiContext.Styles.TabDisabled,
-                    action.Enabled))
+                string label = tail
+                    ? FitBreadcrumbTail(breadcrumb.Label, crumbRect.width, _mutedTextStyle)
+                    : breadcrumb.Label ?? string.Empty;
+                string tooltip = !string.Equals(label, breadcrumb.Label ?? string.Empty, StringComparison.Ordinal)
+                    ? breadcrumb.Label ?? string.Empty
+                    : (action != null ? action.Hint ?? action.Detail ?? string.Empty : string.Empty);
+                if (action != null && DrawPlainButton(crumbRect, new GUIContent(string.Empty, tooltip), GUIStyle.none, action.Enabled))
                 {
                     ExecuteWorkspaceAction(action);
                 }
-                else if (action == null)
-                {
-                    GUI.Label(crumbRect, breadcrumb.Label ?? string.Empty, _mutedTextStyle);
-                }
+                GUI.Label(crumbRect, new GUIContent(label, tooltip), _mutedTextStyle);
                 x = crumbRect.xMax;
                 if (x >= rect.xMax)
                     break;
             }
+        }
+
+        private static string FitBreadcrumbTail(string value, float width, GUIStyle style)
+        {
+            string label = value ?? string.Empty;
+            if (style == null || width <= 0f || style.CalcSize(new GUIContent(label)).x <= width)
+                return label;
+
+            const string ellipsis = "...";
+            for (int length = label.Length - 1; length >= 0; length--)
+            {
+                string candidate = label.Substring(0, length).TrimEnd() + ellipsis;
+                if (style.CalcSize(new GUIContent(candidate)).x <= width)
+                    return candidate;
+            }
+            return string.Empty;
         }
 
         private void DrawWorkspaceBack(Rect rect, ScenarioAuthoringInspectorAction action)

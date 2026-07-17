@@ -143,7 +143,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     Children = new ScenarioAuthoringNavigatorRowViewModel[0]
                 });
             }
-            return Group("locations", "Locations", "LO", rows, map.Locations != null ? map.Locations.Count : 0, state, null);
+            return Group(
+                "locations",
+                "Locations",
+                "LO",
+                rows,
+                map.Locations != null ? map.Locations.Count : 0,
+                state,
+                ScenarioInspectorItemFactory.Action(
+                    ScenarioAuthoringActionIds.ActionMapAuthoringModePlace,
+                    "Add Location",
+                    "Open the expedition map placement flow, then choose a map cell for the new location.",
+                    true,
+                    false,
+                    "L+"));
         }
 
         private ScenarioAuthoringNavigatorGroupViewModel BuildMarkersGroup(
@@ -238,7 +251,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 Label = label,
                 IconText = icon,
                 Expanded = state.GetWorkspaceExpanded(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, id, true),
-                StatusChips = new[] { Chip("map.group." + id, total.ToString(CultureInfo.InvariantCulture) + " " + label.ToLowerInvariant(), ScenarioAuthoringStatusTone.Informational) },
+                StatusChips = new[] { Chip("map.group." + id, CountLabel(total, label.TrimEnd('s').ToLowerInvariant(), label.ToLowerInvariant()), ScenarioAuthoringStatusTone.Informational) },
                 ToggleAction = _factory.CreateGroupToggleAction(ScenarioMapWorkspaceSelection.WorkspaceId, ScenarioMapWorkspaceSelection.MainSubtabId, id, "Toggle " + label),
                 CreateAction = createAction,
                 Rows = rows.ToArray()
@@ -509,9 +522,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return new[]
             {
                 Chip("map.status.surface", state != null && state.MapAuthoringActive ? "Map open" : "Ready", state != null && state.MapAuthoringActive ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Informational),
-                Chip("map.status.locations", (map.Locations != null ? map.Locations.Count : 0).ToString(CultureInfo.InvariantCulture) + " locations", ScenarioAuthoringStatusTone.Neutral),
-                Chip("map.status.markers", (map.Markers != null ? map.Markers.Count : 0).ToString(CultureInfo.InvariantCulture) + " markers", ScenarioAuthoringStatusTone.Neutral)
+                Chip("map.status.locations", CountLabel(map.Locations != null ? map.Locations.Count : 0, "location", "locations"), ScenarioAuthoringStatusTone.Neutral),
+                Chip("map.status.markers", CountLabel(map.Markers != null ? map.Markers.Count : 0, "marker", "markers"), ScenarioAuthoringStatusTone.Neutral)
             };
+        }
+
+        private static string CountLabel(int count, string singular, string plural)
+        {
+            return count.ToString(CultureInfo.InvariantCulture) + " " + (count == 1 ? singular : plural);
         }
 
         private static ScenarioAuthoringStatusChipViewModel Chip(string id, string text, ScenarioAuthoringStatusTone tone)

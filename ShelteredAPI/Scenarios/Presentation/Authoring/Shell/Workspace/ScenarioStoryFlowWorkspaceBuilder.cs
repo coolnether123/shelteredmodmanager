@@ -144,7 +144,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             string entity = ScenarioStoryFocusedEditorActions.SceneEntityId(definition, stageIndex, sceneIndex);
             int warnings = CountIssues(issues, stageIndex, sceneIndex, true);
             List<ScenarioAuthoringStatusChipViewModel> chips = new List<ScenarioAuthoringStatusChipViewModel>();
-            if (warnings > 0) chips.Add(Chip("scene.warning." + stageIndex + "." + sceneIndex, warnings.ToString(CultureInfo.InvariantCulture) + " warnings", ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, entity, "Open " + title + " warnings")));
+            if (warnings > 0) chips.Add(Chip("scene.warning." + stageIndex + "." + sceneIndex, CountLabel(warnings, "warning", "warnings"), ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, entity, "Open " + title + " warnings")));
             if (EndsStory(scene)) chips.Add(Chip("scene.ends." + stageIndex + "." + sceneIndex, "Ends story", ScenarioAuthoringStatusTone.Ready, null));
             else if (!HasSceneRoute(scene)) chips.Add(Chip("scene.route." + stageIndex + "." + sceneIndex, "No route", ScenarioAuthoringStatusTone.Warning, null));
             else if (warnings == 0) chips.Add(Chip("scene.ready." + stageIndex + "." + sceneIndex, "Ready", ScenarioAuthoringStatusTone.Ready, null));
@@ -199,6 +199,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringWorkspaceDocumentViewModel document = factory.CreateDocument("story.flow.overview", "Story Flow");
             document.Subtitle = "See the complete Story, then select a stage or scene to edit it.";
             document.BackAction = factory.CreateBackAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, "Back to Navigator");
+            document.Breadcrumbs = new[]
+            {
+                new ScenarioAuthoringBreadcrumbViewModel { Label = "Story" }
+            };
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(new ScenarioAuthoringInspectorSection
             {
@@ -273,12 +277,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             document.Breadcrumbs = new[]
             {
                 new ScenarioAuthoringBreadcrumbViewModel { Label = "Story", Action = factory.CreateBreadcrumbAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, string.Empty, "Story") },
-                new ScenarioAuthoringBreadcrumbViewModel { Label = "Flow" },
                 new ScenarioAuthoringBreadcrumbViewModel { Label = title }
             };
             int warnings = CountIssues(issues, stageIndex, -1, false);
             document.StatusChips = warnings > 0
-                ? new[] { Chip("document.stage.warning." + stageIndex, warnings.ToString(CultureInfo.InvariantCulture) + " warnings", ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, entity, "Stage warnings")) }
+                ? new[] { Chip("document.stage.warning." + stageIndex, CountLabel(warnings, "warning", "warnings"), ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, entity, "Stage warnings")) }
                 : new[] { Chip("document.stage.ready." + stageIndex, "Ready", ScenarioAuthoringStatusTone.Ready, null) };
             document.Sections = ScenarioStoryFocusedEditorDocumentBuilder.BuildStageWorkspaceSections(definition, stageIndex, issues);
             return document;
@@ -303,7 +306,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             };
             int warnings = CountIssues(issues, stageIndex, sceneIndex, true);
             document.StatusChips = warnings > 0
-                ? new[] { Chip("document.scene.warning." + stageIndex + "." + sceneIndex, warnings.ToString(CultureInfo.InvariantCulture) + " warnings", ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, sceneEntity, "Scene warnings")) }
+                ? new[] { Chip("document.scene.warning." + stageIndex + "." + sceneIndex, CountLabel(warnings, "warning", "warnings"), ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, sceneEntity, "Scene warnings")) }
                 : new[] { Chip("document.scene.ready." + stageIndex + "." + sceneIndex, EndsStory(scene) ? "Ends story" : "Ready", ScenarioAuthoringStatusTone.Ready, null) };
             document.Sections = ScenarioStoryFocusedEditorDocumentBuilder.BuildSceneWorkspaceSections(definition, stageIndex, sceneIndex, issues);
             return document;
@@ -313,9 +316,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             List<ScenarioAuthoringStatusChipViewModel> chips = new List<ScenarioAuthoringStatusChipViewModel>();
             int scenes = stage != null && stage.IntercomStages != null ? stage.IntercomStages.Count : 0;
-            chips.Add(Chip("stage.scenes." + stageIndex, scenes.ToString(CultureInfo.InvariantCulture) + (scenes == 1 ? " scene" : " scenes"), ScenarioAuthoringStatusTone.Informational, null));
+            chips.Add(Chip("stage.scenes." + stageIndex, CountLabel(scenes, "scene", "scenes"), ScenarioAuthoringStatusTone.Informational, null));
             string entity = ScenarioStoryFocusedEditorActions.StageEntityId(definition, stageIndex);
-            if (warnings > 0) chips.Add(Chip("stage.warnings." + stageIndex, warnings.ToString(CultureInfo.InvariantCulture) + " warnings", ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, entity, "Open stage warnings")));
+            if (warnings > 0) chips.Add(Chip("stage.warnings." + stageIndex, CountLabel(warnings, "warning", "warnings"), ScenarioAuthoringStatusTone.Warning, factory.CreateWarningAction(ScenarioStoryFocusedEditorActions.WorkspaceId, ScenarioStoryFocusedEditorActions.FlowSubtabId, entity, "Open stage warnings")));
             if (StageEndsStory(stage)) chips.Add(Chip("stage.ends." + stageIndex, "Ends story", ScenarioAuthoringStatusTone.Ready, null));
             else if (!HasStageRoute(stage)) chips.Add(Chip("stage.route." + stageIndex, "No route", ScenarioAuthoringStatusTone.Warning, null));
             else if (warnings == 0) chips.Add(Chip("stage.ready." + stageIndex, "Ready", ScenarioAuthoringStatusTone.Ready, null));
@@ -383,14 +386,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private static string DescribeStage(ScenarioFlowStageDefinition stage)
         {
             int count = stage != null && stage.IntercomStages != null ? stage.IntercomStages.Count : 0;
-            return count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " scene" : " scenes");
+            return CountLabel(count, "scene", "scenes");
         }
 
         private static string DescribeScene(ScenarioIntercomStageDefinition scene)
         {
             int lines = scene != null && scene.Dialogue != null ? scene.Dialogue.Count : 0;
             int choices = scene != null && scene.Options != null ? scene.Options.Count : 0;
-            return lines.ToString(CultureInfo.InvariantCulture) + " dialogue lines · " + choices.ToString(CultureInfo.InvariantCulture) + " choices";
+            return CountLabel(lines, "dialogue line", "dialogue lines")
+                + " · " + CountLabel(choices, "choice", "choices");
+        }
+
+        private static string CountLabel(int count, string singular, string plural)
+        {
+            return count.ToString(CultureInfo.InvariantCulture) + " " + (count == 1 ? singular : plural);
         }
 
         private static bool Matches(string value, string search)
