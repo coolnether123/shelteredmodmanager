@@ -94,6 +94,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionRendererCandidateSearchPrefix = "shell.renderer.candidate_search.set.";
         public const string ActionRendererCandidateFilterPrefix = "shell.renderer.candidate_filter.select.";
         public const string ActionRendererGlobalSearchQueryPrefix = "shell.renderer.global_search.query.";
+        public const string ActionRendererGlobalSearchActivatePrefix = "shell.renderer.global_search.activate.";
         public const string ActionRendererWorkspaceSubtabSelectPrefix = "shell.renderer.workspace.subtab.select.";
         public const string ActionRendererWorkspaceEntitySelectPrefix = "shell.renderer.workspace.entity.select.";
         public const string ActionRendererWorkspaceWarningOpenPrefix = "shell.renderer.workspace.warning.open.";

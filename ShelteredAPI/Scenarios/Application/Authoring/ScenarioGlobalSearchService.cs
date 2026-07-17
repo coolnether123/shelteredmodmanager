@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
+using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Stages;
@@ -30,9 +31,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     }
 
     /// <summary>
-    /// One ranked, activatable entry in the creator command palette. Activation runs
-    /// <see cref="ActionIds"/> in order through the existing action dispatch, so a story
-    /// element can first select its stage tab and then open the focused editor for it.
+    /// One ranked, activatable entry in the creator command palette. The semantic
+    /// <see cref="ActionIds"/> wrapper replays <see cref="TargetActionIds"/> through the
+    /// existing dispatch, so UI and agent activation share exactly one route.
     /// </summary>
     internal sealed class ScenarioGlobalSearchEntry
     {
@@ -49,7 +50,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             Name = string.IsNullOrEmpty(name) ? "(unnamed)" : name;
             Context = context ?? string.Empty;
             Enabled = enabled;
-            ActionIds = actionIds ?? new string[0];
+            TargetActionIds = actionIds ?? new string[0];
+            string activationActionId = ScenarioGlobalSearchService.BuildActivationActionId(TargetActionIds);
+            ActionIds = string.IsNullOrEmpty(activationActionId)
+                ? new string[0]
+                : new[] { activationActionId };
         }
 
         public ScenarioGlobalSearchKind Kind { get; private set; }
@@ -57,6 +62,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Name { get; private set; }
         public string Context { get; private set; }
         public bool Enabled { get; private set; }
+        public string[] TargetActionIds { get; private set; }
         public string[] ActionIds { get; private set; }
     }
 
@@ -90,21 +96,103 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return entries;
         }
 
+        public static List<ScenarioGlobalSearchEntry> BuildShellActivationEntries(
+            ScenarioAuthoringShellViewModel shell,
+            ScenarioDefinition definition)
+        {
+            List<string> namedVersions = new List<string>();
+            try
+            {
+                ScenarioDraftSnapshotService snapshots = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+                ScenarioDraftSnapshotInfo[] all = snapshots != null ? snapshots.ListSnapshots() : null;
+                for (int i = 0; all != null && i < all.Length; i++)
+                {
+                    ScenarioDraftSnapshotInfo info = all[i];
+                    if (info != null && !info.IsAutosave && !string.IsNullOrEmpty(info.Name))
+                        namedVersions.Add(info.Name);
+                }
+            }
+            catch
+            {
+            }
+
+            return Rank(
+                BuildEntries(shell, definition, namedVersions),
+                ScenarioAuthoringRendererInteractionState.Instance.GlobalSearchQuery,
+                MaxResults);
+        }
+
         private static void DeduplicateExactRoutes(List<ScenarioGlobalSearchEntry> entries)
         {
             HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; entries != null && i < entries.Count; i++)
             {
                 ScenarioGlobalSearchEntry entry = entries[i];
-                if (entry == null || entry.ActionIds == null || entry.ActionIds.Length < 2)
+                if (entry == null || entry.TargetActionIds == null || entry.TargetActionIds.Length < 2)
                     continue;
-                string route = string.Join("\n", entry.ActionIds);
+                string route = string.Join("\n", entry.TargetActionIds);
                 if (!seen.Add(route))
                 {
                     entries.RemoveAt(i);
                     i--;
                 }
             }
+        }
+
+        public static string BuildActivationActionId(string[] route)
+        {
+            if (route == null || route.Length == 0)
+                return null;
+
+            List<string> actions = new List<string>();
+            for (int i = 0; i < route.Length; i++)
+            {
+                string actionId = route[i];
+                if (string.IsNullOrEmpty(actionId)
+                    || actionId.IndexOf('\n') >= 0
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererGlobalSearchActivatePrefix, StringComparison.Ordinal))
+                {
+                    return null;
+                }
+                actions.Add(actionId);
+            }
+
+            return ScenarioAuthoringActionIds.ActionRendererGlobalSearchActivatePrefix
+                + ScenarioAuthoringActionCodec.EncodeToken(string.Join("\n", actions.ToArray()));
+        }
+
+        public static bool TryDecodeActivationAction(string actionId, out string[] route, out string reason)
+        {
+            route = null;
+            reason = null;
+            string payload;
+            if (!ScenarioAuthoringActionCodec.TryDecodeTokenActionId(
+                    actionId,
+                    ScenarioAuthoringActionIds.ActionRendererGlobalSearchActivatePrefix,
+                    out payload))
+            {
+                reason = "Search result activation was malformed.";
+                return false;
+            }
+
+            string[] actions = payload.Split(new[] { '\n' }, StringSplitOptions.None);
+            if (actions.Length == 0)
+            {
+                reason = "Search result activation contained no route.";
+                return false;
+            }
+            for (int i = 0; i < actions.Length; i++)
+            {
+                if (string.IsNullOrEmpty(actions[i])
+                    || actions[i].StartsWith(ScenarioAuthoringActionIds.ActionRendererGlobalSearchActivatePrefix, StringComparison.Ordinal))
+                {
+                    reason = "Search result activation contained an invalid route.";
+                    return false;
+                }
+            }
+
+            route = actions;
+            return true;
         }
 
         private static void CollectWorkspaceEntries(ScenarioAuthoringShellViewModel shell, List<ScenarioGlobalSearchEntry> entries)

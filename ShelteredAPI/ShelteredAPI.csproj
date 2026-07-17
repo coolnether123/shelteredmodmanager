@@ -271,6 +271,7 @@
     <Compile Include="Scenarios\Diagnostics\ScenarioLibraryOrganizationVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioRuntimeOutcomeVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringActionCoverageVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioWorkspaceRoutingVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringShortcutHelpVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioStarterTemplateVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioMapUxVerification.cs" />

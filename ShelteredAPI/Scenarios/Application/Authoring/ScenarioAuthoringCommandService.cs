@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-
 using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
@@ -80,6 +79,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (state == null || string.IsNullOrEmpty(actionId))
                 return ScenarioAuthoringActionExecutionResult.Unavailable(actionId, "Scenario authoring is not active.");
 
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererGlobalSearchActivatePrefix, System.StringComparison.Ordinal))
+                return ExecuteGlobalSearchActivation(state, actionId);
+
             string beforeStatus = state.StatusMessage;
             ScenarioCommandDispatchResult dispatch = _dispatcher.DispatchDetailed(state, actionId);
             if (!string.IsNullOrEmpty(dispatch.Message))
@@ -98,6 +100,36 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 reason = dispatch.Handled ? "Action was handled but made no change." : "Action was not handled.";
 
             return ScenarioAuthoringActionExecutionResult.Failure(actionId, reason, afterStatus);
+        }
+
+        private ScenarioAuthoringActionExecutionResult ExecuteGlobalSearchActivation(ScenarioAuthoringState state, string actionId)
+        {
+            string[] route;
+            string decodeReason;
+            if (!ScenarioGlobalSearchService.TryDecodeActivationAction(actionId, out route, out decodeReason))
+                return ScenarioAuthoringActionExecutionResult.Failure(actionId, decodeReason, state.StatusMessage);
+
+            string lastMessage = null;
+            for (int i = 0; i < route.Length; i++)
+            {
+                ScenarioCommandDispatchResult dispatch = _dispatcher.DispatchDetailed(state, route[i]);
+                if (!dispatch.Handled)
+                {
+                    string reason = "Search result route was not handled: " + route[i];
+                    return ScenarioAuthoringActionExecutionResult.Failure(actionId, reason, state.StatusMessage);
+                }
+                if (!string.IsNullOrEmpty(dispatch.Message))
+                {
+                    state.StatusMessage = dispatch.Message;
+                    lastMessage = dispatch.Message;
+                }
+            }
+
+            state.GlobalSearchOpen = false;
+            if (string.IsNullOrEmpty(lastMessage))
+                lastMessage = "Search result opened.";
+            state.StatusMessage = lastMessage;
+            return ScenarioAuthoringActionExecutionResult.Success(actionId, true, lastMessage);
         }
 
         private static IEnumerable<IScenarioCommandHandler> CreateHandlers(
