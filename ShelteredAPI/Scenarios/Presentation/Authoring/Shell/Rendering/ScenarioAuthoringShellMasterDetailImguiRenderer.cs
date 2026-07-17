@@ -299,9 +299,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (row == null)
                 return;
 
-            float indent = Math.Min(WorkspaceRowIndent * Math.Max(0, depth), GetSectionContentWidth() * 0.30f);
+            float estimatedWidth = Math.Max(80f, GetSectionContentWidth());
+            float indent = Math.Min(WorkspaceRowIndent * Math.Max(0, depth), estimatedWidth * 0.30f);
             bool hasSubtitle = !string.IsNullOrEmpty(row.Subtitle);
-            float height = hasSubtitle ? 46f : 34f;
+            float estimatedRowWidth = Math.Max(80f, estimatedWidth - indent);
+            float estimatedToggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 25f : 0f;
+            float estimatedChipsWidth = MeasureStatusChipsWidth(row.StatusChips, 2, estimatedRowWidth * 0.36f);
+            float estimatedGaps = (estimatedToggleWidth > 0f ? 4f : 0f) + (estimatedChipsWidth > 0f ? 4f : 0f);
+            float estimatedTextWidth = Math.Max(20f, estimatedRowWidth - estimatedToggleWidth - estimatedChipsWidth - estimatedGaps - 18f);
+            GUIStyle estimatedTitleStyle = row.Selected ? _sectionTitleStyle : _textStyle;
+            float titleHeight = estimatedTitleStyle != null
+                ? Math.Max(20f, estimatedTitleStyle.CalcHeight(new GUIContent(JoinIconLabel(row.IconText, row.Title)), estimatedTextWidth))
+                : 20f;
+            float subtitleHeight = hasSubtitle && _mutedTextStyle != null
+                ? Math.Max(17f, _mutedTextStyle.CalcHeight(new GUIContent(row.Subtitle), estimatedTextWidth))
+                : 0f;
+            float height = Math.Max(34f, 8f + titleHeight + (hasSubtitle ? subtitleHeight + 1f : 0f));
             Rect allocated = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
             Rect rowRect = new Rect(allocated.x + indent, allocated.y, Math.Max(80f, allocated.width - indent), allocated.height);
             float toggleWidth = row.Children != null && row.Children.Length > 0 && row.ToggleAction != null ? 25f : 0f;
@@ -318,13 +331,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 enabled))
                 ExecuteWorkspaceAction(select);
 
-            float labelX = selectRect.x + 10f;
+            float labelX = 10f;
+            GUI.BeginGroup(selectRect);
             GUI.Label(
-                new Rect(labelX, selectRect.y + (hasSubtitle ? 4f : 7f), Math.Max(20f, selectRect.width - 18f), 20f),
+                new Rect(labelX, hasSubtitle ? 4f : 7f, Math.Max(20f, selectRect.width - 18f), titleHeight),
                 JoinIconLabel(row.IconText, row.Title),
                 row.Selected ? _sectionTitleStyle : _textStyle);
             if (hasSubtitle)
-                GUI.Label(new Rect(labelX, selectRect.y + 24f, Math.Max(20f, selectRect.width - 18f), 17f), row.Subtitle, _mutedTextStyle);
+                GUI.Label(new Rect(labelX, 5f + titleHeight, Math.Max(20f, selectRect.width - 18f), subtitleHeight), row.Subtitle, _mutedTextStyle);
+            GUI.EndGroup();
 
             float x = selectRect.xMax + (toggleWidth > 0f || chipsWidth > 0f ? 4f : 0f);
             if (toggleWidth > 0f)
@@ -358,6 +373,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
             GUIStyle style = ResolveStatusChipStyle(chip.Tone);
             string label = JoinIconLabel(chip.IconText, chip.Text);
+            float availableTextWidth = Math.Max(0f, rect.width - (style.padding != null ? style.padding.left + style.padding.right : 0f));
+            if (style.CalcSize(new GUIContent(label)).x > availableTextWidth)
+            {
+                const string tail = "...";
+                int length = label.Length;
+                while (length > 0 && style.CalcSize(new GUIContent(label.Substring(0, length) + tail)).x > availableTextWidth)
+                    length--;
+                label = length > 0 ? label.Substring(0, length) + tail : tail;
+            }
             ScenarioAuthoringInspectorAction action = chip.Action;
             if (action != null)
             {
@@ -399,7 +423,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 && workspace.Navigator != null
                 && document.BackAction != null)
             {
-                Rect backRect = new Rect(inner.x, y, Math.Min(112f, inner.width), 28f);
+                float backWidth = Mathf.Clamp(MeasureButtonWidth(document.BackAction, false, 22f), 112f, Math.Max(112f, inner.width));
+                float backHeight = _buttonStyle != null
+                    ? Math.Max(30f, _buttonStyle.CalcHeight(new GUIContent(document.BackAction.Label ?? "< Back"), backWidth))
+                    : 30f;
+                Rect backRect = new Rect(inner.x, y, Math.Min(backWidth, inner.width), backHeight);
                 DrawWorkspaceBack(backRect, document.BackAction);
                 y = backRect.yMax + 5f;
             }
@@ -612,12 +640,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             int count = Math.Min(maximum, chips != null ? chips.Length : 0);
             float remaining = Math.Max(0f, availableWidth);
+            int remainingChipCount = 0;
+            for (int i = 0; i < count; i++)
+            {
+                if (chips[i] != null)
+                    remainingChipCount++;
+            }
             for (int i = 0; i < count && remaining > 24f; i++)
             {
                 ScenarioAuthoringStatusChipViewModel chip = chips[i];
                 if (chip == null)
                     continue;
-                float width = Math.Min(MeasureStatusChipWidth(chip), remaining);
+                remainingChipCount--;
+                float laterChipReserve = remainingChipCount > 0 ? (remainingChipCount * 28f) + (remainingChipCount * 4f) : 0f;
+                float width = Math.Min(MeasureStatusChipWidth(chip), Math.Max(28f, remaining - laterChipReserve));
                 Rect chipRect = new Rect(x, rowRect.y + ((rowRect.height - 20f) * 0.5f), width, 20f);
                 DrawStatusChip(chipRect, chip);
                 x = chipRect.xMax + 4f;
@@ -647,7 +683,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (chip == null)
                 return 0f;
             GUIStyle style = ResolveStatusChipStyle(chip.Tone);
-            return Mathf.Clamp(ScenarioUiMeasuredLabel.Width(JoinIconLabel(chip.IconText, chip.Text), style, 12f), 28f, 112f);
+            return Mathf.Clamp(ScenarioUiMeasuredLabel.Width(JoinIconLabel(chip.IconText, chip.Text), style, 12f), 28f, 280f);
         }
 
         private GUIStyle ResolveStatusChipStyle(ScenarioAuthoringStatusTone tone)
