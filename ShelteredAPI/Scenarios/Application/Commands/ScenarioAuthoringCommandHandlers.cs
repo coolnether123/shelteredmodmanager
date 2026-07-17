@@ -1625,6 +1625,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             ScenarioEditorSession currentSession = _editorService.CurrentSession;
             ScenarioDefinition currentDefinition = currentSession != null ? currentSession.WorkingDefinition : null;
             QuestDefinition selectedQuest = ResolveSelectedQuest(currentDefinition);
+            FutureSurvivorDefinition selectedFutureSurvivor = ResolveSelectedFutureSurvivor(currentDefinition);
             int duplicateSourceIndex = -1;
             int questCount = currentDefinition != null && currentDefinition.Quests != null && currentDefinition.Quests.Quests != null
                 ? currentDefinition.Quests.Quests.Count
@@ -1641,6 +1642,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 FocusGameplayEditor(state, currentSession, actionId);
                 CloseInventoryPickerAfterSelection(state, actionId);
                 ReconcileQuestSelection(currentDefinition, actionId, selectedQuest, duplicateSourceIndex);
+                ReconcileFutureSurvivorSelection(currentDefinition, actionId, selectedFutureSurvivor);
                 if (actionId != null && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, StringComparison.Ordinal) && state != null)
                 {
                     state.FocusedEditorKind = null;
@@ -1712,7 +1714,51 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 SetFocusedEditor(state, "weather", definition.TriggersAndEvents.WeatherEvents.Count - 1, true);
             else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal)
                 && definition.FamilySetup != null)
-                SetFocusedEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, definition.FamilySetup.FutureSurvivors.Count - 1, true);
+            {
+                if (state != null)
+                {
+                    state.FocusedEditorKind = null;
+                    state.FocusedEditorIndex = -1;
+                    state.FocusedEditorIsNew = false;
+                }
+                ScenarioCastWorkspaceActions.SelectFutureDocument(definition, definition.FamilySetup.FutureSurvivors.Count - 1);
+            }
+        }
+
+        private static FutureSurvivorDefinition ResolveSelectedFutureSurvivor(ScenarioDefinition definition)
+        {
+            string selected = ScenarioAuthoringRendererInteractionState.Instance.GetWorkspaceSelection(
+                ScenarioCastWorkspaceActions.WorkspaceId,
+                ScenarioCastWorkspaceActions.SubtabId);
+            int index;
+            return ScenarioCastWorkspaceActions.TryResolveFutureEntity(definition, selected, out index)
+                && definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null
+                && index >= 0 && index < definition.FamilySetup.FutureSurvivors.Count
+                    ? definition.FamilySetup.FutureSurvivors[index]
+                    : null;
+        }
+
+        private static void ReconcileFutureSurvivorSelection(
+            ScenarioDefinition definition,
+            string actionId,
+            FutureSurvivorDefinition previouslySelected)
+        {
+            if (string.IsNullOrEmpty(actionId) || definition == null || definition.FamilySetup == null || definition.FamilySetup.FutureSurvivors == null)
+                return;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal))
+                return;
+            if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix, StringComparison.Ordinal)
+                || previouslySelected == null)
+                return;
+            for (int i = 0; i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                if (object.ReferenceEquals(definition.FamilySetup.FutureSurvivors[i], previouslySelected))
+                {
+                    ScenarioCastWorkspaceActions.SelectFutureDocument(definition, i);
+                    return;
+                }
+            }
+            ScenarioCastWorkspaceActions.SelectOverview();
         }
 
         private static QuestDefinition ResolveSelectedQuest(ScenarioDefinition definition)

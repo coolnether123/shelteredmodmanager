@@ -6,6 +6,7 @@ using UnityEngine;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Story;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 
@@ -286,10 +287,48 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                     if (composed == null || composed.Subtabs == null || composed.Subtabs.Length != 4)
                         result.AddError("Story content kind did not produce its four-tab WorkspaceBody.");
                 }
+                else if (contentKind == ScenarioAuthoringWindowContentKind.Survivors)
+                {
+                    if (composed == null || composed.LayoutKind != ScenarioAuthoringWorkspaceLayoutKind.NavigatorDocument)
+                        result.AddError("Cast content kind did not produce its navigator-document WorkspaceBody.");
+                }
                 else if (composed != null)
                     result.AddError("Unmigrated window content kind '" + contentKind + "' unexpectedly produced a WorkspaceBody.");
             }
             VerifyStoryWorkspace(result);
+            VerifyCastWorkspace(result);
+        }
+
+        private static void VerifyCastWorkspace(ScenarioValidationResult result)
+        {
+            ScenarioDefinition definition = new ScenarioDefinition();
+            definition.FamilySetup = new FamilySetupDefinition();
+            FamilyMemberConfig starting = new FamilyMemberConfig { Name = "Morgan", Gender = ScenarioGender.Any };
+            definition.FamilySetup.Members.Add(starting);
+            FutureSurvivorDefinition future = new FutureSurvivorDefinition
+            {
+                Id = "future_storage_id",
+                Arrival = new ScenarioScheduleTime { Day = 3, Hour = 9 },
+                Survivor = new FamilyMemberConfig { Name = "Riley", Gender = ScenarioGender.Any }
+            };
+            definition.FamilySetup.FutureSurvivors.Add(future);
+
+            ScenarioAuthoringWindowContentContext context = new ScenarioAuthoringWindowContentContext(
+                new ScenarioAuthoringState(),
+                null,
+                null,
+                definition);
+            ScenarioAuthoringWorkspaceComposer composer = new ScenarioAuthoringWorkspaceComposer();
+            ScenarioAuthoringWorkspaceViewModel workspace = composer.Build(ScenarioAuthoringWindowContentKind.Survivors, context);
+            if (workspace == null || workspace.Navigator == null || workspace.Navigator.Groups == null || workspace.Navigator.Groups.Length != 2)
+            {
+                result.AddError("Cast workspace did not produce the two authored survivor navigator groups.");
+                return;
+            }
+            if (!string.Equals(workspace.Navigator.Groups[0].Label, "Starting Survivors", StringComparison.Ordinal)
+                || !string.Equals(workspace.Navigator.Groups[1].Label, "Future Arrivals", StringComparison.Ordinal))
+                result.AddError("Cast navigator group labels changed from Starting Survivors and Future Arrivals.");
+
         }
 
         private static void VerifyStoryWorkspace(ScenarioValidationResult result)

@@ -8,6 +8,7 @@ using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioCharacterEditorAuthoringService
     {
@@ -81,9 +82,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return true;
                 }
 
-                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, index, false);
-                state.FocusedSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneMember(family.Members[index]);
-                message = "Opened focused survivor editor.";
+                SelectStartingSurvivor(state, session.WorkingDefinition, index);
+                message = "Selected starting survivor.";
                 return true;
             }
 
@@ -99,9 +99,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return true;
                 }
 
-                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, index, false);
-                state.FocusedFutureSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneFutureSurvivor(family.FutureSurvivors[index]);
-                message = "Opened focused survivor editor.";
+                SelectFutureSurvivor(state, session.WorkingDefinition, index);
+                message = "Selected future survivor.";
                 return true;
             }
 
@@ -132,8 +131,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _actorResolver.EnsureStartingMemberRef(session.WorkingDefinition, config, family.Members.Count);
             family.Members.Add(config);
             MarkDirty(session);
-            FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, true);
-            message = "Added starting survivor slot " + next.ToString() + ".";
+            SelectStartingSurvivor(state, session.WorkingDefinition, family.Members.Count - 1);
+            message = "Added and selected starting survivor " + next.ToString() + ".";
             return true;
         }
 
@@ -163,9 +162,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 config.ActorRef = _actorResolver.CreateLiveFamilyMemberRef(liveMember);
             family.Members.Add(config);
             MarkDirty(session);
-            FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, false);
-            state.FocusedSurvivorOriginal = ScenarioSurvivorAuthoringOperations.CloneMember(config);
-            message = "Added " + config.Name + " to the starting cast.";
+            SelectStartingSurvivor(state, session.WorkingDefinition, family.Members.Count - 1);
+            message = "Added and selected " + config.Name + " in the starting cast.";
             return true;
         }
 
@@ -189,18 +187,35 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return null;
         }
 
-        private static void FocusSurvivorEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
+        private static void SelectStartingSurvivor(ScenarioAuthoringState state, ScenarioDefinition definition, int index)
         {
-            if (state == null || index < 0)
+            if (index < 0)
                 return;
+            ClearFocusedSurvivorState(state);
+            ScenarioCastWorkspaceActions.SelectStartingDocument(definition, index);
+        }
 
-            state.FocusedEditorKind = kind;
-            state.FocusedEditorIndex = index;
-            state.FocusedEditorIsNew = isNew;
+        private static void SelectFutureSurvivor(ScenarioAuthoringState state, ScenarioDefinition definition, int index)
+        {
+            if (index < 0)
+                return;
+            ClearFocusedSurvivorState(state);
+            ScenarioCastWorkspaceActions.SelectFutureDocument(definition, index);
+        }
+
+        private static void ClearFocusedSurvivorState(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return;
+            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, StringComparison.OrdinalIgnoreCase))
+            {
+                state.FocusedEditorKind = null;
+                state.FocusedEditorIndex = -1;
+                state.FocusedEditorIsNew = false;
+            }
             state.FocusedSurvivorOriginal = null;
             state.FocusedFutureSurvivorOriginal = null;
-            state.SurvivorColorPickerChannel = null;
-            state.SurvivorColorPickerRequestId = 0;
         }
 
         private bool HandleFutureMemberCommand(
@@ -239,7 +254,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (_actorResolver != null)
                     _actorResolver.EnsureFutureSurvivorRef(session.WorkingDefinition, duplicate, duplicateIndex);
                 MarkDirty(session);
-                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, duplicateIndex, true);
+                SelectFutureSurvivor(state, session.WorkingDefinition, duplicateIndex);
                 message = "Duplicated future survivor with a new name and actor identity.";
                 return true;
             }
@@ -267,8 +282,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 int removeIndex;
                 if (TryParseIndex(command.Substring("remove.".Length), members.Count, out removeIndex))
                 {
+                    FamilyMemberConfig selectedMember = ResolveSelectedStartingMember(session.WorkingDefinition);
                     members.RemoveAt(removeIndex);
                     MarkDirty(session);
+                    ReconcileStartingSelection(session.WorkingDefinition, members, selectedMember);
                     message = "Removed " + label + ".";
                     return true;
                 }
@@ -287,10 +304,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         return true;
                     }
 
+                    FamilyMemberConfig selectedMember = ResolveSelectedStartingMember(session.WorkingDefinition);
                     FamilyMemberConfig member = members[moveIndex];
                     members.RemoveAt(moveIndex);
                     members.Insert(targetIndex, member);
                     MarkDirty(session);
+                    ReconcileStartingSelection(session.WorkingDefinition, members, selectedMember);
                     message = "Moved " + label + " to slot " + (targetIndex + 1).ToString() + ".";
                     return true;
                 }
@@ -322,7 +341,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (_actorResolver != null)
                     _actorResolver.EnsureStartingMemberRef(session.WorkingDefinition, duplicate, duplicateIndex);
                 MarkDirty(session);
-                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, duplicateIndex, true);
+                SelectStartingSurvivor(state, session.WorkingDefinition, duplicateIndex);
                 message = "Duplicated starting survivor with a new name and actor identity.";
                 return true;
             }
@@ -625,6 +644,37 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MarkDirty(session);
             message = "Copied selected live character identity onto " + label + ".";
             return true;
+        }
+
+        private static FamilyMemberConfig ResolveSelectedStartingMember(ScenarioDefinition definition)
+        {
+            string selected = ScenarioAuthoringRendererInteractionState.Instance.GetWorkspaceSelection(
+                ScenarioCastWorkspaceActions.WorkspaceId,
+                ScenarioCastWorkspaceActions.SubtabId);
+            int index;
+            return ScenarioCastWorkspaceActions.TryResolveStartingEntity(definition, selected, out index)
+                && definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null
+                && index >= 0 && index < definition.FamilySetup.Members.Count
+                    ? definition.FamilySetup.Members[index]
+                    : null;
+        }
+
+        private static void ReconcileStartingSelection(
+            ScenarioDefinition definition,
+            List<FamilyMemberConfig> members,
+            FamilyMemberConfig previouslySelected)
+        {
+            if (previouslySelected == null)
+                return;
+            for (int i = 0; members != null && i < members.Count; i++)
+            {
+                if (object.ReferenceEquals(members[i], previouslySelected))
+                {
+                    ScenarioCastWorkspaceActions.SelectStartingDocument(definition, i);
+                    return;
+                }
+            }
+            ScenarioCastWorkspaceActions.SelectOverview();
         }
 
         private static void CaptureLiveFamilyMember(FamilyMember member, FamilyMemberConfig config)
