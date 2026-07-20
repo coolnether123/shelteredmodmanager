@@ -1063,8 +1063,14 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             EnsureCustomPixelStrokeSnapshot("paint stroke");
             Color color = _customEditorSession.ActiveColor;
-            _customEditorSession.Texture.SetPixel(pixelX, pixelY, color);
-            _customEditorSession.Texture.Apply();
+            if (!ScenarioPixelEditorAdapter.PaintPixel(
+                _customEditorSession.Texture,
+                pixelX,
+                pixelY,
+                color))
+            {
+                return false;
+            }
             MarkCustomEditorDirty();
             ApplyCustomEditorPreview(state);
             message = "Painted custom sprite pixel.";
@@ -1088,7 +1094,16 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             _customEditorSession.LastInteractionX = pixelX;
             _customEditorSession.LastInteractionY = pixelY;
-            Color sampled = _customEditorSession.Texture.GetPixel(pixelX, pixelY);
+            Color sampled;
+            if (!ScenarioPixelEditorAdapter.TryPickColor(
+                _customEditorSession.Texture,
+                pixelX,
+                pixelY,
+                out sampled))
+            {
+                message = "The selected pixel could not be sampled.";
+                return false;
+            }
             _customEditorSession.ActiveColor = sampled;
             _customEditorSession.ActiveBrushIndex = FindMatchingBrushIndex(sampled);
             message = "Picked color #" + EncodeColor(sampled) + ".";
