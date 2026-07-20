@@ -27,10 +27,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool readableSupplyCards = IsStartingSupplyGrid(section) && !timed;
             float minSlot = timed
                 ? (compactInspector ? 86f : 96f)
-                : (readableSupplyCards ? (compactInspector ? 78f : 88f) : (compactInspector ? 54f : 62f));
+                : (readableSupplyCards ? (compactInspector ? 104f : 112f) : (compactInspector ? 54f : 62f));
             float preferredSlot = timed
                 ? (compactInspector ? 98f : 112f)
-                : (readableSupplyCards ? (compactInspector ? 88f : 98f) : (compactInspector ? 64f : 74f));
+                : (readableSupplyCards ? (compactInspector ? 112f : 124f) : (compactInspector ? 64f : 74f));
             int columns = Mathf.Max(1, Mathf.FloorToInt((availableWidth + gap) / (minSlot + gap)));
             float slotSize = Mathf.Min(preferredSlot, (availableWidth - (gap * (columns - 1))) / columns);
             float responsiveMinimum = readableSupplyCards
@@ -213,11 +213,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect plusRect = new Rect(minusRect.xMax + controlGap, y, quantityWidth, controlHeight);
             Rect removeRect = new Rect(cellRect.xMax - removeWidth, y, removeWidth, controlHeight);
             if (slot.QuantityDecreaseAction != null)
-                DrawButton(minusRect, slot.QuantityDecreaseAction, false);
+                DrawButton(minusRect, readableSupplyCard ? CloneWithLabel(slot.QuantityDecreaseAction, "\u2212") : slot.QuantityDecreaseAction, false);
             if (slot.QuantityIncreaseAction != null)
-                DrawButton(plusRect, slot.QuantityIncreaseAction, false);
+                DrawButton(plusRect, readableSupplyCard ? CloneWithLabel(slot.QuantityIncreaseAction, "+") : slot.QuantityIncreaseAction, false);
             if (slot.RemoveAction != null)
-                DrawButton(removeRect, slot.RemoveAction, false);
+                DrawButton(removeRect, readableSupplyCard ? CloneWithLabel(slot.RemoveAction, "\u00D7") : slot.RemoveAction, false);
 
             if (slot.KindAction == null && (slot.TimeActions == null || slot.TimeActions.Length == 0))
                 return;
