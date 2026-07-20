@@ -4144,7 +4144,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float cellWidth = twoColumns
                 ? Math.Min(preferredCellWidth, (availableWidth - columnGap) * 0.5f)
                 : Math.Min(preferredCellWidth, availableWidth);
-            float cellHeight = 64f;
             int column = 0;
             int actionColumn = 0;
             bool actionRow = false;
@@ -4236,7 +4235,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     float itemCap = ResolveLogicalPixelCap(numericField ? 160f : 520f);
                     resolvedCellWidth = Math.Min(itemCap, availableWidth);
                 }
-                Rect cellRect = GUILayoutUtility.GetRect(resolvedCellWidth, cellHeight, GUILayout.Width(resolvedCellWidth), GUILayout.Height(cellHeight));
+                float resolvedCellHeight = MeasureFactCellHeight(item, resolvedCellWidth);
+                Rect cellRect = GUILayoutUtility.GetRect(
+                    resolvedCellWidth,
+                    resolvedCellHeight,
+                    GUILayout.Width(resolvedCellWidth),
+                    GUILayout.Height(resolvedCellHeight));
                 DrawFactCell(cellRect, item);
                 column++;
                 if (twoColumns && column < 2)
@@ -4720,13 +4724,49 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             GUIContent label = new GUIContent(item.Label ?? string.Empty, item.HoverHint ?? item.Detail ?? item.Value ?? string.Empty);
             GUIContent value = new GUIContent(item.Value ?? string.Empty, item.HoverHint ?? item.Detail ?? string.Empty);
-            Rect labelRect = new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 16f);
-            Rect valueRect = new Rect(rect.x + 8f, rect.y + 20f, rect.width - 16f, rect.height - 24f);
+            float contentWidth = Math.Max(1f, rect.width - 16f);
+            GUIStyle labelStyle = CreateFactLabelStyle();
+            GUIStyle valueStyle = CreateFactValueStyle();
+            float labelHeight = Mathf.Clamp(labelStyle.CalcHeight(label, contentWidth), 18f, 48f);
+            float valueTop = rect.y + 5f + labelHeight + 3f;
+            Rect labelRect = new Rect(rect.x + 8f, rect.y + 4f, contentWidth, labelHeight);
+            Rect valueRect = new Rect(
+                rect.x + 8f,
+                valueTop,
+                contentWidth,
+                Math.Max(18f, rect.yMax - valueTop - 5f));
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
-            GUI.Label(labelRect, label, _mutedTextStyle);
-            GUIStyle valueStyle = new GUIStyle(_textStyle);
-            valueStyle.wordWrap = true;
+            GUI.Label(labelRect, label, labelStyle);
             GUI.Label(valueRect, value, valueStyle);
+        }
+
+        private float MeasureFactCellHeight(ScenarioAuthoringInspectorItem item, float width)
+        {
+            if (item == null)
+                return 64f;
+
+            float contentWidth = Math.Max(1f, width - 16f);
+            GUIContent label = new GUIContent(item.Label ?? string.Empty);
+            GUIContent value = new GUIContent(item.Value ?? string.Empty);
+            float labelHeight = Mathf.Clamp(CreateFactLabelStyle().CalcHeight(label, contentWidth), 18f, 48f);
+            float valueHeight = Mathf.Clamp(CreateFactValueStyle().CalcHeight(value, contentWidth), 18f, 112f);
+            return Mathf.Clamp(5f + labelHeight + 3f + valueHeight + 5f, 64f, 176f);
+        }
+
+        private GUIStyle CreateFactLabelStyle()
+        {
+            GUIStyle style = new GUIStyle(_mutedTextStyle);
+            style.wordWrap = true;
+            style.clipping = TextClipping.Clip;
+            return style;
+        }
+
+        private GUIStyle CreateFactValueStyle()
+        {
+            GUIStyle style = new GUIStyle(_textStyle);
+            style.wordWrap = true;
+            style.clipping = TextClipping.Clip;
+            return style;
         }
 
         private void DrawItemPulseOverlay(Rect rect, ScenarioAuthoringInspectorItem item)
