@@ -152,7 +152,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             const int daysPerPage = 7;
             int weekCount = Math.Max(1, (days.Length + daysPerPage - 1) / daysPerPage);
             int maxLanes = Math.Max(1, _timelineTrackMaxLanes);
-            float weekHeight = Mathf.Clamp(62f + (maxLanes * 50f), 174f, 330f);
+            float weekHeight = Mathf.Clamp(62f + (maxLanes * 56f), 180f, 360f);
             float trackHeight = (weekHeight * weekCount) + (8f * Math.Max(0, weekCount - 1));
             Rect viewportRect = GUILayoutUtility.GetRect(availableWidth, trackHeight, GUILayout.ExpandWidth(true), GUILayout.Height(trackHeight));
             DrawTimelineTrackViewport(viewportRect, days, chips, weekHeight);
@@ -415,7 +415,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (chip == null || day == null || chip.Day != day.Day)
                     continue;
 
-                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 50f), Math.Max(84f, dayRect.width - 16f), 44f);
+                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 56f), Math.Max(84f, dayRect.width - 16f), 50f);
                 DrawTimelineChip(chipRect, chip);
                 lane++;
             }
@@ -456,7 +456,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             bool showStatusBadge = !string.IsNullOrEmpty(chip.Action.Badge)
                 && !string.Equals(chip.Status, "Pending", StringComparison.OrdinalIgnoreCase);
-            Rect labelRect = new Rect(rect.x + 7f, rect.y + 16f, rect.width - (showStatusBadge ? 40f : 14f), 25f);
+            Rect labelRect = new Rect(rect.x + 7f, rect.y + 16f, rect.width - (showStatusBadge ? 40f : 14f), 31f);
             GUIStyle calendarLabelStyle = new GUIStyle(_buttonStyle);
             calendarLabelStyle.alignment = TextAnchor.UpperLeft;
             calendarLabelStyle.padding = new RectOffset();
@@ -474,8 +474,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : fullLabel;
             if (calendarLabel.StartsWith("Story ", StringComparison.OrdinalIgnoreCase))
                 calendarLabel = calendarLabel.Substring("Story ".Length);
-            calendarLabel = calendarLabel.Replace("stage change -> ", "Go to ");
-            calendarLabel = calendarLabel.Replace("unanswered -> ", "No answer \u2192 ");
+            const string stageChangePrefix = "stage change -> ";
+            const string unansweredPrefix = "unanswered -> ";
+            if (calendarLabel.StartsWith(stageChangePrefix, StringComparison.OrdinalIgnoreCase))
+                calendarLabel = "Go to\n" + calendarLabel.Substring(stageChangePrefix.Length);
+            else if (calendarLabel.StartsWith(unansweredPrefix, StringComparison.OrdinalIgnoreCase))
+                calendarLabel = "No answer\n" + calendarLabel.Substring(unansweredPrefix.Length);
             GUI.Label(labelRect, new GUIContent(calendarLabel, fullLabel), calendarLabelStyle);
             if (!string.IsNullOrEmpty(chip.Time))
             {
