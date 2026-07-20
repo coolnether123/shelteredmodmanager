@@ -1,6 +1,6 @@
-# Custom Scenarios Guide (v2.0, Experimental)
+# Custom Scenarios Guide (v2.0)
 
-The 2.0 line is a breaking clean API line. Custom scenarios are experimental in 2.0 and should be tested with disposable saves before being used in long-running playthroughs.
+The 2.0 line is a breaking clean API line. Custom scenario installation, playback, XML/code registration, and runtime bindings are supported 2.0 surfaces. The advanced in-game scenario authoring workspace is an opt-in preview and defaults off; enable `Custom Scenario Authoring (Preview)` in the manager's Runtime Features settings when you intend to create or edit drafts. Installed custom scenarios remain available while authoring is disabled.
 
 Exact scenario signatures are in [API Signatures Reference](API_Signatures_Reference.md); use this guide for authoring flow and behavior. Reference choices and facade rules are centralized in the canonical [assembly boundary](README.md#assembly-boundary-canonical).
 
@@ -19,7 +19,7 @@ Authoring checklist:
 4. Keep asset paths relative to the scenario pack folder.
 5. Test a new game, save/load, dependency-missing startup, and return-to-menu/reload.
 
-Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. The hub is always available from the scenario book, even when there are no existing custom scenarios, so authors can use `Add New Scenario`.
+Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. The hub and installed-scenario playback remain available when authoring is disabled. `Add New Scenario` and draft editing appear only after `Custom Scenario Authoring (Preview)` is enabled in the manager.
 
 Downloaded and exported XML packages can be managed from `Install Downloads`. An installed package has an `Uninstall` action with confirmation. Uninstall deletes only that package's direct child folder under the manager-owned `Scenarios` directory and refreshes the scenario catalog immediately. It does not delete authoring drafts, exports, or saved-run archives. If saved runs exist, they remain archived while the package is absent and reconnect when a package with the same stable scenario id is installed again.
 
@@ -233,12 +233,12 @@ ShelteredScenarioRuntime.SetScoreSnapshot(snapshot);
 The scenario book adds a `Custom Scenarios` button. Selecting it replaces the vanilla scenario buttons with:
 
 - a fixed-size paged list that reuses the vanilla scenario button count for visible custom scenarios
-- a dedicated `Add New Scenario` button
+- a dedicated `Add New Scenario` button when the authoring preview is enabled
 - save-style `< Previous`, `Next >`, and `Page X / Y` controls
 
 This keeps the browser usable for arbitrarily large scenario catalogs without instantiating one on-screen button per scenario, and it behaves like the regular custom-save paging flow.
 
-`Add New Scenario` creates an in-memory draft with the default id `com.author.scenario.new` through internal browser/editor services. XML and code authors should use `ShelteredScenarioAuthoring` to create, load, validate, save, and run framework verification for scenario definitions; browser controllers and editor backend services are not public API. The Survivors workspace exposes the character editor for both starting crew and future survivors: add/remove starting people, move the start crew order, cycle names/gender/age, step individual stats, cycle strength/weakness traits, copy full identity from a selected live family member, and copy or clear appearance. Future survivors use the same character editor row underneath their arrival scheduling controls.
+When the preview is enabled, `Add New Scenario` creates an in-memory draft with the default id `com.author.scenario.new` through internal browser/editor services. XML and code authors should use `ShelteredScenarioAuthoring` to create, load, validate, save, and run framework verification for scenario definitions; browser controllers and editor backend services are not public API. The Survivors workspace exposes the character editor for both starting crew and future survivors: add/remove starting people, move the start crew order, cycle names/gender/age, step individual stats, cycle strength/weakness traits, copy full identity from a selected live family member, and copy or clear appearance. Future survivors use the same character editor row underneath their arrival scheduling controls.
 
 ## Public XML Authoring API
 

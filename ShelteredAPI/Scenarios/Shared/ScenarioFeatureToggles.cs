@@ -3,9 +3,9 @@ namespace ShelteredAPI.Scenarios.Shared{
     internal static class ScenarioFeatureToggles
     {
         public const string CustomScenarioEditorPatchToggleId = "ShelteredAPI.PatchCustomScenarioEditor";
-        public const string CustomScenarioEditorPatchLabel = "Custom Scenario Editor";
+        public const string CustomScenarioEditorPatchLabel = "Custom Scenario Authoring (Preview)";
         public const string CustomScenarioEditorPatchDescription =
-            "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.";
+            "Enables the advanced scenario authoring workspace and Add New Scenario entry. Installed custom scenarios remain available while this preview is disabled.";
         public const string DevActorAuthoringProviderToggleId = "ShelteredAPI.DevActorAuthoringProvider";
         public const string DevActorAuthoringProviderLabel = "Dev Actor Authoring Fields";
         public const string DevActorAuthoringProviderDescription =
@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios.Shared{
                 Owner = "ShelteredAPI",
                 Label = CustomScenarioEditorPatchLabel,
                 Description = CustomScenarioEditorPatchDescription,
-                DefaultValue = true,
+                DefaultValue = false,
                 RequiresRestart = true,
                 SortOrder = 100
             });
@@ -37,7 +37,7 @@ namespace ShelteredAPI.Scenarios.Shared{
 
         public static bool IsCustomScenarioEditorEnabled()
         {
-            return ManagerBooleanOptions.GetBool(CustomScenarioEditorPatchToggleId, true);
+            return ManagerBooleanOptions.GetBool(CustomScenarioEditorPatchToggleId, false);
         }
 
         public static bool IsDevActorAuthoringProviderEnabled()
