@@ -92,6 +92,42 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <Compile Include="Shared\ModAboutReader.cs" />
+    <Compile Include="..\Shared\ContentPacks\ContentPackPathPolicy.cs">
+      <Link>Shared\ContentPacks\ContentPackPathPolicy.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSchema.cs">
+      <Link>Shared\ContentPacks\ContentPackSchema.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSerialization.cs">
+      <Link>Shared\ContentPacks\ContentPackSerialization.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidation.cs">
+      <Link>Shared\ContentPacks\ContentPackValidation.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidator.cs">
+      <Link>Shared\ContentPacks\ContentPackValidator.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelClipboard.cs">
+      <Link>Shared\PixelEditing\PixelClipboard.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelDocument.cs">
+      <Link>Shared\PixelEditing\PixelDocument.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditHistory.cs">
+      <Link>Shared\PixelEditing\PixelEditHistory.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorContracts.cs">
+      <Link>Shared\PixelEditing\PixelEditorContracts.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorSession.cs">
+      <Link>Shared\PixelEditing\PixelEditorSession.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelSelection.cs">
+      <Link>Shared\PixelEditing\PixelSelection.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\Rgba32.cs">
+      <Link>Shared\PixelEditing\Rgba32.cs</Link>
+    </Compile>
     <Compile Include="AssemblyVersionChecker.cs" />
     <Compile Include="Core\AppVersionInfo.cs" />
     <!-- New modular architecture -->
@@ -102,6 +138,7 @@
     <Compile Include="Core\Models\ModItem.cs" />
     <Compile Include="Core\Models\AppSettings.cs" />
     <Compile Include="Core\Models\ManagerBooleanOption.cs" />
+    <Compile Include="Core\Models\ContentWorkshopProject.cs" />
     <Compile Include="Core\Models\SaveSlotInfo.cs" />
     <Compile Include="Core\Models\ApiCompatibility.cs" />
     <Compile Include="Core\Models\NexusModReference.cs" />
@@ -115,6 +152,7 @@
     <Compile Include="Core\Services\SettingsService.cs" />
     <Compile Include="Core\Services\ApiCompatibilityService.cs" />
     <Compile Include="Core\Services\ManagerBooleanOptionsService.cs" />
+    <Compile Include="Core\Services\ContentWorkshopProjectService.cs" />
     <Compile Include="Core\Services\ModDiscoveryService.cs" />
     <Compile Include="Core\Services\LoadOrderService.cs" />
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />
@@ -145,11 +183,17 @@
     <Compile Include="Controls\ActionButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\PixelEditorCanvas.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <!-- View Tabs -->
     <Compile Include="Views\GameSetupTab.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Views\ModManagerTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\ContentWorkshopTab.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Views\NexusModsTab.cs">

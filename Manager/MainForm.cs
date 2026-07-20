@@ -24,6 +24,7 @@ namespace Manager
         private TabControl _tabControl;
         private TabPage _gameSetupPage;
         private TabPage _modManagerPage;
+        private TabPage _contentWorkshopPage;
         private TabPage _nexusPage;
         private TabPage _nexusUploadPage;
         private TabPage _settingsPage;
@@ -36,6 +37,7 @@ namespace Manager
         private Label _nexusUpdatesLabel;
         private Panel _headerStatusPanel;
         private ModManagerTab _modManagerTab;
+        private ContentWorkshopTab _contentWorkshopTab;
         private NexusModsTab _nexusTab;
         private NexusUploadTab _nexusUploadTab;
         private SettingsTab _settingsTab;
@@ -253,6 +255,8 @@ namespace Manager
             this._gameSetupPage = new System.Windows.Forms.TabPage();
             this._modManagerPage = new System.Windows.Forms.TabPage();
             this._modManagerTab = new Manager.Views.ModManagerTab();
+            this._contentWorkshopPage = new System.Windows.Forms.TabPage();
+            this._contentWorkshopTab = new Manager.Views.ContentWorkshopTab();
             this._nexusPage = new System.Windows.Forms.TabPage();
             this._nexusTab = new Manager.Views.NexusModsTab();
             this._nexusUploadPage = new System.Windows.Forms.TabPage();
@@ -268,6 +272,7 @@ namespace Manager
             this._tabControl.SuspendLayout();
             this._gameSetupPage.SuspendLayout();
             this._modManagerPage.SuspendLayout();
+            this._contentWorkshopPage.SuspendLayout();
             this._nexusPage.SuspendLayout();
             this._nexusUploadPage.SuspendLayout();
             this._settingsPage.SuspendLayout();
@@ -367,6 +372,7 @@ namespace Manager
             // 
             this._tabControl.Controls.Add(this._gameSetupPage);
             this._tabControl.Controls.Add(this._modManagerPage);
+            this._tabControl.Controls.Add(this._contentWorkshopPage);
             this._tabControl.Controls.Add(this._nexusPage);
             this._tabControl.Controls.Add(this._nexusUploadPage);
             this._tabControl.Controls.Add(this._settingsPage);
@@ -406,6 +412,23 @@ namespace Manager
             this._modManagerTab.Padding = new System.Windows.Forms.Padding(15);
             this._modManagerTab.Size = new System.Drawing.Size(1174, 562);
             this._modManagerTab.TabIndex = 0;
+            //
+            // _contentWorkshopPage
+            //
+            this._contentWorkshopPage.Controls.Add(this._contentWorkshopTab);
+            this._contentWorkshopPage.Location = new System.Drawing.Point(4, 42);
+            this._contentWorkshopPage.Name = "_contentWorkshopPage";
+            this._contentWorkshopPage.Size = new System.Drawing.Size(1174, 562);
+            this._contentWorkshopPage.TabIndex = 2;
+            this._contentWorkshopPage.Text = "Content Workshop";
+            //
+            // _contentWorkshopTab
+            //
+            this._contentWorkshopTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._contentWorkshopTab.Location = new System.Drawing.Point(0, 0);
+            this._contentWorkshopTab.Name = "_contentWorkshopTab";
+            this._contentWorkshopTab.Size = new System.Drawing.Size(1174, 562);
+            this._contentWorkshopTab.TabIndex = 0;
             // 
             // _nexusPage
             // 
@@ -508,6 +531,7 @@ namespace Manager
             this._tabControl.ResumeLayout(false);
             this._gameSetupPage.ResumeLayout(false);
             this._modManagerPage.ResumeLayout(false);
+            this._contentWorkshopPage.ResumeLayout(false);
             this._nexusPage.ResumeLayout(false);
             this._nexusUploadPage.ResumeLayout(false);
             this._settingsPage.ResumeLayout(false);
@@ -589,6 +613,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             RefreshNexusAccountStatusAsync(true);
 
@@ -724,6 +749,12 @@ namespace Manager
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (_contentWorkshopTab != null && !_contentWorkshopTab.ConfirmClose())
+            {
+                e.Cancel = true;
+                return;
+            }
+
             CaptureWindowPlacement();
 
             RefreshRuntimeWritableSettings();
@@ -1681,6 +1712,7 @@ namespace Manager
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
+            _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             SaveSettingsFromUi();
 
@@ -1734,6 +1766,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             
             // Re-apply theme
@@ -1988,6 +2021,7 @@ namespace Manager
             _modManagerTab.ApplyTheme(isDark);
             _nexusTab.ApplyTheme(isDark);
             _nexusUploadTab.ApplyTheme(isDark);
+            _contentWorkshopTab.ApplyTheme(isDark);
             _settingsTab.ApplyTheme(isDark);
             _aboutTab.ApplyTheme(isDark);
         }
