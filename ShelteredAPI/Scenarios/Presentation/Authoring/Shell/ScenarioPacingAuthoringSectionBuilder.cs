@@ -37,7 +37,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return new ScenarioAuthoringInspectorSection
             {
                 Id = SectionId,
-                Title = "Pacing",
+                Title = "Schedule overview",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = items.ToArray()
@@ -77,7 +77,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private static int ResolveShownDayCount(ScenarioPacingAnalysis analysis)
         {
             int authoredDays = analysis != null ? analysis.LastAuthoredDay : 0;
-            return Math.Min(ScenarioPacingAnalysisService.VisibleDayLimit, Math.Max(8, authoredDays));
+            return Math.Min(ScenarioPacingAnalysisService.VisibleDayLimit, Math.Max(7, authoredDays));
         }
 
         private static string BuildDensityMetadata(ScenarioPacingAnalysis analysis, int shownDays)

@@ -1142,7 +1142,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "timeline_workshop_track",
-                Title = "What happens, and when?",
+                Title = "Scenario Calendar",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = BuildTimelineTrackItems(state, definition, entries).ToArray()
@@ -1168,7 +1168,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AddTimelinePresetActions(items, definition);
 
             int lastDay = ResolveLastDay(entries);
-            int visibleDayCount = Math.Max(5, lastDay + 2);
+            int visibleDayCount = Math.Max(7, lastDay + 2);
             string currentWeather = GetCurrentWeatherSummary();
             for (int day = 1; day <= visibleDayCount; day++)
             {
