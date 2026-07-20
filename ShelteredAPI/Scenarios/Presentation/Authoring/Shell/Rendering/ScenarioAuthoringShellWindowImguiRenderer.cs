@@ -4262,9 +4262,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     float width = Math.Max(86f, MeasureButtonWidth(item.Action, false, 24f));
                     width = Math.Min(width, actionWidth);
                     float labelWidth = Math.Max(48f, width - 20f);
-                    float labelHeight = _textStyle != null
-                        ? _textStyle.CalcHeight(new GUIContent(item.Action.Label ?? string.Empty), labelWidth)
-                        : 18f;
+                    GUIStyle actionMeasureStyle = new GUIStyle(_textStyle ?? _buttonStyle);
+                    actionMeasureStyle.fixedHeight = 0f;
+                    actionMeasureStyle.wordWrap = true;
+                    float labelHeight = actionMeasureStyle.CalcHeight(
+                        new GUIContent(item.Action.Label ?? string.Empty),
+                        labelWidth);
                     float actionHeight = Mathf.Clamp(labelHeight + 10f, 28f, 56f);
                     Rect actionRect = GUILayoutUtility.GetRect(
                         width,
