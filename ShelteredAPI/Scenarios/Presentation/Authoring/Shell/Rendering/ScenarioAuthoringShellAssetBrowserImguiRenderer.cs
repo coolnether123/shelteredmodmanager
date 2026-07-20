@@ -114,7 +114,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
             DrawAssetBrowserCategoryButton("Favorites", "Starred assets", ScenarioAssetBrowserUx.FavoritesFilter, ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.FavoritesFilter));
             DrawAssetBrowserCategoryButton("Recent", "Last 20 placed / used", ScenarioAssetBrowserUx.RecentFilter, ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.RecentFilter));
-            DrawAssetBrowserCategoryButton("All", "Entire catalog", CandidateFilterAll, CountAssetBrowserCandidates(window));
+            DrawAssetBrowserCategoryButton("All", "Entire catalog", ScenarioAssetBrowserUx.AllFilter, CountAssetBrowserCandidates(window));
             for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
             {
                 ScenarioAuthoringInspectorSection section = window.Sections[i];
@@ -128,16 +128,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.EndArea();
         }
 
-        private void DrawAssetBrowserCategoryButton(string label, string secondary, string filter, int count)
+        private void DrawAssetBrowserCategoryButton(
+            string label,
+            string secondary,
+            string filter,
+            int count,
+            bool clearSearch = false,
+            bool prominent = false)
         {
             bool active = string.Equals(_assetBrowserCategoryFilter, filter, StringComparison.OrdinalIgnoreCase)
                 || (string.IsNullOrEmpty(_assetBrowserCategoryFilter) && string.Equals(filter, CandidateFilterAll, StringComparison.OrdinalIgnoreCase));
             string safeLabel = string.IsNullOrEmpty(label) ? "Assets" : label;
-            string display = safeLabel + "  " + count;
-            Rect rect = GUILayoutUtility.GetRect(0f, 32f, GUILayout.ExpandWidth(true), GUILayout.Height(32f));
+            string display = prominent ? safeLabel : safeLabel + "  " + count;
+            float height = prominent ? 36f : 32f;
+            Rect rect = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
             string tooltip = safeLabel + (string.IsNullOrEmpty(secondary) ? string.Empty : " — " + secondary);
-            if (DrawPlainButton(rect, new GUIContent(display, tooltip), active ? _activeButtonStyle : _buttonStyle, true))
+            if (DrawPlainButton(rect, new GUIContent(display, tooltip), active || prominent ? _activeButtonStyle : _buttonStyle, true))
             {
+                if (clearSearch)
+                {
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionRendererAssetSearchClear);
+                    _assetBrowserSearchText = ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch;
+                }
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(
                     ScenarioAuthoringRendererActionManifest.BuildTokenAction(ScenarioAuthoringActionIds.ActionRendererAssetCategorySelectPrefix, filter));
                 _assetBrowserCategoryFilter = ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserCategory;
@@ -174,7 +186,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             if (visibleCount == 0)
-                GUILayout.Label("No assets match the current search and category.", _uiContext.Styles.MutedText);
+            {
+                int catalogCount = CountAssetBrowserCandidates(window);
+                bool hasSearch = !string.IsNullOrEmpty(_assetBrowserSearchText);
+                bool canBroaden = catalogCount > 0
+                    && (hasSearch || !string.Equals(_assetBrowserCategoryFilter, ScenarioAssetBrowserUx.AllFilter, StringComparison.OrdinalIgnoreCase));
+                GUILayout.BeginVertical(_uiContext.Styles.Inset);
+                GUILayout.Label(
+                    catalogCount > 0 ? "Nothing matches these filters" : "No assets are available",
+                    _sectionTitleStyle);
+                GUILayout.Label(
+                    catalogCount > 0
+                        ? "Choose another category, or browse the complete asset catalog."
+                        : "Add or import scenario assets, then reopen this browser.",
+                    _uiContext.Styles.MutedText);
+                if (canBroaden)
+                {
+                    GUILayout.Space(8f);
+                    string browseLabel = hasSearch ? "Clear filters & browse all assets" : "Browse all assets";
+                    DrawAssetBrowserCategoryButton(
+                        browseLabel,
+                        "Show the entire asset catalog.",
+                        ScenarioAssetBrowserUx.AllFilter,
+                        catalogCount,
+                        hasSearch,
+                        true);
+                }
+                GUILayout.EndVertical();
+            }
 
             GUILayout.Space(18f);
             GUILayout.EndScrollView();
@@ -302,7 +341,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool AssetBrowserCategoryMatches(ScenarioAuthoringInspectorSection section)
         {
             return string.IsNullOrEmpty(_assetBrowserCategoryFilter)
-                || string.Equals(_assetBrowserCategoryFilter, CandidateFilterAll, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(_assetBrowserCategoryFilter, ScenarioAssetBrowserUx.AllFilter, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(_assetBrowserCategoryFilter, ScenarioAssetBrowserUx.FavoritesFilter, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(_assetBrowserCategoryFilter, ScenarioAssetBrowserUx.RecentFilter, StringComparison.OrdinalIgnoreCase)
                 || (section != null && string.Equals(section.Id, _assetBrowserCategoryFilter, StringComparison.OrdinalIgnoreCase));
@@ -322,7 +361,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private bool IsVisibleAssetBrowserAction(ScenarioAuthoringInspectorSection section, ScenarioAuthoringInspectorAction action)
         {
-            return CandidateActionMatches(section, action, _assetBrowserSearchText, CandidateFilterAll)
+            return CandidateActionMatches(section, action, _assetBrowserSearchText, ScenarioAssetBrowserUx.AllFilter)
                 && ScenarioAssetBrowserUx.ActionMatches(
                     _snapshot != null ? _snapshot.State : null,
                     action,
