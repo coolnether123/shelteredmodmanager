@@ -653,9 +653,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCustomSpriteEditorDedicated(Rect bodyRect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
         {
-            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.26f, 248f, 288f);
-            controlsWidth = Math.Min(controlsWidth, Math.Max(224f, bodyRect.width - 360f));
-            float controlsContentWidth = Math.Max(196f, controlsWidth - 20f);
+            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.30f, 320f, 360f);
+            controlsWidth = Math.Min(controlsWidth, Math.Max(288f, bodyRect.width - 420f));
+            float controlsContentWidth = Math.Max(240f, controlsWidth - 36f);
             float footerHeight = editor.IsAnimationEditor ? 76f : 0f;
             Rect toolsRect = new Rect(bodyRect.x, bodyRect.y, controlsWidth, Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect canvasPane = new Rect(toolsRect.xMax + 10f, bodyRect.y, Math.Max(160f, bodyRect.xMax - toolsRect.xMax - 10f), Math.Max(120f, bodyRect.height - footerHeight - 8f));
@@ -663,15 +663,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             GUILayout.BeginArea(toolsRect);
             RegisterInteractiveRegion(toolsRect);
-            Vector2 toolsScroll = GetWindowScrollPosition("pixel_editor_tools");
-            toolsScroll.x = 0f;
-            toolsScroll = GUILayout.BeginScrollView(
-                toolsScroll,
-                false,
-                true,
-                GUILayout.Width(Math.Max(180f, toolsRect.width)),
+            GUILayout.BeginVertical(
+                _uiContext.Styles.Section,
+                GUILayout.Width(Math.Max(180f, toolsRect.width - 2f)),
                 GUILayout.Height(Math.Max(100f, toolsRect.height)));
-            GUILayout.BeginVertical(_uiContext.Styles.Section, GUILayout.Width(Math.Max(180f, toolsRect.width)));
             DrawPixelEditorPrimaryControls(editor, controlsContentWidth);
             GUILayout.Space(4f);
             if (editor.IsCharacterEditor)
@@ -688,9 +683,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Space(4f);
             DrawPixelEditorColorGroup(editor, controlsContentWidth);
             GUILayout.EndVertical();
-            GUILayout.EndScrollView();
-            toolsScroll.x = 0f;
-            SetWindowScrollPosition("pixel_editor_tools", toolsScroll);
             GUILayout.EndArea();
 
             DrawPixelCanvasViewport(canvasPane, editor);
@@ -1225,7 +1217,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawPixelCanvasViewport(Rect viewportRect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
         {
             GUI.Box(viewportRect, GUIContent.none, _uiContext.Styles.Section);
-            Rect inner = new Rect(viewportRect.x + 10f, viewportRect.y + 10f, viewportRect.width - 20f, viewportRect.height - 20f);
+            const float statusHeight = 26f;
+            Rect inner = new Rect(
+                viewportRect.x + 10f,
+                viewportRect.y + 10f,
+                viewportRect.width - 20f,
+                Math.Max(40f, viewportRect.height - statusHeight - 20f));
+            Rect statusRect = new Rect(
+                inner.x + 8f,
+                inner.yMax + 3f,
+                inner.width - 16f,
+                statusHeight - 4f);
             RegisterInteractiveRegion(inner);
             if (editor.Width <= 0 || editor.Height <= 0)
             {
@@ -1278,7 +1280,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawPixelCanvas(localCanvasRect, editor, displayZoom);
             GUI.EndGroup();
 
-            GUI.Label(new Rect(inner.x + 8f, inner.yMax - 24f, inner.width - 16f, 20f),
+            GUI.Label(statusRect,
                 editor.Width + "x" + editor.Height + " | " + Mathf.RoundToInt(Mathf.Max(1f, editor.Zoom) * 100f) + "% | wheel zoom, middle-drag pan",
                 _mutedTextStyle);
         }
