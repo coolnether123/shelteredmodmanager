@@ -156,6 +156,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 tooltip = string.Empty;
             string actionIdentity = (action.Id ?? string.Empty) + " " + (action.Label ?? string.Empty);
             bool danger = !tab
+                && !string.Equals(action.Label, "CLOSE", StringComparison.OrdinalIgnoreCase)
                 && (actionIdentity.IndexOf("delete", StringComparison.OrdinalIgnoreCase) >= 0
                     || actionIdentity.IndexOf("remove", StringComparison.OrdinalIgnoreCase) >= 0
                     || actionIdentity.IndexOf("discard", StringComparison.OrdinalIgnoreCase) >= 0);
