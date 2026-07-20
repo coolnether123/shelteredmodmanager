@@ -4807,11 +4807,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (item.Kind == ScenarioAuthoringInspectorItemKind.Text && string.IsNullOrEmpty(item.Label))
             {
                 valueStyle.fixedHeight = 0f;
-                GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+                GUIStyle noteFieldStyle = new GUIStyle(_uiContext.Styles.Field);
+                noteFieldStyle.fixedHeight = 0f;
+                GUI.BeginGroup(rect);
+                GUI.Box(new Rect(0f, 0f, rect.width, rect.height), GUIContent.none, noteFieldStyle);
                 GUI.Label(
-                    new Rect(rect.x + 8f, rect.y + 8f, contentWidth, Math.Max(18f, rect.height - 20f)),
+                    new Rect(8f, 8f, contentWidth, Math.Max(18f, rect.height - 20f)),
                     value,
                     valueStyle);
+                GUI.EndGroup();
                 return;
             }
 
