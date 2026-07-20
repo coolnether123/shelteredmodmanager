@@ -653,9 +653,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCustomSpriteEditorDedicated(Rect bodyRect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
         {
-            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.30f, 320f, 360f);
-            controlsWidth = Math.Min(controlsWidth, Math.Max(288f, bodyRect.width - 420f));
-            float controlsContentWidth = Math.Max(240f, controlsWidth - 36f);
+            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.35f, 380f, 420f);
+            controlsWidth = Math.Min(controlsWidth, Math.Max(340f, bodyRect.width - 440f));
+            float controlsContentWidth = Math.Max(292f, controlsWidth - 36f);
             float footerHeight = editor.IsAnimationEditor ? 76f : 0f;
             Rect toolsRect = new Rect(bodyRect.x, bodyRect.y, controlsWidth, Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect canvasPane = new Rect(toolsRect.xMax + 10f, bodyRect.y, Math.Max(160f, bodyRect.xMax - toolsRect.xMax - 10f), Math.Max(120f, bodyRect.height - footerHeight - 8f));
@@ -680,8 +680,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUILayout.Space(4f);
             }
             DrawPixelEditorClipboardGroup(editor, controlsContentWidth);
-            GUILayout.Space(4f);
+            GUILayout.Space(8f);
             DrawPixelEditorColorGroup(editor, controlsContentWidth);
+            GUILayout.FlexibleSpace();
+            GUILayout.Space(8f);
+            GUILayout.Label("FINISH", _textStyle);
+            GUILayout.BeginHorizontal();
+            float finishGap = 6f;
+            float primaryWidth = (controlsContentWidth - finishGap) * 0.62f;
+            float secondaryWidth = controlsContentWidth - finishGap - primaryWidth;
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave,
+                "SAVE CHANGES",
+                editor.Dirty,
+                primaryWidth,
+                editor.IsAnimationEditor ? "Save edited animation frames. Ctrl+S" : "Save the current pixel edit. Ctrl+S",
+                editor.Dirty);
+            GUILayout.Space(finishGap);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard,
+                editor.Dirty ? "DISCARD" : "CLOSE",
+                false,
+                secondaryWidth,
+                editor.Dirty ? "Discard all unsaved pixel changes and close." : "Close the pixel editor.");
+            GUILayout.EndHorizontal();
             GUILayout.EndVertical();
             GUILayout.EndArea();
 
@@ -697,16 +719,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawPixelEditorPrimaryControls(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
+            GUILayout.Label("TOOLS", _textStyle);
             DrawCustomEditorToolbar(editor, contentWidth);
-            GUILayout.Space(4f);
-            DrawCustomZoomToolbar(editor, contentWidth);
-            GUILayout.Space(4f);
-            GUILayout.BeginHorizontal();
-            float saveWidth = (contentWidth - 8f) * 0.5f;
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, saveWidth, editor.IsAnimationEditor ? "Save edited animation frames. Ctrl+S" : "Save the current pixel edit. Ctrl+S");
             GUILayout.Space(8f);
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, "Discard", false, saveWidth, "Discard the current pixel edit.", editor.Dirty);
+            GUILayout.Label("HISTORY", _textStyle);
+            GUILayout.BeginHorizontal();
+            float historyWidth = (contentWidth - 6f) * 0.5f;
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionHistoryUndo,
+                "UNDO",
+                false,
+                historyWidth,
+                "Undo the last pixel edit. Ctrl+Z");
+            GUILayout.Space(6f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionHistoryRedo,
+                "REDO",
+                false,
+                historyWidth,
+                "Redo the last undone pixel edit. Ctrl+Y");
             GUILayout.EndHorizontal();
+            GUILayout.Space(8f);
+            GUILayout.Label("CANVAS ZOOM", _textStyle);
+            DrawCustomZoomToolbar(editor, contentWidth);
         }
 
         private void DrawPixelEditorAnimationGroup(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
@@ -743,32 +778,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawPixelEditorClipboardGroup(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
-            if (!DrawPixelEditorGroupHeader("pixel_editor.group.clipboard", "Clipboard", false))
-                return;
-
+            GUILayout.Label("SELECTION & CLIPBOARD", _textStyle);
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 6f, 76f);
             GUILayout.BeginHorizontal();
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomCopy, "Copy", false, 58f, "Copy the current selection. If nothing is selected, copy the whole sprite. Ctrl+C", true);
-            GUILayout.Space(4f);
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomPaste, "Paste", editor.HasClipboard, 62f, editor.HasClipboard ? "Paste the pixel clipboard into the canvas. Ctrl+V" : "Pixel clipboard is empty.", editor.HasClipboard);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomCopy, "COPY", false, buttonWidth, "Copy the selection, or the full sprite when nothing is selected. Ctrl+C", true);
+            GUILayout.Space(6f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomPaste, "PASTE", editor.HasClipboard, buttonWidth, editor.HasClipboard ? "Paste the pixel clipboard into the canvas. Ctrl+V" : "Pixel clipboard is empty.", editor.HasClipboard);
+            GUILayout.Space(6f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomSelectionClear, "CLEAR", editor.HasSelection, buttonWidth, editor.HasSelection ? "Clear the current pixel selection." : "There is no active selection.", editor.HasSelection);
             GUILayout.EndHorizontal();
-            GUILayout.Space(3f);
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomSelectionClear, "Clear Selection", editor.HasSelection, Math.Min(contentWidth, 132f), editor.HasSelection ? "Clear the current pixel selection." : "There is no active selection.", editor.HasSelection);
-            GUILayout.Label(BuildSelectionSummary(editor), _mutedTextStyle);
-            GUILayout.Label(BuildClipboardSummary(editor), _mutedTextStyle);
+            GUILayout.Space(2f);
+            GUILayout.Label(
+                editor.HasSelection
+                    ? BuildSelectionSummary(editor)
+                    : "No selection - Copy uses the full sprite.",
+                _mutedTextStyle);
         }
 
         private void DrawPixelEditorColorGroup(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
-            if (!DrawPixelEditorGroupHeader("pixel_editor.group.color", "Color", true))
-                return;
-
+            GUILayout.Label("COLOR", _textStyle);
             GUILayout.BeginHorizontal();
-            Rect colorRect = GUILayoutUtility.GetRect(48f, 28f, GUILayout.Width(48f), GUILayout.Height(28f));
+            Rect colorRect = GUILayoutUtility.GetRect(44f, 34f, GUILayout.Width(44f), GUILayout.Height(34f));
             DrawColorPreview(colorRect, editor.ActiveColor);
-            GUILayout.Label("#" + (editor.ActiveColorHex ?? "000000FF"), _textStyle, GUILayout.Width(Math.Max(92f, contentWidth - 112f)));
-            GUILayout.EndHorizontal();
-            GUILayout.Space(3f);
-            GUILayout.BeginHorizontal();
+            GUILayout.Space(6f);
+            GUILayout.BeginVertical();
+            GUILayout.Label("ACTIVE", _mutedTextStyle);
+            GUILayout.Label("#" + (editor.ActiveColorHex ?? "000000FF"), _textStyle, GUILayout.Width(94f));
+            GUILayout.EndVertical();
+            GUILayout.Space(6f);
             for (int i = 0; editor.BrushPalette != null && i < editor.BrushPalette.Length; i++)
             {
                 Rect swatchRect = GUILayoutUtility.GetRect(20f, 20f, GUILayout.Width(20f), GUILayout.Height(20f));
@@ -776,17 +814,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUILayout.Space(2f);
             }
             GUILayout.EndHorizontal();
-            GUILayout.Space(3f);
+            GUILayout.Space(6f);
             DrawColorSlider("R", editor, contentWidth, 0);
             DrawColorSlider("G", editor, contentWidth, 1);
             DrawColorSlider("B", editor, contentWidth, 2);
             DrawColorSlider("A", editor, contentWidth, 3);
-            GUILayout.Space(3f);
-            GUILayout.BeginHorizontal();
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPick, "Picker", editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick, 70f, "Use the picker tool to sample a color from the sprite.");
-            GUIStyle pickerHelpStyle = new GUIStyle(_mutedTextStyle) { wordWrap = false };
-            GUILayout.Label("Click canvas to sample", pickerHelpStyle, GUILayout.Width(Math.Max(104f, contentWidth - 78f)));
-            GUILayout.EndHorizontal();
         }
 
         private bool DrawPixelEditorGroupHeader(string key, string label, bool defaultExpanded)
@@ -992,29 +1024,61 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCustomEditorToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
-            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 62f);
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 6f, 94f);
             GUILayout.BeginHorizontal();
-            DrawInlineAction(
+            DrawPixelEditorToolCard(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPaint,
+                "P",
                 "Paint",
                 editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Paint,
                 buttonWidth,
                 "Paint pixels using the active color.");
-            GUILayout.Space(4f);
-            DrawInlineAction(
+            GUILayout.Space(6f);
+            DrawPixelEditorToolCard(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPick,
+                "I",
                 "Pick",
                 editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick,
                 buttonWidth,
                 "Sample a pixel color from the canvas.");
-            GUILayout.Space(4f);
-            DrawInlineAction(
+            GUILayout.Space(6f);
+            DrawPixelEditorToolCard(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolSelect,
+                "S",
                 "Select",
                 editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Select,
                 buttonWidth,
                 "Drag a rectangular pixel selection.");
             GUILayout.EndHorizontal();
+        }
+
+        private void DrawPixelEditorToolCard(
+            string actionId,
+            string badge,
+            string label,
+            bool active,
+            float width,
+            string hint)
+        {
+            Rect rect = GUILayoutUtility.GetRect(width, 42f, GUILayout.Width(width), GUILayout.Height(42f));
+            bool hovered = IsInteractiveHoverAllowed(rect);
+            bool pressed = IsInteractiveMouseDownAllowed(rect);
+            GUIStyle background = active ? _uiContext.Styles.ButtonActive : _uiContext.Styles.Card;
+            bool clicked = DrawPlainButton(rect, new GUIContent(string.Empty, hint), background, true);
+
+            Rect badgeRect = new Rect(rect.x + 7f, rect.y + 6f, 30f, 30f);
+            Rect labelRect = new Rect(badgeRect.xMax + 8f, rect.y + 7f, Math.Max(38f, rect.xMax - badgeRect.xMax - 13f), 28f);
+            GUI.Box(badgeRect, badge, active ? _activeButtonStyle : _uiContext.Styles.Field);
+            GUI.Label(labelRect, label, active ? _activeButtonContentStyle : _textStyle);
+
+            if (clicked)
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(actionId);
+                if (Event.current != null)
+                    Event.current.Use();
+            }
+
+            DrawButtonAnimationOverlay(rect, actionId, true, hovered, pressed);
         }
 
         private void DrawCustomClipboardToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
