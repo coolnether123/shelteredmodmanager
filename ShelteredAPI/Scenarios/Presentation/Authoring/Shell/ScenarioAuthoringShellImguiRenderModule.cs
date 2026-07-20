@@ -1519,6 +1519,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineRibbonChapterStyle = null;
             _timelineTrackLabelStyle = null;
             _timelineTrackGlyphStyle = null;
+            _metadataMultilineFieldStyle = null;
             _timelineTrackCachedRevisionToken = null;
             _timelineTrackCachedDays = null;
             _timelineTrackCachedChips = null;
