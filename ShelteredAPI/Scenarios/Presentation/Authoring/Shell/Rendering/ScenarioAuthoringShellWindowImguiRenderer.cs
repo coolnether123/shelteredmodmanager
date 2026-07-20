@@ -4644,11 +4644,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             GUIStyle style = _uiContext.Styles.PaperMutedText;
-            float width = Mathf.Clamp(style.CalcSize(new GUIContent(status)).x + 20f, 58f, Math.Max(58f, bounds.width));
+            const string startingCastSuffix = " / in starting cast";
+            string displayStatus = status;
+            int startingCastIndex = status.IndexOf(startingCastSuffix, StringComparison.OrdinalIgnoreCase);
+            if (startingCastIndex >= 0)
+                displayStatus = status.Substring(0, startingCastIndex) + " / Starting";
+
+            float width = Mathf.Clamp(style.CalcSize(new GUIContent(displayStatus)).x + 20f, 58f, Math.Max(58f, bounds.width));
             float x = anchor == TextAnchor.UpperRight || anchor == TextAnchor.MiddleRight
                 ? bounds.xMax - width
                 : bounds.x;
-            ScenarioUiWidgets.DrawPill(new Rect(x, bounds.y, width, bounds.height), status, _uiContext.Styles, ResolveCastStatusEmphasis(status));
+            Rect pillRect = new Rect(x, bounds.y, width, bounds.height);
+            ScenarioUiWidgets.DrawPill(pillRect, displayStatus, _uiContext.Styles, ResolveCastStatusEmphasis(status));
+            if (!string.Equals(displayStatus, status, StringComparison.Ordinal))
+                GUI.Label(pillRect, new GUIContent(string.Empty, status), GUIStyle.none);
         }
 
         private static ScenarioUiPillEmphasis ResolveCastStatusEmphasis(string status)
