@@ -10,7 +10,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     // grouped by context, and highlights the currently-active context group.
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private void DrawHelpShortcutsBody(ScenarioAuthoringShortcutOverlayViewModel shortcuts)
+        private void DrawHelpShortcutsBody(ScenarioAuthoringShortcutOverlayViewModel shortcuts, float availableWidth)
         {
             GUILayout.Label("KEYBOARD SHORTCUTS", _sectionTitleStyle);
             GUILayout.Space(4f);
@@ -19,16 +19,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             ScenarioAuthoringShortcutGroupViewModel[] groups = shortcuts != null ? shortcuts.Groups : null;
             int groupCount = groups != null ? groups.Length : 0;
-            int leftCount = (groupCount + 1) / 2;
-            float width = Math.Max(220f, (GetSectionContentWidth() - 10f) * 0.5f);
+            int columnCount = availableWidth >= 500f ? 2 : 1;
+            int groupsPerColumn = (groupCount + columnCount - 1) / columnCount;
+            float columnGap = 10f;
+            float scrollBarAllowance = 18f;
+            float layoutWidth = Math.Max(120f, availableWidth - scrollBarAllowance);
+            float columnWidth = columnCount == 1
+                ? layoutWidth
+                : Math.Max(120f, (layoutWidth - columnGap) * 0.5f);
+            bool stackRows = columnCount == 1 && columnWidth < 300f;
             bool roomy = _chromeViewportRect.height >= 820f;
             GUILayout.BeginHorizontal();
-            for (int column = 0; column < 2; column++)
+            for (int column = 0; column < columnCount; column++)
             {
-                if (column > 0) GUILayout.Space(10f);
-                GUILayout.BeginVertical(GUILayout.Width(width));
-                int start = column == 0 ? 0 : leftCount;
-                int end = column == 0 ? leftCount : groupCount;
+                if (column > 0) GUILayout.Space(columnGap);
+                GUILayout.BeginVertical(GUILayout.Width(columnWidth));
+                int start = column * groupsPerColumn;
+                int end = Math.Min(groupCount, start + groupsPerColumn);
                 for (int g = start; g < end; g++)
                 {
                     ScenarioAuthoringShortcutGroupViewModel group = groups[g];
@@ -50,10 +57,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         {
                             ScenarioAuthoringShortcutRowViewModel row = rows[r];
                             if (row == null) continue;
-                            GUILayout.BeginHorizontal();
-                            GUILayout.Label(row.KeyChord ?? string.Empty, _uiContext.Styles.Pill, GUILayout.Width(118f));
-                            GUILayout.Label(row.Description ?? string.Empty, _textStyle);
-                            GUILayout.EndHorizontal();
+                            if (stackRows)
+                            {
+                                GUILayout.Label(row.KeyChord ?? string.Empty, _uiContext.Styles.Pill, GUILayout.Width(Math.Min(118f, columnWidth)));
+                                GUILayout.Label(row.Description ?? string.Empty, _textStyle);
+                            }
+                            else
+                            {
+                                GUILayout.BeginHorizontal();
+                                GUILayout.Label(row.KeyChord ?? string.Empty, _uiContext.Styles.Pill, GUILayout.Width(118f));
+                                GUILayout.Label(row.Description ?? string.Empty, _textStyle);
+                                GUILayout.EndHorizontal();
+                            }
                             GUILayout.Space(3f);
                         }
                     }
