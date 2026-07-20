@@ -71,9 +71,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (available < 48f)
                     break;
 
-                float measuredWidth = ScenarioUiMeasuredLabel.Width(value, _mutedTextStyle, 16f);
+                GUIStyle statusText = _statusTextStyle ?? _mutedTextStyle;
+                float measuredWidth = ScenarioUiMeasuredLabel.Width(value, statusText, 16f);
                 float width = Math.Min(measuredWidth, available);
-                DrawStatusLabel(new Rect(x, animatedRect.y + 14f, width, 20f), value, false);
+                DrawStatusLabel(new Rect(x, animatedRect.y + 14f, width, 20f), value, true);
                 x += width + 18f;
             }
 
