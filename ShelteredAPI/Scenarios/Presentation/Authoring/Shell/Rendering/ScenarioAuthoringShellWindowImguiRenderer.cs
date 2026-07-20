@@ -4319,6 +4319,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 else if (i + 1 < section.Items.Length)
                 {
                     GUILayout.EndHorizontal();
+                    GUILayout.Space(8f);
                     GUILayout.BeginHorizontal();
                     column = 0;
                 }
