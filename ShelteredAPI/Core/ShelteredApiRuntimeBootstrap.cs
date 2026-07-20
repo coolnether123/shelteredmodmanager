@@ -8,6 +8,7 @@ using ModAPI.InputServices;
 using ModAPI.Scenarios;
 using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
+using ShelteredAPI.Content.Packs;
 using ShelteredAPI.Debugging;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
@@ -43,6 +44,7 @@ namespace ShelteredAPI.Core
                 if (_initialized) return;
 
                 MeasureStartupPhase("ShelteredAPI ShelteredUnityLogNormalizers.Register", ShelteredUnityLogNormalizers.Register);
+                MeasureStartupPhase("ShelteredAPI ContentPackRuntimeBootstrap.EnsureSubscribed", ContentPackRuntimeBootstrap.EnsureSubscribed);
                 MeasureStartupPhase("ShelteredAPI ScenarioCompositionRoot.EnsureRuntimeInitialized", ScenarioCompositionRoot.EnsureRuntimeInitialized);
                 MeasureStartupPhase("ShelteredAPI ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle", ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle);
                 if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())

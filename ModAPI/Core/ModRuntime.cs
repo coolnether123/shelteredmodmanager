@@ -8,6 +8,14 @@ namespace ModAPI.Core
     /// </summary>
     public static class ModRuntime
     {
+        /// <summary>
+        /// Raised after a mod passes compatibility checks and before its plugin
+        /// types initialize. Host integrations can use this ordered boundary to
+        /// register data-only content owned by the activating mod.
+        /// </summary>
+        public static event System.Action<ModEntry> ModActivating;
+
+        /// <summary>Raised after all prepared mods finish activation.</summary>
         public static event System.Action PluginsActivated;
 
         public static bool IsQuitting
@@ -76,6 +84,30 @@ namespace ModAPI.Core
                 catch (System.Exception ex)
                 {
                     MMLog.WritePluginError("ModRuntime.PluginsActivated", "PluginsActivated", ex);
+                }
+            }
+        }
+
+        internal static void NotifyModActivating(ModEntry entry)
+        {
+            System.Action<ModEntry> handlers = ModActivating;
+            if (handlers == null || entry == null)
+                return;
+
+            System.Delegate[] invocationList = handlers.GetInvocationList();
+            for (int i = 0; i < invocationList.Length; i++)
+            {
+                System.Action<ModEntry> handler = invocationList[i] as System.Action<ModEntry>;
+                if (handler == null)
+                    continue;
+
+                try
+                {
+                    handler(entry);
+                }
+                catch (System.Exception ex)
+                {
+                    MMLog.WritePluginError(entry.Id, "ModRuntime.ModActivating", ex);
                 }
             }
         }

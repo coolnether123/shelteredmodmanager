@@ -184,6 +184,7 @@ namespace ShelteredAPI.Content
         private const int CustomItemTypeStart = 10000;
         private const int CustomItemTypeRange = 900000;
 
+        private static readonly object RegistrationSync = new object();
         private static readonly HashSet<int> _claimedIds = new HashSet<int>();
 
         /// <summary>Items to add to the game (IDs must be unique).</summary>
@@ -326,6 +327,69 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
+        /// Registers a complete data-driven content pack as one transaction.
+        /// A failed item or recipe leaves the registry exactly as it was before
+        /// the batch began.
+        /// </summary>
+        internal static ContentOperationResult RegisterBatch(
+            string modId,
+            IList<ItemDefinition> items,
+            IList<RecipeDefinition> recipes)
+        {
+            if (string.IsNullOrEmpty(modId))
+                return ContentOperationResult.Failed("Mod ID is required");
+
+            lock (RegistrationSync)
+            {
+                int itemCount = Items.Count;
+                int recipeCount = Recipes.Count;
+                HashSet<int> claimedIds = new HashSet<int>(_claimedIds);
+
+                try
+                {
+                    for (int i = 0; items != null && i < items.Count; i++)
+                    {
+                        ItemDefinition item = items[i];
+                        if (item == null)
+                            throw new InvalidOperationException("Content pack item " + i + " is null.");
+
+                        RegistrationResult itemResult = RegisterItemWithFixedId(modId, item.Id, item);
+                        if (!itemResult.Success)
+                            throw new InvalidOperationException(itemResult.ErrorMessage);
+                    }
+
+                    for (int i = 0; recipes != null && i < recipes.Count; i++)
+                    {
+                        RecipeDefinition recipe = recipes[i];
+                        if (recipe == null)
+                            throw new InvalidOperationException("Content pack recipe " + i + " is null.");
+                        if (IsRecipeIdAlreadyRegistered(recipe.Id))
+                            throw new InvalidOperationException("Recipe ID already registered: " + recipe.Id);
+
+                        ContentOperationResult recipeResult = RegisterRecipe(recipe);
+                        if (!recipeResult.Success)
+                            throw new InvalidOperationException(recipeResult.ErrorMessage);
+                    }
+
+                    return ContentOperationResult.Ok();
+                }
+                catch (Exception ex)
+                {
+                    if (Items.Count > itemCount)
+                        Items.RemoveRange(itemCount, Items.Count - itemCount);
+                    if (Recipes.Count > recipeCount)
+                        Recipes.RemoveRange(recipeCount, Recipes.Count - recipeCount);
+
+                    _claimedIds.Clear();
+                    foreach (int claimedId in claimedIds)
+                        _claimedIds.Add(claimedId);
+
+                    return ContentOperationResult.Failed(ex.Message);
+                }
+            }
+        }
+
+        /// <summary>
         /// Register a cooking recipe for the stove.
         /// </summary>
         public static ContentOperationResult RegisterCookingRecipe(CookingRecipe recipe)
@@ -437,6 +501,21 @@ namespace ShelteredAPI.Content
                     continue;
 
                 if (string.Equals(existing.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsRecipeIdAlreadyRegistered(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+                return false;
+
+            for (int i = 0; i < Recipes.Count; i++)
+            {
+                RecipeDefinition existing = Recipes[i];
+                if (existing != null && string.Equals(existing.Id, id, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
 

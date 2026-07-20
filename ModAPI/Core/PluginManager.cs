@@ -701,6 +701,8 @@ namespace ModAPI.Core
                 return;
             }
 
+            ModRuntime.NotifyModActivating(entry);
+
             for (int j = 0; j < prepared.Assemblies.Count; j++)
             {
                 var preparedAssembly = prepared.Assemblies[j];
