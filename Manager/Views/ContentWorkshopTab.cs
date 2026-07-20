@@ -41,7 +41,18 @@ namespace Manager.Views
         private PixelEditorCanvas _pixelCanvas;
         private Panel _colorSwatch;
         private Label _pixelStatus;
+        private Label _workspaceStatus;
+        private Label _itemEditorHeading;
+        private Label _recipeEditorHeading;
+        private ComboBox _iconItemPicker;
+        private Button _paintToolButton;
+        private Button _eraseToolButton;
+        private Button _pickToolButton;
+        private Button _undoButton;
+        private Button _redoButton;
+        private Button _saveIconButton;
         private ListView _validationList;
+        private Label _validationSummary;
 
         public string ModsPath { get; set; }
 
@@ -73,24 +84,46 @@ namespace Manager.Views
         private void InitializeView()
         {
             Dock = DockStyle.Fill;
-            Padding = new Padding(10);
+            Padding = new Padding(12);
 
-            ToolStrip actions = new ToolStrip();
-            actions.GripStyle = ToolStripGripStyle.Hidden;
-            actions.Dock = DockStyle.Top;
-            actions.Items.Add(CreateAction("New", NewProject));
-            actions.Items.Add(CreateAction("Open", OpenProject));
-            actions.Items.Add(CreateAction("Save", SaveProject));
-            actions.Items.Add(new ToolStripSeparator());
-            actions.Items.Add(CreateAction("Validate", ValidateProject));
-            actions.Items.Add(CreateAction("Export Folder", ExportFolder));
-            actions.Items.Add(CreateAction("Export ZIP", ExportZip));
-            actions.Items.Add(CreateAction("Install Locally", InstallLocally));
+            Panel commandHeader = new Panel { Dock = DockStyle.Top, Height = 72 };
+            Label title = new Label
+            {
+                Text = "Content Workshop",
+                Font = new Font("Segoe UI", 16f, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(4, 2)
+            };
+            Label subtitle = new Label
+            {
+                Text = "Build data-driven items, recipes, and pixel icons without a code plugin.",
+                AutoSize = true,
+                Location = new Point(7, 34)
+            };
+            FlowLayoutPanel actions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                Width = 650,
+                Padding = new Padding(0, 12, 0, 0),
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false
+            };
+            actions.Controls.Add(CreateCommandButton("New project", NewProject, false));
+            actions.Controls.Add(CreateCommandButton("Open", OpenProject, false));
+            actions.Controls.Add(CreateCommandButton("Save", SaveProject, true));
+            actions.Controls.Add(CreateCommandButton("Check", ValidateProject, false));
+            actions.Controls.Add(CreateCommandButton("Export folder", ExportFolder, false));
+            actions.Controls.Add(CreateCommandButton("Export ZIP", ExportZip, false));
+            actions.Controls.Add(CreateCommandButton("Install", InstallLocally, false));
+            commandHeader.Controls.Add(actions);
+            commandHeader.Controls.Add(title);
+            commandHeader.Controls.Add(subtitle);
 
-            Panel identity = new Panel();
+            GroupBox identity = new GroupBox();
+            identity.Text = "Project details";
             identity.Dock = DockStyle.Top;
-            identity.Height = 120;
-            identity.Padding = new Padding(4);
+            identity.Height = 118;
+            identity.Padding = new Padding(10, 18, 10, 8);
             TableLayoutPanel identityGrid = new TableLayoutPanel();
             identityGrid.Dock = DockStyle.Fill;
             identityGrid.ColumnCount = 6;
@@ -113,6 +146,7 @@ namespace Manager.Views
             _projectPath.AutoEllipsis = true;
             _projectPath.Dock = DockStyle.Fill;
             _projectPath.TextAlign = ContentAlignment.MiddleLeft;
+            _projectPath.Font = new Font("Segoe UI", 8.25f, FontStyle.Italic);
             identityGrid.Controls.Add(_projectPath, 4, 1);
             identityGrid.SetColumnSpan(_projectPath, 2);
             identity.Controls.Add(identityGrid);
@@ -129,32 +163,48 @@ namespace Manager.Views
             _tabs.TabPages.Add(BuildPixelPage());
             _tabs.TabPages.Add(BuildValidationPage());
 
+            _workspaceStatus = new Label
+            {
+                Dock = DockStyle.Bottom,
+                Height = 26,
+                Padding = new Padding(6, 5, 0, 0),
+                Text = "Create or open a project to begin."
+            };
             Controls.Add(_tabs);
+            Controls.Add(_workspaceStatus);
             Controls.Add(identity);
-            Controls.Add(actions);
+            Controls.Add(commandHeader);
             SetEditorEnabled(false);
         }
 
         private TabPage BuildItemsPage()
         {
             TabPage page = new TabPage("Items");
-            SplitContainer split = new SplitContainer();
-            split.Dock = DockStyle.Fill;
-            split.SplitterDistance = 250;
-            Panel listPanel = new Panel { Dock = DockStyle.Fill };
-            FlowLayoutPanel buttons = new FlowLayoutPanel
+            page.Padding = new Padding(8);
+            SplitContainer split = new SplitContainer
             {
-                Dock = DockStyle.Bottom,
-                Height = 36,
-                FlowDirection = FlowDirection.LeftToRight
+                Dock = DockStyle.Fill,
+                Size = new Size(1000, 600),
+                Panel1MinSize = 240,
+                SplitterDistance = 275,
+                FixedPanel = FixedPanel.Panel1
             };
-            Button add = new Button { Text = "Add Item", AutoSize = true };
+            Panel listPanel = CreateLibraryPanel(
+                "Item library",
+                "Select an item to edit. IDs stay inside the project namespace.");
+            FlowLayoutPanel buttons = CreateListActions();
+            Button add = CreateSmallButton("+ Add item");
             add.Click += delegate { AddItem(); };
-            Button remove = new Button { Text = "Remove", AutoSize = true };
+            Button remove = CreateSmallButton("Remove");
             remove.Click += delegate { RemoveItem(); };
             buttons.Controls.Add(add);
             buttons.Controls.Add(remove);
-            _itemList = new ListBox { Dock = DockStyle.Fill };
+            _itemList = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                IntegralHeight = false,
+                BorderStyle = BorderStyle.FixedSingle
+            };
             _itemList.SelectedIndexChanged += delegate
             {
                 if (!_loading)
@@ -164,35 +214,72 @@ namespace Manager.Views
             listPanel.Controls.Add(buttons);
             split.Panel1.Controls.Add(listPanel);
 
-            TableLayoutPanel form = CreateEditorGrid();
-            AddTextRow(form, _itemFields, "id", "ID");
-            AddTextRow(form, _itemFields, "displayName", "Display name");
-            AddMultilineRow(form, _itemFields, "description", "Description");
-            AddTextRow(form, _itemFields, "iconPath", "Icon path");
-            AddChoiceRow(form, _itemFields, "category", "Category", new string[]
+            Panel editor = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 0, 0, 0) };
+            _itemEditorHeading = CreateEditorHeading("No item selected");
+            TabControl sections = new TabControl { Dock = DockStyle.Fill };
+
+            TabPage basics = CreateSectionPage("Identity & icon");
+            TableLayoutPanel basicForm = CreateEditorGrid();
+            AddTextRow(basicForm, _itemFields, "id", "Item ID");
+            AddTextRow(basicForm, _itemFields, "displayName", "Display name");
+            AddMultilineRow(basicForm, _itemFields, "description", "Player description");
+            AddChoiceRow(basicForm, _itemFields, "category", "Category", new string[]
             {
                 "Normal", "Medicine", "Entertainment", "Object", "Tool", "Food", "Water",
                 "Weapon", "Ammo", "Armour", "LoadCarrying", "Equipment", "Schematic",
                 "Shelter", "ShelterPaint", "Meat", "Embryo", "GasMask"
             });
-            AddNumberRow(form, _itemFields, "stackSize", "Stack size", 1, 9999, 0);
-            AddNumberRow(form, _itemFields, "tradeValue", "Trade value", 0, 1000000, 0);
-            AddNumberRow(form, _itemFields, "burnValue", "Burn value", 0, 1000000, 2);
-            AddNumberRow(form, _itemFields, "scrapValue", "Scrap value", 0, 1000000, 2);
-            AddNumberRow(form, _itemFields, "baseCraftTime", "Base craft time", 0, 1000000, 2);
-            AddNumberRow(form, _itemFields, "craftStackSize", "Craft stack size", 1, 9999, 0);
-            AddNumberRow(form, _itemFields, "fabricationCost", "Fabrication cost", 0, 1000000, 2);
-            AddNumberRow(form, _itemFields, "fabricationTime", "Fabrication time", 0, 1000000, 2);
-            AddNumberRow(form, _itemFields, "rationValue", "Ration value", 0, 1000000, 0);
-            AddNumberRow(form, _itemFields, "contamination", "Contamination (0–1)", 0, 1, 3);
-            AddNumberRow(form, _itemFields, "loadCarrySlots", "Load carry slots", 0, 9999, 0);
-            AddCheckRow(form, _itemFields, "rawFood", "Raw food");
-            AddNumberRow(form, _itemFields, "cookedMultiplier", "Cooked hunger multiplier", 0.01m, 1000, 3);
-            AddMultilineRow(form, _itemFields, "recycling", "Recycling (item=count)");
+            AddIconRow(basicForm);
+            basics.Controls.Add(basicForm);
+
+            TabPage economy = CreateSectionPage("Inventory & crafting");
+            TableLayoutPanel economyColumns = CreateTwoColumnSections();
+            TableLayoutPanel inventoryForm = CreateEditorGrid();
+            AddNumberRow(inventoryForm, _itemFields, "stackSize", "Maximum stack", 1, 9999, 0);
+            AddNumberRow(inventoryForm, _itemFields, "tradeValue", "Trade value", 0, 1000000, 0);
+            AddNumberRow(inventoryForm, _itemFields, "burnValue", "Burn value", 0, 1000000, 2);
+            AddNumberRow(inventoryForm, _itemFields, "scrapValue", "Scrap value", 0, 1000000, 2);
+            AddNumberRow(inventoryForm, _itemFields, "loadCarrySlots", "Carry slots", 0, 9999, 0);
+            TableLayoutPanel craftingForm = CreateEditorGrid();
+            AddNumberRow(craftingForm, _itemFields, "baseCraftTime", "Base craft time", 0, 1000000, 2);
+            AddNumberRow(craftingForm, _itemFields, "craftStackSize", "Craft output count", 1, 9999, 0);
+            AddNumberRow(craftingForm, _itemFields, "fabricationCost", "Fabrication cost", 0, 1000000, 2);
+            AddNumberRow(craftingForm, _itemFields, "fabricationTime", "Fabrication time", 0, 1000000, 2);
+            economyColumns.Controls.Add(CreateSectionGroup(
+                "Inventory & value", "How this item stacks, trades, burns, and carries.", inventoryForm), 0, 0);
+            economyColumns.Controls.Add(CreateSectionGroup(
+                "Crafting & fabrication", "Static production values used by recipes.", craftingForm), 1, 0);
+            economy.Controls.Add(economyColumns);
+
+            TabPage food = CreateSectionPage("Food & recycling");
+            TableLayoutPanel foodColumns = CreateTwoColumnSections();
+            TableLayoutPanel foodForm = CreateEditorGrid();
+            AddNumberRow(foodForm, _itemFields, "rationValue", "Ration value", 0, 1000000, 0);
+            AddNumberRow(foodForm, _itemFields, "contamination", "Contamination (0-1)", 0, 1, 3);
+            AddCheckRow(foodForm, _itemFields, "rawFood", "Raw food");
+            AddNumberRow(foodForm, _itemFields, "cookedMultiplier", "Cooked hunger multiplier", 0.01m, 1000, 3);
+            TableLayoutPanel recyclingForm = CreateEditorGrid();
+            AddMultilineRow(recyclingForm, _itemFields, "recycling", "Materials");
+            Label syntax = new Label
+            {
+                Text = "One per line: item.id=count\nExample: Metal=2",
+                AutoSize = true,
+                Padding = new Padding(12, 4, 0, 0)
+            };
+            recyclingForm.Controls.Add(syntax, 1, recyclingForm.RowCount++);
+            foodColumns.Controls.Add(CreateSectionGroup(
+                "Food values", "Leave these at zero for non-food items.", foodForm), 0, 0);
+            foodColumns.Controls.Add(CreateSectionGroup(
+                "Recycling output", "Materials returned when the item is recycled.", recyclingForm), 1, 0);
+            food.Controls.Add(foodColumns);
+
+            sections.TabPages.Add(basics);
+            sections.TabPages.Add(economy);
+            sections.TabPages.Add(food);
             WireDirty(_itemFields);
-            Panel scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-            scroll.Controls.Add(form);
-            split.Panel2.Controls.Add(scroll);
+            editor.Controls.Add(sections);
+            editor.Controls.Add(_itemEditorHeading);
+            split.Panel2.Controls.Add(editor);
             page.Controls.Add(split);
             return page;
         }
@@ -200,24 +287,31 @@ namespace Manager.Views
         private TabPage BuildRecipesPage()
         {
             TabPage page = new TabPage("Recipes");
+            page.Padding = new Padding(8);
             SplitContainer split = new SplitContainer
             {
                 Dock = DockStyle.Fill,
-                SplitterDistance = 250
+                Size = new Size(1000, 600),
+                Panel1MinSize = 240,
+                SplitterDistance = 275,
+                FixedPanel = FixedPanel.Panel1
             };
-            Panel listPanel = new Panel { Dock = DockStyle.Fill };
-            FlowLayoutPanel buttons = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 36
-            };
-            Button add = new Button { Text = "Add Recipe", AutoSize = true };
+            Panel listPanel = CreateLibraryPanel(
+                "Recipe library",
+                "Recipes connect a result item to a station and material cost.");
+            FlowLayoutPanel buttons = CreateListActions();
+            Button add = CreateSmallButton("+ Add recipe");
             add.Click += delegate { AddRecipe(); };
-            Button remove = new Button { Text = "Remove", AutoSize = true };
+            Button remove = CreateSmallButton("Remove");
             remove.Click += delegate { RemoveRecipe(); };
             buttons.Controls.Add(add);
             buttons.Controls.Add(remove);
-            _recipeList = new ListBox { Dock = DockStyle.Fill };
+            _recipeList = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                IntegralHeight = false,
+                BorderStyle = BorderStyle.FixedSingle
+            };
             _recipeList.SelectedIndexChanged += delegate
             {
                 if (!_loading)
@@ -227,74 +321,207 @@ namespace Manager.Views
             listPanel.Controls.Add(buttons);
             split.Panel1.Controls.Add(listPanel);
 
-            TableLayoutPanel form = CreateEditorGrid();
-            AddTextRow(form, _recipeFields, "id", "ID");
-            AddTextRow(form, _recipeFields, "resultItemId", "Result item ID");
-            AddChoiceRow(form, _recipeFields, "station", "Station",
+            Panel editor = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 0, 0, 0) };
+            _recipeEditorHeading = CreateEditorHeading("No recipe selected");
+            TableLayoutPanel sections = CreateTwoColumnSections();
+            TableLayoutPanel definitionForm = CreateEditorGrid();
+            AddTextRow(definitionForm, _recipeFields, "id", "Recipe ID");
+            AddTextRow(definitionForm, _recipeFields, "resultItemId", "Creates item");
+            AddChoiceRow(definitionForm, _recipeFields, "station", "Crafting station",
                 new string[] { "Workbench", "Laboratory", "AmmoPress" });
-            AddNumberRow(form, _recipeFields, "level", "Level", 1, 5, 0);
-            AddNumberRow(form, _recipeFields, "craftTime", "Craft time", 0.01m, 1000000, 2);
-            AddCheckRow(form, _recipeFields, "unique", "Unique");
-            AddCheckRow(form, _recipeFields, "locked", "Locked");
-            AddTextRow(form, _recipeFields, "unlockFlag", "Unlock flag");
-            AddMultilineRow(form, _recipeFields, "ingredients", "Ingredients (item=count)");
+            AddNumberRow(definitionForm, _recipeFields, "level", "Station level", 1, 5, 0);
+            AddNumberRow(definitionForm, _recipeFields, "craftTime", "Craft time (seconds)", 0.01m, 1000000, 2);
+            AddCheckRow(definitionForm, _recipeFields, "unique", "Unique result");
+            AddCheckRow(definitionForm, _recipeFields, "locked", "Starts locked");
+            AddTextRow(definitionForm, _recipeFields, "unlockFlag", "Unlock flag");
+
+            TableLayoutPanel ingredientsForm = CreateEditorGrid();
+            AddMultilineRow(ingredientsForm, _recipeFields, "ingredients", "Materials");
+            Label syntax = new Label
+            {
+                Text = "One per line: item.id=count\nReferences may point to this pack, vanilla items, or dependencies.",
+                AutoSize = true,
+                MaximumSize = new Size(420, 0),
+                Padding = new Padding(12, 4, 0, 0)
+            };
+            ingredientsForm.Controls.Add(syntax, 1, ingredientsForm.RowCount++);
+            sections.Controls.Add(CreateSectionGroup(
+                "Recipe settings", "Where, when, and how the result is crafted.", definitionForm), 0, 0);
+            sections.Controls.Add(CreateSectionGroup(
+                "Ingredient cost", "Materials consumed for one crafting operation.", ingredientsForm), 1, 0);
             WireDirty(_recipeFields);
-            Panel scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-            scroll.Controls.Add(form);
-            split.Panel2.Controls.Add(scroll);
+            editor.Controls.Add(sections);
+            editor.Controls.Add(_recipeEditorHeading);
+            split.Panel2.Controls.Add(editor);
             page.Controls.Add(split);
             return page;
         }
 
         private TabPage BuildPixelPage()
         {
-            TabPage page = new TabPage("Icon Pixel Editor");
-            ToolStrip tools = new ToolStrip { Dock = DockStyle.Top, GripStyle = ToolStripGripStyle.Hidden };
-            tools.Items.Add(CreateAction("Load Selected Icon", LoadSelectedIcon));
-            tools.Items.Add(CreateAction("Import PNG", ImportIcon));
-            tools.Items.Add(CreateAction("New 32×32", NewIcon));
-            tools.Items.Add(CreateAction("Save to Selected Item", SaveIcon));
-            tools.Items.Add(new ToolStripSeparator());
-            tools.Items.Add(CreateAction("Paint", delegate { _pixelCanvas.ActiveTool = PixelEditorTool.Paint; }));
-            tools.Items.Add(CreateAction("Erase", delegate { _pixelCanvas.ActiveTool = PixelEditorTool.Erase; }));
-            tools.Items.Add(CreateAction("Pick", delegate { _pixelCanvas.ActiveTool = PixelEditorTool.Pick; }));
-            tools.Items.Add(CreateAction("Color", ChooseColor));
-            tools.Items.Add(CreateAction("Undo", delegate { _pixelCanvas.Undo(); }));
-            tools.Items.Add(CreateAction("Redo", delegate { _pixelCanvas.Redo(); }));
+            TabPage page = new TabPage("Icon Studio");
+            page.Padding = new Padding(8);
+            Panel sidebar = new Panel
+            {
+                Dock = DockStyle.Left,
+                Width = 260,
+                Padding = new Padding(0, 0, 10, 0)
+            };
+            GroupBox targetGroup = new GroupBox
+            {
+                Text = "1. Choose item",
+                Dock = DockStyle.Top,
+                Height = 92,
+                Padding = new Padding(10, 20, 10, 8)
+            };
+            _iconItemPicker = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            _iconItemPicker.SelectedIndexChanged += IconItemPickerChanged;
+            Label targetHelp = new Label
+            {
+                Text = "The saved PNG will be assigned to this item.",
+                Dock = DockStyle.Bottom,
+                Height = 28
+            };
+            targetGroup.Controls.Add(_iconItemPicker);
+            targetGroup.Controls.Add(targetHelp);
 
-            Panel status = new Panel { Dock = DockStyle.Bottom, Height = 30 };
+            GroupBox fileGroup = new GroupBox
+            {
+                Text = "2. Start or load",
+                Dock = DockStyle.Top,
+                Height = 122,
+                Padding = new Padding(10, 20, 10, 8)
+            };
+            FlowLayoutPanel fileActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true
+            };
+            fileActions.Controls.Add(CreateSidebarButton("Load assigned icon", LoadSelectedIcon));
+            fileActions.Controls.Add(CreateSidebarButton("Import PNG...", ImportIcon));
+            fileActions.Controls.Add(CreateSidebarButton("New 32 x 32", NewIcon));
+            fileGroup.Controls.Add(fileActions);
+
+            GroupBox drawingGroup = new GroupBox
+            {
+                Text = "3. Draw",
+                Dock = DockStyle.Top,
+                Height = 155,
+                Padding = new Padding(10, 20, 10, 8)
+            };
+            FlowLayoutPanel drawingActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true
+            };
+            _paintToolButton = CreateSidebarButton("Paint (P)", SelectPaintTool);
+            _eraseToolButton = CreateSidebarButton("Erase (E)", SelectEraseTool);
+            _pickToolButton = CreateSidebarButton("Pick color (I)", SelectPickTool);
+            Button colorButton = CreateSidebarButton("Choose color...", ChooseColor);
             _colorSwatch = new Panel
             {
-                Location = new Point(5, 5),
-                Size = new Size(20, 20),
+                Size = new Size(34, 30),
+                Margin = new Padding(6, 3, 3, 3),
                 BackColor = Color.Black,
                 BorderStyle = BorderStyle.FixedSingle
             };
+            _colorSwatch.Click += ChooseColor;
+            drawingActions.Controls.Add(_paintToolButton);
+            drawingActions.Controls.Add(_eraseToolButton);
+            drawingActions.Controls.Add(_pickToolButton);
+            drawingActions.Controls.Add(colorButton);
+            drawingActions.Controls.Add(_colorSwatch);
+            drawingGroup.Controls.Add(drawingActions);
+
+            GroupBox finishGroup = new GroupBox
+            {
+                Text = "4. Review and save",
+                Dock = DockStyle.Top,
+                Height = 122,
+                Padding = new Padding(10, 20, 10, 8)
+            };
+            FlowLayoutPanel finishActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true
+            };
+            _undoButton = CreateSidebarButton("Undo", delegate { _pixelCanvas.Undo(); UpdatePixelStatus(); });
+            _redoButton = CreateSidebarButton("Redo", delegate { _pixelCanvas.Redo(); UpdatePixelStatus(); });
+            Button fitButton = CreateSidebarButton("Fit canvas", FitIconCanvas);
+            _saveIconButton = CreateSidebarButton("Save to item", SaveIcon);
+            _saveIconButton.Font = new Font(_saveIconButton.Font, FontStyle.Bold);
+            finishActions.Controls.Add(_undoButton);
+            finishActions.Controls.Add(_redoButton);
+            finishActions.Controls.Add(fitButton);
+            finishActions.Controls.Add(_saveIconButton);
+            finishGroup.Controls.Add(finishActions);
+
+            sidebar.Controls.Add(finishGroup);
+            sidebar.Controls.Add(drawingGroup);
+            sidebar.Controls.Add(fileGroup);
+            sidebar.Controls.Add(targetGroup);
+
+            Panel status = new Panel { Dock = DockStyle.Bottom, Height = 34, Padding = new Padding(8, 7, 0, 0) };
             _pixelStatus = new Label
             {
-                Location = new Point(32, 6),
                 AutoSize = true,
-                Text = "32×32 • Ctrl+wheel zoom • Ctrl+Z/Ctrl+Y history"
+                Text = "32 x 32 | 12x zoom | Saved icon"
             };
-            status.Controls.Add(_colorSwatch);
             status.Controls.Add(_pixelStatus);
+            Panel canvasHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(12),
+                BorderStyle = BorderStyle.FixedSingle
+            };
             _pixelCanvas = new PixelEditorCanvas { Dock = DockStyle.Fill };
             _pixelCanvas.ActiveColorChanged += delegate { UpdatePixelStatus(); };
+            _pixelCanvas.ActiveToolChanged += delegate { UpdateToolButtons(); };
             _pixelCanvas.DocumentChanged += delegate
             {
-                if (_project != null)
-                    _project.IsDirty = true;
                 UpdatePixelStatus();
+                UpdateWorkspaceStatus();
             };
-            page.Controls.Add(_pixelCanvas);
+            canvasHost.Controls.Add(_pixelCanvas);
+            page.Controls.Add(canvasHost);
             page.Controls.Add(status);
-            page.Controls.Add(tools);
+            page.Controls.Add(sidebar);
+            SelectPixelTool(PixelEditorTool.Paint);
             return page;
         }
 
         private TabPage BuildValidationPage()
         {
             TabPage page = new TabPage("Validation");
+            page.Padding = new Padding(8);
+            Panel header = new Panel { Dock = DockStyle.Top, Height = 62 };
+            Label title = new Label
+            {
+                Text = "Project readiness",
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(4, 4)
+            };
+            _validationSummary = new Label
+            {
+                Text = "Run Check to verify IDs, values, references, and icon files.",
+                AutoSize = true,
+                Location = new Point(6, 33)
+            };
+            Button check = CreateSmallButton("Run check");
+            check.Location = new Point(0, 6);
+            check.Dock = DockStyle.Right;
+            check.Click += ValidateProject;
+            header.Controls.Add(check);
+            header.Controls.Add(title);
+            header.Controls.Add(_validationSummary);
             _validationList = new ListView
             {
                 Dock = DockStyle.Fill,
@@ -306,6 +533,7 @@ namespace Manager.Views
             _validationList.Columns.Add("Location", 240);
             _validationList.Columns.Add("Message", 700);
             page.Controls.Add(_validationList);
+            page.Controls.Add(header);
             return page;
         }
 
@@ -352,7 +580,10 @@ namespace Manager.Views
         {
             if (!CommitAllEditors())
                 return;
-            ShowResult(_service.Save(_project), "Project saved.");
+            ContentWorkshopOperationResult result = _service.Save(_project);
+            ShowResult(result, "Project saved.");
+            if (result.Success)
+                _workspaceStatus.Text = "Saved | " + _project.RootPath;
             RefreshLists();
         }
 
@@ -422,6 +653,11 @@ namespace Manager.Views
         {
             if (_project == null || _itemList.SelectedIndex < 0)
                 return;
+            if (_pixelCanvas.HasUnsavedChanges)
+            {
+                ShowError("Save the current Icon Studio pixels before removing an item.");
+                return;
+            }
             _project.Content.items.RemoveAt(_itemList.SelectedIndex);
             _project.IsDirty = true;
             RefreshLists();
@@ -460,6 +696,7 @@ namespace Manager.Views
             if (_project == null || _itemList.SelectedIndex < 0)
             {
                 _loadedItemIndex = -1;
+                _itemEditorHeading.Text = "No item selected";
                 return;
             }
             _loadedItemIndex = _itemList.SelectedIndex;
@@ -484,6 +721,15 @@ namespace Manager.Views
             SetNumber(_itemFields, "cookedMultiplier",
                 item.rawFood == null ? 1.1f : item.rawFood.cookedHungerMultiplier);
             SetText(_itemFields, "recycling", FormatIngredients(item.recycling));
+            _itemEditorHeading.Text = (item.displayName ?? "Unnamed item") + "  |  " + (item.id ?? string.Empty);
+            if (_iconItemPicker != null &&
+                _itemList.SelectedIndex < _iconItemPicker.Items.Count &&
+                _iconItemPicker.SelectedIndex != _itemList.SelectedIndex)
+            {
+                _loading = true;
+                _iconItemPicker.SelectedIndex = _itemList.SelectedIndex;
+                _loading = false;
+            }
         }
 
         private void LoadSelectedRecipe()
@@ -494,6 +740,7 @@ namespace Manager.Views
             if (_project == null || _recipeList.SelectedIndex < 0)
             {
                 _loadedRecipeIndex = -1;
+                _recipeEditorHeading.Text = "No recipe selected";
                 return;
             }
             _loadedRecipeIndex = _recipeList.SelectedIndex;
@@ -507,6 +754,8 @@ namespace Manager.Views
             SetCheck(_recipeFields, "locked", recipe.locked);
             SetText(_recipeFields, "unlockFlag", recipe.unlockFlag);
             SetText(_recipeFields, "ingredients", FormatIngredients(recipe.ingredients));
+            _recipeEditorHeading.Text = (recipe.id ?? "Unnamed recipe") +
+                "  |  Creates " + (recipe.resultItemId ?? "(no result)");
         }
 
         private bool CommitAllEditors()
@@ -524,6 +773,8 @@ namespace Manager.Views
             _project.Content.modId = _project.About.id;
             CommitSelectedItem();
             CommitSelectedRecipe();
+            if (!CommitPendingIconEdits())
+                return false;
             _project.IsDirty = true;
             return true;
         }
@@ -610,7 +861,10 @@ namespace Manager.Views
             if (!_pixelCanvas.LoadPng(result.Path, out error))
                 ShowError(error);
             else
+            {
+                UpdatePixelStatus();
                 _tabs.SelectedTab = _tabs.TabPages[2];
+            }
         }
 
         private void LoadSelectedIcon(object sender, EventArgs e)
@@ -634,6 +888,8 @@ namespace Manager.Views
             }
             if (!_pixelCanvas.LoadPng(full, out error))
                 ShowError(error);
+            else
+                UpdatePixelStatus();
         }
 
         private void NewIcon(object sender, EventArgs e)
@@ -643,10 +899,31 @@ namespace Manager.Views
 
         private void SaveIcon(object sender, EventArgs e)
         {
-            if (_project == null || _itemList.SelectedIndex < 0)
-            {
-                ShowError("Select an item first.");
+            if (!SaveIconToSelectedItem(true))
                 return;
+        }
+
+        private bool CommitPendingIconEdits()
+        {
+            if (_pixelCanvas == null || !_pixelCanvas.HasUnsavedChanges)
+                return true;
+            if (_project == null || _iconItemPicker.SelectedIndex < 0)
+            {
+                ShowError("The Icon Studio has unsaved pixels. Select an item before saving the project.");
+                return false;
+            }
+            return SaveIconToSelectedItem(false);
+        }
+
+        private bool SaveIconToSelectedItem(bool showSuccess)
+        {
+            int itemIndex = _iconItemPicker == null
+                ? _itemList.SelectedIndex
+                : _iconItemPicker.SelectedIndex;
+            if (_project == null || itemIndex < 0 || itemIndex >= _project.Content.items.Count)
+            {
+                ShowError("Choose the item that should receive this icon.");
+                return false;
             }
             string temp = Path.Combine(Path.GetTempPath(), "smm-icon-" + Guid.NewGuid().ToString("N") + ".png");
             try
@@ -655,21 +932,26 @@ namespace Manager.Views
                 if (!_pixelCanvas.SavePng(temp, out error))
                 {
                     ShowError(error);
-                    return;
+                    return false;
                 }
-                ContentPackItem item = _project.Content.items[_itemList.SelectedIndex];
+                ContentPackItem item = _project.Content.items[itemIndex];
                 string relative;
                 ContentWorkshopOperationResult result = _service.ImportIcon(
                     _project, temp, GetAssetName(item), out relative);
                 if (!result.Success)
                 {
                     ShowError(result.ErrorMessage);
-                    return;
+                    return false;
                 }
                 item.iconPath = relative;
+                _pixelCanvas.MarkSaved();
                 _project.IsDirty = true;
-                LoadSelectedItem();
-                ShowResult(result, "Icon saved to the project.");
+                if (itemIndex == _itemList.SelectedIndex)
+                    SetText(_itemFields, "iconPath", relative);
+                UpdatePixelStatus();
+                if (showSuccess)
+                    ShowResult(result, "Icon saved to the project.");
+                return true;
             }
             finally
             {
@@ -687,6 +969,88 @@ namespace Manager.Views
             };
             if (dialog.ShowDialog(this) == DialogResult.OK)
                 _pixelCanvas.ActiveColor = dialog.Color;
+        }
+
+        private void OpenIconStudio(object sender, EventArgs e)
+        {
+            if (_itemList.SelectedIndex < 0)
+            {
+                ShowError("Select an item before opening the Icon Studio.");
+                return;
+            }
+            _tabs.SelectedTab = _tabs.TabPages[2];
+            SyncIconItemPicker();
+        }
+
+        private void IconItemPickerChanged(object sender, EventArgs e)
+        {
+            if (_loading || _iconItemPicker.SelectedIndex < 0)
+                return;
+            if (_iconItemPicker.SelectedIndex != _itemList.SelectedIndex)
+                _itemList.SelectedIndex = _iconItemPicker.SelectedIndex;
+            UpdatePixelStatus();
+        }
+
+        private void SelectPaintTool(object sender, EventArgs e)
+        {
+            SelectPixelTool(PixelEditorTool.Paint);
+        }
+
+        private void SelectEraseTool(object sender, EventArgs e)
+        {
+            SelectPixelTool(PixelEditorTool.Erase);
+        }
+
+        private void SelectPickTool(object sender, EventArgs e)
+        {
+            SelectPixelTool(PixelEditorTool.Pick);
+        }
+
+        private void SelectPixelTool(PixelEditorTool tool)
+        {
+            _pixelCanvas.ActiveTool = tool;
+            UpdateToolButtons();
+            _pixelCanvas.Focus();
+        }
+
+        private void UpdateToolButtons()
+        {
+            if (_pixelCanvas == null)
+                return;
+            _paintToolButton.FlatStyle = _pixelCanvas.ActiveTool == PixelEditorTool.Paint
+                ? FlatStyle.Popup : FlatStyle.Standard;
+            _eraseToolButton.FlatStyle = _pixelCanvas.ActiveTool == PixelEditorTool.Erase
+                ? FlatStyle.Popup : FlatStyle.Standard;
+            _pickToolButton.FlatStyle = _pixelCanvas.ActiveTool == PixelEditorTool.Pick
+                ? FlatStyle.Popup : FlatStyle.Standard;
+        }
+
+        private void FitIconCanvas(object sender, EventArgs e)
+        {
+            _pixelCanvas.FitZoomToClient();
+            UpdatePixelStatus();
+        }
+
+        private void SyncIconItemPicker()
+        {
+            if (_iconItemPicker == null)
+                return;
+            if (_pixelCanvas != null && _pixelCanvas.HasUnsavedChanges)
+                return;
+            int selected = _itemList == null ? -1 : _itemList.SelectedIndex;
+            _loading = true;
+            _iconItemPicker.Items.Clear();
+            if (_project != null)
+            {
+                for (int i = 0; i < _project.Content.items.Count; i++)
+                {
+                    ContentPackItem item = _project.Content.items[i];
+                    _iconItemPicker.Items.Add((item.displayName ?? "(unnamed)") + " [" + item.id + "]");
+                }
+            }
+            if (selected >= 0 && selected < _iconItemPicker.Items.Count)
+                _iconItemPicker.SelectedIndex = selected;
+            _loading = false;
         }
 
         private void RefreshProject()
@@ -742,11 +1106,17 @@ namespace Manager.Views
             _loading = false;
             LoadSelectedItem();
             LoadSelectedRecipe();
+            SyncIconItemPicker();
+            UpdateWorkspaceStatus();
         }
 
         private void ShowValidation(ContentPackValidationResult result)
         {
             _validationList.Items.Clear();
+            _validationSummary.Text = result.IsValid
+                ? "Ready to export | " + result.WarningCount + " warning(s)"
+                : result.ErrorCount + " error(s) must be fixed | " +
+                    result.WarningCount + " warning(s)";
             for (int i = 0; i < result.Issues.Count; i++)
             {
                 ContentPackValidationIssue issue = result.Issues[i];
@@ -772,9 +1142,14 @@ namespace Manager.Views
         {
             _colorSwatch.BackColor = _pixelCanvas.ActiveColor;
             Size size = _pixelCanvas.CanvasPixelSize;
-            _pixelStatus.Text = size.Width + "×" + size.Height +
-                " • Zoom " + _pixelCanvas.Zoom + "× • " +
-                (_pixelCanvas.Session.Dirty ? "Unsaved icon changes" : "Saved icon");
+            _pixelStatus.Text = size.Width + " x " + size.Height +
+                " | " + _pixelCanvas.Zoom + "x zoom | " +
+                (_pixelCanvas.HasUnsavedChanges ? "Unsaved icon changes" : "Saved icon");
+            _undoButton.Enabled = _pixelCanvas.Session.History.CanUndo;
+            _redoButton.Enabled = _pixelCanvas.Session.History.CanRedo;
+            _saveIconButton.Enabled = _project != null && _iconItemPicker.SelectedIndex >= 0;
+            _iconItemPicker.Enabled = !_pixelCanvas.HasUnsavedChanges;
+            UpdateToolButtons();
         }
 
         private void SetEditorEnabled(bool enabled)
@@ -787,12 +1162,168 @@ namespace Manager.Views
             _description.Enabled = enabled;
         }
 
-        private static ToolStripButton CreateAction(string text, EventHandler handler)
+        private static Button CreateCommandButton(
+            string text, EventHandler handler, bool primary)
         {
-            ToolStripButton button = new ToolStripButton(text);
-            button.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            Button button = new Button
+            {
+                Text = text,
+                AutoSize = true,
+                Height = 32,
+                Padding = new Padding(8, 2, 8, 2),
+                Margin = new Padding(3)
+            };
+            if (primary)
+                button.Font = new Font(button.Font, FontStyle.Bold);
             button.Click += handler;
             return button;
+        }
+
+        private static Button CreateSmallButton(string text)
+        {
+            return new Button
+            {
+                Text = text,
+                AutoSize = true,
+                Height = 28,
+                Padding = new Padding(5, 0, 5, 0),
+                Margin = new Padding(3)
+            };
+        }
+
+        private static Button CreateSidebarButton(string text, EventHandler handler)
+        {
+            Button button = new Button
+            {
+                Text = text,
+                Width = 108,
+                Height = 30,
+                Margin = new Padding(3)
+            };
+            button.Click += handler;
+            return button;
+        }
+
+        private static FlowLayoutPanel CreateListActions()
+        {
+            return new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 38,
+                Padding = new Padding(3, 2, 0, 0),
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false
+            };
+        }
+
+        private static Panel CreateLibraryPanel(string title, string help)
+        {
+            Panel panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 70, 8, 0) };
+            Label titleLabel = new Label
+            {
+                Text = title,
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(4, 4)
+            };
+            Label helpLabel = new Label
+            {
+                Text = help,
+                AutoEllipsis = true,
+                Location = new Point(5, 31),
+                Size = new Size(255, 34)
+            };
+            panel.Controls.Add(titleLabel);
+            panel.Controls.Add(helpLabel);
+            return panel;
+        }
+
+        private static Label CreateEditorHeading(string text)
+        {
+            return new Label
+            {
+                Text = text,
+                Dock = DockStyle.Top,
+                Height = 40,
+                Padding = new Padding(4, 6, 0, 0),
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
+                AutoEllipsis = true
+            };
+        }
+
+        private static TabPage CreateSectionPage(string text)
+        {
+            return new TabPage(text) { Padding = new Padding(10) };
+        }
+
+        private static TableLayoutPanel CreateTwoColumnSections()
+        {
+            TableLayoutPanel columns = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                Padding = new Padding(2)
+            };
+            columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            columns.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            return columns;
+        }
+
+        private static GroupBox CreateSectionGroup(
+            string title, string help, Control content)
+        {
+            GroupBox group = new GroupBox
+            {
+                Text = title,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(6),
+                Padding = new Padding(10, 42, 10, 10)
+            };
+            Label helpLabel = new Label
+            {
+                Text = help,
+                Dock = DockStyle.Top,
+                Height = 30,
+                Padding = new Padding(4, 0, 0, 0)
+            };
+            content.Dock = DockStyle.Fill;
+            group.Controls.Add(content);
+            group.Controls.Add(helpLabel);
+            return group;
+        }
+
+        private void AddIconRow(TableLayoutPanel grid)
+        {
+            int row = grid.RowCount++;
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            grid.Controls.Add(new Label
+            {
+                Text = "Item icon",
+                AutoSize = true,
+                Margin = new Padding(3, 7, 3, 3)
+            }, 0, row);
+            TableLayoutPanel iconRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                AutoSize = true,
+                Margin = new Padding(0)
+            };
+            iconRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            iconRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            iconRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            TextBox path = new TextBox { Dock = DockStyle.Fill, ReadOnly = true };
+            Button import = CreateSmallButton("Import PNG...");
+            import.Click += ImportIcon;
+            Button edit = CreateSmallButton("Open Icon Studio");
+            edit.Click += OpenIconStudio;
+            iconRow.Controls.Add(path, 0, 0);
+            iconRow.Controls.Add(import, 1, 0);
+            iconRow.Controls.Add(edit, 2, 0);
+            grid.Controls.Add(iconRow, 1, row);
+            _itemFields.Add("iconPath", path);
         }
 
         private static TextBox AddIdentityField(
@@ -921,7 +1452,10 @@ namespace Manager.Views
         private void EditorChanged(object sender, EventArgs e)
         {
             if (!_loading && _project != null)
+            {
                 _project.IsDirty = true;
+                UpdateWorkspaceStatus();
+            }
         }
 
         private static void ClearFields(Dictionary<string, Control> fields)
@@ -1064,17 +1598,38 @@ namespace Manager.Views
 
         private bool ConfirmDiscardChanges()
         {
-            if (_project == null || !_project.IsDirty)
+            bool iconDirty = _pixelCanvas != null && _pixelCanvas.HasUnsavedChanges;
+            if ((_project == null || !_project.IsDirty) && !iconDirty)
                 return true;
 
             DialogResult choice = MessageBox.Show(
                 this,
-                "This Content Workshop project has unsaved changes. Discard them?",
+                iconDirty
+                    ? "This project has unsaved changes, including pixels in the Icon Studio. Discard them?"
+                    : "This Content Workshop project has unsaved changes. Discard them?",
                 "Content Workshop",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2);
             return choice == DialogResult.Yes;
+        }
+
+        private void UpdateWorkspaceStatus()
+        {
+            if (_workspaceStatus == null)
+                return;
+            if (_project == null)
+            {
+                _workspaceStatus.Text = "Create or open a project to begin.";
+                return;
+            }
+            int itemCount = _project.Content.items == null ? 0 : _project.Content.items.Count;
+            int recipeCount = _project.Content.recipes == null ? 0 : _project.Content.recipes.Count;
+            _workspaceStatus.Text =
+                (_project.IsDirty ? "Unsaved project" : "Saved") +
+                (_pixelCanvas != null && _pixelCanvas.HasUnsavedChanges ? " + unsaved icon" : string.Empty) +
+                " | " + itemCount + " item(s) | " + recipeCount + " recipe(s) | " +
+                _project.RootPath;
         }
 
         private static void ApplyThemeRecursive(

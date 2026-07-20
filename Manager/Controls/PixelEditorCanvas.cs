@@ -13,14 +13,18 @@ namespace Manager.Controls
     /// System.Drawing host for the shared pixel-editing session. This control owns
     /// pointer/rendering concerns only; history and document mutations stay shared.
     /// </summary>
-    public sealed class PixelEditorCanvas : Control
+    public sealed class PixelEditorCanvas : ScrollableControl
     {
         private PixelEditorSession _session;
         private bool _pointerDown;
+        private bool _pointerChanged;
+        private bool _hasUnsavedChanges;
         private int _zoom = 12;
+        private Bitmap _renderBitmap;
 
         public event EventHandler DocumentChanged;
         public event EventHandler ActiveColorChanged;
+        public event EventHandler ActiveToolChanged;
 
         public PixelEditorCanvas()
         {
@@ -32,6 +36,7 @@ namespace Manager.Controls
                 true);
             BackColor = Color.FromArgb(36, 36, 38);
             TabStop = true;
+            AutoScroll = true;
             Session = new PixelEditorSession(new PixelDocument(32, 32), 50);
         }
 
@@ -41,6 +46,8 @@ namespace Manager.Controls
             private set
             {
                 _session = value;
+                InvalidateRenderCache();
+                UpdateScrollArea();
                 Invalidate();
             }
         }
@@ -48,7 +55,15 @@ namespace Manager.Controls
         public PixelEditorTool ActiveTool
         {
             get { return Session.ActiveTool; }
-            set { Session.ActiveTool = value; }
+            set
+            {
+                if (Session.ActiveTool == value)
+                    return;
+                Session.ActiveTool = value;
+                EventHandler handler = ActiveToolChanged;
+                if (handler != null)
+                    handler(this, EventArgs.Empty);
+            }
         }
 
         public Color ActiveColor
@@ -70,8 +85,8 @@ namespace Manager.Controls
             get { return _zoom; }
             set
             {
-                _zoom = Math.Max(2, Math.Min(48, value));
-                AutoScrollMinSizeChanged();
+                _zoom = Math.Max(1, Math.Min(48, value));
+                UpdateScrollArea();
                 Invalidate();
             }
         }
@@ -81,10 +96,15 @@ namespace Manager.Controls
             get { return new Size(Session.Document.Width, Session.Document.Height); }
         }
 
+        public bool HasUnsavedChanges
+        {
+            get { return _hasUnsavedChanges; }
+        }
+
         public void CreateDocument(int width, int height)
         {
             Session = new PixelEditorSession(new PixelDocument(width, height), 50);
-            AutoScrollMinSizeChanged();
+            _hasUnsavedChanges = true;
             OnDocumentChanged();
         }
 
@@ -95,8 +115,8 @@ namespace Manager.Controls
                 return false;
             Session = new PixelEditorSession(document, 50);
             Session.MarkSaved();
-            AutoScrollMinSizeChanged();
-            OnDocumentChanged();
+            _hasUnsavedChanges = false;
+            Invalidate();
             return true;
         }
 
@@ -104,14 +124,32 @@ namespace Manager.Controls
         {
             if (!PixelEditorDrawingCodec.TrySavePng(Session.Document, path, out error))
                 return false;
-            Session.MarkSaved();
             return true;
+        }
+
+        public void MarkSaved()
+        {
+            Session.MarkSaved();
+            _hasUnsavedChanges = false;
+            OnDocumentChanged();
+        }
+
+        public void FitZoomToClient()
+        {
+            int availableWidth = Math.Max(1, ClientSize.Width - 24);
+            int availableHeight = Math.Max(1, ClientSize.Height - 24);
+            int horizontal = availableWidth / Session.Document.Width;
+            int vertical = availableHeight / Session.Document.Height;
+            Zoom = Math.Max(1, Math.Min(48, Math.Min(horizontal, vertical)));
+            AutoScrollPosition = Point.Empty;
         }
 
         public bool Undo()
         {
             if (!Session.Undo())
                 return false;
+            _hasUnsavedChanges = true;
+            InvalidateRenderCache();
             Invalidate();
             OnDocumentChanged();
             return true;
@@ -121,6 +159,8 @@ namespace Manager.Controls
         {
             if (!Session.Redo())
                 return false;
+            _hasUnsavedChanges = true;
+            InvalidateRenderCache();
             Invalidate();
             OnDocumentChanged();
             return true;
@@ -130,40 +170,39 @@ namespace Manager.Controls
         {
             base.OnPaint(e);
             PixelDocument document = Session.Document;
-            int width = document.Width * Zoom;
-            int height = document.Height * Zoom;
-            int originX = Math.Max(0, (ClientSize.Width - width) / 2);
-            int originY = Math.Max(0, (ClientSize.Height - height) / 2);
-
+            Rectangle canvas = GetCanvasBounds();
+            EnsureRenderBitmap();
             e.Graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
             e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
-            for (int y = 0; y < document.Height; y++)
+            DrawTransparency(e.Graphics, canvas);
+            e.Graphics.DrawImage(
+                _renderBitmap,
+                canvas,
+                new Rectangle(0, 0, document.Width, document.Height),
+                GraphicsUnit.Pixel);
+
+            if (Zoom >= 8)
             {
-                for (int x = 0; x < document.Width; x++)
+                using (Pen grid = new Pen(Color.FromArgb(45, Color.Black)))
                 {
-                    Rectangle cell = new Rectangle(
-                        originX + x * Zoom,
-                        originY + y * Zoom,
-                        Zoom,
-                        Zoom);
-                    Rgba32 pixel = document.GetPixel(x, y);
-                    if (pixel.A < 255)
-                        DrawTransparency(e.Graphics, cell, x, y);
-                    if (pixel.A > 0)
+                    int firstX = Math.Max(0, (e.ClipRectangle.Left - canvas.Left) / Zoom);
+                    int lastX = Math.Min(document.Width, (e.ClipRectangle.Right - canvas.Left) / Zoom + 1);
+                    int firstY = Math.Max(0, (e.ClipRectangle.Top - canvas.Top) / Zoom);
+                    int lastY = Math.Min(document.Height, (e.ClipRectangle.Bottom - canvas.Top) / Zoom + 1);
+                    for (int x = firstX; x <= lastX; x++)
                     {
-                        using (SolidBrush brush = new SolidBrush(
-                            Color.FromArgb(pixel.A, pixel.R, pixel.G, pixel.B)))
-                            e.Graphics.FillRectangle(brush, cell);
+                        int lineX = canvas.Left + x * Zoom;
+                        e.Graphics.DrawLine(grid, lineX, canvas.Top, lineX, canvas.Bottom);
                     }
-                    if (Zoom >= 8)
+                    for (int y = firstY; y <= lastY; y++)
                     {
-                        using (Pen grid = new Pen(Color.FromArgb(45, Color.Black)))
-                            e.Graphics.DrawRectangle(grid, cell.X, cell.Y, cell.Width, cell.Height);
+                        int lineY = canvas.Top + y * Zoom;
+                        e.Graphics.DrawLine(grid, canvas.Left, lineY, canvas.Right, lineY);
                     }
                 }
             }
             using (Pen border = new Pen(Color.DimGray))
-                e.Graphics.DrawRectangle(border, originX, originY, width, height);
+                e.Graphics.DrawRectangle(border, canvas);
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -173,6 +212,7 @@ namespace Manager.Controls
             if (e.Button != MouseButtons.Left)
                 return;
             _pointerDown = true;
+            _pointerChanged = false;
             Session.BeginStroke();
             ApplyPointer(e.Location);
         }
@@ -191,7 +231,8 @@ namespace Manager.Controls
                 return;
             _pointerDown = false;
             Session.EndStroke();
-            OnDocumentChanged();
+            if (_pointerChanged)
+                OnDocumentChanged();
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)
@@ -213,18 +254,22 @@ namespace Manager.Controls
                 Redo();
                 e.Handled = true;
             }
+            else if (e.KeyCode == Keys.P)
+                ActiveTool = PixelEditorTool.Paint;
+            else if (e.KeyCode == Keys.E)
+                ActiveTool = PixelEditorTool.Erase;
+            else if (e.KeyCode == Keys.I)
+                ActiveTool = PixelEditorTool.Pick;
             base.OnKeyDown(e);
         }
 
         private void ApplyPointer(Point point)
         {
-            int width = Session.Document.Width * Zoom;
-            int height = Session.Document.Height * Zoom;
-            int originX = Math.Max(0, (ClientSize.Width - width) / 2);
-            int originY = Math.Max(0, (ClientSize.Height - height) / 2);
-            int x = (point.X - originX) / Zoom;
-            int y = (point.Y - originY) / Zoom;
-            if (point.X < originX || point.Y < originY || !Session.Document.Contains(x, y))
+            Rectangle canvas = GetCanvasBounds();
+            int x = (point.X - canvas.Left) / Zoom;
+            int y = (point.Y - canvas.Top) / Zoom;
+            if (point.X < canvas.Left || point.Y < canvas.Top ||
+                !Session.Document.Contains(x, y))
                 return;
 
             if (Session.ActiveTool == PixelEditorTool.Pick)
@@ -238,26 +283,61 @@ namespace Manager.Controls
             {
                 if (Session.PaintPixel(x, y))
                 {
+                    _pointerChanged = true;
+                    _hasUnsavedChanges = true;
+                    InvalidateRenderCache();
                     Invalidate();
-                    OnDocumentChanged();
                 }
             }
         }
 
-        private static void DrawTransparency(Graphics graphics, Rectangle cell, int x, int y)
+        private static void DrawTransparency(Graphics graphics, Rectangle canvas)
         {
-            Color color = ((x + y) & 1) == 0
-                ? Color.FromArgb(210, 210, 210)
-                : Color.FromArgb(160, 160, 160);
-            using (SolidBrush brush = new SolidBrush(color))
-                graphics.FillRectangle(brush, cell);
+            using (Bitmap tile = new Bitmap(16, 16))
+            using (Graphics tileGraphics = Graphics.FromImage(tile))
+            {
+                tileGraphics.Clear(Color.FromArgb(205, 205, 205));
+                using (SolidBrush dark = new SolidBrush(Color.FromArgb(160, 160, 160)))
+                {
+                    tileGraphics.FillRectangle(dark, 0, 0, 8, 8);
+                    tileGraphics.FillRectangle(dark, 8, 8, 8, 8);
+                }
+                using (TextureBrush brush = new TextureBrush(tile, WrapMode.Tile))
+                    graphics.FillRectangle(brush, canvas);
+            }
         }
 
-        private void AutoScrollMinSizeChanged()
+        private Rectangle GetCanvasBounds()
         {
-            MinimumSize = new Size(
-                Math.Min(100, Session.Document.Width * Zoom),
-                Math.Min(100, Session.Document.Height * Zoom));
+            int width = Session.Document.Width * Zoom;
+            int height = Session.Document.Height * Zoom;
+            int originX = AutoScrollPosition.X + Math.Max(0, (ClientSize.Width - width) / 2);
+            int originY = AutoScrollPosition.Y + Math.Max(0, (ClientSize.Height - height) / 2);
+            return new Rectangle(originX, originY, width, height);
+        }
+
+        private void UpdateScrollArea()
+        {
+            if (Session == null)
+                return;
+            AutoScrollMinSize = new Size(
+                Session.Document.Width * Zoom + 24,
+                Session.Document.Height * Zoom + 24);
+        }
+
+        private void EnsureRenderBitmap()
+        {
+            if (_renderBitmap == null)
+                _renderBitmap = PixelEditorDrawingCodec.ToBitmap(Session.Document);
+        }
+
+        private void InvalidateRenderCache()
+        {
+            if (_renderBitmap != null)
+            {
+                _renderBitmap.Dispose();
+                _renderBitmap = null;
+            }
         }
 
         private void OnDocumentChanged()
@@ -273,6 +353,13 @@ namespace Manager.Controls
             EventHandler handler = ActiveColorChanged;
             if (handler != null)
                 handler(this, EventArgs.Empty);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                InvalidateRenderCache();
+            base.Dispose(disposing);
         }
     }
 
@@ -351,7 +438,7 @@ namespace Manager.Controls
             }
         }
 
-        private static Bitmap ToBitmap(PixelDocument document)
+        internal static Bitmap ToBitmap(PixelDocument document)
         {
             Bitmap bitmap = new Bitmap(document.Width, document.Height, PixelFormat.Format32bppArgb);
             Rectangle area = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
