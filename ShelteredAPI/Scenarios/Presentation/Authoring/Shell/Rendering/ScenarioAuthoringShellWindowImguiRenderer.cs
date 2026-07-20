@@ -4804,13 +4804,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUIContent value = new GUIContent(item.Value ?? string.Empty, item.HoverHint ?? item.Detail ?? string.Empty);
             float contentWidth = Math.Max(1f, rect.width - 16f);
             GUIStyle valueStyle = CreateFactValueStyle();
+            GUIStyle fieldStyle = new GUIStyle(_uiContext.Styles.Field);
+            fieldStyle.fixedHeight = 0f;
+            GUI.BeginGroup(rect);
+            GUI.Box(new Rect(0f, 0f, rect.width, rect.height), GUIContent.none, fieldStyle);
             if (item.Kind == ScenarioAuthoringInspectorItemKind.Text && string.IsNullOrEmpty(item.Label))
             {
-                valueStyle.fixedHeight = 0f;
-                GUIStyle noteFieldStyle = new GUIStyle(_uiContext.Styles.Field);
-                noteFieldStyle.fixedHeight = 0f;
-                GUI.BeginGroup(rect);
-                GUI.Box(new Rect(0f, 0f, rect.width, rect.height), GUIContent.none, noteFieldStyle);
                 GUI.Label(
                     new Rect(8f, 8f, contentWidth, Math.Max(18f, rect.height - 20f)),
                     value,
@@ -4821,16 +4820,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             GUIStyle labelStyle = CreateFactLabelStyle();
             float labelHeight = Mathf.Clamp(labelStyle.CalcHeight(label, contentWidth), 18f, 48f);
-            float valueTop = rect.y + 5f + labelHeight + 3f;
-            Rect labelRect = new Rect(rect.x + 8f, rect.y + 4f, contentWidth, labelHeight);
+            float valueTop = 5f + labelHeight + 3f;
+            Rect labelRect = new Rect(8f, 4f, contentWidth, labelHeight);
             Rect valueRect = new Rect(
-                rect.x + 8f,
+                8f,
                 valueTop,
                 contentWidth,
-                Math.Max(18f, rect.yMax - valueTop - 5f));
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+                Math.Max(18f, rect.height - valueTop - 5f));
             GUI.Label(labelRect, label, labelStyle);
             GUI.Label(valueRect, value, valueStyle);
+            GUI.EndGroup();
         }
 
         private float MeasureFactCellHeight(ScenarioAuthoringInspectorItem item, float width)
@@ -4849,6 +4848,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private GUIStyle CreateFactLabelStyle()
         {
             GUIStyle style = new GUIStyle(_mutedTextStyle);
+            style.fixedHeight = 0f;
             style.wordWrap = true;
             style.clipping = TextClipping.Clip;
             return style;
@@ -4857,6 +4857,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private GUIStyle CreateFactValueStyle()
         {
             GUIStyle style = new GUIStyle(_textStyle);
+            style.fixedHeight = 0f;
             style.wordWrap = true;
             style.clipping = TextClipping.Clip;
             return style;
