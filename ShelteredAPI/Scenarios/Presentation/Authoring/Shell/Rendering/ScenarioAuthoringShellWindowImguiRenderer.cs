@@ -3952,6 +3952,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool showFavoriteToggle,
             bool suppressSecondaryText)
         {
+            DrawCandidateCard(
+                rect,
+                action,
+                armPlacementOnAssetBrowserClick,
+                showFavoriteToggle,
+                suppressSecondaryText,
+                false);
+        }
+
+        private void DrawCandidateCard(
+            Rect rect,
+            ScenarioAuthoringInspectorAction action,
+            bool armPlacementOnAssetBrowserClick,
+            bool showFavoriteToggle,
+            bool suppressSecondaryText,
+            bool stackPreviewAboveLabel)
+        {
             if (action == null)
                 return;
 
@@ -3972,7 +3989,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, pressed);
 
             Rect textRect;
-            if (action.PreviewSprite != null && rect.width >= 150f)
+            if (action.PreviewSprite != null && stackPreviewAboveLabel)
+            {
+                float previewSize = Mathf.Clamp(
+                    Math.Min(rect.width - 20f, rect.height - 64f),
+                    54f,
+                    82f);
+                Rect previewRect = new Rect(
+                    rect.x + ((rect.width - previewSize) * 0.5f),
+                    rect.y + 7f,
+                    previewSize,
+                    previewSize);
+                DrawSpritePreview(previewRect, action.PreviewSprite, action.Emphasized, action.HasPreviewTint ? action.PreviewTint : Color.white);
+                textRect = new Rect(
+                    rect.x + 10f,
+                    previewRect.yMax + 6f,
+                    rect.width - 20f,
+                    Math.Max(20f, rect.yMax - previewRect.yMax - 38f));
+            }
+            else if (action.PreviewSprite != null && rect.width >= 150f)
             {
                 float previewSize = Mathf.Clamp(rect.height - 28f, 44f, 70f);
                 Rect previewRect = new Rect(rect.x + 6f, rect.y + 6f, previewSize, previewSize);
@@ -3988,6 +4023,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             labelStyle.wordWrap = true;
             labelStyle.clipping = TextClipping.Clip;
             float labelHeight = Math.Min(40f, Math.Max(20f, labelStyle.CalcHeight(new GUIContent(action.Label ?? string.Empty), textRect.width)));
+            if (stackPreviewAboveLabel)
+                labelHeight = Math.Min(labelHeight, textRect.height);
             string fittedLabel = action.Label ?? string.Empty;
             string labelTooltip = RegisterRichHoverHelpSource(rect, action) ? string.Empty : BuildFullLabelTooltip(action);
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), new GUIContent(fittedLabel, labelTooltip), labelStyle);
@@ -4003,7 +4040,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(action.Badge))
             {
                 Vector2 badgeSize = _mutedTextStyle.CalcSize(new GUIContent(action.Badge));
-                Rect badgeRect = new Rect(textRect.x, rect.yMax - 22f, Mathf.Max(52f, badgeSize.x + 16f), 18f);
+                float badgeX = stackPreviewAboveLabel && showFavoriteToggle
+                    ? rect.x + 38f
+                    : textRect.x;
+                float badgeMaxWidth = Math.Max(40f, rect.xMax - badgeX - 6f);
+                float badgeWidth = Math.Min(badgeMaxWidth, Mathf.Max(52f, badgeSize.x + 16f));
+                Rect badgeRect = new Rect(badgeX, rect.yMax - 22f, badgeWidth, 18f);
                 ScenarioUiWidgets.DrawPill(badgeRect, action.Badge, _uiContext.Styles, action.Emphasized ? ScenarioUiPillEmphasis.Active : ScenarioUiPillEmphasis.Default);
             }
             if (showFavoriteToggle)

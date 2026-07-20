@@ -234,7 +234,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 5);
             float cardWidth = Math.Min(preferredCardWidth, (availableWidth - (gap * (columns - 1))) / columns);
             cardWidth = Mathf.Clamp(cardWidth, 154f, preferredCardWidth);
-            float cardHeight = 122f;
+            float cardHeight = 160f;
             int count = 0;
 
             GUILayout.BeginHorizontal();
@@ -251,7 +251,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 // detail. Keeping it off the compact grid card prevents a
                 // wrapped title, duplicate source name, and OBJ badge from
                 // competing for the same vertical space.
-                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick, true, true);
+                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick, true, true, true);
                 count++;
                 if (count % columns == 0 && HasMoreVisibleAssetBrowserAction(section, i + 1))
                 {
