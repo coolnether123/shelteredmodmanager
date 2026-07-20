@@ -564,12 +564,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Vector2 BeginMeasuredScrollView(Vector2 scrollPosition, Rect viewportRect)
         {
-            return GUILayout.BeginScrollView(
+            // Authoring documents, inspectors, and browsers are vertical reading surfaces.
+            // Hiding the horizontal track prevents a one-pixel layout overrun from creating
+            // a second scrollbar and taking height away from the last editable row.
+            scrollPosition.x = 0f;
+            Vector2 next = GUILayout.BeginScrollView(
                 scrollPosition,
                 false,
                 false,
+                GUIStyle.none,
+                GUI.skin.verticalScrollbar,
                 GUILayout.Width(Math.Max(1f, viewportRect.width)),
                 GUILayout.Height(Math.Max(1f, viewportRect.height)));
+            next.x = 0f;
+            return next;
         }
 
         private Rect DrawPixelEditorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
@@ -3236,7 +3244,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.CastCardGrid
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.SurvivorEditor;
-            float sectionMaxWidth = ResolveLogicalPixelCap(specializedSurface ? 1080f : 760f);
+            float sectionMaxWidth = ResolveLogicalPixelCap(specializedSurface ? 1080f : 960f);
             if (section.Layout == ScenarioAuthoringInspectorSectionLayout.FactGrid)
             {
                 int factCount = 0;
@@ -3635,6 +3643,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (item == null)
                 return;
 
+            // Editable properties may also carry explanatory detail. They must remain
+            // fields; treating every detailed item as a read-only rich card made warning
+            // acceptance notes impossible to enter on the Test and Publish pages.
+            if (item.Kind == ScenarioAuthoringInspectorItemKind.Property && item.Editable)
+            {
+                DrawEditableProperty(item, compactInspector);
+                return;
+            }
+
             if (item.Kind == ScenarioAuthoringInspectorItemKind.Choice)
             {
                 DrawCompactChoice(item.Choice);
@@ -3650,12 +3667,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             switch (item.Kind)
             {
                 case ScenarioAuthoringInspectorItemKind.Property:
-                    if (item.Editable)
-                    {
-                        DrawEditableProperty(item, compactInspector);
-                        break;
-                    }
-
                     string value = compactInspector ? Shorten(item.Value, 34) : item.Value;
                     float rowHeight = CalculateKeyValueRowHeight(item.Label, value);
                     Rect rowRect = GUILayoutUtility.GetRect(0f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
@@ -3672,7 +3683,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                         float width = Math.Max(96f, MeasureButtonWidth(item.Action, false, 24f));
                         width = Math.Min(width, GetSectionContentWidth());
-                        Rect rect = GUILayoutUtility.GetRect(width, 30f, GUILayout.Width(width), GUILayout.Height(30f));
+                        GUIStyle buttonStyle = !item.Action.Enabled
+                            ? _uiContext.Styles.ButtonDisabled
+                            : (item.Action.Emphasized ? _activeButtonStyle : _buttonStyle);
+                        float buttonHeight = buttonStyle != null
+                            ? Mathf.Clamp(
+                                buttonStyle.CalcHeight(new GUIContent(item.Action.Label ?? string.Empty), Math.Max(1f, width)),
+                                30f,
+                                72f)
+                            : 30f;
+                        Rect rect = GUILayoutUtility.GetRect(width, buttonHeight, GUILayout.Width(width), GUILayout.Height(buttonHeight));
                         DrawButton(rect, item.Action, false);
                     }
                     break;
@@ -3716,13 +3736,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             string label = item != null ? item.Label ?? string.Empty : string.Empty;
             string value = compactInspector ? Shorten(item != null ? item.Value : null, 34) : (item != null ? item.Value : null);
-            float rowHeight = Math.Max(30f, CalculateKeyValueRowHeight(label, value) + 6f);
+            string detail = item != null ? item.Detail : null;
+            float contentWidth = GetSectionContentWidth();
+            float detailHeight = string.IsNullOrEmpty(detail) || _mutedTextStyle == null
+                ? 0f
+                : Mathf.Clamp(
+                    _mutedTextStyle.CalcHeight(new GUIContent(detail), Math.Max(80f, contentWidth)),
+                    20f,
+                    56f);
+            const float fieldRowHeight = 34f;
+            float rowHeight = fieldRowHeight + (detailHeight > 0f ? detailHeight + 4f : 0f);
             Rect rowRect = GUILayoutUtility.GetRect(0f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
             float gap = _uiContext != null ? _uiContext.Styles.Theme.Metrics.PaddingSm : 6f;
             float labelWidth = Math.Max(42f, (rowRect.width - gap) / 2.4f);
-            Rect labelRect = new Rect(rowRect.x, rowRect.y + 3f, labelWidth, rowRect.height - 6f);
-            Rect fieldRect = new Rect(labelRect.xMax + gap, rowRect.y + 2f, Math.Max(60f, rowRect.width - labelWidth - gap), rowRect.height - 4f);
+            Rect labelRect = new Rect(rowRect.x, rowRect.y + 3f, labelWidth, fieldRowHeight - 6f);
+            Rect fieldRect = new Rect(labelRect.xMax + gap, rowRect.y + 2f, Math.Max(60f, rowRect.width - labelWidth - gap), fieldRowHeight - 4f);
             GUI.Label(labelRect, label, _mutedTextStyle);
+            if (detailHeight > 0f)
+            {
+                Rect detailRect = new Rect(
+                    rowRect.x,
+                    rowRect.y + fieldRowHeight + 2f,
+                    rowRect.width,
+                    detailHeight);
+                GUI.Label(detailRect, detail, _mutedTextStyle);
+            }
 
             string controlName = "editable." + label;
             string focusedName = GUI.GetNameOfFocusedControl();

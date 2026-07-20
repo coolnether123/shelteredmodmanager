@@ -192,7 +192,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 return;
 
             Rect inner = InsetWorkspaceRect(rect, WorkspacePanePadding);
-            GUI.Label(new Rect(inner.x, inner.y, inner.width, 22f), "Navigator", _smallTitleStyle);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 22f), "Browse & select", _smallTitleStyle);
             Rect searchRect = new Rect(inner.x, inner.y + 26f, inner.width, 30f);
             DrawWorkspaceSearch(searchRect, workspace, subtabId, navigator);
             Rect viewport = new Rect(inner.x, searchRect.yMax + 8f, inner.width, Math.Max(60f, inner.yMax - searchRect.yMax - 8f));
@@ -447,7 +447,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             Rect inner = InsetWorkspaceRect(rect, WorkspacePanePadding);
             if (workspace != null && workspace.LayoutKind == ScenarioAuthoringWorkspaceLayoutKind.DocumentOnly)
             {
-                float documentWidth = Math.Min(inner.width, ResolveLogicalPixelCap(760f));
+                // Status-flow documents contain warnings, guidance, and editable notes.
+                // Give them enough reading width to keep those rows from collapsing into
+                // one another while retaining a centered document on very wide screens.
+                float documentWidth = Math.Min(inner.width, ResolveLogicalPixelCap(960f));
                 inner = new Rect(inner.x + ((inner.width - documentWidth) * 0.5f), inner.y, documentWidth, inner.height);
             }
             if (document == null)
@@ -479,12 +482,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 y = breadcrumbRect.yMax + 4f;
             }
 
-            GUI.Label(new Rect(inner.x, y, inner.width, 28f), document.Title ?? "Document", _smallTitleStyle);
-            y += 29f;
+            string documentTitle = document.Title ?? "Document";
+            float titleHeight = MeasureWrappedWorkspaceLabel(
+                documentTitle,
+                inner.width,
+                _smallTitleStyle,
+                28f,
+                72f);
+            GUI.Label(
+                new Rect(inner.x, y, inner.width, titleHeight),
+                new GUIContent(documentTitle, documentTitle),
+                _smallTitleStyle);
+            y += titleHeight + 3f;
             if (!string.IsNullOrEmpty(document.Subtitle))
             {
-                GUI.Label(new Rect(inner.x, y, inner.width, 20f), document.Subtitle, _uiContext.Styles.MutedText);
-                y += 22f;
+                float subtitleHeight = MeasureWrappedWorkspaceLabel(
+                    document.Subtitle,
+                    inner.width,
+                    _uiContext.Styles.MutedText,
+                    20f,
+                    60f);
+                GUI.Label(
+                    new Rect(inner.x, y, inner.width, subtitleHeight),
+                    new GUIContent(document.Subtitle, document.Subtitle),
+                    _uiContext.Styles.MutedText);
+                y += subtitleHeight + 5f;
             }
             if (document.StatusChips != null && document.StatusChips.Length > 0)
             {
@@ -513,7 +535,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 y += 40f;
             }
 
-            Rect viewport = new Rect(inner.x, y + 3f, inner.width, Math.Max(60f, inner.yMax - y - 3f));
+            GUI.Box(
+                new Rect(inner.x, y + 1f, inner.width, 1f),
+                GUIContent.none,
+                _uiContext.Styles.Divider);
+            y += 10f;
+
+            Rect viewport = new Rect(inner.x, y, inner.width, Math.Max(60f, inner.yMax - y));
             GUILayout.BeginArea(viewport);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, viewport.width - 18f);
@@ -621,6 +649,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (action == null)
                 return;
             string label = string.IsNullOrEmpty(action.Label) ? "< Back" : action.Label;
+            if (string.Equals(label, "Back to Navigator", StringComparison.OrdinalIgnoreCase))
+                label = "< Back to list";
             if (DrawPlainButton(
                 rect,
                 new GUIContent(label, action.Hint ?? action.Detail ?? string.Empty),
@@ -629,6 +659,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             {
                 ExecuteWorkspaceAction(action);
             }
+        }
+
+        private static float MeasureWrappedWorkspaceLabel(
+            string text,
+            float width,
+            GUIStyle style,
+            float minimumHeight,
+            float maximumHeight)
+        {
+            if (style == null || width <= 0f)
+                return minimumHeight;
+
+            float measured = style.CalcHeight(
+                new GUIContent(text ?? string.Empty),
+                Math.Max(1f, width));
+            return Mathf.Clamp(measured, minimumHeight, Math.Max(minimumHeight, maximumHeight));
         }
 
         private void DrawCompactChoice(ScenarioAuthoringCompactChoiceViewModel choice)
