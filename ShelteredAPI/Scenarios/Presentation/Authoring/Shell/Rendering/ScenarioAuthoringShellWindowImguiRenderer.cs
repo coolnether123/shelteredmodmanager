@@ -171,11 +171,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = oldColor;
 
             bool homeWorkshopPage = IsHomeWorkshopPage(window);
+            bool timelineWorkshopPage = IsTimelineWorkshopPage(window);
             Rect pageRect = homeWorkshopPage
                 ? ScenarioAuthoringShellLayout.BuildHomeWorkshopPageRect(contentRect)
                 : ScenarioAuthoringShellLayout.BuildWorkshopPageRect(contentRect);
             Rect bodyRect;
-            if (homeWorkshopPage)
+            if (homeWorkshopPage || timelineWorkshopPage)
             {
                 bodyRect = new Rect(pageRect.x, pageRect.y, pageRect.width, pageRect.height);
             }
@@ -1947,33 +1948,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorSection track = FindSection(window, TimelineTrackSectionId);
             ScenarioAuthoringInspectorSection pacing = FindSection(window, ScenarioPacingAuthoringSectionBuilder.SectionId);
             ScenarioAuthoringInspectorSection logic = FindSection(window, "timeline_logic");
-            bool roomy = _chromeViewportRect.height >= 820f;
             float fullWidth = GetSectionContentWidth();
-            float gap = 12f;
-            float leftWidth = Math.Max(360f, (fullWidth - gap) * 0.58f);
-            float rightWidth = Math.Max(300f, fullWidth - leftWidth - gap);
 
-            GUILayout.BeginHorizontal();
-            GUILayout.BeginVertical(GUILayout.Width(leftWidth));
-            _activeContentWidth = Math.Max(120f, leftWidth - 12f);
+            _activeContentWidth = fullWidth;
             if (track != null)
                 DrawSection(track);
             if (pacing != null)
             {
-                GUILayout.Space(8f);
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.pacing", "Pacing", BuildTimelinePacingSummary(pacing), roomy, pacing, DisclosureBodyStrategy.TimelinePacing);
+                GUILayout.Space(10f);
+                DrawSection(pacing);
             }
-            GUILayout.EndVertical();
-
-            GUILayout.Space(gap);
-            GUILayout.BeginVertical(GUILayout.Width(rightWidth));
-            _activeContentWidth = Math.Max(120f, rightWidth - 12f);
-            if (track != null)
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.entries", "Entries", BuildTimelineEntriesSummary(track), roomy, track, DisclosureBodyStrategy.TimelineEntries);
             if (logic != null)
-                DrawCollapsibleGroup(ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, "timeline.group.logic", "Logic", BuildTimelineLogicSummary(logic), roomy, logic, DisclosureBodyStrategy.TimelineLogic);
-            GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
+            {
+                GUILayout.Space(10f);
+                DrawCollapsibleGroup(
+                    ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix,
+                    "timeline.group.logic",
+                    "Advanced event rules",
+                    BuildTimelineLogicSummary(logic),
+                    false,
+                    logic,
+                    DisclosureBodyStrategy.TimelineLogic);
+            }
             _activeContentWidth = fullWidth;
         }
 

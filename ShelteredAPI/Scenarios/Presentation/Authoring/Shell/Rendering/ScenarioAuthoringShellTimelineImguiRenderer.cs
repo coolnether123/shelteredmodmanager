@@ -139,21 +139,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             EnsureTimelineTrackCache(section);
             TimelineDayInfo[] days = _timelineTrackCachedDays;
             TimelineChipInfo[] chips = _timelineTrackCachedChips;
-            if (chips.Length == 0)
-            {
-                DrawTimelineEmptyState(section);
-                return;
-            }
 
-            DrawTimelineAddFlow(section, false);
+            GUIStyle instructionStyle = new GUIStyle(_mutedTextStyle);
+            instructionStyle.wordWrap = true;
+            GUILayout.Label(
+                "Each column is one in-game day. Event cards show when something happens; select a card to edit it.",
+                instructionStyle);
+            GUILayout.Space(5f);
+            DrawTimelineAddFlow(section, chips.Length == 0);
+
             float availableWidth = GetSectionContentWidth();
-            float closeDayWidth = Math.Max(_timelineTrackMeasuredDayWidth, availableWidth >= 720f ? 168f : 144f);
-            float overviewDayWidth = Math.Max(54f, availableWidth / Math.Max(1, days.Length));
-            float dayWidth = Mathf.Lerp(overviewDayWidth, Math.Max(overviewDayWidth, closeDayWidth), _timelineTrackZoom);
+            const int daysPerPage = 7;
+            int weekCount = Math.Max(1, (days.Length + daysPerPage - 1) / daysPerPage);
             int maxLanes = Math.Max(1, _timelineTrackMaxLanes);
-            float trackHeight = Mathf.Clamp(86f + (maxLanes * 34f), 158f, 242f);
+            float weekHeight = Mathf.Clamp(62f + (maxLanes * 50f), 174f, 330f);
+            float trackHeight = (weekHeight * weekCount) + (8f * Math.Max(0, weekCount - 1));
             Rect viewportRect = GUILayoutUtility.GetRect(availableWidth, trackHeight, GUILayout.ExpandWidth(true), GUILayout.Height(trackHeight));
-            DrawTimelineTrackViewport(viewportRect, days, chips, dayWidth, trackHeight);
+            DrawTimelineTrackViewport(viewportRect, days, chips, weekHeight);
+            GUILayout.Space(5f);
+            GUILayout.Label(
+                chips.Length == 0
+                    ? "The calendar is empty. Choose an event type above to schedule the first change."
+                    : "Color key: story, weather, supplies, survivors, journal, and world events.",
+                _mutedTextStyle);
         }
 
         private void EnsureTimelineTrackCache(ScenarioAuthoringInspectorSection section)
@@ -209,10 +217,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawTimelineAddFlow(ScenarioAuthoringInspectorSection section, bool empty)
         {
+            GUILayout.Label(empty ? "Add the first event" : "Add to calendar", _uiContext.Styles.PaperTitleText);
+            GUILayout.Space(3f);
             GUILayout.BeginHorizontal();
-            GUILayout.Label(empty ? "Add your first event" : "Add event", _timelineTrackLabelStyle, GUILayout.Width(empty ? 132f : 84f), GUILayout.Height(30f));
-
-            float used = empty ? 132f : 84f;
+            float used = 0f;
             float limit = GetSectionContentWidth();
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
             {
@@ -238,27 +246,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Space(8f);
         }
 
-        private void DrawTimelineTrackViewport(Rect viewportRect, TimelineDayInfo[] days, TimelineChipInfo[] chips, float dayWidth, float trackHeight)
+        private void DrawTimelineTrackViewport(
+            Rect viewportRect,
+            TimelineDayInfo[] days,
+            TimelineChipInfo[] chips,
+            float weekHeight)
         {
             if (days == null || days.Length == 0)
                 return;
 
-            RegisterScrollRegion("timeline.track", viewportRect);
             RegisterInteractiveRegion(viewportRect);
-            Vector2 scroll = GetWindowScrollPosition("timeline.track");
-            scroll = HandleTimelineTrackInput(viewportRect, days, chips, scroll);
-            float closeDayWidth = Math.Max(_timelineTrackMeasuredDayWidth, viewportRect.width >= 720f ? 168f : 144f);
-            float overviewDayWidth = Math.Max(54f, viewportRect.width / Math.Max(1, days.Length));
-            dayWidth = Mathf.Lerp(overviewDayWidth, Math.Max(overviewDayWidth, closeDayWidth), _timelineTrackZoom);
-            scroll.x = Mathf.Clamp(scroll.x, 0f, Math.Max(0f, (dayWidth * days.Length) - viewportRect.width));
-            float contentWidth = Math.Max(viewportRect.width, dayWidth * days.Length);
-            GUILayout.BeginArea(viewportRect);
-            scroll = GUILayout.BeginScrollView(scroll, true, false, GUILayout.Width(viewportRect.width), GUILayout.Height(viewportRect.height));
-            Rect canvasRect = GUILayoutUtility.GetRect(contentWidth, trackHeight - 18f, GUILayout.Width(contentWidth), GUILayout.Height(trackHeight - 18f));
-            DrawTimelineAxis(canvasRect, days, chips, dayWidth);
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-            SetWindowScrollPosition("timeline.track", scroll);
+            Color oldColor = GUI.color;
+            GUI.color = _uiContext.Styles.Theme.Palette.SurfacePage;
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(viewportRect, Texture2D.whiteTexture);
+            GUI.color = oldColor;
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(
+                viewportRect,
+                _uiContext.Styles.BorderStrongTexture,
+                _uiContext.Styles.BorderSubtleTexture);
+
+            const int daysPerWeek = 7;
+            float fittedDayWidth = viewportRect.width / daysPerWeek;
+            for (int dayIndex = 0; dayIndex < days.Length; dayIndex++)
+            {
+                int weekIndex = dayIndex / daysPerWeek;
+                int columnIndex = dayIndex % daysPerWeek;
+                TimelineDayInfo day = days[dayIndex];
+                Rect dayRect = new Rect(
+                    viewportRect.x + (columnIndex * fittedDayWidth) + 3f,
+                    viewportRect.y + (weekIndex * (weekHeight + 8f)) + 4f,
+                    fittedDayWidth - 6f,
+                    weekHeight - 8f);
+                DrawTimelineDayColumn(dayRect, day, Math.Max(1, _timelineTrackMaxLanes), fittedDayWidth);
+                DrawTimelineChipsForDay(dayRect, day, chips);
+            }
         }
 
         private Vector2 HandleTimelineTrackInput(
@@ -373,6 +394,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string baseline = day != null ? day.Baseline : null;
             if (!string.IsNullOrEmpty(baseline))
             {
+                int repeatedDay = baseline.IndexOf(" / day ", StringComparison.OrdinalIgnoreCase);
+                if (repeatedDay > 0)
+                    baseline = baseline.Substring(0, repeatedDay);
+                if (string.Equals(baseline, "LightSand", StringComparison.OrdinalIgnoreCase))
+                    baseline = "Light sand";
                 string fitted;
                 string tooltip;
                 ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(baseline, rect.width - 16f, _mutedTextStyle, out fitted, out tooltip);
@@ -389,7 +415,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (chip == null || day == null || chip.Day != day.Day)
                     continue;
 
-                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 34f), Math.Max(84f, dayRect.width - 16f), 28f);
+                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 50f), Math.Max(84f, dayRect.width - 16f), 44f);
                 DrawTimelineChip(chipRect, chip);
                 lane++;
             }
@@ -428,15 +454,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = oldColor;
             ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, chip.Action.Emphasized ? _uiContext.Styles.BorderStrongTexture : _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderSubtleTexture);
 
-            Rect iconRect = new Rect(rect.x + 5f, rect.y + 5f, 18f, 18f);
-            DrawTimelineChipGlyph(iconRect, chip);
-            Rect labelRect = new Rect(rect.x + 27f, rect.y + 5f, rect.width - 58f, 18f);
-            string fittedLabel;
-            string labelTooltip;
-            ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(chip.Action.Label ?? string.Empty, labelRect.width, _textStyle, out fittedLabel, out labelTooltip);
-            GUI.Label(labelRect, new GUIContent(fittedLabel, labelTooltip), _textStyle);
-            if (!string.IsNullOrEmpty(chip.Action.Badge))
-                ScenarioUiWidgets.DrawPill(new Rect(rect.xMax - 28f, rect.y + 5f, 23f, 18f), chip.Action.Badge, _uiContext.Styles, ResolveTimelineStatusEmphasis(chip.Status));
+            bool showStatusBadge = !string.IsNullOrEmpty(chip.Action.Badge)
+                && !string.Equals(chip.Status, "Pending", StringComparison.OrdinalIgnoreCase);
+            Rect labelRect = new Rect(rect.x + 7f, rect.y + 16f, rect.width - (showStatusBadge ? 40f : 14f), 25f);
+            GUIStyle calendarLabelStyle = new GUIStyle(_buttonStyle);
+            calendarLabelStyle.alignment = TextAnchor.UpperLeft;
+            calendarLabelStyle.padding = new RectOffset();
+            calendarLabelStyle.wordWrap = true;
+            calendarLabelStyle.clipping = TextClipping.Clip;
+            calendarLabelStyle.normal.background = null;
+            calendarLabelStyle.hover.background = null;
+            calendarLabelStyle.active.background = null;
+            calendarLabelStyle.focused.background = null;
+
+            string fullLabel = chip.Action.Label ?? string.Empty;
+            int scheduleSeparator = fullLabel.IndexOf(" - ", StringComparison.Ordinal);
+            string calendarLabel = scheduleSeparator >= 0 && scheduleSeparator + 3 < fullLabel.Length
+                ? fullLabel.Substring(scheduleSeparator + 3)
+                : fullLabel;
+            if (calendarLabel.StartsWith("Story ", StringComparison.OrdinalIgnoreCase))
+                calendarLabel = calendarLabel.Substring("Story ".Length);
+            calendarLabel = calendarLabel.Replace("stage change -> ", "Go to ");
+            calendarLabel = calendarLabel.Replace("unanswered -> ", "No answer \u2192 ");
+            GUI.Label(labelRect, new GUIContent(calendarLabel, fullLabel), calendarLabelStyle);
+            if (!string.IsNullOrEmpty(chip.Time))
+            {
+                GUIStyle timeStyle = new GUIStyle(calendarLabelStyle);
+                timeStyle.fontSize = Math.Max(9, timeStyle.fontSize - 2);
+                timeStyle.wordWrap = false;
+                GUI.Label(new Rect(labelRect.x, rect.y + 2f, labelRect.width, 14f), chip.Time, timeStyle);
+            }
+            if (showStatusBadge)
+                ScenarioUiWidgets.DrawPill(new Rect(rect.xMax - 28f, rect.y + 13f, 23f, 18f), chip.Action.Badge, _uiContext.Styles, ResolveTimelineStatusEmphasis(chip.Status));
         }
 
         private void DrawTimelineChipGlyph(Rect rect, TimelineChipInfo chip)
@@ -535,6 +584,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionJournalEntryAdd, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionTriggerAddScheduled, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal)
+                || action.Id.StartsWith(ScenarioAuthoringActionIds.ActionTimelinePresetPrefix, StringComparison.Ordinal)
                 || action.Id.StartsWith(ScenarioAuthoringActionIds.ActionStageSelectPrefix, StringComparison.Ordinal);
         }
 
