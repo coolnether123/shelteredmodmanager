@@ -267,18 +267,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private void DrawNavigatorGroupHeader(ScenarioAuthoringNavigatorGroupViewModel group)
         {
-            Rect rowRect = GUILayoutUtility.GetRect(0f, 34f, GUILayout.ExpandWidth(true), GUILayout.Height(34f));
-            float createWidth = group.CreateAction != null
-                ? Mathf.Clamp(MeasureButtonWidth(group.CreateAction, false, 18f), 30f, Math.Max(30f, rowRect.width * 0.34f))
+            float availableWidth = Math.Max(120f, GetSectionContentWidth());
+            string label = group.Label ?? string.Empty;
+            ScenarioAuthoringInspectorAction toggle = group.ToggleAction;
+            GUIStyle toggleStyle = toggle != null && !toggle.Enabled
+                ? _uiContext.Styles.ButtonDisabled
+                : (group.Expanded ? _activeButtonStyle : _buttonStyle);
+            float desiredToggleWidth = Math.Max(58f, ScenarioUiMeasuredLabel.Width(label, toggleStyle, 20f));
+            float desiredCreateWidth = group.CreateAction != null
+                ? Mathf.Clamp(MeasureButtonWidth(group.CreateAction, false, 18f), 30f, availableWidth)
                 : 0f;
+            float estimatedChipsWidth = MeasureStatusChipsWidth(group.StatusChips, 2, availableWidth * 0.34f);
+            float estimatedGaps = (estimatedChipsWidth > 0f ? 4f : 0f)
+                + (desiredCreateWidth > 0f ? 5f : 0f);
+            bool stackCreate = group.CreateAction != null
+                && desiredToggleWidth + estimatedChipsWidth + desiredCreateWidth + estimatedGaps > availableWidth;
+            float allocatedHeight = stackCreate ? 70f : 34f;
+            Rect allocatedRect = GUILayoutUtility.GetRect(
+                0f,
+                allocatedHeight,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(allocatedHeight));
+            Rect rowRect = new Rect(allocatedRect.x, allocatedRect.y, allocatedRect.width, 34f);
+            float createWidth = stackCreate ? 0f : Math.Min(desiredCreateWidth, rowRect.width);
             float chipsWidth = MeasureStatusChipsWidth(group.StatusChips, 2, rowRect.width * 0.34f);
             float rightWidth = createWidth
                 + (createWidth > 0f ? 5f : 0f)
                 + chipsWidth
                 + (chipsWidth > 0f ? 4f : 0f);
             Rect toggleRect = new Rect(rowRect.x, rowRect.y, Math.Max(58f, rowRect.width - rightWidth), rowRect.height);
-            string label = group.Label ?? string.Empty;
-            ScenarioAuthoringInspectorAction toggle = group.ToggleAction;
             if (toggle != null && DrawPlainButton(
                 toggleRect,
                 new GUIContent(label, toggle.Hint ?? toggle.Detail ?? string.Empty),
@@ -296,7 +313,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             x = DrawStatusChipRun(x, rowRect, group.StatusChips, 2, chipsWidth);
             if (group.CreateAction != null)
             {
-                Rect createRect = new Rect(rowRect.xMax - createWidth, rowRect.y + 2f, createWidth, rowRect.height - 4f);
+                Rect createRect = stackCreate
+                    ? new Rect(allocatedRect.x, rowRect.yMax + 4f, allocatedRect.width, 30f)
+                    : new Rect(rowRect.xMax - createWidth, rowRect.y + 2f, createWidth, rowRect.height - 4f);
                 DrawButton(createRect, group.CreateAction, false);
             }
         }
