@@ -4220,8 +4220,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     actionColumn = 0;
                     actionRow = false;
                     float textHeight = Mathf.Clamp(
-                        _textStyle.CalcHeight(new GUIContent(item.Value), Math.Max(80f, availableWidth - 16f)) + 28f,
-                        64f,
+                        _textStyle.CalcHeight(new GUIContent(item.Value), Math.Max(80f, availableWidth - 16f)) + 18f,
+                        48f,
                         180f);
                     Rect noteRect = GUILayoutUtility.GetRect(
                         availableWidth,
@@ -4232,6 +4232,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     if (i + 1 < section.Items.Length)
                     {
                         GUILayout.EndHorizontal();
+                        GUILayout.Space(8f);
                         GUILayout.BeginHorizontal();
                     }
                     continue;
@@ -4796,8 +4797,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUIContent label = new GUIContent(item.Label ?? string.Empty, item.HoverHint ?? item.Detail ?? item.Value ?? string.Empty);
             GUIContent value = new GUIContent(item.Value ?? string.Empty, item.HoverHint ?? item.Detail ?? string.Empty);
             float contentWidth = Math.Max(1f, rect.width - 16f);
-            GUIStyle labelStyle = CreateFactLabelStyle();
             GUIStyle valueStyle = CreateFactValueStyle();
+            if (item.Kind == ScenarioAuthoringInspectorItemKind.Text && string.IsNullOrEmpty(item.Label))
+            {
+                GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+                GUI.Label(
+                    new Rect(rect.x + 8f, rect.y + 8f, contentWidth, Math.Max(18f, rect.height - 16f)),
+                    value,
+                    valueStyle);
+                return;
+            }
+
+            GUIStyle labelStyle = CreateFactLabelStyle();
             float labelHeight = Mathf.Clamp(labelStyle.CalcHeight(label, contentWidth), 18f, 48f);
             float valueTop = rect.y + 5f + labelHeight + 3f;
             Rect labelRect = new Rect(rect.x + 8f, rect.y + 4f, contentWidth, labelHeight);
