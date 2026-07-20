@@ -4019,9 +4019,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 textRect = new Rect(rect.x + 10f, rect.y + 8f, rect.width - 20f, rect.height - 16f);
             }
 
-            GUIStyle labelStyle = new GUIStyle(_textStyle);
+            GUIStyle labelStyle = new GUIStyle(stackPreviewAboveLabel ? style : _textStyle);
             labelStyle.wordWrap = true;
             labelStyle.clipping = TextClipping.Clip;
+            if (stackPreviewAboveLabel)
+            {
+                labelStyle.alignment = TextAnchor.UpperLeft;
+                labelStyle.padding = new RectOffset();
+                labelStyle.normal.background = null;
+                labelStyle.hover.background = null;
+                labelStyle.active.background = null;
+                labelStyle.focused.background = null;
+            }
             float labelHeight = Math.Min(40f, Math.Max(20f, labelStyle.CalcHeight(new GUIContent(action.Label ?? string.Empty), textRect.width)));
             if (stackPreviewAboveLabel)
                 labelHeight = Math.Min(labelHeight, textRect.height);
