@@ -24,12 +24,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float gap = compactInspector ? 5f : 6f;
             bool timed = HasInventoryScheduleSlots(slots);
-            float minSlot = timed ? (compactInspector ? 86f : 96f) : (compactInspector ? 54f : 62f);
-            float preferredSlot = timed ? (compactInspector ? 98f : 112f) : (compactInspector ? 64f : 74f);
+            bool readableSupplyCards = IsStartingSupplyGrid(section) && !timed;
+            float minSlot = timed
+                ? (compactInspector ? 86f : 96f)
+                : (readableSupplyCards ? (compactInspector ? 78f : 88f) : (compactInspector ? 54f : 62f));
+            float preferredSlot = timed
+                ? (compactInspector ? 98f : 112f)
+                : (readableSupplyCards ? (compactInspector ? 88f : 98f) : (compactInspector ? 64f : 74f));
             int columns = Mathf.Max(1, Mathf.FloorToInt((availableWidth + gap) / (minSlot + gap)));
             float slotSize = Mathf.Min(preferredSlot, (availableWidth - (gap * (columns - 1))) / columns);
-            slotSize = Mathf.Clamp(slotSize, minSlot, preferredSlot);
-            float cellHeight = timed ? slotSize + 112f : slotSize + 48f;
+            float responsiveMinimum = readableSupplyCards
+                ? Math.Min(minSlot, Math.Max(54f, availableWidth))
+                : minSlot;
+            float responsiveMaximum = readableSupplyCards
+                ? Math.Min(preferredSlot, Math.Max(responsiveMinimum, availableWidth))
+                : preferredSlot;
+            slotSize = Mathf.Clamp(slotSize, responsiveMinimum, responsiveMaximum);
+            float cellHeight = timed
+                ? slotSize + 112f
+                : slotSize + (readableSupplyCards ? 68f : 48f);
 
             int column = 0;
             GUILayout.BeginHorizontal();
@@ -40,7 +53,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect cellRect = GUILayoutUtility.GetRect(slotSize, cellHeight, GUILayout.Width(slotSize), GUILayout.Height(cellHeight));
-                DrawInventorySlotCell(cellRect, slot, grid != null && grid.ReadOnly, timed);
+                DrawInventorySlotCell(
+                    cellRect,
+                    slot,
+                    grid != null && grid.ReadOnly,
+                    timed,
+                    readableSupplyCards);
                 column++;
                 if (column >= columns && HasMoreInventorySlots(slots, i + 1))
                 {
@@ -101,7 +119,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private void DrawInventorySlotCell(Rect cellRect, ScenarioInventorySlotViewModel slot, bool gridReadOnly, bool reserveScheduleSpace)
+        private void DrawInventorySlotCell(
+            Rect cellRect,
+            ScenarioInventorySlotViewModel slot,
+            bool gridReadOnly,
+            bool reserveScheduleSpace,
+            bool readableSupplyCard)
         {
             bool readOnly = gridReadOnly || (slot != null && slot.ReadOnly);
             float slotSize = cellRect.width;
@@ -126,7 +149,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool pressed = clickable && IsInteractiveMouseDownAllowed(slotRect);
             DrawButtonAnimationOverlay(slotRect, primary != null ? primary.Id : null, clickable, hovered, pressed);
             DrawInventorySlotIcon(slotRect, slot);
-            DrawInventorySlotBadge(slotRect, slot);
+            DrawInventorySlotBadge(slotRect, slot, readableSupplyCard);
             DrawInventoryQuantityBadge(slotRect, slot);
             if (slot != null && slot.Emphasized)
             {
@@ -139,10 +162,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawInventoryReadOnlyCorner(slotRect);
             ScenarioUiAtlasSkin.DrawCornerCutBorder(slotRect, _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderSubtleTexture);
 
-            Rect labelRect = new Rect(cellRect.x, slotRect.yMax + 3f, cellRect.width, reserveScheduleSpace ? 32f : 30f);
+            float labelHeight = reserveScheduleSpace ? 32f : (readableSupplyCard ? 38f : 30f);
+            Rect labelRect = new Rect(cellRect.x, slotRect.yMax + 3f, cellRect.width, labelHeight);
             GUIStyle labelStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
             labelStyle.wordWrap = true;
             labelStyle.clipping = TextClipping.Clip;
+            labelStyle.alignment = TextAnchor.UpperLeft;
             GUI.Label(labelRect, slot != null ? slot.DisplayName ?? string.Empty : string.Empty, labelStyle);
 
             if (reserveScheduleSpace)
@@ -151,18 +176,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.Label(scheduleRect, ShortenToFit(slot != null ? slot.ScheduleText : null, scheduleRect.width, _mutedTextStyle), _mutedTextStyle);
             }
 
-            DrawInventorySlotControls(cellRect, slot, readOnly, reserveScheduleSpace);
+            DrawInventorySlotControls(
+                cellRect,
+                slot,
+                readOnly,
+                reserveScheduleSpace,
+                readableSupplyCard,
+                labelRect.yMax);
         }
 
-        private void DrawInventorySlotControls(Rect cellRect, ScenarioInventorySlotViewModel slot, bool readOnly, bool reserveScheduleSpace)
+        private void DrawInventorySlotControls(
+            Rect cellRect,
+            ScenarioInventorySlotViewModel slot,
+            bool readOnly,
+            bool reserveScheduleSpace,
+            bool readableSupplyCard,
+            float labelBottom)
         {
             if (slot == null || slot.Empty || readOnly)
                 return;
 
-            float y = cellRect.y + cellRect.width + (reserveScheduleSpace ? 51f : 32f);
-            Rect minusRect = new Rect(cellRect.x, y, 18f, 18f);
-            Rect plusRect = new Rect(minusRect.xMax + 2f, y, 18f, 18f);
-            Rect removeRect = new Rect(cellRect.xMax - 20f, y, 20f, 18f);
+            float controlHeight = readableSupplyCard ? 22f : 18f;
+            float quantityWidth = readableSupplyCard
+                ? (cellRect.width >= 82f ? 24f : (cellRect.width >= 70f ? 18f : 15f))
+                : 18f;
+            float controlGap = readableSupplyCard
+                ? (cellRect.width >= 82f ? 3f : (cellRect.width >= 70f ? 2f : 1f))
+                : 2f;
+            float removeWidth = readableSupplyCard
+                ? Mathf.Clamp(cellRect.width - (quantityWidth * 2f) - (controlGap * 2f), 22f, 30f)
+                : 20f;
+            float y = readableSupplyCard
+                ? labelBottom + 3f
+                : cellRect.y + cellRect.width + (reserveScheduleSpace ? 51f : 32f);
+            Rect minusRect = new Rect(cellRect.x, y, quantityWidth, controlHeight);
+            Rect plusRect = new Rect(minusRect.xMax + controlGap, y, quantityWidth, controlHeight);
+            Rect removeRect = new Rect(cellRect.xMax - removeWidth, y, removeWidth, controlHeight);
             if (slot.QuantityDecreaseAction != null)
                 DrawButton(minusRect, slot.QuantityDecreaseAction, false);
             if (slot.QuantityIncreaseAction != null)
@@ -174,7 +223,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             if (slot.KindAction != null)
-                DrawButton(new Rect(cellRect.x, y, Math.Min(42f, cellRect.width), 18f), slot.KindAction, false);
+                DrawButton(new Rect(cellRect.x, y, Math.Min(42f, cellRect.width), controlHeight), slot.KindAction, false);
 
             y += 20f;
             float x = cellRect.x;
@@ -211,19 +260,36 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.Label(iconRect, glyph, glyphStyle);
         }
 
-        private void DrawInventorySlotBadge(Rect slotRect, ScenarioInventorySlotViewModel slot)
+        private void DrawInventorySlotBadge(
+            Rect slotRect,
+            ScenarioInventorySlotViewModel slot,
+            bool compactLongBadge)
         {
             if (slot == null || string.IsNullOrEmpty(slot.Badge))
                 return;
 
-            float badgeWidth = Mathf.Min(slotRect.width - 8f, Math.Max(44f, MeasurePillWidth(slot.Badge, 18f)));
+            string badge = compactLongBadge
+                ? ResolveSupplyCardBadge(slot.Badge, slotRect.width - 8f)
+                : slot.Badge;
+            float badgeWidth = Mathf.Min(slotRect.width - 8f, Math.Max(44f, MeasurePillWidth(badge, 18f)));
             Rect badgeRect = new Rect(slotRect.x + 4f, slotRect.y + 4f, badgeWidth, 17f);
             ScenarioUiPillEmphasis emphasis = ScenarioUiPillEmphasis.Default;
             if (StringContains(slot.Badge, "+") || StringContains(slot.Badge, "START"))
                 emphasis = ScenarioUiPillEmphasis.Active;
             else if (StringContains(slot.Badge, "-"))
                 emphasis = ScenarioUiPillEmphasis.Warning;
-            ScenarioUiWidgets.DrawPill(badgeRect, slot.Badge, _uiContext.Styles, emphasis);
+            ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, emphasis);
+        }
+
+        private string ResolveSupplyCardBadge(string badge, float availableWidth)
+        {
+            if (string.IsNullOrEmpty(badge) || MeasurePillWidth(badge, 18f) <= availableWidth)
+                return badge;
+            if (StringContains(badge, "EDITOR"))
+                return "EDITOR";
+            if (StringContains(badge, "START"))
+                return "START";
+            return ShortenToFit(badge, availableWidth - 12f, _mutedTextStyle);
         }
 
         private void DrawInventoryQuantityBadge(Rect slotRect, ScenarioInventorySlotViewModel slot)
@@ -309,6 +375,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return false;
+        }
+
+        private static bool IsStartingSupplyGrid(ScenarioAuthoringInspectorSection section)
+        {
+            return section != null
+                && string.Equals(section.Id, "authored_starting_items", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
