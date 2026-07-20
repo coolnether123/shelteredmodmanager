@@ -47,6 +47,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
     <Reference Include="UnityEngine">
       <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
@@ -83,6 +84,10 @@
     <Compile Include="Map\Internal\MapGenerationPolicyRegistry.cs" />
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
     <Compile Include="Content\AssetLoader.cs" />
+    <Compile Include="Content\Packs\ContentPackLoadResult.cs" />
+    <Compile Include="Content\Packs\ContentPackLoader.cs" />
+    <Compile Include="Content\Packs\ContentPackMapper.cs" />
+    <Compile Include="Content\Packs\ContentPackRuntimeBootstrap.cs" />
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
@@ -90,6 +95,42 @@
     <Compile Include="Content\ShelteredContent.cs" />
     <Compile Include="Content\ShelteredContentServices.cs" />
     <Compile Include="Content\ShelteredContentResolutionService.cs" />
+    <Compile Include="..\Shared\ContentPacks\ContentPackPathPolicy.cs">
+      <Link>Shared\ContentPacks\ContentPackPathPolicy.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSchema.cs">
+      <Link>Shared\ContentPacks\ContentPackSchema.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSerialization.cs">
+      <Link>Shared\ContentPacks\ContentPackSerialization.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidation.cs">
+      <Link>Shared\ContentPacks\ContentPackValidation.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidator.cs">
+      <Link>Shared\ContentPacks\ContentPackValidator.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelClipboard.cs">
+      <Link>Shared\PixelEditing\PixelClipboard.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelDocument.cs">
+      <Link>Shared\PixelEditing\PixelDocument.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditHistory.cs">
+      <Link>Shared\PixelEditing\PixelEditHistory.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorContracts.cs">
+      <Link>Shared\PixelEditing\PixelEditorContracts.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorSession.cs">
+      <Link>Shared\PixelEditing\PixelEditorSession.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelSelection.cs">
+      <Link>Shared\PixelEditing\PixelSelection.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\Rgba32.cs">
+      <Link>Shared\PixelEditing\Rgba32.cs</Link>
+    </Compile>
     <Compile Include="Core\ShelteredGameLifecycleSource.cs" />
     <Compile Include="Events\FactionEvents.cs" />
     <Compile Include="Events\GameEvents.cs" />
