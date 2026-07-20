@@ -3240,7 +3240,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.CastCardGrid
                 || section.Layout == ScenarioAuthoringInspectorSectionLayout.SurvivorEditor;
-            float sectionMaxWidth = ResolveLogicalPixelCap(specializedSurface ? 1080f : 960f);
+            bool fullWidthTimelineSurface = IsTimelineTrackSection(section) || IsPacingSection(section);
+            float sectionMaxWidth = fullWidthTimelineSurface
+                ? GetSectionContentWidth()
+                : ResolveLogicalPixelCap(specializedSurface ? 1080f : 960f);
             if (section.Layout == ScenarioAuthoringInspectorSectionLayout.FactGrid)
             {
                 int factCount = 0;
