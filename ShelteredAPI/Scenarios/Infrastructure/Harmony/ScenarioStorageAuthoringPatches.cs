@@ -16,7 +16,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
         ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = true,
+        ManagerToggleDefault = false,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 101,
         StartupTiming = PatchStartupTiming.EditorDeferred)]

@@ -29,7 +29,7 @@ Use this file for type names and method shapes only. For setup, assembly selecti
 | Compatibility exports | [Save Manifest / Support Bundle](#save-manifest--support-bundle-smm-20) |
 | Documentation contract | [Documentation Model](#documentation-model-smm-20) |
 
-> Status note: runtime UI/store/cooking signatures are API preview, and custom scenario authoring/runtime/scoring surfaces are experimental in 2.0. See the linked task guides before publishing against those areas.
+> Status note: runtime UI/store/cooking signatures and the advanced in-game custom scenario authoring workspace are preview surfaces. Custom scenario registration, playback, runtime bindings, and scoring snapshots are supported 2.0 surfaces. See the linked task guides before publishing against preview areas.
 - Shared SMM 2.0 naming and DTO rules are defined in [ShelteredAPI Guide: Shared Facade Conventions](ShelteredAPI_Guide.md#shared-facade-conventions).
 
 ## Plugin Lifecycle (`ModAPI.Core`)
