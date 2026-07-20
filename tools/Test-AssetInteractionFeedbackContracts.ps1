@@ -75,6 +75,8 @@ Assert-Match 'live pixel preview prefers the nearest then largest active object 
 Assert-Match 'saved sprite rules retain the exact rendered child' $spriteTargetResolver 'TargetPath = BuildTransformPath\(spriteRenderer\.transform\).*Transform = spriteRenderer\.transform.*TargetPath = BuildTransformPath\(ui2DSprite\.transform\).*TargetPath = BuildTransformPath\(particleRenderer\.transform\)'
 Assert-Match 'scenario sprite replacement preserves the live target geometry' $spriteSwapRenderer 'ResolveAlignedReplacement\(entry\.TargetPath, entry\.Sprite\).*baseline\.Sprite\.pivot\.x / baselineRect\.width.*baseline\.Sprite\.pixelsPerUnit'
 Assert-Match 'pixel editor suppresses tool rail' $toolRail 'PixelEditorChromeSuppressed.*ZeroRect'
+Assert-Match 'pixel editor tools fit without scrollbars' $shellWindowRenderer 'DrawCustomSpriteEditorDedicated\([^{]+\)\s*\{(?:(?!GUILayout\.BeginScrollView).)*DrawPixelCanvasViewport'
+Assert-Match 'pixel editor status stays outside the canvas' $shellWindowRenderer 'const float statusHeight.*Rect inner = new Rect\(.*viewportRect\.height - statusHeight - 20f.*Rect statusRect = new Rect\(.*GUI\.Label\(statusRect'
 Assert-Match 'inactive upgrade renderers excluded' $bounds '!spriteRenderer\.gameObject\.activeInHierarchy'
 Assert-Match 'authoring hover feeds vanilla interaction' $interaction 'state\.HoveredTarget.*ResolveObjBase\(authoringObject\).*SelectInteractionObject'
 Assert-Match 'right click restores a usable family selection' $interaction 'EnsureSelectedFamilyMember.*GetFamilyMemberByIndex.*SelectFamilyMemberByIndex'
