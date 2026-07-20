@@ -713,6 +713,7 @@
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteAssetResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteReferenceLibrary.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteAnimationMetadataService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Assets\ScenarioPixelEditorAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteRuntimeMutationService.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteRuntimeResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioWeatherEffectSpriteCatalogService.cs" />
