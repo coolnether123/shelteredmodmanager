@@ -152,7 +152,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             const int daysPerPage = 7;
             int weekCount = Math.Max(1, (days.Length + daysPerPage - 1) / daysPerPage);
             int maxLanes = Math.Max(1, _timelineTrackMaxLanes);
-            float weekHeight = Mathf.Clamp(62f + (maxLanes * 60f), 180f, 390f);
+            float weekHeight = Math.Max(180f, 62f + (maxLanes * 60f));
             float trackHeight = (weekHeight * weekCount) + (8f * Math.Max(0, weekCount - 1));
             Rect viewportRect = GUILayoutUtility.GetRect(availableWidth, trackHeight, GUILayout.ExpandWidth(true), GUILayout.Height(trackHeight));
             DrawTimelineTrackViewport(viewportRect, days, chips, weekHeight);
@@ -415,7 +415,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (chip == null || day == null || chip.Day != day.Day)
                     continue;
 
-                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 60f), Math.Max(84f, dayRect.width - 16f), 54f);
+                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 60f), Math.Max(0f, dayRect.width - 16f), 54f);
                 DrawTimelineChip(chipRect, chip);
                 lane++;
             }
@@ -456,7 +456,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             bool showStatusBadge = !string.IsNullOrEmpty(chip.Action.Badge)
                 && !string.Equals(chip.Status, "Pending", StringComparison.OrdinalIgnoreCase);
-            float timeColumnWidth = Mathf.Clamp(rect.width * 0.27f, 42f, 50f);
+            bool compactCard = rect.width < 112f;
+            float timeColumnWidth = Mathf.Clamp(rect.width * 0.27f, compactCard ? 30f : 42f, 50f);
             Rect timeRect = new Rect(rect.x + 4f, rect.y + 5f, timeColumnWidth, rect.height - 10f);
             float labelX = timeRect.xMax + 8f;
             float labelRightPadding = showStatusBadge ? 34f : 7f;
