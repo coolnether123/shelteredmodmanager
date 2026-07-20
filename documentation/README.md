@@ -64,6 +64,7 @@ For the internal ownership history and verifier policy, see [ModAPI/ShelteredAPI
 | I want to... | Use... | Guide |
 |--------------|--------|-------|
 | Register items, recipes, loot, assets, or localization | `ShelteredContent` | [Content Guide](ShelteredAPI_Content_Guide.md) |
+| Create data-driven items, recipes, costs, and icons without writing a plugin | Desktop Content Workshop | [Content Workshop Guide](Content_Workshop_Guide.md) |
 | Store ordinary mod state with a save | `ctx.SaveSystem` | [Settings and Persistence](SETTINGS.md) |
 | Inspect or operate on Sheltered save slots | `ShelteredSaves`, `ShelteredSaveEvents` | [ShelteredAPI Guide](ShelteredAPI_Guide.md#facade-chooser) |
 | Listen for game, UI, faction, or scheduled time events | `ShelteredEvents` | [Events Guide](Events_Guide.md) |
