@@ -15,6 +15,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private const string AssetFilterAll = "all";
         private string _newWindowsAssetFilter = AssetFilterAll;
         private Vector2 _testConsoleLogScroll = Vector2.zero;
+        private GUIStyle _metadataMultilineFieldStyle;
 
         private bool TryDrawNewWindowsSection(ScenarioAuthoringInspectorSection section, bool compactInspector)
         {
@@ -91,7 +92,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     continue;
                 }
 
-                DrawMetadataField(section.Id, item, string.Equals(item.Label, "Description", StringComparison.OrdinalIgnoreCase));
+                bool multiline = string.Equals(item.Label, "Description", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(item.Label, "Credits", StringComparison.OrdinalIgnoreCase);
+                DrawMetadataField(section.Id, item, multiline);
                 GUILayout.Space(4f);
             }
             for (int i = 0; section.Items != null && i < section.Items.Length; i++)
@@ -139,14 +142,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             float width = GetSectionContentWidth();
             bool stacked = width < 520f;
             string warning = MetadataWarning(item);
-            float controlHeight = multiline ? 70f : 32f;
+            float labelAndGapWidth = stacked ? 0f : 116f;
+            float maximumWidth = ResolveLogicalPixelCap(multiline ? 680f : 520f);
+            float estimatedFieldWidth = Math.Min(maximumWidth, Math.Max(80f, width - labelAndGapWidth));
+            float controlHeight = multiline
+                ? Mathf.Clamp(
+                    GetMetadataMultilineFieldStyle().CalcHeight(
+                        new GUIContent(item.Value ?? string.Empty),
+                        estimatedFieldWidth),
+                    70f,
+                    140f)
+                : 32f;
             float rowHeight = stacked ? controlHeight + 28f + (string.IsNullOrEmpty(warning) ? 0f : 18f) : controlHeight + (string.IsNullOrEmpty(warning) ? 0f : 18f);
             Rect row = GUILayoutUtility.GetRect(0f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
             float labelWidth = stacked ? row.width : 108f;
             GUI.Label(new Rect(row.x, row.y + 5f, labelWidth, 22f), item.Label ?? string.Empty, _mutedTextStyle);
             float fieldX = stacked ? row.x : row.x + labelWidth + 8f;
             float fieldY = stacked ? row.y + 26f : row.y;
-            float maximumWidth = ResolveLogicalPixelCap(multiline ? 680f : 520f);
             Rect fieldRect = new Rect(fieldX, fieldY, Math.Min(maximumWidth, Math.Max(80f, row.xMax - fieldX)), controlHeight);
             DrawNewWindowsEditableControl(fieldRect, sectionId, item, multiline);
             if (!string.IsNullOrEmpty(warning))
@@ -166,7 +178,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
             GUI.SetNextControlName(controlName);
             string next = multiline
-                ? GUI.TextArea(rect, draft, _uiContext.Styles.Field)
+                ? GUI.TextArea(rect, draft, GetMetadataMultilineFieldStyle())
                 : GUI.TextField(rect, draft, _uiContext.Styles.Field);
             _editableFieldDrafts[controlName] = next;
             bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
@@ -187,6 +199,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 Event.current.Use();
             }
             TrackEditableFieldFocus(controlName, focused);
+        }
+
+        private GUIStyle GetMetadataMultilineFieldStyle()
+        {
+            if (_metadataMultilineFieldStyle != null)
+                return _metadataMultilineFieldStyle;
+
+            _metadataMultilineFieldStyle = new GUIStyle(_uiContext.Styles.Field);
+            _metadataMultilineFieldStyle.fixedHeight = 0f;
+            _metadataMultilineFieldStyle.wordWrap = true;
+            _metadataMultilineFieldStyle.alignment = TextAnchor.UpperLeft;
+            return _metadataMultilineFieldStyle;
         }
 
         private void DrawMetadataWarning(Rect rect, string warning)
