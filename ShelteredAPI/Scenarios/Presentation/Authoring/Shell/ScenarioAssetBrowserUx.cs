@@ -11,6 +11,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
     internal static class ScenarioAssetBrowserUx
     {
+        internal const string AllFilter = "all";
         internal const string FavoritesFilter = "favorites";
         internal const string RecentFilter = "recent";
         private const string FavoritesKey = "asset_browser.favorites";
@@ -56,15 +57,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             switch (stage)
             {
                 case ScenarioStageKind.BunkerBackground:
-                    return Coalesce(FindSectionByHint(sections, "wall", "wire"), RecentFilter);
+                    return Coalesce(FindSectionByHint(sections, "wall", "wire"), ResolvePopulatedOverviewFilter(state, sections));
                 case ScenarioStageKind.BunkerInside:
-                    return Coalesce(FindObjectSection(sections), RecentFilter);
+                    return Coalesce(FindObjectSection(sections), ResolvePopulatedOverviewFilter(state, sections));
                 case ScenarioStageKind.BunkerSurface:
-                    return Coalesce(FindSectionByHint(sections, "scene_"), RecentFilter);
+                    return Coalesce(FindSectionByHint(sections, "scene_"), ResolvePopulatedOverviewFilter(state, sections));
                 case ScenarioStageKind.Bunker:
-                    return Coalesce(FindSectionByHint(sections, "structure", "room"), RecentFilter);
+                    return Coalesce(FindSectionByHint(sections, "structure", "room"), ResolvePopulatedOverviewFilter(state, sections));
                 default:
-                    return RecentFilter;
+                    return ResolvePopulatedOverviewFilter(state, sections);
             }
         }
 
@@ -240,7 +241,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             for (int i = 0; sections != null && i < sections.Length; i++)
             {
                 ScenarioAuthoringInspectorSection section = sections[i];
-                if (section == null || section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
+                if (!HasCandidateAction(section))
                     continue;
                 for (int j = 0; hints != null && j < hints.Length; j++)
                 {
@@ -258,7 +259,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 ScenarioAuthoringInspectorSection section = sections[i];
                 string id = section != null ? section.Id ?? string.Empty : string.Empty;
                 if (section != null
-                    && section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid
+                    && HasCandidateAction(section)
                     && !Contains(id, "scene_")
                     && !Contains(id, "weather")
                     && !Contains(id, "wall")
@@ -268,6 +269,56 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     return id;
             }
             return null;
+        }
+
+        private static string ResolvePopulatedOverviewFilter(
+            ScenarioAuthoringState state,
+            ScenarioAuthoringInspectorSection[] sections)
+        {
+            if (HasMatchingAction(state, sections, RecentFilter))
+                return RecentFilter;
+            if (HasMatchingAction(state, sections, FavoritesFilter))
+                return FavoritesFilter;
+
+            for (int i = 0; sections != null && i < sections.Length; i++)
+            {
+                if (HasCandidateAction(sections[i]))
+                    return AllFilter;
+            }
+
+            // Preserve the empty-catalog landing state; the renderer explains that
+            // no assets are currently available instead of suggesting a dead action.
+            return RecentFilter;
+        }
+
+        private static bool HasMatchingAction(
+            ScenarioAuthoringState state,
+            ScenarioAuthoringInspectorSection[] sections,
+            string filter)
+        {
+            for (int i = 0; sections != null && i < sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = sections[i];
+                for (int j = 0; section != null && section.Items != null && j < section.Items.Length; j++)
+                {
+                    ScenarioAuthoringInspectorAction action = section.Items[j] != null ? section.Items[j].Action : null;
+                    if (ActionMatches(state, action, filter))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool HasCandidateAction(ScenarioAuthoringInspectorSection section)
+        {
+            if (section == null || section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
+                return false;
+            for (int i = 0; section.Items != null && i < section.Items.Length; i++)
+            {
+                if (section.Items[i] != null && section.Items[i].Action != null)
+                    return true;
+            }
+            return false;
         }
 
         private static string ShortUniqueTitle(string title)
