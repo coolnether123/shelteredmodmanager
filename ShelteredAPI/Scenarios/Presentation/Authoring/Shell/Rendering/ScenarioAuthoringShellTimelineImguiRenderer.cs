@@ -152,7 +152,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             const int daysPerPage = 7;
             int weekCount = Math.Max(1, (days.Length + daysPerPage - 1) / daysPerPage);
             int maxLanes = Math.Max(1, _timelineTrackMaxLanes);
-            float weekHeight = Mathf.Clamp(62f + (maxLanes * 56f), 180f, 360f);
+            float weekHeight = Mathf.Clamp(62f + (maxLanes * 60f), 180f, 390f);
             float trackHeight = (weekHeight * weekCount) + (8f * Math.Max(0, weekCount - 1));
             Rect viewportRect = GUILayoutUtility.GetRect(availableWidth, trackHeight, GUILayout.ExpandWidth(true), GUILayout.Height(trackHeight));
             DrawTimelineTrackViewport(viewportRect, days, chips, weekHeight);
@@ -415,7 +415,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (chip == null || day == null || chip.Day != day.Day)
                     continue;
 
-                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 56f), Math.Max(84f, dayRect.width - 16f), 50f);
+                Rect chipRect = new Rect(dayRect.x + 8f, dayRect.y + 48f + (lane * 60f), Math.Max(84f, dayRect.width - 16f), 54f);
                 DrawTimelineChip(chipRect, chip);
                 lane++;
             }
@@ -456,9 +456,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             bool showStatusBadge = !string.IsNullOrEmpty(chip.Action.Badge)
                 && !string.Equals(chip.Status, "Pending", StringComparison.OrdinalIgnoreCase);
-            Rect labelRect = new Rect(rect.x + 7f, rect.y + 16f, rect.width - (showStatusBadge ? 40f : 14f), 31f);
+            float timeColumnWidth = Mathf.Clamp(rect.width * 0.27f, 42f, 50f);
+            Rect timeRect = new Rect(rect.x + 4f, rect.y + 5f, timeColumnWidth, rect.height - 10f);
+            float labelX = timeRect.xMax + 8f;
+            float labelRightPadding = showStatusBadge ? 34f : 7f;
+            Rect labelRect = new Rect(labelX, rect.y + 5f, Math.Max(24f, rect.xMax - labelRightPadding - labelX), rect.height - 10f);
             GUIStyle calendarLabelStyle = new GUIStyle(_buttonStyle);
-            calendarLabelStyle.alignment = TextAnchor.UpperLeft;
+            calendarLabelStyle.alignment = TextAnchor.MiddleLeft;
             calendarLabelStyle.padding = new RectOffset();
             calendarLabelStyle.wordWrap = true;
             calendarLabelStyle.clipping = TextClipping.Clip;
@@ -481,15 +485,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             else if (calendarLabel.StartsWith(unansweredPrefix, StringComparison.OrdinalIgnoreCase))
                 calendarLabel = "No answer\n" + calendarLabel.Substring(unansweredPrefix.Length);
             GUI.Label(labelRect, new GUIContent(calendarLabel, fullLabel), calendarLabelStyle);
+
+            GUI.color = new Color(oldColor.r, oldColor.g, oldColor.b, oldColor.a * 0.28f);
+            GUI.DrawTexture(new Rect(timeRect.xMax + 3f, rect.y + 7f, 1f, rect.height - 14f), Texture2D.whiteTexture);
+            GUI.color = oldColor;
             if (!string.IsNullOrEmpty(chip.Time))
             {
                 GUIStyle timeStyle = new GUIStyle(calendarLabelStyle);
                 timeStyle.fontSize = Math.Max(9, timeStyle.fontSize - 2);
                 timeStyle.wordWrap = false;
-                GUI.Label(new Rect(labelRect.x, rect.y + 2f, labelRect.width, 14f), chip.Time, timeStyle);
+                timeStyle.alignment = TextAnchor.MiddleCenter;
+                GUI.Label(timeRect, chip.Time, timeStyle);
             }
             if (showStatusBadge)
-                ScenarioUiWidgets.DrawPill(new Rect(rect.xMax - 28f, rect.y + 13f, 23f, 18f), chip.Action.Badge, _uiContext.Styles, ResolveTimelineStatusEmphasis(chip.Status));
+                ScenarioUiWidgets.DrawPill(new Rect(rect.xMax - 28f, rect.y + 18f, 23f, 18f), chip.Action.Badge, _uiContext.Styles, ResolveTimelineStatusEmphasis(chip.Status));
         }
 
         private void DrawTimelineChipGlyph(Rect rect, TimelineChipInfo chip)
