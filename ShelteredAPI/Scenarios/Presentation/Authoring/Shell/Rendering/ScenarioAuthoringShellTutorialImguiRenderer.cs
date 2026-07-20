@@ -48,41 +48,79 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(rect, help.Title, help.Subtitle, false, 46f, 0f);
             DrawHelpHeaderActions(regions.Header, help.HeaderActions);
+            float contentWidth = Math.Max(120f, regions.Body.width - 24f);
             GUILayout.BeginArea(regions.Body);
             GUILayout.BeginVertical(_uiContext.Styles.Section);
-            DrawHelpViewTabs(help.ViewTabs);
+            DrawHelpViewTabs(help.ViewTabs, contentWidth);
+
+            string scrollId = help.Shortcuts != null ? "help.shortcuts.body" : "help.pages.body";
+            Vector2 scroll = GetWindowScrollPosition(scrollId);
+            scroll = GUILayout.BeginScrollView(
+                scroll,
+                false,
+                false,
+                GUILayout.ExpandWidth(true),
+                GUILayout.ExpandHeight(true));
             if (help.Shortcuts != null)
-                DrawHelpShortcutsBody(help.Shortcuts);
+                DrawHelpShortcutsBody(help.Shortcuts, contentWidth);
             else
-                DrawHelpPagesBody(help);
+                DrawHelpPagesContent(help);
+            GUILayout.EndScrollView();
+            SetWindowScrollPosition(scrollId, scroll);
+
+            if (help.Shortcuts == null)
+                DrawHelpPagesFooter(help);
             GUILayout.EndVertical();
             GUILayout.EndArea();
         }
 
-        private void DrawHelpViewTabs(ScenarioAuthoringInspectorAction[] tabs)
+        private void DrawHelpViewTabs(ScenarioAuthoringInspectorAction[] tabs, float contentWidth)
         {
             if (tabs == null || tabs.Length == 0)
                 return;
 
+            int visibleTabCount = 0;
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                if (tabs[i] != null)
+                    visibleTabCount++;
+            }
+
+            if (visibleTabCount == 0)
+                return;
+
+            float tabGap = 4f;
+            float fittedTabWidth = (contentWidth - ((visibleTabCount - 1) * tabGap)) / visibleTabCount;
+            float tabWidth = Mathf.Clamp(fittedTabWidth, 88f, 120f);
             GUILayout.BeginHorizontal();
             for (int i = 0; i < tabs.Length; i++)
             {
                 if (tabs[i] == null)
                     continue;
-                DrawButton(GUILayoutUtility.GetRect(120f, 26f, GUILayout.Width(120f), GUILayout.Height(26f)), tabs[i], true);
+                DrawButton(
+                    GUILayoutUtility.GetRect(tabWidth, 26f, GUILayout.Width(tabWidth), GUILayout.Height(26f)),
+                    tabs[i],
+                    true);
+                if (i < tabs.Length - 1)
+                    GUILayout.Space(tabGap);
             }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
             GUILayout.Space(8f);
         }
 
-        private void DrawHelpPagesBody(ScenarioAuthoringHelpViewModel help)
+        private void DrawHelpPagesContent(ScenarioAuthoringHelpViewModel help)
         {
             GUILayout.Label((help.PageTitle ?? "Help").ToUpperInvariant(), _sectionTitleStyle);
             GUILayout.Space(6f);
             GUILayout.Label(help.Body ?? string.Empty, _textStyle);
             GUILayout.Space(12f);
             DrawHelpTopicActions(help.TopicActions);
+            GUILayout.Space(8f);
+        }
+
+        private void DrawHelpPagesFooter(ScenarioAuthoringHelpViewModel help)
+        {
             GUILayout.Space(8f);
             GUILayout.BeginHorizontal();
             DrawButton(GUILayoutUtility.GetRect(92f, 28f, GUILayout.Width(92f), GUILayout.Height(28f)), help.PreviousAction, false);
