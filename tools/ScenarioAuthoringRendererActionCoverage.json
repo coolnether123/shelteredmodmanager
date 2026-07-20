@@ -50,6 +50,7 @@
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawModFieldRow", "actionFamily": "mod-field row actions" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelCanvas", "actionFamily": "sprite_swap.custom." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelEditorGroupHeader", "actionFamily": "shell.renderer.pixel_group.toggle." },
+    { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawPixelEditorToolCard", "actionFamily": "sprite_swap.custom.tool." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorColorRow", "actionFamily": "row.OpenColorPickerActionId" },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorAppearanceZone", "actionFamily": "shell.renderer.workshop_group.toggle." },
     { "key": "ScenarioAuthoringShellWindowImguiRenderer.cs::DrawSurvivorTraitPickerPopup", "actionFamily": "option.SelectAction.Id" },
