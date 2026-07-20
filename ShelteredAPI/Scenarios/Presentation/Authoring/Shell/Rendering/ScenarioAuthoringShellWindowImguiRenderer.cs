@@ -4219,9 +4219,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     column = 0;
                     actionColumn = 0;
                     actionRow = false;
+                    GUIStyle noteMeasureStyle = CreateFactValueStyle();
+                    noteMeasureStyle.fixedHeight = 0f;
                     float textHeight = Mathf.Clamp(
-                        _textStyle.CalcHeight(new GUIContent(item.Value), Math.Max(80f, availableWidth - 16f)) + 18f,
-                        48f,
+                        Mathf.Ceil(Math.Max(
+                            _textStyle.CalcHeight(new GUIContent(item.Value), Math.Max(80f, availableWidth - 16f)),
+                            noteMeasureStyle.CalcHeight(
+                                new GUIContent(item.Value),
+                                Math.Max(80f, availableWidth - 16f)))) + 24f,
+                        72f,
                         180f);
                     Rect noteRect = GUILayoutUtility.GetRect(
                         availableWidth,
@@ -4800,9 +4806,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUIStyle valueStyle = CreateFactValueStyle();
             if (item.Kind == ScenarioAuthoringInspectorItemKind.Text && string.IsNullOrEmpty(item.Label))
             {
+                valueStyle.fixedHeight = 0f;
                 GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
                 GUI.Label(
-                    new Rect(rect.x + 8f, rect.y + 8f, contentWidth, Math.Max(18f, rect.height - 16f)),
+                    new Rect(rect.x + 8f, rect.y + 8f, contentWidth, Math.Max(18f, rect.height - 20f)),
                     value,
                     valueStyle);
                 return;
