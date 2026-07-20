@@ -15,25 +15,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const string TimelineTrackSectionId = "timeline_workshop_track";
         private const string TimelineDayMetadataPrefix = "timeline-day|";
         private const string TimelineChipMetadataPrefix = "timeline-chip|";
-        private const float TimelineTrackZoomDuration = 0.15f;
         private ScenarioDayTimelineRibbonViewModel _timelineTrackCachedRevisionToken;
         private TimelineDayInfo[] _timelineTrackCachedDays;
         private TimelineChipInfo[] _timelineTrackCachedChips;
-        private float _timelineTrackMeasuredDayWidth;
         private int _timelineTrackMaxLanes;
-        private float _timelineTrackZoom;
-        private float _timelineTrackTargetZoom;
-        private float _timelineTrackZoomStart;
-        private float _timelineTrackZoomStartedAt;
-        private float _timelineTrackZoomAnchorDay;
-        private float _timelineTrackZoomAnchorPixel;
-        private bool _timelineTrackZoomAnimating;
-        private bool _timelineTrackDragCandidate;
-        private bool _timelineTrackDragging;
-        private Vector2 _timelineTrackDragStartMouse;
-        private float _timelineTrackDragStartScroll;
-        private GUIStyle _timelineTrackLabelStyle;
-        private GUIStyle _timelineTrackGlyphStyle;
 
         private bool IsPacingSection(ScenarioAuthoringInspectorSection section)
         {
@@ -179,16 +164,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineTrackCachedRevisionToken = revisionToken;
             _timelineTrackCachedDays = BuildTimelineDayInfos(section);
             _timelineTrackCachedChips = BuildTimelineChipInfos(section);
-            if (_timelineTrackLabelStyle == null)
-            {
-                _timelineTrackLabelStyle = new GUIStyle(_mutedTextStyle);
-                _timelineTrackLabelStyle.alignment = TextAnchor.MiddleLeft;
-                _timelineTrackGlyphStyle = new GUIStyle(_mutedTextStyle);
-                _timelineTrackGlyphStyle.alignment = TextAnchor.MiddleCenter;
-                _timelineTrackGlyphStyle.fontStyle = FontStyle.Bold;
-                _timelineTrackGlyphStyle.clipping = TextClipping.Clip;
-            }
-            _timelineTrackMeasuredDayWidth = MeasureTimelineDayWidth(_timelineTrackCachedDays, _timelineTrackCachedChips, 0f);
             _timelineTrackMaxLanes = MaxTimelineChipLaneCount(_timelineTrackCachedDays, _timelineTrackCachedChips);
         }
 
@@ -278,98 +253,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     fittedDayWidth - 6f,
                     weekHeight - 8f);
                 DrawTimelineDayColumn(dayRect, day, Math.Max(1, _timelineTrackMaxLanes), fittedDayWidth);
-                DrawTimelineChipsForDay(dayRect, day, chips);
-            }
-        }
-
-        private Vector2 HandleTimelineTrackInput(
-            Rect viewportRect,
-            TimelineDayInfo[] days,
-            TimelineChipInfo[] chips,
-            Vector2 scroll)
-        {
-            float closeDayWidth = Math.Max(_timelineTrackMeasuredDayWidth, viewportRect.width >= 720f ? 168f : 144f);
-            float overviewDayWidth = Math.Max(54f, viewportRect.width / Math.Max(1, days.Length));
-            float dayWidth = Mathf.Lerp(overviewDayWidth, Math.Max(overviewDayWidth, closeDayWidth), _timelineTrackZoom);
-            Event current = Event.current;
-            if (current != null && current.type == EventType.ScrollWheel && viewportRect.Contains(current.mousePosition))
-            {
-                _timelineTrackZoomAnchorPixel = current.mousePosition.x - viewportRect.x;
-                _timelineTrackZoomAnchorDay = (scroll.x + _timelineTrackZoomAnchorPixel) / Math.Max(1f, dayWidth);
-                _timelineTrackZoomStart = _timelineTrackZoom;
-                _timelineTrackTargetZoom = Mathf.Clamp01(_timelineTrackTargetZoom - (current.delta.y * 0.10f));
-                _timelineTrackZoomStartedAt = Time.realtimeSinceStartup;
-                _timelineTrackZoomAnimating = true;
-                current.Use();
-            }
-
-            if (_timelineTrackZoomAnimating)
-            {
-                float progress = Mathf.Clamp01((Time.realtimeSinceStartup - _timelineTrackZoomStartedAt) / TimelineTrackZoomDuration);
-                float eased = progress * progress * (3f - (2f * progress));
-                _timelineTrackZoom = Mathf.Lerp(_timelineTrackZoomStart, _timelineTrackTargetZoom, eased);
-                dayWidth = Mathf.Lerp(overviewDayWidth, Math.Max(overviewDayWidth, closeDayWidth), _timelineTrackZoom);
-                scroll.x = (_timelineTrackZoomAnchorDay * dayWidth) - _timelineTrackZoomAnchorPixel;
-                if (progress >= 0.999f)
-                {
-                    _timelineTrackZoom = _timelineTrackTargetZoom;
-                    _timelineTrackZoomAnimating = false;
-                }
-            }
-
-            if (current != null && current.type == EventType.MouseDown && current.button == 0 && viewportRect.Contains(current.mousePosition))
-            {
-                _timelineTrackDragCandidate = true;
-                _timelineTrackDragging = false;
-                _timelineTrackDragStartMouse = current.mousePosition;
-                _timelineTrackDragStartScroll = scroll.x;
-            }
-            else if (current != null && _timelineTrackDragCandidate && current.type == EventType.MouseDrag && current.button == 0)
-            {
-                if (_timelineTrackDragging || Mathf.Abs(current.mousePosition.x - _timelineTrackDragStartMouse.x) >= 3f)
-                {
-                    _timelineTrackDragging = true;
-                    scroll.x = _timelineTrackDragStartScroll - (current.mousePosition.x - _timelineTrackDragStartMouse.x);
-                    current.Use();
-                }
-            }
-            else if (current != null && _timelineTrackDragCandidate && current.rawType == EventType.MouseUp && current.button == 0)
-            {
-                bool wasDragging = _timelineTrackDragging;
-                _timelineTrackDragCandidate = false;
-                _timelineTrackDragging = false;
-                if (wasDragging)
-                    current.Use();
-            }
-            return scroll;
-        }
-
-        private float MeasureTimelineDayWidth(TimelineDayInfo[] days, TimelineChipInfo[] chips, float minimum)
-        {
-            float width = minimum;
-            for (int i = 0; days != null && i < days.Length; i++)
-                width = Math.Max(width, ScenarioUiMeasuredLabel.Width(days[i] != null ? days[i].Baseline : null, _mutedTextStyle, 22f));
-            for (int i = 0; chips != null && i < chips.Length; i++)
-                width = Math.Max(width, ScenarioUiMeasuredLabel.Width(chips[i] != null && chips[i].Action != null ? chips[i].Action.Label : null, _textStyle, 66f));
-            return Math.Min(320f, width);
-        }
-
-        private void DrawTimelineAxis(Rect canvasRect, TimelineDayInfo[] days, TimelineChipInfo[] chips, float dayWidth)
-        {
-            Rect rulerRect = new Rect(canvasRect.x, canvasRect.y, canvasRect.width, 42f);
-            Color oldColor = GUI.color;
-            GUI.color = new Color(0.28f, 0.22f, 0.16f, 0.52f);
-            GUI.DrawTexture(new Rect(rulerRect.x, rulerRect.y + rulerRect.height - 5f, rulerRect.width, 2f), Texture2D.whiteTexture);
-            GUI.color = oldColor;
-
-            int maxDensity = 1;
-            for (int i = 0; days != null && i < days.Length; i++)
-                maxDensity = Math.Max(maxDensity, days[i] != null ? days[i].Count : 0);
-            for (int i = 0; days != null && i < days.Length; i++)
-            {
-                TimelineDayInfo day = days[i];
-                Rect dayRect = new Rect(canvasRect.x + (i * dayWidth), canvasRect.y, dayWidth - 6f, canvasRect.height - 2f);
-                DrawTimelineDayColumn(dayRect, day, maxDensity, dayWidth);
                 DrawTimelineChipsForDay(dayRect, day, chips);
             }
         }
@@ -492,44 +375,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioUiWidgets.DrawPill(new Rect(rect.xMax - 28f, rect.y + 13f, 23f, 18f), chip.Action.Badge, _uiContext.Styles, ResolveTimelineStatusEmphasis(chip.Status));
         }
 
-        private void DrawTimelineChipGlyph(Rect rect, TimelineChipInfo chip)
-        {
-            string role = ResolveTimelineIconRole(chip != null ? chip.Domain : null);
-            if (!string.IsNullOrEmpty(role) && ScenarioUiAtlasSkin.HasIcon(role) && ScenarioUiAtlasSkin.DrawIcon(rect, role))
-                return;
-
-            GUI.Label(rect, ShortenToFit(chip.Action.IconText ?? string.Empty, rect.width, _timelineTrackGlyphStyle), _timelineTrackGlyphStyle);
-        }
-
-        private void DrawTimelineEmptyState(ScenarioAuthoringInspectorSection section)
-        {
-            Rect rect = GUILayoutUtility.GetRect(GetSectionContentWidth(), 110f, GUILayout.ExpandWidth(true), GUILayout.Height(110f));
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Card);
-            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
-            GUI.Label(new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, 24f), "Nothing scheduled yet", _sectionTitleStyle);
-            GUI.Label(new Rect(rect.x + 14f, rect.y + 38f, rect.width - 28f, 20f), "Add events to build your day track, or open Story for beats.", _textStyle);
-
-            float x = rect.x + 14f;
-            float y = rect.y + 66f;
-            int drawn = 0;
-            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
-            {
-                ScenarioAuthoringInspectorAction action = section.Items[i] != null ? section.Items[i].Action : null;
-                if (!IsTimelineAddAction(action))
-                    continue;
-
-                float width = Math.Max(90f, MeasureButtonWidth(action, false, 20f));
-                if (x + width > rect.xMax - 14f && drawn > 0)
-                {
-                    x = rect.x + 14f;
-                    y += 30f;
-                }
-                DrawButton(new Rect(x, y, width, 26f), action, false);
-                x += width + 6f;
-                drawn++;
-            }
-        }
-
         private TimelineDayInfo[] BuildTimelineDayInfos(ScenarioAuthoringInspectorSection section)
         {
             List<TimelineDayInfo> result = new List<TimelineDayInfo>();
@@ -624,19 +469,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (string.Equals(domain, "world_event", StringComparison.OrdinalIgnoreCase))
                 return _uiContext.Styles.Theme.Palette.WorkspaceMap;
             return _uiContext.Styles.Theme.Palette.BorderDefault;
-        }
-
-        private static string ResolveTimelineIconRole(string domain)
-        {
-            if (string.Equals(domain, "inventory", StringComparison.OrdinalIgnoreCase))
-                return "home_inventory";
-            if (string.Equals(domain, "arrival", StringComparison.OrdinalIgnoreCase))
-                return "home_people";
-            if (string.Equals(domain, "story", StringComparison.OrdinalIgnoreCase))
-                return "home_publish";
-            if (string.Equals(domain, "world_event", StringComparison.OrdinalIgnoreCase))
-                return "home_events";
-            return "home_events";
         }
 
         private static ScenarioUiPillEmphasis ResolveTimelineStatusEmphasis(string status)
