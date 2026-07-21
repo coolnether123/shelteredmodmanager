@@ -33,7 +33,7 @@ namespace Manager.Views
         private TextBox _versionBox;
         private TextBox _gameDomainBox;
         private TextBox _nexusModIdBox;
-        private TextBox _updateGroupIdBox;
+        private TextBox _existingModFileIdBox;
         private ComboBox _fileCategoryBox;
         private TextBox _authorsBox;
         private TextBox _tagsBox;
@@ -264,7 +264,7 @@ namespace Manager.Views
             _versionBox = CreateTextBox();
             _gameDomainBox = CreateTextBox();
             _nexusModIdBox = CreateTextBox();
-            _updateGroupIdBox = CreateTextBox();
+            _existingModFileIdBox = CreateTextBox();
             _fileCategoryBox = new ComboBox();
             _fileCategoryBox.DropDownStyle = ComboBoxStyle.DropDownList;
             _fileCategoryBox.Items.Add("main");
@@ -282,7 +282,7 @@ namespace Manager.Views
             AddLabeledControl(detailsLayout, "File Category", _fileCategoryBox, 3, 0, 1);
             AddLabeledControl(detailsLayout, "Game Domain", _gameDomainBox, 0, 1, 1);
             AddLabeledControl(detailsLayout, "Nexus Mod ID", _nexusModIdBox, 1, 1, 1);
-            AddLabeledControl(detailsLayout, "Update Group ID", _updateGroupIdBox, 2, 1, 1);
+            AddLabeledControl(detailsLayout, "Existing Mod File ID", _existingModFileIdBox, 2, 1, 1);
             AddLabeledControl(detailsLayout, "Authors", _authorsBox, 3, 1, 1);
             AddLabeledControl(detailsLayout, "Tags", _tagsBox, 0, 2, 4);
             AddLabeledControl(detailsLayout, "Summary", _summaryBox, 0, 3, 4);
@@ -391,7 +391,7 @@ namespace Manager.Views
 
             _currentDraft.GameDomain = remote.GameDomain;
             _currentDraft.NexusModId = remote.ModId;
-            _currentDraft.UpdateGroupId = string.Empty;
+            _currentDraft.ExistingModFileId = string.Empty;
             if (!string.IsNullOrEmpty(remote.Name))
                 _currentDraft.Name = remote.Name;
             if (!string.IsNullOrEmpty(remote.Version))
@@ -604,7 +604,7 @@ namespace Manager.Views
             _versionBox.Text = draft != null ? draft.Version : string.Empty;
             _gameDomainBox.Text = draft != null ? draft.GameDomain : string.Empty;
             _nexusModIdBox.Text = draft != null && draft.NexusModId > 0 ? draft.NexusModId.ToString() : string.Empty;
-            _updateGroupIdBox.Text = draft != null ? draft.UpdateGroupId : string.Empty;
+            _existingModFileIdBox.Text = draft != null ? draft.ExistingModFileId : string.Empty;
             _fileCategoryBox.SelectedItem = draft != null && !string.IsNullOrEmpty(draft.FileCategory) ? draft.FileCategory : "main";
             if (_fileCategoryBox.SelectedIndex < 0)
                 _fileCategoryBox.SelectedItem = "main";
@@ -627,7 +627,7 @@ namespace Manager.Views
             _currentDraft.Version = _versionBox.Text.Trim();
             _currentDraft.GameDomain = _gameDomainBox.Text.Trim().ToLowerInvariant();
             _currentDraft.NexusModId = int.TryParse(_nexusModIdBox.Text.Trim(), out modId) ? modId : 0;
-            _currentDraft.UpdateGroupId = _updateGroupIdBox.Text.Trim();
+            _currentDraft.ExistingModFileId = _existingModFileIdBox.Text.Trim();
             _currentDraft.FileCategory = Convert.ToString(_fileCategoryBox.SelectedItem);
             _currentDraft.AuthorsText = _authorsBox.Text.Trim();
             _currentDraft.TagsText = _tagsBox.Text.Trim();
@@ -936,7 +936,7 @@ namespace Manager.Views
             _helpToolTip.SetToolTip(_fileCategoryBox, "Nexus file bucket: main for primary releases, optional for add-ons, miscellaneous for supporting files.");
             _helpToolTip.SetToolTip(_gameDomainBox, "Nexus game domain used in upload URLs. Sheltered uses 'sheltered'.");
             _helpToolTip.SetToolTip(_nexusModIdBox, "Numeric Nexus mod page ID. Pick an owned Nexus mod to fill this automatically.");
-            _helpToolTip.SetToolTip(_updateGroupIdBox, "Optional Nexus update group ID for grouping files in the same update stream.");
+            _helpToolTip.SetToolTip(_existingModFileIdBox, "Optional Nexus v3 mod file ID. When set, publishing creates a new version of this file through POST /mod-files/{id}/versions.");
             _helpToolTip.SetToolTip(_authorsBox, "Comma-separated authors saved with the draft.");
             _helpToolTip.SetToolTip(_tagsBox, "Comma-separated tags saved with the draft.");
             _helpToolTip.SetToolTip(_summaryBox, "Short changelog-style summary for the upload.");

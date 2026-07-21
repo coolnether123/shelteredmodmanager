@@ -19,6 +19,11 @@ namespace ShelteredAPI.Scenarios.Shared{
             return _inner.Load(filePath);
         }
 
+        public bool TryLoadWithRecovery(string filePath, out ScenarioDefinition definition, out string recoveryMessage, out bool recovered)
+        {
+            return _inner.TryLoadWithRecovery(filePath, out definition, out recoveryMessage, out recovered);
+        }
+
         public ScenarioDefinition FromXml(string xml)
         {
             return _inner.FromXml(xml);

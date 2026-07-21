@@ -23,6 +23,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int StartupSaveSlot { get; private set; }
         public SaveEntry StartupSave { get; private set; }
         public SaveType LaunchSaveType { get; private set; }
+        public string ExpectedSceneName { get; private set; }
+        public bool ReenterPlaytestAfterBootstrap { get; private set; }
+        public bool CaptureBaseDefaultFamilyAfterBootstrap { get; private set; }
+        public bool SuppressIntroCutsceneAfterSceneLoad { get; private set; }
+        public bool AutoPopulateStartingCastAfterBootstrap { get; private set; }
 
         public static ScenarioAuthoringSession Create(
             ScenarioInfo draftInfo,
@@ -49,8 +54,42 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 StartupSaveId = startupSaveId,
                 StartupSaveSlot = startupSaveSlot,
                 StartupSave = startupSave,
-                LaunchSaveType = launchSaveType
+                LaunchSaveType = launchSaveType,
+                ExpectedSceneName = ResolveExpectedSceneName(baseMode)
             };
+        }
+
+        public void RequestPlaytestAfterBootstrap()
+        {
+            ReenterPlaytestAfterBootstrap = true;
+        }
+
+        public void RequestBaseDefaultFamilyCaptureAfterBootstrap()
+        {
+            CaptureBaseDefaultFamilyAfterBootstrap = true;
+        }
+
+        public void RequestSuppressIntroCutsceneAfterSceneLoad()
+        {
+            SuppressIntroCutsceneAfterSceneLoad = true;
+        }
+
+        public void RequestStartingCastAutoPopulateAfterBootstrap()
+        {
+            AutoPopulateStartingCastAfterBootstrap = true;
+        }
+
+        private static string ResolveExpectedSceneName(ScenarioBaseGameMode baseMode)
+        {
+            switch (baseMode)
+            {
+                case ScenarioBaseGameMode.Surrounded:
+                    return "ShelterScene_Surrounded";
+                case ScenarioBaseGameMode.Stasis:
+                    return "ShelterScene_Stasis";
+                default:
+                    return "ShelterScene";
+            }
         }
     }
 }

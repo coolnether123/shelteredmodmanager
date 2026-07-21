@@ -122,7 +122,10 @@ namespace ModAPI.Inspector
             for (int i = 0; spriteRenderers != null && i < spriteRenderers.Length; i++)
             {
                 SpriteRenderer spriteRenderer = spriteRenderers[i];
-                if (spriteRenderer == null || spriteRenderer.sprite == null || !spriteRenderer.enabled)
+                if (spriteRenderer == null
+                    || spriteRenderer.sprite == null
+                    || !spriteRenderer.enabled
+                    || !spriteRenderer.gameObject.activeInHierarchy)
                     continue;
 
                 drew |= DrawSpriteOutline(spriteRenderer.transform, spriteRenderer.sprite, spriteRenderer.flipX, spriteRenderer.flipY);
@@ -142,7 +145,10 @@ namespace ModAPI.Inspector
             bool drew = false;
 
             SpriteRenderer spriteRenderer = target.GetComponent<SpriteRenderer>();
-            if (spriteRenderer != null && spriteRenderer.sprite != null && spriteRenderer.enabled)
+            if (spriteRenderer != null
+                && spriteRenderer.sprite != null
+                && spriteRenderer.enabled
+                && spriteRenderer.gameObject.activeInHierarchy)
                 drew |= DrawSpriteOutline(spriteRenderer.transform, spriteRenderer.sprite, spriteRenderer.flipX, spriteRenderer.flipY);
 
             Component[] components = target.GetComponents<Component>();
@@ -156,7 +162,9 @@ namespace ModAPI.Inspector
 
         private static bool TryDrawReflectedSpriteOutline(Component component)
         {
-            if (component == null || !IsReflectedComponentEnabled(component))
+            if (component == null
+                || !component.gameObject.activeInHierarchy
+                || !IsReflectedComponentEnabled(component))
                 return false;
 
             Sprite sprite;

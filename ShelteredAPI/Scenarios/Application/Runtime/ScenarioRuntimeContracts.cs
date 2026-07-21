@@ -22,6 +22,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal interface IScenarioDefinitionSerializer
     {
         ScenarioDefinition Load(string filePath);
+        bool TryLoadWithRecovery(string filePath, out ScenarioDefinition definition, out string recoveryMessage, out bool recovered);
         ScenarioDefinition FromXml(string xml);
         void Save(ScenarioDefinition definition, string filePath);
         string ToXml(ScenarioDefinition definition);
@@ -153,8 +154,31 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
     internal interface IScenarioWinLossOutcomeService
     {
+        bool IsOutcomeArmed { get; }
+        bool IsPresentationPending { get; }
+        void ResetForNewRun();
         void Initialize(ScenarioDefinition definition, ScenarioRuntimeBinding binding);
         void Tick(ScenarioRuntimeState state);
+    }
+
+    internal interface IScenarioEndGamePresenter
+    {
+        void ResetForNewRun();
+        bool TryPresent(ScenarioEndGamePresentation presentation, out string reason);
+    }
+
+    internal sealed class ScenarioEndGamePresentation
+    {
+        public bool Success { get; set; }
+        public ScenarioBaseGameMode BaseGameMode { get; set; }
+        public string ScenarioDisplayName { get; set; }
+        public int DaysSurvived { get; set; }
+        public string FulfilledConditionText { get; set; }
+    }
+
+    internal interface IScenarioAuthoringSessionContext
+    {
+        bool HasActiveSession { get; }
     }
 
     internal interface IScenarioScoreSnapshotService
@@ -229,6 +253,11 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         void ReleasePause(string reason);
         bool ShouldSuppressPauseMenu();
         bool IsPauseMenuPanel(BasePanel panel);
+    }
+
+    internal interface IScenarioPlaytestUiService
+    {
+        void RestoreForPlaytest();
     }
 
     internal interface IScenarioRuntimeOrchestrator

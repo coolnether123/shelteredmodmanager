@@ -2,6 +2,11 @@ using System.Collections.Generic;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Domain.Map{
+    internal static class ScenarioMapTerrainModes
+    {
+        public const string GeneratedBlend = "GeneratedBlend";
+    }
+
     /// <summary>
     /// Top-level authored world-map data for a scenario.
     /// Locations, routes, loot, and encounter tables are neutral data until the game runtime projects them onto Sheltered's map.
@@ -42,6 +47,8 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
             Properties = new List<ScenarioProperty>();
             Searchable = true;
             DiscoveredAtStart = true;
+            VisibleAtStart = true;
+            HiddenUntilDiscovered = false;
         }
 
         public string Id { get; set; }
@@ -49,13 +56,19 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         public string Kind { get; set; }
         public float X { get; set; }
         public float Y { get; set; }
+        public int GridX { get; set; }
+        public int GridY { get; set; }
         public float Radius { get; set; }
         public bool Searchable { get; set; }
         public bool DiscoveredAtStart { get; set; }
+        public bool VisibleAtStart { get; set; }
+        public bool HiddenUntilDiscovered { get; set; }
+        public string IconId { get; set; }
         public string MarkerId { get; set; }
         public string BoundaryId { get; set; }
         public string TerrainId { get; set; }
         public string LootTableId { get; set; }
+        public bool ReplaceGeneratedLoot { get; set; }
         public string EncounterTableId { get; set; }
         public string RequiredGateId { get; set; }
         public int Danger { get; set; }
@@ -227,6 +240,8 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         public int MaxQuantity { get; set; }
         public int Weight { get; set; }
         public float Chance { get; set; }
+        public bool Hidden { get; set; }
+        public string HiddenUnlockItemId { get; set; }
     }
 
     /// <summary>
@@ -238,10 +253,18 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         {
             Entries = new List<MapEncounterEntryDefinition>();
             Properties = new List<ScenarioProperty>();
+            OpenGroundChance = -1;
+            SearchNpcRevealChance = -1;
+            AnimalEncounterChance = -1;
+            FactionEncounterChance = -1;
         }
 
         public string Id { get; set; }
         public string DisplayName { get; set; }
+        public int OpenGroundChance { get; set; }
+        public int SearchNpcRevealChance { get; set; }
+        public int AnimalEncounterChance { get; set; }
+        public int FactionEncounterChance { get; set; }
         public List<MapEncounterEntryDefinition> Entries { get; private set; }
         public List<ScenarioProperty> Properties { get; private set; }
     }

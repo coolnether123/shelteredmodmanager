@@ -2,9 +2,11 @@ using ShelteredAPI.Core;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioInfrastructureModule
@@ -24,13 +26,23 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringPauseService(); });
             services.AddSingleton<IScenarioPauseService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioAuthoringPauseService>(); });
+            services.AddSingleton<IScenarioPlaytestUiService>(delegate(IServiceResolver resolver) { return new ScenarioPlaytestVanillaUiService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringDraftRepository(resolver.Get<IScenarioSaveLibrary>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDraftMetadataEditService(resolver.Get<ScenarioAuthoringDraftRepository>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringHistoryService(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringCaptureService(resolver.Get<IScenarioDraftMutationService>()); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioGameplayScheduleAuthoringService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringInventoryProjectionService(resolver.Get<InventoryApplyService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringCaptureService(
+                    resolver.Get<IScenarioDraftMutationService>(),
+                    resolver.Get<ScenarioActorResolver>(),
+                    resolver.Get<ScenarioObjectIdentityAssignmentService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioGameplayScheduleAuthoringService(resolver.Get<ScenarioActorResolver>(), resolver.Get<ScenarioAuthoringInventoryProjectionService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStoryAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioEventAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteRuntimeResolver(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteAnimationMetadataService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpritePlacementPolicy(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

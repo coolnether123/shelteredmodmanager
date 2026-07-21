@@ -16,10 +16,15 @@ namespace ModAPI.Harmony
     public static class IntentAPI
     {
         /// <summary>
-        /// "When method X is called, call Y instead."
-        /// Automatically handles instance-to-static conversion, parameter matching validation,
-        /// and OpCode replacement (Call vs Callvirt).
+        /// "When method X is called, call Y instead." Redirects the <b>first</b> matching call.
         /// </summary>
+        /// <remarks>
+        /// Legacy redirect entry point retained for compatibility. The canonical way to redirect a
+        /// single call site is <c>t.ForCall(originalType, originalMethod).ReplaceWith(replacementType,
+        /// replacementMethod)</c>, which reports an ambiguous match instead of silently taking the
+        /// first — see Transpilers/README.md §4.1.
+        /// </remarks>
+        [Obsolete("Use t.ForCall(type, method).ReplaceWith(type, method) — see Transpilers/README.md §4.1.", false)]
         public static FluentTranspiler RedirectCall(
             this FluentTranspiler t,
             Type originalType, string originalMethod,
@@ -32,17 +37,23 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// "When method X is called, call Y instead."
-        /// Replaces ALL occurrences of the call in the method body.
+        /// "When method X is called, call Y instead." Replaces ALL occurrences in the method body.
         /// </summary>
+        /// <remarks>
+        /// Legacy redirect entry point retained for compatibility. The canonical way to redirect every
+        /// matching call site is <c>t.ForCall(originalType, originalMethod).ReplaceAllWith(replacementType,
+        /// replacementMethod)</c> — see Transpilers/README.md §4.1. This shim forwards to that single
+        /// implementation so the two paths cannot drift.
+        /// </remarks>
+        [Obsolete("Use t.ForCall(type, method).ReplaceAllWith(type, method) — see Transpilers/README.md §4.1.", false)]
         public static FluentTranspiler RedirectCallAll(
             this FluentTranspiler t,
             Type originalType, string originalMethod,
             Type replacementType, string replacementMethod)
         {
-            return t.ReplaceAllCalls(
-                originalType, originalMethod,
-                replacementType, replacementMethod);
+            t.ForCall(originalType, originalMethod)
+             .ReplaceAllWith(replacementType, replacementMethod);
+            return t;
         }
 
         /// <summary>

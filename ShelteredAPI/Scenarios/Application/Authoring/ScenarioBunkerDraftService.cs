@@ -5,6 +5,7 @@ using UnityEngine;
 
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal static class ScenarioBunkerDraftService
@@ -27,11 +28,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Bunker))
-                session.DirtyFlags.Add(ScenarioDirtySection.Bunker);
-
-            session.CurrentEditCategory = ScenarioEditCategory.Bunker;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
         }
 
         public static void UpsertRoomEdit(ScenarioEditorSession session, int gridX, int gridY, Action<RoomEdit> applyUpdate)
@@ -94,6 +91,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Value = SafeObjectName(obj)
             });
             ScenarioObjectStatePropertyService.Capture(obj, placement);
+            ScenarioStationUpgradePropertyService.Capture(obj, placement);
             return placement;
         }
 
@@ -140,41 +138,89 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MarkBunkerDirty(session);
         }
 
+        public static bool RemovePlacement(ScenarioEditorSession session, Predicate<ObjectPlacement> predicate)
+        {
+            if (predicate == null)
+                return false;
+
+            BunkerEditsDefinition bunkerEdits = EnsureBunkerEdits(session);
+            for (int i = bunkerEdits.ObjectPlacements.Count - 1; i >= 0; i--)
+            {
+                ObjectPlacement placement = bunkerEdits.ObjectPlacements[i];
+                if (placement != null && predicate(placement))
+                {
+                    bunkerEdits.ObjectPlacements.RemoveAt(i);
+                    MarkBunkerDirty(session);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool RemoveRoomEdit(ScenarioEditorSession session, int gridX, int gridY, Func<RoomEdit, bool> shouldRemove)
+        {
+            BunkerEditsDefinition bunkerEdits = EnsureBunkerEdits(session);
+            RoomEdit room = FindRoomEdit(bunkerEdits.RoomChanges, gridX, gridY);
+            if (room == null)
+                return false;
+
+            if (shouldRemove != null && !shouldRemove(room))
+                return false;
+
+            bunkerEdits.RoomChanges.Remove(room);
+            MarkBunkerDirty(session);
+            return true;
+        }
+
         public static int FindPlacementIndex(List<ObjectPlacement> placements, Obj_Base obj)
         {
             if (placements == null || obj == null)
                 return -1;
 
-            string objectId = obj.objectId > 0 ? obj.objectId.ToString() : null;
-            string definitionReference = obj.GetObjectType().ToString();
-            Vector3 position = obj.transform.position;
-
             for (int i = 0; i < placements.Count; i++)
             {
                 ObjectPlacement placement = placements[i];
-                if (placement == null)
-                    continue;
-
-                string sourceObjectId = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
-                if (!string.IsNullOrEmpty(objectId)
-                    && !string.IsNullOrEmpty(sourceObjectId)
-                    && string.Equals(sourceObjectId, objectId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return i;
-                }
-
-                if (!string.Equals(placement.DefinitionReference, definitionReference, StringComparison.OrdinalIgnoreCase)
-                    || placement.Position == null)
-                {
-                    continue;
-                }
-
-                Vector3 placementPosition = new Vector3(placement.Position.X, placement.Position.Y, placement.Position.Z);
-                if (Vector3.Distance(position, placementPosition) <= PlacementMatchTolerance)
+                if (MatchesPlacement(placement, obj))
                     return i;
             }
 
             return -1;
+        }
+
+        public static bool MatchesPlacement(ObjectPlacement placement, Obj_Base obj)
+        {
+            if (placement == null || obj == null)
+                return false;
+
+            ScenarioObjectPlacementRuntimeBinding binding = obj.GetComponent<ScenarioObjectPlacementRuntimeBinding>();
+            if (binding != null)
+            {
+                if (!string.IsNullOrEmpty(binding.ScenarioObjectId)
+                    && string.Equals(placement.ScenarioObjectId, binding.ScenarioObjectId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (!string.IsNullOrEmpty(binding.RuntimeBindingKey)
+                    && string.Equals(placement.RuntimeBindingKey, binding.RuntimeBindingKey, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            string objectId = obj.objectId > 0 ? obj.objectId.ToString() : null;
+            string sourceObjectId = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
+            if (!string.IsNullOrEmpty(objectId)
+                && !string.IsNullOrEmpty(sourceObjectId)
+                && string.Equals(sourceObjectId, objectId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!string.Equals(placement.DefinitionReference, obj.GetObjectType().ToString(), StringComparison.OrdinalIgnoreCase)
+                || placement.Position == null)
+            {
+                return false;
+            }
+
+            Vector3 placementPosition = new Vector3(placement.Position.X, placement.Position.Y, placement.Position.Z);
+            return Vector3.Distance(obj.transform.position, placementPosition) <= PlacementMatchTolerance;
         }
 
         public static int FindPlacementIndex(List<ObjectPlacement> placements, ObjectPlacement placement)
@@ -223,6 +269,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return -1;
+        }
+
+        public static bool IsPlacementAtGrid(ObjectPlacement placement, string definitionReference, int gridX, int gridY)
+        {
+            if (placement == null || !string.Equals(placement.DefinitionReference, definitionReference, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int placementGridX;
+            int placementGridY;
+            if (ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridX, out placementGridX)
+                && ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridY, out placementGridY))
+            {
+                return placementGridX == gridX && placementGridY == gridY;
+            }
+
+            return false;
         }
 
         public static bool ShouldPreserveDuringLiveCapture(ObjectPlacement placement)

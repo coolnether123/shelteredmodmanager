@@ -8,6 +8,8 @@ using ModAPI.InputServices;
 using ModAPI.Scenarios;
 using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
+using ShelteredAPI.Content.Packs;
+using ShelteredAPI.Debugging;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
 using ShelteredAPI.Storage;
@@ -42,6 +44,7 @@ namespace ShelteredAPI.Core
                 if (_initialized) return;
 
                 MeasureStartupPhase("ShelteredAPI ShelteredUnityLogNormalizers.Register", ShelteredUnityLogNormalizers.Register);
+                MeasureStartupPhase("ShelteredAPI ContentPackRuntimeBootstrap.EnsureSubscribed", ContentPackRuntimeBootstrap.EnsureSubscribed);
                 MeasureStartupPhase("ShelteredAPI ScenarioCompositionRoot.EnsureRuntimeInitialized", ScenarioCompositionRoot.EnsureRuntimeInitialized);
                 MeasureStartupPhase("ShelteredAPI ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle", ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle);
                 if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
@@ -84,12 +87,16 @@ namespace ShelteredAPI.Core
 
             LoadingTransitionRecoveryService.EnsureInstalled(runtimeRoot);
 
+            ShelteredFeedbackBootstrap.EnsureInstalled(runtimeRoot);
+
             if (runtimeRoot.GetComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>() == null)
                 runtimeRoot.AddComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>();
         }
 
         private static void EnsureApiRegistrations()
         {
+            RegisterApi(OverlayInputCaptureApi.Name, new ShelteredOverlayInputCaptureService());
+
             var gameHelper = new GameHelperImpl();
             RegisterApi(GameRuntimeApiIds.GameHelper, gameHelper);
             RegisterApi(ShelteredApiAliasIds.GameHelper, gameHelper);
@@ -146,6 +153,11 @@ namespace ShelteredAPI.Core
             RegisterApi(ShelteredApiAliasIds.ActorEvents, (IActorEvents)actors);
             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
             RegisterApi(ShelteredApiAliasIds.ActorSerialization, (IActorSerializationService)actors);
+            IActorAuthoringCapabilityRegistry actorAuthoringCapabilities = new ScenarioActorAuthoringCapabilityRegistry();
+            if (ScenarioFeatureToggles.IsDevActorAuthoringProviderEnabled())
+                actorAuthoringCapabilities.RegisterProvider(new ScenarioDevActorAuthoringCapabilityProvider());
+            RegisterApi(GameRuntimeApiIds.ActorAuthoringCapabilities, actorAuthoringCapabilities);
+            RegisterApi(ShelteredApiAliasIds.ActorAuthoringCapabilities, actorAuthoringCapabilities);
 
             ICustomScenarioService customScenarios = ScenarioCompositionRoot.ResolveRuntime<ICustomScenarioService>();
             ScenarioCompositionRoot.ResolveRuntime<IScenarioRuntimeBindingService>().EnsureHooked();

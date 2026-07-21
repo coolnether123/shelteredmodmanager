@@ -3,6 +3,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Core;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Bunker;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Conditions;
@@ -68,12 +69,13 @@ namespace ShelteredAPI.Scenarios.Composition{
                 return new ScenarioLaunchCoordinator(
                     resolver.Get<IScenarioSaveLibrary>(),
                     resolver.Get<IScenarioSelectionCatalogService>(),
-                    resolver.Get<ICustomScenarioLifecycleService>());
+                    resolver.Get<ICustomScenarioLifecycleService>(),
+                    resolver.Get<IScenarioDefinitionCatalogService>(),
+                    resolver.Get<IScenarioWinLossOutcomeService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStageCoordinator(resolver.Get<ScenarioStageRegistry>(), new IScenarioStageModule[0]); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PublishValidationSummaryBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineBuilder(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioScheduleTimelineBuilder(resolver.Get<ScenarioTimelineBuilder>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioModDependencyDetector(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectIdentityAssignmentService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioBunkerSupportResolver(); });
@@ -83,11 +85,14 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new StructurePlacementService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ObjectPlacementService(resolver.Get<IScenarioDraftMutationService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new WallWiringEditService(resolver.Get<IScenarioDraftMutationService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioBuildDeletionAuthoringService(resolver.Get<ObjectPlacementService>(), resolver.Get<WallWiringEditService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementPaletteService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new RoomVisualPaletteService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementGhostSessionService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpritePatchAuthoringService(resolver.Get<SpritePatchBuilder>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioPngImportService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAssetInventoryService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAssetInventoryMutationService(resolver.Get<ScenarioAuthoringHistoryService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioApplyCoordinator(
@@ -97,27 +102,53 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<AssetApplyService>(),
                     resolver.Get<TriggerRuntimeAdapter>(),
                     resolver.Get<ScenarioObjectStartStateApplyService>(),
-                    resolver.Get<ScenarioSceneSpriteStartStateApplyService>());
+                    resolver.Get<ScenarioSceneSpriteStartStateApplyService>(),
+                    resolver.Get<ScenarioMapProjectionApplyService>(),
+                    resolver.Get<ScenarioActorResolver>());
             });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new FamilyApplyService(resolver.Get<ScenarioCharacterAppearanceService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioActorResolver(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new FamilyApplyService(resolver.Get<ScenarioCharacterAppearanceService>(), resolver.Get<ScenarioActorResolver>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new InventoryApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new BunkerApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournalRepository(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeStateService(resolver.Get<ScenarioRuntimeExecutionJournalRepository>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionLog(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTestTimeAdvanceService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioScoreSnapshotService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton<IScenarioScoreSnapshotService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioScoreSnapshotService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournal(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpriteStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTriggerRuntimeService(resolver.Get<ScenarioRuntimeStateService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapProjectionApplyService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTriggerRuntimeService(resolver.Get<ScenarioRuntimeStateService>(), resolver.Get<ScenarioRuntimeExecutionLog>()); });
             services.AddSingleton<IScenarioTriggerRuntimeService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioTriggerRuntimeService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestInstanceResolver(resolver.Get<IVanillaScenarioRuntime>()); });
             services.AddSingleton<IScenarioQuestInstanceResolver>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioQuestInstanceResolver>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioWinLossConditionAdapter(); });
             services.AddSingleton<IScenarioWinLossConditionAdapter>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossConditionAdapter>(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringSessionContext(); });
+            services.AddSingleton<IScenarioAuthoringSessionContext>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioAuthoringSessionContext>(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioPlaytestEndGamePresenter(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioInstalledEndGamePresenter(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioEndGamePresenter(
+                    resolver.Get<IScenarioAuthoringSessionContext>(),
+                    resolver.Get<ScenarioPlaytestEndGamePresenter>(),
+                    resolver.Get<ScenarioInstalledEndGamePresenter>());
+            });
+            services.AddSingleton<IScenarioEndGamePresenter>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioEndGamePresenter>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledInventoryRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledWeatherRuntimeService(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledSurvivorRuntimeService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledJournalRuntimeService(resolver.Get<ScenarioActorResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledWorldEventRuntimeService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioFutureSurvivorRecruitBindingService(resolver.Get<ScenarioActorResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScheduledSurvivorRuntimeService(
+                    resolver.Get<ScenarioActorResolver>(),
+                    resolver.Get<ScenarioFutureSurvivorRecruitBindingService>());
+            });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledQuestRuntimeService(resolver.Get<IVanillaScenarioRuntime>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledBunkerRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledObjectRuntimeService(); });
@@ -135,6 +166,14 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
+                return new ScenarioConversationRuntimeService(
+                    resolver.Get<ScenarioActorResolver>(),
+                    resolver.Get<ScenarioRuntimeStateService>(),
+                    resolver.Get<ScenarioConditionEvaluatorRegistry>(),
+                    resolver.Get<ScenarioRuntimeExecutionLog>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
                 ScenarioEffectDispatcher dispatcher = new ScenarioEffectDispatcher();
                 dispatcher.Register(resolver.Get<ScheduledInventoryRuntimeService>());
                 dispatcher.Register(resolver.Get<ScheduledWeatherRuntimeService>());
@@ -144,6 +183,9 @@ namespace ShelteredAPI.Scenarios.Composition{
                 dispatcher.Register(resolver.Get<ScheduledObjectRuntimeService>());
                 dispatcher.Register(resolver.Get<ScenarioFlagRuntimeService>());
                 dispatcher.Register(resolver.Get<ScenarioTriggerRuntimeService>());
+                dispatcher.Register(resolver.Get<ScheduledJournalRuntimeService>());
+                dispatcher.Register(resolver.Get<ScheduledWorldEventRuntimeService>());
+                dispatcher.Register(resolver.Get<ScenarioConversationRuntimeService>());
                 return dispatcher;
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
@@ -152,11 +194,15 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioQuestInstanceResolver>(),
                     resolver.Get<IScenarioWinLossConditionAdapter>(),
                     resolver.Get<ScenarioConditionEvaluatorRegistry>(),
-                    resolver.Get<IVanillaScenarioRuntime>());
+                    resolver.Get<IVanillaScenarioRuntime>(),
+                    resolver.Get<ScenarioRuntimeExecutionLog>(),
+                    resolver.Get<IScenarioEndGamePresenter>());
             });
             services.AddSingleton<IScenarioWinLossOutcomeService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossOutcomeService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDefinitionScheduledActionProvider(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioJournalScheduledActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTriggerScheduledActionProvider(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioConversationScheduledActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioLegacyScheduleActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -169,9 +215,21 @@ namespace ShelteredAPI.Scenarios.Composition{
                     new IScenarioScheduledActionProvider[]
                     {
                         resolver.Get<ScenarioDefinitionScheduledActionProvider>(),
+                        resolver.Get<ScenarioJournalScheduledActionProvider>(),
                         resolver.Get<ScenarioTriggerScheduledActionProvider>(),
+                        resolver.Get<ScenarioConversationScheduledActionProvider>(),
                         resolver.Get<ScenarioLegacyScheduleActionProvider>()
-                    });
+                    },
+                    resolver.Get<ScenarioRuntimeExecutionLog>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioTestConsoleService(
+                    resolver.Get<ScenarioRuntimeExecutionLog>(),
+                    resolver.Get<ScenarioScheduleRuntimeCoordinator>(),
+                    resolver.Get<IScenarioTriggerRuntimeService>(),
+                    resolver.Get<ScenarioRuntimeStateService>(),
+                    resolver.Get<ScenarioTestTimeAdvanceService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -183,7 +241,8 @@ namespace ShelteredAPI.Scenarios.Composition{
             {
                 return new TriggerRuntimeAdapter(
                     resolver.Get<ScenarioScheduleRuntimeCoordinator>(),
-                    resolver.Get<IScenarioRuntimeBindingService>());
+                    resolver.Get<IScenarioRuntimeBindingService>(),
+                    resolver.Get<ScenarioConversationRuntimeService>());
             });
         }
 
@@ -200,13 +259,15 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new InspectorViewModelBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new StatusBarViewModelBuilder(resolver.Get<ScenarioSelectionScopeService>()); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineNavigationService(resolver.Get<ScenarioAuthoringLayoutService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineNavigationService(resolver.Get<ScenarioAuthoringLayoutService>(), resolver.Get<IScenarioEditorService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAssetAuthoringContentBuilder(
                     resolver.Get<IScenarioAuthoringSectionHub>(),
                     resolver.Get<ScenarioSelectionScopeService>(),
-                    resolver.Get<ScenarioSpriteRuntimeResolver>());
+                    resolver.Get<ScenarioSpriteRuntimeResolver>(),
+                    resolver.Get<ScenarioWeatherEffectSpriteCatalogService>(),
+                    resolver.Get<ScenarioAssetInventoryService>());
             });
         }
 
@@ -215,6 +276,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new SpritePatchValidator(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new SpritePatchBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new SpritePatchRuntimeRenderer(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioWeatherEffectSpriteCatalogService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new SpritePatchApplyService(

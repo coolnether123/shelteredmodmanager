@@ -14,6 +14,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private readonly TriggerRuntimeAdapter _triggerRuntimeAdapter;
         private readonly ScenarioObjectStartStateApplyService _objectStartStateApplyService;
         private readonly ScenarioSceneSpriteStartStateApplyService _sceneSpriteStartStateApplyService;
+        private readonly ScenarioMapProjectionApplyService _mapProjectionApplyService;
+        private readonly ScenarioActorResolver _actorResolver;
 
         public ScenarioApplyCoordinator(
             FamilyApplyService familyApplyService,
@@ -22,7 +24,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             AssetApplyService assetApplyService,
             TriggerRuntimeAdapter triggerRuntimeAdapter,
             ScenarioObjectStartStateApplyService objectStartStateApplyService,
-            ScenarioSceneSpriteStartStateApplyService sceneSpriteStartStateApplyService)
+            ScenarioSceneSpriteStartStateApplyService sceneSpriteStartStateApplyService,
+            ScenarioMapProjectionApplyService mapProjectionApplyService,
+            ScenarioActorResolver actorResolver)
         {
             _familyApplyService = familyApplyService;
             _inventoryApplyService = inventoryApplyService;
@@ -31,6 +35,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             _triggerRuntimeAdapter = triggerRuntimeAdapter;
             _objectStartStateApplyService = objectStartStateApplyService;
             _sceneSpriteStartStateApplyService = sceneSpriteStartStateApplyService;
+            _mapProjectionApplyService = mapProjectionApplyService;
+            _actorResolver = actorResolver;
         }
 
         public ScenarioApplyResult ApplyAll(ScenarioDefinition definition, string scenarioFilePath)
@@ -42,6 +48,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return result;
             }
 
+            if (_actorResolver != null)
+                ApplyStep("actors", result, delegate { _actorResolver.EnsureScenarioActors(definition); });
             if (_bunkerApplyService != null)
                 ApplyStep("bunker", result, delegate { _bunkerApplyService.Apply(definition, result); });
             if (_objectStartStateApplyService != null)
@@ -54,6 +62,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 ApplyStep("assets", result, delegate { _assetApplyService.Apply(definition, scenarioFilePath, result); });
             if (_sceneSpriteStartStateApplyService != null)
                 ApplyStep("scene sprite start state", result, delegate { _sceneSpriteStartStateApplyService.Apply(definition, result); });
+            if (_mapProjectionApplyService != null)
+                ApplyStep("map projection", result, delegate { _mapProjectionApplyService.Apply(definition, result); });
             if (_triggerRuntimeAdapter != null)
                 ApplyStep("scheduled runtime", result, delegate { _triggerRuntimeAdapter.Apply(definition, result); });
             return result;

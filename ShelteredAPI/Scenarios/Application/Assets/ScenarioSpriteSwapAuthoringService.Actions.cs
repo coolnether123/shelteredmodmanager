@@ -59,6 +59,30 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomReset, StringComparison.Ordinal))
                 return ResetEditorZoom(state, out message);
 
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayPause, StringComparison.Ordinal))
+                return ToggleAnimationPlayback(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayInWorld, StringComparison.Ordinal))
+                return ToggleAnimationWorldPlayback(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepPrevious, StringComparison.Ordinal))
+                return StepAnimationFrame(state, -1, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepNext, StringComparison.Ordinal))
+                return StepAnimationFrame(state, 1, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationOnionToggle, StringComparison.Ordinal))
+                return ToggleOnionSkin(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationCompareToggle, StringComparison.Ordinal))
+                return ToggleOriginalComparison(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertFrame, StringComparison.Ordinal))
+                return RevertAnimationFrame(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertAll, StringComparison.Ordinal))
+                return RevertAnimation(state, out message);
+
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, StringComparison.Ordinal))
                 return SavePicker(state, out message);
 
@@ -91,6 +115,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomPaste, StringComparison.Ordinal))
                 return PasteCustomPixels(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomStrokeBegin, StringComparison.Ordinal))
+                return BeginCustomPixelStroke(state, out message);
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapClear, StringComparison.Ordinal)
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapRevert, StringComparison.Ordinal))
@@ -155,6 +182,15 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSpriteSwapCustomColorPrefix, StringComparison.Ordinal))
                 return TryHandleColorAction(state, actionId, out message);
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationFramePrefix, StringComparison.Ordinal))
+                return TryHandleAnimationFrameAction(state, actionId, out message);
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationCopyPrefix, StringComparison.Ordinal))
+                return TryHandleAnimationCopyAction(state, actionId, out message);
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationSpeedPrefix, StringComparison.Ordinal))
+                return TryHandleAnimationSpeedAction(state, actionId, out message);
 
             handled = false;
             return false;
@@ -233,6 +269,46 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             return SetCustomColor(state, color, -1, out message);
+        }
+
+        private bool TryHandleAnimationFrameAction(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            int frameIndex;
+            if (!int.TryParse(actionId.Substring(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationFramePrefix.Length), out frameIndex))
+            {
+                message = "Animation frame selection could not be decoded.";
+                return false;
+            }
+
+            return SelectAnimationFrame(state, frameIndex, out message);
+        }
+
+        private bool TryHandleAnimationCopyAction(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            int frameIndex;
+            if (!int.TryParse(actionId.Substring(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationCopyPrefix.Length), out frameIndex))
+            {
+                message = "Animation source frame could not be decoded.";
+                return false;
+            }
+
+            return CopyAnimationFrameFrom(state, frameIndex, out message);
+        }
+
+        private bool TryHandleAnimationSpeedAction(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            float speed;
+            if (!float.TryParse(
+                actionId.Substring(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationSpeedPrefix.Length),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out speed))
+            {
+                message = "Animation speed could not be decoded.";
+                return false;
+            }
+
+            return SetAnimationPlaybackSpeed(state, speed, out message);
         }
 
         private bool TryHandlePixelAction(

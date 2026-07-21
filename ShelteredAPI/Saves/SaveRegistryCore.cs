@@ -52,7 +52,7 @@ namespace ShelteredAPI.Saves
             
             foreach (var e in entries.Values)
             {
-                var savePath = DirectoryProvider.EntryPath(_scenarioId, e.absoluteSlot);
+                var savePath = DirectoryProvider.EntryPath(_scenarioId, e.absoluteSlot, false);
                 if (File.Exists(savePath))
                 {
                     results.Add(e);
@@ -154,12 +154,11 @@ namespace ShelteredAPI.Saves
                     return _entryCache;
                 }
 
-                var dirs = Directory.GetDirectories(scenarioRoot, "Slot_*");
+                var dirs = Directory.GetDirectories(scenarioRoot, "*", SearchOption.TopDirectoryOnly);
                 foreach (var dir in dirs)
                 {
-                    var dirName = Path.GetFileName(dir);
-                    var numPart = dirName.Substring(5); // "Slot_" is 5 chars
-                    if (int.TryParse(numPart, out int absoluteSlot))
+                    int absoluteSlot;
+                    if (TryGetActiveSlotNumber(scenarioRoot, dir, out absoluteSlot))
                     {
                         var savePath = Path.Combine(dir, "SaveData.xml");
                         try
@@ -179,6 +178,29 @@ namespace ShelteredAPI.Saves
                 _cacheValid = true;
                 return _entryCache;
             }
+        }
+
+        internal static bool TryGetActiveSlotNumber(string scenarioRoot, string directoryPath, out int absoluteSlot)
+        {
+            absoluteSlot = 0;
+            if (string.IsNullOrEmpty(scenarioRoot) || string.IsNullOrEmpty(directoryPath))
+                return false;
+
+            string root = Path.GetFullPath(scenarioRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string candidate = Path.GetFullPath(directoryPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string parent = Path.GetDirectoryName(candidate);
+            if (!string.Equals(root, parent, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string directoryName = Path.GetFileName(candidate);
+            if (string.IsNullOrEmpty(directoryName)
+                || directoryName[0] == '_'
+                || !directoryName.StartsWith("Slot_", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return int.TryParse(directoryName.Substring(5), out absoluteSlot) && absoluteSlot > 0;
         }
 
         /// <summary>
@@ -288,7 +310,11 @@ namespace ShelteredAPI.Saves
             if (entry == null && !TryCreateTransientEntryFromId(saveId, opts, out entry))
                 return null;
 
-            SaveBackupService.BackupCustomEntryBeforeOverwrite(entry);
+            if (!SaveBackupService.BackupCustomEntryBeforeOverwrite(entry))
+            {
+                MMLog.WriteError("[SaveBackup] Refusing to overwrite custom save because its recovery snapshot failed.");
+                return null;
+            }
 
             if (opts != null && !string.IsNullOrEmpty(opts.name))
                 entry.name = NameSanitizer.SanitizeName(opts.name);
@@ -992,7 +1018,13 @@ namespace ShelteredAPI.Saves
             SaveRegistryCore registry = new SaveRegistryCore(scenarioId);
             SaveEntry existing = registry.GetSaveBySlot(comparison.SlotNumber);
             if (backupExistingMirror && existing != null && File.Exists(comparison.MirrorPath))
-                SaveBackupService.BackupCustomEntryBeforeOverwrite(existing);
+            {
+                if (!SaveBackupService.BackupCustomEntryBeforeOverwrite(existing))
+                {
+                    MMLog.WriteError("[SaveBackup] Refusing to overwrite the vanilla mirror because its recovery snapshot failed.");
+                    return null;
+                }
+            }
 
             long fileSize;
             uint crc;

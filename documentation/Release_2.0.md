@@ -15,7 +15,7 @@ It supersedes the previous beta checklist for the public 2.0 stable line.
 ## User-Facing Scope
 
 - Split API surface: neutral `ModAPI.dll` plus Sheltered-specific `ShelteredAPI.dll`.
-- Custom scenario browser, XML packs, authoring tools, dependency lockout, trigger runtime, scheduled effects, and win/loss support.
+- Custom scenario browser, XML packs, dependency lockout, trigger runtime, scheduled effects, and win/loss support. Advanced in-game authoring ships as an opt-in preview and defaults off.
 - Custom-scenario save APIs now reject reserved built-in save ids such as `Standard`, `Vanilla.Surrounded`, `Vanilla.Stasis`, and draft storage. Mods should use the explicit `ShelteredSaves.*Standard` helpers for built-in save buckets.
 - Scenario authoring writes `scenario.xml` through same-directory temp files, parse validation, replace, and `.bak` recovery files so failed writes preserve the previous XML.
 - Save backup lineage support records manager-created save backups so users can recover from failed save writes or compatibility testing regressions.
@@ -27,10 +27,10 @@ It supersedes the previous beta checklist for the public 2.0 stable line.
 ## Safety And Compatibility
 
 - Players should back up saves before upgrading major framework versions.
-- The custom scenario browser/editor and Stasis/Surrounded expanded saves should be smoke tested before long-running playthroughs.
+- Custom scenario playback and Stasis/Surrounded expanded saves should be smoke tested before long-running playthroughs. Use disposable saves for the opt-in authoring preview.
 - Family Expansion and Deep Expansion should be treated as not compatible until rebuilt and smoke tested against ModAPI/ShelteredAPI 2.0.
 - Some 1.2.2 mods may break because Sheltered-specific API surface moved from `ModAPI.dll` to `ShelteredAPI.dll`.
-- Bug reports should include storefront/version, mod list, save type, custom scenario editor toggle state, reproduction steps, and `SMM\mod_manager.log`.
+- Bug reports should include storefront/version, mod list, save type, custom scenario authoring preview state, reproduction steps, and `SMM\mod_manager.log`.
 
 ## Documentation Readiness
 

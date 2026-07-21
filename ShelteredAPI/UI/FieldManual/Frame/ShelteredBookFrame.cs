@@ -23,10 +23,10 @@ namespace ShelteredAPI.UI.FieldManual.Frame
 
         private readonly IThemePalette _palette;
         private readonly IThemeMetrics _metrics;
-        private readonly ITextureLibrary _textures;
+        private readonly ProceduralTextureLibrary _textures;
         private readonly UIPrimitiveFactory _ui;
 
-        public ShelteredBookFrame(IThemePalette palette, IThemeMetrics metrics, ITextureLibrary textures, UIPrimitiveFactory ui)
+        public ShelteredBookFrame(IThemePalette palette, IThemeMetrics metrics, ProceduralTextureLibrary textures, UIPrimitiveFactory ui)
         {
             _palette = palette;
             _metrics = metrics;
@@ -36,9 +36,13 @@ namespace ShelteredAPI.UI.FieldManual.Frame
 
         public PanelFrameRegions Build(GameObject parent, string title, string subtitle)
         {
-            UITexture vignette = _ui.CreateQuad(parent, "BookBackdrop", _textures.Vignette(512, 512), Vector3.zero,
+            UITexture vignette = _ui.CreateQuad(parent, "BookBackdrop", _textures.GetBookChromeTexture(BookChromeTexture.Vignette), Vector3.zero,
                 (int)ScreenSpan, (int)ScreenSpan, Color.white, _ui.NextDepth());
-            _ui.AddClickCollider(vignette.gameObject, (int)ScreenSpan, (int)ScreenSpan, null);
+            BoxCollider backdropCollider = _ui.AddClickCollider(vignette.gameObject, (int)ScreenSpan, (int)ScreenSpan, null);
+            // Keep the input shield behind interactive book content. All Field Manual UI is
+            // constructed at z=0, so an unshifted full-screen collider can win NGUI's
+            // physics raycast before a search field, row, or button collider.
+            backdropCollider.center = new Vector3(0f, 0f, 100f);
 
             int maxBookVisualDepth;
             int bookVisualDepth = _ui.NextDepth();
@@ -69,23 +73,23 @@ namespace ShelteredAPI.UI.FieldManual.Frame
 
         private void BuildFallbackBook(GameObject parent)
         {
-            _ui.CreateQuad(parent, "BookShadow", _textures.White, new Vector3(8f, -10f, 0f),
+            _ui.CreateQuad(parent, "BookShadow", _textures.GetBookChromeTexture(BookChromeTexture.White), new Vector3(8f, -10f, 0f),
                 BookWidth, BookHeight, _palette.PaperShadow, _ui.NextDepth());
 
-            _ui.CreateQuad(parent, "BookCover", _textures.Gunmetal(BookWidth, BookHeight),
+            _ui.CreateQuad(parent, "BookCover", _textures.GetBookChromeTexture(BookChromeTexture.Gunmetal),
                 Vector3.zero, BookWidth, BookHeight, Color.white, _ui.NextDepth());
 
-            _ui.CreateQuad(parent, "LeftPage", _textures.Paper(PageWidth, PageHeight),
+            _ui.CreateQuad(parent, "LeftPage", _textures.GetBookChromeTexture(BookChromeTexture.Paper),
                 new Vector3(-300f, 0f, 0f), PageWidth, PageHeight, Color.white, _ui.NextDepth());
-            _ui.CreateQuad(parent, "RightPage", _textures.Paper(PageWidth, PageHeight),
+            _ui.CreateQuad(parent, "RightPage", _textures.GetBookChromeTexture(BookChromeTexture.Paper),
                 new Vector3(300f, 0f, 0f), PageWidth, PageHeight, Color.white, _ui.NextDepth());
 
-            _ui.CreateQuad(parent, "BookCreaseShadow", _textures.White, Vector3.zero,
+            _ui.CreateQuad(parent, "BookCreaseShadow", _textures.GetBookChromeTexture(BookChromeTexture.White), Vector3.zero,
                 66, PageHeight + 20, new Color(0.08f, 0.04f, 0.03f, 0.36f), _ui.NextDepth());
-            _ui.CreateQuad(parent, "BookCreaseHighlight", _textures.White, new Vector3(-18f, 0f, 0f),
+            _ui.CreateQuad(parent, "BookCreaseHighlight", _textures.GetBookChromeTexture(BookChromeTexture.White), new Vector3(-18f, 0f, 0f),
                 4, PageHeight, new Color(0.95f, 0.88f, 0.66f, 0.22f), _ui.NextDepth());
 
-            Texture2D rivet = _textures.Rivet(18);
+            Texture2D rivet = _textures.GetBookChromeTexture(BookChromeTexture.Rivet);
             int ringDepth = _ui.NextDepth();
             for (int i = 0; i < 8; i++)
             {

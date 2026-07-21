@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
@@ -24,6 +26,119 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             return map != null && Upsert(map.Locations, location, GetId, location != null ? location.Id : null);
         }
 
+        public MapLocationDefinition CreateLocationAtGrid(
+            ScenarioEditorSession session,
+            int gridX,
+            int gridY,
+            float worldX,
+            float worldY)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            if (map == null)
+                return null;
+
+            EnsureMapSize(map);
+            string id = BuildAuthoredLocationId(map, gridX, gridY);
+            MapLocationDefinition location = new MapLocationDefinition();
+            location.Id = id;
+            location.DisplayName = "Authored Location " + (map.Locations.Count + 1).ToString(CultureInfo.InvariantCulture);
+            location.Kind = "PointOfInterest";
+            location.X = gridX;
+            location.Y = gridY;
+            location.GridX = gridX;
+            location.GridY = gridY;
+            location.Searchable = true;
+            location.VisibleAtStart = true;
+            location.DiscoveredAtStart = false;
+            location.HiddenUntilDiscovered = false;
+            SetProperty(location.Properties, "authoring.createdFrom", "map-click");
+            SetProperty(location.Properties, "authoring.world", FormatFloat(worldX) + "," + FormatFloat(worldY));
+            map.Locations.Add(location);
+            return location;
+        }
+
+        public bool MoveLocation(ScenarioEditorSession session, string id, int gridX, int gridY, float worldX, float worldY, out MapLocationDefinition location)
+        {
+            location = null;
+            MapAuthoringDefinition map = EnsureMap(session);
+            if (map == null || string.IsNullOrEmpty(id))
+                return false;
+
+            location = FindLocation(map, id);
+            if (location == null)
+                return false;
+
+            EnsureMapSize(map);
+            location.X = gridX;
+            location.Y = gridY;
+            location.GridX = gridX;
+            location.GridY = gridY;
+            SetProperty(location.Properties, "authoring.world", FormatFloat(worldX) + "," + FormatFloat(worldY));
+            return true;
+        }
+
+        public bool UpsertLocationFromSelection(
+            ScenarioEditorSession session,
+            ScenarioMapRegionSelection selection,
+            out MapLocationDefinition location,
+            out bool wasExisting)
+        {
+            location = null;
+            wasExisting = false;
+            MapAuthoringDefinition map = EnsureMap(session);
+            if (map == null || selection == null)
+                return false;
+
+            EnsureMapSize(map);
+
+            string id = BuildLocationId(selection);
+            location = FindLocation(map, id);
+            wasExisting = location != null;
+            if (location == null)
+            {
+                location = new MapLocationDefinition();
+                location.Id = id;
+            }
+
+            location.DisplayName = !string.IsNullOrEmpty(selection.DisplayName) ? selection.DisplayName : id;
+            location.Kind = !string.IsNullOrEmpty(selection.Topography) ? selection.Topography : selection.Category;
+            location.X = selection.GridX;
+            location.Y = selection.GridY;
+            location.GridX = selection.GridX;
+            location.GridY = selection.GridY;
+            location.Searchable = selection.Searchable;
+            location.DiscoveredAtStart = selection.Discovered;
+            location.VisibleAtStart = selection.VisibleOnMap;
+            location.HiddenUntilDiscovered = selection.HiddenUntilDiscovered;
+            location.Danger = Math.Max(0, selection.OpenGroundEncounterChance);
+            if (ScenarioMapIconCatalog.IsKnownIconId(selection.IconId))
+                location.IconId = selection.IconId;
+
+            SetProperty(location.Properties, "vanilla.regionName", selection.RegionName);
+            SetProperty(location.Properties, "vanilla.townName", selection.TownName);
+            SetProperty(location.Properties, "vanilla.category", selection.Category);
+            SetProperty(location.Properties, "vanilla.topography", selection.Topography);
+            SetProperty(location.Properties, "vanilla.grid", selection.GridX.ToString(CultureInfo.InvariantCulture) + "," + selection.GridY.ToString(CultureInfo.InvariantCulture));
+            SetProperty(location.Properties, "vanilla.world", FormatFloat(selection.WorldX) + "," + FormatFloat(selection.WorldY));
+            SetProperty(location.Properties, "vanilla.visibleOnMap", selection.VisibleOnMap ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.discovered", selection.Discovered ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.hiddenUntilDiscovered", selection.HiddenUntilDiscovered ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.searchable", selection.Searchable ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.iconId", selection.IconId);
+            SetProperty(location.Properties, "vanilla.searchTime", FormatFloat(selection.MinSearchTime) + "-" + FormatFloat(selection.MaxSearchTime));
+            SetProperty(location.Properties, "vanilla.hasItems", selection.HasItems ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.hasHiddenItems", selection.HasHiddenItems ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.hasQuest", selection.HasQuest ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.maxItems", selection.MaxItems.ToString(CultureInfo.InvariantCulture));
+            SetProperty(location.Properties, "vanilla.locationLootTypeCount", selection.LocationSpecificLootTypeCount.ToString(CultureInfo.InvariantCulture));
+            SetProperty(location.Properties, "vanilla.searchNpcRevealChance", selection.SearchNpcRevealChance.ToString(CultureInfo.InvariantCulture));
+            SetProperty(location.Properties, "vanilla.openGroundEncounterChance", selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture));
+            SetProperty(location.Properties, "vanilla.openGroundFactionEncounterChance", selection.OpenGroundFactionEncounterChance.ToString(CultureInfo.InvariantCulture));
+            SetProperty(location.Properties, "vanilla.animalEncounterChance", selection.AnimalEncounterChance.ToString(CultureInfo.InvariantCulture));
+
+            return UpsertLocation(session, location);
+        }
+
         public bool UpsertMarker(ScenarioEditorSession session, MapMarkerDefinition marker)
         {
             MapAuthoringDefinition map = EnsureMap(session);
@@ -40,6 +155,76 @@ namespace ShelteredAPI.Scenarios.Application.Map{
         {
             MapAuthoringDefinition map = EnsureMap(session);
             return map != null && Upsert(map.TerrainPatches, patch, GetId, patch != null ? patch.Id : null);
+        }
+
+        public MapTerrainPatchDefinition PaintTerrainArea(
+            ScenarioEditorSession session,
+            int gridX,
+            int gridY,
+            string terrainId,
+            MapTerrainBrushShape shape,
+            int brushSize)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            if (map == null || string.IsNullOrEmpty(terrainId))
+                return null;
+
+            EnsureMapSize(map);
+            int size = brushSize < 1 ? 1 : (brushSize > 7 ? 7 : brushSize);
+            if (size % 2 == 0)
+                size++;
+            string rootId = "terrain-brush-" + gridX.ToString(CultureInfo.InvariantCulture)
+                + "-" + gridY.ToString(CultureInfo.InvariantCulture);
+            string id = rootId;
+            int suffix = 2;
+            bool idExists = true;
+            while (idExists)
+            {
+                idExists = false;
+                for (int i = 0; map.TerrainPatches != null && i < map.TerrainPatches.Count; i++)
+                {
+                    MapTerrainPatchDefinition existing = map.TerrainPatches[i];
+                    if (existing != null && string.Equals(existing.Id, id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        idExists = true;
+                        id = rootId + "-" + suffix.ToString(CultureInfo.InvariantCulture);
+                        suffix++;
+                        break;
+                    }
+                }
+            }
+
+            MapTerrainPatchDefinition patch = new MapTerrainPatchDefinition();
+            patch.Id = id;
+            patch.TerrainId = terrainId;
+            patch.Shape = shape == MapTerrainBrushShape.Circle ? MapTerrainBrushShape.Circle : MapTerrainBrushShape.Rectangle;
+            if (patch.Shape == MapTerrainBrushShape.Circle)
+            {
+                patch.X = gridX + 0.5f;
+                patch.Y = gridY + 0.5f;
+                patch.Width = 0f;
+                patch.Height = 0f;
+                patch.Radius = size * 0.5f;
+            }
+            else
+            {
+                int half = size / 2;
+                patch.X = gridX - half;
+                patch.Y = gridY - half;
+                patch.Width = size;
+                patch.Height = size;
+                patch.Radius = 0f;
+            }
+            patch.Priority = 100;
+            patch.BoundaryId = null;
+            SetProperty(patch.Properties, "authoring.createdFrom", "map-terrain-brush");
+            SetProperty(patch.Properties, "authoring.brushSize", size.ToString(CultureInfo.InvariantCulture));
+            SetProperty(patch.Properties, "authoring.renderMode",
+                string.Equals(terrainId, ScenarioMapTerrainModes.GeneratedBlend, StringComparison.OrdinalIgnoreCase)
+                    ? "generated-blend"
+                    : "manual");
+            map.TerrainPatches.Add(patch);
+            return patch;
         }
 
         public bool UpsertLootTable(ScenarioEditorSession session, MapLootTableDefinition table)
@@ -178,6 +363,101 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             }
 
             return false;
+        }
+
+        public bool HasLocation(ScenarioEditorSession session, string id)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            return map != null && FindLocation(map, id) != null;
+        }
+
+        public MapLocationDefinition GetLocation(ScenarioEditorSession session, string id)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            return FindLocation(map, id);
+        }
+
+        public MapLocationDefinition FindLocationAtGrid(ScenarioEditorSession session, int gridX, int gridY)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            for (int i = 0; map != null && map.Locations != null && i < map.Locations.Count; i++)
+            {
+                MapLocationDefinition location = map.Locations[i];
+                if (location != null && location.GridX == gridX && location.GridY == gridY)
+                    return location;
+            }
+
+            return null;
+        }
+
+        public string BuildLocationId(ScenarioMapRegionSelection selection)
+        {
+            if (selection == null)
+                return null;
+
+            return "vanilla-" + selection.GridX.ToString(CultureInfo.InvariantCulture)
+                + "-" + selection.GridY.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static MapLocationDefinition FindLocation(MapAuthoringDefinition map, string id)
+        {
+            for (int i = 0; map != null && map.Locations != null && i < map.Locations.Count; i++)
+            {
+                MapLocationDefinition location = map.Locations[i];
+                if (location != null && string.Equals(location.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return location;
+            }
+
+            return null;
+        }
+
+        private static void EnsureMapSize(MapAuthoringDefinition map)
+        {
+            if (map == null || ExpeditionMap.Instance == null)
+                return;
+
+            if (map.Width <= 0f)
+                map.Width = ExpeditionMap.Instance.width;
+            if (map.Height <= 0f)
+                map.Height = ExpeditionMap.Instance.height;
+        }
+
+        private static string BuildAuthoredLocationId(MapAuthoringDefinition map, int gridX, int gridY)
+        {
+            string root = "authored-" + gridX.ToString(CultureInfo.InvariantCulture)
+                + "-" + gridY.ToString(CultureInfo.InvariantCulture);
+            string candidate = root;
+            int suffix = 2;
+            while (FindLocation(map, candidate) != null)
+            {
+                candidate = root + "-" + suffix.ToString(CultureInfo.InvariantCulture);
+                suffix++;
+            }
+
+            return candidate;
+        }
+
+        private static void SetProperty(List<ScenarioProperty> properties, string key, string value)
+        {
+            if (properties == null || string.IsNullOrEmpty(key))
+                return;
+
+            for (int i = 0; i < properties.Count; i++)
+            {
+                ScenarioProperty property = properties[i];
+                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    property.Value = value ?? string.Empty;
+                    return;
+                }
+            }
+
+            properties.Add(new ScenarioProperty { Key = key, Value = value ?? string.Empty });
+        }
+
+        private static string FormatFloat(float value)
+        {
+            return value.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         private static void ClearLocationReferences(MapAuthoringDefinition map, string id)

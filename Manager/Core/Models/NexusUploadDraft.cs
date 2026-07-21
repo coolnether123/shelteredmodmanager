@@ -33,7 +33,7 @@ namespace Manager.Core.Models
         public string TagsText { get; set; }
         public string PackagePath { get; set; }
         public string FileCategory { get; set; }
-        public string UpdateGroupId { get; set; }
+        public string ExistingModFileId { get; set; }
         public bool PrimaryModManagerDownload { get; set; }
         public bool AllowModManagerDownload { get; set; }
         public bool ShowRequirementsPopup { get; set; }
@@ -54,7 +54,7 @@ namespace Manager.Core.Models
             TagsText = string.Empty;
             PackagePath = string.Empty;
             FileCategory = "main";
-            UpdateGroupId = string.Empty;
+            ExistingModFileId = string.Empty;
             AllowModManagerDownload = true;
             SavedAtUtc = DateTime.MinValue;
             Stage = NexusUploadStage.Details;
@@ -115,7 +115,7 @@ namespace Manager.Core.Models
         public string Summary { get; set; }
     }
 
-    public class NexusModFileUpdateGroup
+    public class NexusV3ModFileRecord
     {
         public string Id { get; set; }
         public string Name { get; set; }

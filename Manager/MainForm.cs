@@ -24,6 +24,7 @@ namespace Manager
         private TabControl _tabControl;
         private TabPage _gameSetupPage;
         private TabPage _modManagerPage;
+        private TabPage _contentWorkshopPage;
         private TabPage _nexusPage;
         private TabPage _nexusUploadPage;
         private TabPage _settingsPage;
@@ -36,6 +37,7 @@ namespace Manager
         private Label _nexusUpdatesLabel;
         private Panel _headerStatusPanel;
         private ModManagerTab _modManagerTab;
+        private ContentWorkshopTab _contentWorkshopTab;
         private NexusModsTab _nexusTab;
         private NexusUploadTab _nexusUploadTab;
         private SettingsTab _settingsTab;
@@ -51,6 +53,7 @@ namespace Manager
         // State
         private AppSettings _settings;
         private Timer _restartPollTimer;
+        private Timer _nexusProtocolPollTimer;
         private Panel headerPanel;
         private GameSetupTab _gameSetupTab;
         private bool _windowPlacementInitialized;
@@ -59,17 +62,24 @@ namespace Manager
         private bool _startupNexusUpdateAnnouncementsPending = true;
         private int _nexusAccountRequestToken;
         private string _startupPreviousInstalledModApiVersion;
+        private readonly string _startupNexusLink;
         private const string APP_VERSION = AppVersionInfo.Display;
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 // Historical IDs seen in user loadorder files/logs.
-                { "com.coolnether123.pluginconsole", "coolnether123.pluginconsole" },
+                { "coolnether123.pluginconsole", "com.coolnether123.pluginconsole" },
                 { "com.plugin.harmony.example", "coolnether123.harmonyexample" }
             };
 
         public MainForm()
+            : this(null)
         {
+        }
+
+        public MainForm(string startupNexusLink)
+        {
+            _startupNexusLink = startupNexusLink;
             InitializeServices();
             InitializeComponent();
             InitializeCustomResources();
@@ -245,6 +255,8 @@ namespace Manager
             this._gameSetupPage = new System.Windows.Forms.TabPage();
             this._modManagerPage = new System.Windows.Forms.TabPage();
             this._modManagerTab = new Manager.Views.ModManagerTab();
+            this._contentWorkshopPage = new System.Windows.Forms.TabPage();
+            this._contentWorkshopTab = new Manager.Views.ContentWorkshopTab();
             this._nexusPage = new System.Windows.Forms.TabPage();
             this._nexusTab = new Manager.Views.NexusModsTab();
             this._nexusUploadPage = new System.Windows.Forms.TabPage();
@@ -260,6 +272,7 @@ namespace Manager
             this._tabControl.SuspendLayout();
             this._gameSetupPage.SuspendLayout();
             this._modManagerPage.SuspendLayout();
+            this._contentWorkshopPage.SuspendLayout();
             this._nexusPage.SuspendLayout();
             this._nexusUploadPage.SuspendLayout();
             this._settingsPage.SuspendLayout();
@@ -359,6 +372,7 @@ namespace Manager
             // 
             this._tabControl.Controls.Add(this._gameSetupPage);
             this._tabControl.Controls.Add(this._modManagerPage);
+            this._tabControl.Controls.Add(this._contentWorkshopPage);
             this._tabControl.Controls.Add(this._nexusPage);
             this._tabControl.Controls.Add(this._nexusUploadPage);
             this._tabControl.Controls.Add(this._settingsPage);
@@ -398,6 +412,23 @@ namespace Manager
             this._modManagerTab.Padding = new System.Windows.Forms.Padding(15);
             this._modManagerTab.Size = new System.Drawing.Size(1174, 562);
             this._modManagerTab.TabIndex = 0;
+            //
+            // _contentWorkshopPage
+            //
+            this._contentWorkshopPage.Controls.Add(this._contentWorkshopTab);
+            this._contentWorkshopPage.Location = new System.Drawing.Point(4, 42);
+            this._contentWorkshopPage.Name = "_contentWorkshopPage";
+            this._contentWorkshopPage.Size = new System.Drawing.Size(1174, 562);
+            this._contentWorkshopPage.TabIndex = 2;
+            this._contentWorkshopPage.Text = "Content Workshop";
+            //
+            // _contentWorkshopTab
+            //
+            this._contentWorkshopTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._contentWorkshopTab.Location = new System.Drawing.Point(0, 0);
+            this._contentWorkshopTab.Name = "_contentWorkshopTab";
+            this._contentWorkshopTab.Size = new System.Drawing.Size(1174, 562);
+            this._contentWorkshopTab.TabIndex = 0;
             // 
             // _nexusPage
             // 
@@ -500,6 +531,7 @@ namespace Manager
             this._tabControl.ResumeLayout(false);
             this._gameSetupPage.ResumeLayout(false);
             this._modManagerPage.ResumeLayout(false);
+            this._contentWorkshopPage.ResumeLayout(false);
             this._nexusPage.ResumeLayout(false);
             this._nexusUploadPage.ResumeLayout(false);
             this._settingsPage.ResumeLayout(false);
@@ -574,6 +606,7 @@ namespace Manager
 
             // Clean up any stale staged Nexus archives/folders from previous runs.
             NexusInstallService.CleanupStartupArtifacts();
+            ManagerSelfUpdateService.CleanupStartupArtifacts();
 
             // Initialize tabs with services and settings
             _gameSetupTab.Initialize(_settings);
@@ -581,6 +614,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             RefreshNexusAccountStatusAsync(true);
 
@@ -600,8 +634,40 @@ namespace Manager
 
             // Start restart poll timer
             StartRestartPollTimer();
+            StartNexusProtocolPolling();
 
             BeginInvoke((MethodInvoker)ShowReleaseNoticeIfNeeded);
+            if (!string.IsNullOrEmpty(_startupNexusLink))
+                BeginInvoke((MethodInvoker)delegate { HandleNexusProtocolLink(_startupNexusLink); });
+        }
+
+        private void StartNexusProtocolPolling()
+        {
+            if (_nexusProtocolPollTimer != null)
+                return;
+
+            _nexusProtocolPollTimer = new Timer();
+            _nexusProtocolPollTimer.Interval = 750;
+            _nexusProtocolPollTimer.Tick += delegate
+            {
+                IList<string> links = NexusProtocolHandlerService.DequeuePendingLinks();
+                for (int i = 0; i < links.Count; i++)
+                    HandleNexusProtocolLink(links[i]);
+            };
+            _nexusProtocolPollTimer.Start();
+        }
+
+        private void HandleNexusProtocolLink(string rawLink)
+        {
+            if (_nexusTab == null)
+                return;
+
+            if (_tabControl != null && _nexusPage != null)
+                _tabControl.SelectedTab = _nexusPage;
+            if (WindowState == FormWindowState.Minimized)
+                WindowState = FormWindowState.Normal;
+            Activate();
+            _nexusTab.HandleNxmLinkAsync(rawLink);
         }
 
         private void ShowReleaseNoticeIfNeeded()
@@ -684,8 +750,15 @@ namespace Manager
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (_contentWorkshopTab != null && !_contentWorkshopTab.ConfirmClose())
+            {
+                e.Cancel = true;
+                return;
+            }
+
             CaptureWindowPlacement();
 
+            RefreshRuntimeWritableSettings();
             // Save settings on close
             _settingsService.Save(_settings);
             
@@ -695,6 +768,13 @@ namespace Manager
                 _restartPollTimer.Stop();
                 _restartPollTimer.Dispose();
             }
+            if (_nexusProtocolPollTimer != null)
+            {
+                _nexusProtocolPollTimer.Stop();
+                _nexusProtocolPollTimer.Dispose();
+                _nexusProtocolPollTimer = null;
+            }
+            NexusProtocolHandlerService.RestorePreviousHandler();
         }
 
         private void TabControl_SelectedIndexChanged(object sender, EventArgs e)
@@ -787,6 +867,9 @@ namespace Manager
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
+
+                // The running game may have changed its remembered prompt choice.
+                RefreshRuntimeWritableSettings();
 
                 // Save settings before launch
                 SaveSettingsFromUi();
@@ -1630,6 +1713,7 @@ namespace Manager
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
+            _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             SaveSettingsFromUi();
 
@@ -1683,6 +1767,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             
             // Re-apply theme
@@ -1812,6 +1897,14 @@ namespace Manager
             _settingsService.Save(_settings);
         }
 
+        private void RefreshRuntimeWritableSettings()
+        {
+            if (_settings == null || _settingsService == null)
+                return;
+
+            _settings.AutoCondenseSaves = _settingsService.LoadAutoCondensePreference();
+        }
+
         private void UpdateStatusCounts()
         {
             if (_settings.IsModsPathValid)
@@ -1929,6 +2022,7 @@ namespace Manager
             _modManagerTab.ApplyTheme(isDark);
             _nexusTab.ApplyTheme(isDark);
             _nexusUploadTab.ApplyTheme(isDark);
+            _contentWorkshopTab.ApplyTheme(isDark);
             _settingsTab.ApplyTheme(isDark);
             _aboutTab.ApplyTheme(isDark);
         }
@@ -2000,6 +2094,13 @@ namespace Manager
                         try { File.Delete(restartPath); } catch { }
                         return;
                     }
+
+                    // The in-game requester writes this file before asking Unity to quit.
+                    // Keep the request queued until the process has actually exited; consuming
+                    // it earlier would delete the request and LaunchWithMods would reject the
+                    // relaunch because the old game process is still alive.
+                    if (CheckGameRunning())
+                        return;
 
                     // Read Manifest
                     ManagerSlotManifest manifest = null;

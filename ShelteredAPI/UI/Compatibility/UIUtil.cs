@@ -477,6 +477,9 @@ namespace ShelteredAPI.UI.Compatibility
                 go.transform.localScale = Vector3.one;
             }
 
+            if (!go.activeSelf)
+                go.SetActive(true);
+
             var panel = go.GetComponent<UIPanel>() ?? go.AddComponent<UIPanel>();
             // Always sit above any existing UI panel to avoid pause/settings overlays covering mod UI.
             int targetDepth = depth;

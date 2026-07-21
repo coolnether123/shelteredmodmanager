@@ -35,14 +35,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             state.ActiveLayoutPreset = string.IsNullOrEmpty(state.ActiveLayoutPreset) ? "default" : state.ActiveLayoutPreset;
+            state.ActiveStage = ScenarioStageKind.None;
+            state.ActiveShellTab = ScenarioAuthoringShellTab.Shell;
             if (state.ActiveBunkerStage == ScenarioStageKind.None)
                 state.ActiveBunkerStage = ScenarioStageKind.BunkerInside;
             state.Settings = state.Settings != null ? state.Settings.Copy() : _settingsService.Load();
             _settingsService.ApplyDefinitionDefaults(state.Settings);
             EnsureWindowStates(state);
-            bool layoutLoaded = LoadLayout(state);
-            if (!layoutLoaded)
-                HideStartupUtilityWindows(state);
+            LoadLayout(state);
+            // Floating utilities are transient work surfaces. Preserve their
+            // saved size and position, but never carry an open palette/editor
+            // from one authoring session into the next.
+            HideStartupUtilityWindows(state);
             ApplyStageWorkspace(state);
         }
 
@@ -69,6 +73,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
             if (window == null)
                 return false;
+
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+                return ShowHome(state, window);
 
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
             if (definition != null && definition.IsWorkspaceStageWindow)
@@ -106,8 +113,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Calendar, StringComparison.OrdinalIgnoreCase))
-                ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return true;
         }
@@ -117,6 +122,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
             if (window == null)
                 return false;
+
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+                return open && ShowHome(state, window);
 
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
             if (definition != null && definition.IsWorkspaceStageWindow)
@@ -155,6 +163,65 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return changed;
+        }
+
+        public void BeginPixelEditorFocus(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return;
+
+            ScenarioAuthoringWindowState buildTools = FindWindow(state, ScenarioAuthoringWindowIds.BuildTools);
+            ScenarioAuthoringWindowState inspector = FindWindow(state, ScenarioAuthoringWindowIds.Inspector);
+            if (!state.PixelEditorChromeSuppressed)
+            {
+                state.PixelEditorRestoreBuildToolsVisible = buildTools != null && buildTools.Visible;
+                state.PixelEditorRestoreBuildToolsCollapsed = buildTools != null && buildTools.Collapsed;
+                state.PixelEditorRestoreInspectorVisible = inspector != null && inspector.Visible;
+                state.PixelEditorRestoreInspectorCollapsed = inspector != null && inspector.Collapsed;
+            }
+
+            state.PixelEditorChromeSuppressed = true;
+            if (buildTools != null)
+            {
+                buildTools.Visible = false;
+                buildTools.Collapsed = false;
+            }
+
+            if (inspector != null)
+            {
+                inspector.Visible = false;
+                inspector.Collapsed = false;
+            }
+
+            state.WindowMenuOpen = false;
+            PersistIfEnabled(state);
+        }
+
+        public void EndPixelEditorFocus(ScenarioAuthoringState state)
+        {
+            if (state == null || !state.PixelEditorChromeSuppressed)
+                return;
+
+            ScenarioAuthoringWindowState buildTools = FindWindow(state, ScenarioAuthoringWindowIds.BuildTools);
+            ScenarioAuthoringWindowState inspector = FindWindow(state, ScenarioAuthoringWindowIds.Inspector);
+            state.PixelEditorChromeSuppressed = false;
+            if (buildTools != null)
+            {
+                buildTools.Visible = state.PixelEditorRestoreBuildToolsVisible;
+                buildTools.Collapsed = state.PixelEditorRestoreBuildToolsCollapsed && !buildTools.Visible;
+            }
+
+            if (inspector != null)
+            {
+                inspector.Visible = state.PixelEditorRestoreInspectorVisible;
+                inspector.Collapsed = state.PixelEditorRestoreInspectorCollapsed && !inspector.Visible;
+            }
+
+            state.PixelEditorRestoreBuildToolsVisible = false;
+            state.PixelEditorRestoreInspectorVisible = false;
+            state.PixelEditorRestoreBuildToolsCollapsed = false;
+            state.PixelEditorRestoreInspectorCollapsed = false;
+            PersistIfEnabled(state);
         }
 
         public bool ToggleWindowCollapsed(ScenarioAuthoringState state, string windowId)
@@ -198,6 +265,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
             state.SettingsWindowOpen = false;
+            state.HelpWindowOpen = false;
             ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return true;
@@ -218,6 +286,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             state.MinimalMode = true;
             state.FocusSelectionMode = false;
             state.SettingsWindowOpen = false;
+            state.HelpWindowOpen = false;
             PersistIfEnabled(state);
             return true;
         }
@@ -273,6 +342,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return transition;
         }
 
+        private bool ShowHome(ScenarioAuthoringState state, ScenarioAuthoringWindowState window)
+        {
+            if (state == null || window == null)
+                return false;
+
+            bool changed = state.ActiveStage != ScenarioStageKind.None || !window.Visible || window.Collapsed;
+            state.ActiveStage = ScenarioStageKind.None;
+            state.ActiveShellTab = ScenarioAuthoringShellTab.Shell;
+            state.MinimalMode = false;
+            state.FocusSelectionMode = false;
+            window.Visible = true;
+            window.Collapsed = false;
+            ApplyStageWorkspace(state);
+            PersistIfEnabled(state);
+            return changed;
+        }
+
         public void ApplyStageWorkspace(ScenarioAuthoringState state)
         {
             if (state == null || state.WindowStates == null)
@@ -280,6 +366,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             ScenarioStageKind activeStage = ResolveActiveStage(state);
             bool showBuild = ScenarioAuthoringWorkflowRules.ShouldShowToolWorkspace(state);
+            bool showWorldInspector = IsWorldSurfaceStage(activeStage);
 
             for (int i = 0; i < state.WindowStates.Count; i++)
             {
@@ -290,17 +377,36 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(window.Id);
                 if (definition != null && definition.IsWorkspaceStageWindow)
                 {
-                    window.Visible = definition.WorkspaceStage == activeStage;
+                    window.Visible = string.Equals(window.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase)
+                        ? activeStage == ScenarioStageKind.None || activeStage == ScenarioStageKind.Test
+                        : definition.WorkspaceStage == activeStage;
                     window.Collapsed = !window.Visible && window.Collapsed;
                     continue;
                 }
 
-                if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
+                if (state.PixelEditorChromeSuppressed
+                    && (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase)))
+                {
+                    window.Visible = false;
+                    window.Collapsed = false;
+                }
+                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
                     window.Visible = showBuild && !window.Collapsed;
+                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
+                    window.Visible = showWorldInspector && !window.Collapsed;
 
                 if (window.Visible)
                     window.Collapsed = false;
             }
+        }
+
+        private static bool IsWorldSurfaceStage(ScenarioStageKind stage)
+        {
+            return stage == ScenarioStageKind.Bunker
+                || stage == ScenarioStageKind.BunkerBackground
+                || stage == ScenarioStageKind.BunkerSurface
+                || stage == ScenarioStageKind.BunkerInside;
         }
 
         public bool SetSettingsWindowOpen(ScenarioAuthoringState state, bool open)
@@ -348,10 +454,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return false;
 
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
-            if (definition == null || definition.Dock != ScenarioAuthoringShellDock.Floating)
+            bool dockedInspector = definition != null
+                && definition.Dock == ScenarioAuthoringShellDock.Right
+                && string.Equals(windowId, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase);
+            if (definition == null || (definition.Dock != ScenarioAuthoringShellDock.Floating && !dockedInspector))
                 return false;
 
-            float clampedWidth = Math.Max(definition.MinWidth, width);
+            float minWidth = dockedInspector ? ScenarioAuthoringShellLayout.InspectorMinWidth : definition.MinWidth;
+            float maxWidth = dockedInspector ? ScenarioAuthoringShellLayout.InspectorMaxWidth : float.MaxValue;
+            float clampedWidth = Math.Min(maxWidth, Math.Max(minWidth, width));
             float clampedHeight = Math.Max(definition.MinHeight, height);
             bool changed = !window.HasCustomBounds
                 || Math.Abs(window.X - x) > 0.01f
@@ -454,6 +565,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.Hierarchy);
             SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.SelectionStack);
+            SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.TilesPalette);
+            SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.PixelEditor);
         }
 
         private static void SetStartupUtilityWindowHidden(ScenarioAuthoringState state, string windowId)

@@ -17,7 +17,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Bunker = 2,
         Triggers = 3,
         Assets = 4,
-        WinLoss = 5
+        WinLoss = 5,
+        Map = 6,
+        LaunchSetup = 7
     }
 
     internal enum ScenarioDirtySection
@@ -29,7 +31,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Bunker = 8,
         Triggers = 16,
         WinLoss = 32,
-        Assets = 64
+        Assets = 64,
+        Map = 128,
+        AuthorTestChecklist = 256,
+        LaunchSetup = 512
     }
 
     /// <summary>
@@ -53,5 +58,52 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool RequestedRestart { get; set; }
         public ScenarioEditCategory CurrentEditCategory { get; set; }
         public bool HasAppliedToCurrentWorld { get; set; }
+        public string LoadWarning { get; set; }
+        public int DraftRevision { get; private set; }
+        public int AppliedDraftRevision { get; private set; }
+
+        public bool HasUnappliedDraftChanges
+        {
+            get { return HasAppliedToCurrentWorld && AppliedDraftRevision != DraftRevision; }
+        }
+
+        public void MarkDraftChanged(ScenarioDirtySection section, ScenarioEditCategory category)
+        {
+            if (DirtyFlags == null)
+                DirtyFlags = new List<ScenarioDirtySection>();
+            if (section != ScenarioDirtySection.None && !DirtyFlags.Contains(section))
+                DirtyFlags.Add(section);
+            CurrentEditCategory = category;
+            DraftRevision++;
+        }
+
+        public void MarkDraftChanged(ScenarioDirtySection section)
+        {
+            MarkDraftChanged(section, CurrentEditCategory);
+        }
+
+        public void MarkAppliedToCurrentWorld()
+        {
+            HasAppliedToCurrentWorld = true;
+            AppliedDraftRevision = DraftRevision;
+        }
+
+        // A stopped playtest must not keep claiming ownership of the live world.
+        // The next start reapplies the saved draft and creates a fresh completion
+        // carrier instead of being rejected as a stale continuation.
+        public void ResetStoppedPlaytestWorld()
+        {
+            HasAppliedToCurrentWorld = false;
+            AppliedDraftRevision = DraftRevision;
+            RequestedRestart = false;
+        }
+
+        public void MarkChecklistChanged()
+        {
+            if (DirtyFlags == null)
+                DirtyFlags = new List<ScenarioDirtySection>();
+            if (!DirtyFlags.Contains(ScenarioDirtySection.AuthorTestChecklist))
+                DirtyFlags.Add(ScenarioDirtySection.AuthorTestChecklist);
+        }
     }
 }

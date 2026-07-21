@@ -1,3 +1,4 @@
+using System;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -30,6 +31,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         public string DisplayName { get; set; }
         public string Description { get; set; }
         public string Version { get; set; }
+        public string Author { get; set; }
         public string OwnerModId { get; set; }
         public int Order { get; set; }
         public int SaveCount { get; set; }
@@ -37,6 +39,9 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         public ScenarioDependencyVerificationState DependencyState { get; set; }
         public SlotManifest DependencyManifest { get; set; }
         public CustomScenarioInfo CustomScenario { get; set; }
+        public DateTime? InstalledUtc { get; set; }
+        public DateTime? CreatedUtc { get; set; }
+        public DateTime? LastPlayedUtc { get; set; }
 
         public bool IsVanilla
         {
@@ -72,5 +77,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         void QueueLoadTarget(string scenarioId, SaveEntry save, SaveManager.SaveType saveType);
         bool ClearQueuedNewGameSave(SaveManager.SaveType saveType);
         bool ClearQueuedLoad(SaveManager.SaveType saveType);
+        bool ClearQueuedNewGameSaveIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId);
+        bool ClearQueuedLoadIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId);
     }
 }

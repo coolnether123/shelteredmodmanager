@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using ShelteredAPI.Content;
+using ModAPI.Core;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.UI.Internal.Settings;
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
@@ -25,9 +27,29 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             "Perception"
         };
 
+        private static readonly string[] CoreConditions = new[]
+        {
+            "Hunger",
+            "Thirst",
+            "Fatigue",
+            "Dirtiness",
+            "Toilet",
+            "Stress"
+        };
+
+        public const int StatMin = 1;
+        public const int StatMax = 20;
+        public const int ConditionMin = 0;
+        public const int ConditionMax = 100;
+
         public static string[] StatIds
         {
             get { return CoreStats; }
+        }
+
+        public static string[] ConditionIds
+        {
+            get { return CoreConditions; }
         }
 
         public static FamilyMemberConfig CreateDefaultConfig(string name, ScenarioGender gender)
@@ -70,6 +92,43 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return created;
         }
 
+        public static bool TryGetConditionValue(FamilyMemberConfig config, string conditionId, out int value)
+        {
+            value = 0;
+            if (config == null || config.Conditions == null || string.IsNullOrEmpty(conditionId))
+                return false;
+
+            int? stored = GetConditionValue(config.Conditions, conditionId);
+            if (!stored.HasValue)
+                return false;
+
+            value = ClampCondition(stored.Value);
+            return true;
+        }
+
+        public static void SetConditionValue(FamilyMemberConfig config, string conditionId, int value)
+        {
+            if (config == null || string.IsNullOrEmpty(conditionId))
+                return;
+
+            if (config.Conditions == null)
+                config.Conditions = new FamilyMemberConditionConfig();
+
+            int clamped = ClampCondition(value);
+            if (string.Equals(conditionId, "Hunger", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Hunger = clamped;
+            else if (string.Equals(conditionId, "Thirst", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Thirst = clamped;
+            else if (string.Equals(conditionId, "Fatigue", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Fatigue = clamped;
+            else if (string.Equals(conditionId, "Dirtiness", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Dirtiness = clamped;
+            else if (string.Equals(conditionId, "Toilet", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Toilet = clamped;
+            else if (string.Equals(conditionId, "Stress", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Stress = clamped;
+        }
+
         public static FamilySpawner.CharacterAttributes CreateAttributes(FamilyMemberConfig config)
         {
             FamilySpawner.CharacterAttributes attributes = new FamilySpawner.CharacterAttributes();
@@ -80,19 +139,23 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             attributes.m_lastName = string.Empty;
             attributes.m_meshId = ResolveMeshId(config);
 
-            if (config.Appearance != null)
+            FamilyMemberAppearanceConfig appearance = config.Appearance;
+            if (appearance != null)
             {
-                if (!string.IsNullOrEmpty(config.Appearance.HeadTextureId))
-                    attributes.m_headTexture = config.Appearance.HeadTextureId;
-                if (!string.IsNullOrEmpty(config.Appearance.TorsoTextureId))
-                    attributes.m_torsoTexture = config.Appearance.TorsoTextureId;
-                if (!string.IsNullOrEmpty(config.Appearance.LegTextureId))
-                    attributes.m_legTexture = config.Appearance.LegTextureId;
-                ApplyColor(config.Appearance.HairColorHex, delegate(Color color) { attributes.m_hairColor = color; });
-                ApplyColor(config.Appearance.SkinColorHex, delegate(Color color) { attributes.m_skinColor = color; });
-                ApplyColor(config.Appearance.ShirtColorHex, delegate(Color color) { attributes.m_shirtColor = color; });
-                ApplyColor(config.Appearance.PantsColorHex, delegate(Color color) { attributes.m_pantsColor = color; });
+                if (!string.IsNullOrEmpty(appearance.HeadTextureId))
+                    attributes.m_headTexture = appearance.HeadTextureId;
+                if (!string.IsNullOrEmpty(appearance.TorsoTextureId))
+                    attributes.m_torsoTexture = appearance.TorsoTextureId;
+                if (!string.IsNullOrEmpty(appearance.LegTextureId))
+                    attributes.m_legTexture = appearance.LegTextureId;
             }
+
+            ScenarioCharacterAppearanceService.ResolveConfiguredColors(
+                appearance,
+                out attributes.m_hairColor,
+                out attributes.m_skinColor,
+                out attributes.m_shirtColor,
+                out attributes.m_pantsColor);
 
             for (int i = 0; config.Stats != null && i < config.Stats.Count; i++)
                 ApplyStat(attributes, config.Stats[i]);
@@ -100,6 +163,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             for (int i = 0; config.Traits != null && i < config.Traits.Count; i++)
                 ApplyTrait(attributes, config.Traits[i]);
 
+            SanitizeTraitPairs(attributes, config);
             return attributes;
         }
 
@@ -129,6 +193,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (after != null && after.Count > previousCount)
             {
                 spawned = after[after.Count - 1];
+                ApplyConditions(spawned, config);
                 message = "Spawned survivor '" + (config.Name ?? "Survivor") + "'.";
                 return true;
             }
@@ -139,6 +204,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         public static bool ScheduleRecruit(FamilyMemberConfig config, float arrivalDelay, out string message)
         {
+            FamilySpawner.CharacterAttributes queuedAttributes;
+            return ScheduleRecruit(config, arrivalDelay, out queuedAttributes, out message);
+        }
+
+        public static bool ScheduleRecruit(
+            FamilyMemberConfig config,
+            float arrivalDelay,
+            out FamilySpawner.CharacterAttributes queuedAttributes,
+            out string message)
+        {
+            queuedAttributes = null;
             message = null;
             if (config == null)
             {
@@ -180,7 +256,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            attributes.Add(CreateAttributes(config));
+            queuedAttributes = CreateAttributes(config);
+            attributes.Add(queuedAttributes);
             pendingSpawns.Add(spawnInfo);
             message = "Scheduled recruit '" + (config.Name ?? "Survivor") + "' to ask to join.";
             return true;
@@ -188,9 +265,61 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         public static int ClampStat(int value)
         {
-            if (value < 0)
-                return 0;
-            return value > 20 ? 20 : value;
+            if (value < StatMin)
+                return StatMin;
+            return value > StatMax ? StatMax : value;
+        }
+
+        public static int ClampCondition(int value)
+        {
+            if (value < ConditionMin)
+                return ConditionMin;
+            return value > ConditionMax ? ConditionMax : value;
+        }
+
+        public static bool ApplyConditions(FamilyMember member, FamilyMemberConfig config)
+        {
+            if (member == null || config == null || config.Conditions == null || member.stats == null)
+                return false;
+
+            bool changed = false;
+            changed |= ApplyCondition(member.stats.hunger, config.Conditions.Hunger);
+            changed |= ApplyCondition(member.stats.thirst, config.Conditions.Thirst);
+            changed |= ApplyCondition(member.stats.fatigue, config.Conditions.Fatigue);
+            changed |= ApplyCondition(member.stats.dirtiness, config.Conditions.Dirtiness);
+            changed |= ApplyCondition(member.stats.toilet, config.Conditions.Toilet);
+            changed |= ApplyCondition(member.stats.stress, config.Conditions.Stress);
+            return changed;
+        }
+
+        private static bool ApplyCondition(BehaviourStat target, int? value)
+        {
+            if (target == null || !value.HasValue)
+                return false;
+
+            target.Set(ClampCondition(value.Value));
+            return true;
+        }
+
+        private static int? GetConditionValue(FamilyMemberConditionConfig conditions, string conditionId)
+        {
+            if (conditions == null || string.IsNullOrEmpty(conditionId))
+                return null;
+
+            if (string.Equals(conditionId, "Hunger", StringComparison.OrdinalIgnoreCase))
+                return conditions.Hunger;
+            if (string.Equals(conditionId, "Thirst", StringComparison.OrdinalIgnoreCase))
+                return conditions.Thirst;
+            if (string.Equals(conditionId, "Fatigue", StringComparison.OrdinalIgnoreCase))
+                return conditions.Fatigue;
+            if (string.Equals(conditionId, "Dirtiness", StringComparison.OrdinalIgnoreCase))
+                return conditions.Dirtiness;
+            if (string.Equals(conditionId, "Toilet", StringComparison.OrdinalIgnoreCase))
+                return conditions.Toilet;
+            if (string.Equals(conditionId, "Stress", StringComparison.OrdinalIgnoreCase))
+                return conditions.Stress;
+
+            return null;
         }
 
         private static string ResolveMeshId(FamilyMemberConfig config)
@@ -208,16 +337,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (gender == ScenarioGender.Female)
                 return adult ? "woman" : "girl";
             return adult ? "man" : "boy";
-        }
-
-        private static void ApplyColor(string colorHex, Action<Color> apply)
-        {
-            if (apply == null)
-                return;
-
-            Color color;
-            if (ScenarioCharacterAppearanceService.TryParseColorHex(colorHex, out color))
-                apply(color);
         }
 
         private static void ApplyStat(FamilySpawner.CharacterAttributes attributes, StatOverride stat)
@@ -255,51 +374,48 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 attributes.m_weaknessTraits.Add(weakness);
         }
 
+        private static void SanitizeTraitPairs(FamilySpawner.CharacterAttributes attributes, FamilyMemberConfig config)
+        {
+            if (attributes == null || attributes.m_strengthTraits == null || attributes.m_weaknessTraits == null)
+                return;
+
+            for (int i = attributes.m_weaknessTraits.Count - 1; i >= 0; i--)
+            {
+                Traits.Weakness weakness = attributes.m_weaknessTraits[i];
+                Traits.Strength pairedStrength;
+                if (!TryGetPairedStrength(weakness, out pairedStrength) || !attributes.m_strengthTraits.Contains(pairedStrength))
+                    continue;
+
+                attributes.m_weaknessTraits.RemoveAt(i);
+                MMLog.WriteWarning("[ScenarioFamilyMemberFactory] Dropped conflicting weakness '" + weakness
+                    + "' from survivor '" + (config != null && !string.IsNullOrEmpty(config.Name) ? config.Name : "Survivor")
+                    + "' because paired strength '" + pairedStrength + "' is already active.");
+            }
+        }
+
         public static bool TryParseStrengthTrait(string value, out Traits.Strength strength)
         {
-            strength = Traits.Strength.Max;
-            string trimmed = TrimTraitPrefix(value, "Strength:");
-            if (trimmed == null)
-                return false;
-
-            try
-            {
-                strength = (Traits.Strength)Enum.Parse(typeof(Traits.Strength), trimmed, true);
-                return strength != Traits.Strength.Max;
-            }
-            catch
-            {
-                return false;
-            }
+            return ScenarioSurvivorTraitConflictRules.TryParseStrength(value, out strength);
         }
 
         public static bool TryParseWeaknessTrait(string value, out Traits.Weakness weakness)
         {
-            weakness = Traits.Weakness.Max;
-            string trimmed = TrimTraitPrefix(value, "Weakness:");
-            if (trimmed == null)
-                return false;
-
-            try
-            {
-                weakness = (Traits.Weakness)Enum.Parse(typeof(Traits.Weakness), trimmed, true);
-                return weakness != Traits.Weakness.Max;
-            }
-            catch
-            {
-                return false;
-            }
+            return ScenarioSurvivorTraitConflictRules.TryParseWeakness(value, out weakness);
         }
 
-        private static string TrimTraitPrefix(string value, string prefix)
+        public static bool TryGetPairedWeakness(Traits.Strength strength, out Traits.Weakness weakness)
         {
-            if (string.IsNullOrEmpty(value))
-                return null;
+            return ScenarioSurvivorTraitConflictRules.TryGetPairedWeakness(strength, out weakness);
+        }
 
-            string trimmed = value.Trim();
-            return trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                ? trimmed.Substring(prefix.Length).Trim()
-                : trimmed;
+        public static bool TryGetPairedStrength(Traits.Weakness weakness, out Traits.Strength strength)
+        {
+            return ScenarioSurvivorTraitConflictRules.TryGetPairedStrength(weakness, out strength);
+        }
+
+        public static bool HasConflictingTraitPair(FamilyMemberConfig config, out Traits.Strength strength, out Traits.Weakness weakness)
+        {
+            return ScenarioSurvivorTraitConflictRules.HasConflict(config, out strength, out weakness);
         }
     }
 }

@@ -55,6 +55,44 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             return false;
         }
 
+        public int CountRecords(string actionKey, ScenarioExecutedActionStatus status)
+        {
+            int count = 0;
+            if (string.IsNullOrEmpty(actionKey) || State == null || State.ExecutedActions == null)
+                return count;
+
+            for (int i = 0; i < State.ExecutedActions.Count; i++)
+            {
+                ScenarioExecutedActionRecord record = State.ExecutedActions[i];
+                if (record != null
+                    && string.Equals(record.ActionKey, actionKey, StringComparison.OrdinalIgnoreCase)
+                    && record.Status == status)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        public int CountAttempts(string actionKey)
+        {
+            int count = 0;
+            if (string.IsNullOrEmpty(actionKey) || State == null || State.ExecutedActions == null)
+                return count;
+
+            for (int i = 0; i < State.ExecutedActions.Count; i++)
+            {
+                ScenarioExecutedActionRecord record = State.ExecutedActions[i];
+                if (record != null
+                    && string.Equals(record.ActionKey, actionKey, StringComparison.OrdinalIgnoreCase)
+                    && IsExecutionAttempt(record.Status))
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
         public bool TryGetLastExecutionAttempt(string actionKey, out ScenarioExecutedActionRecord lastRecord)
         {
             lastRecord = null;
@@ -66,8 +104,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 ScenarioExecutedActionRecord record = State.ExecutedActions[i];
                 if (record == null
                     || !string.Equals(record.ActionKey, actionKey, StringComparison.OrdinalIgnoreCase)
-                    || (record.Status != ScenarioExecutedActionStatus.Succeeded
-                        && record.Status != ScenarioExecutedActionStatus.Failed))
+                    || !IsExecutionAttempt(record.Status))
                 {
                     continue;
                 }
@@ -121,6 +158,13 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             if (hour != 0) return hour;
 
             return left.FiredMinute.CompareTo(right.FiredMinute);
+        }
+
+        private static bool IsExecutionAttempt(ScenarioExecutedActionStatus status)
+        {
+            return status == ScenarioExecutedActionStatus.Succeeded
+                || status == ScenarioExecutedActionStatus.Failed
+                || status == ScenarioExecutedActionStatus.Skipped;
         }
     }
 }

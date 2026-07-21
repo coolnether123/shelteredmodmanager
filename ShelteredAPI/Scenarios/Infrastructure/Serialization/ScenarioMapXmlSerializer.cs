@@ -66,13 +66,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 location.Kind = AttributeOrChild(node, "kind", "Kind");
                 location.X = ReadFloatAttribute(node, "x", 0f);
                 location.Y = ReadFloatAttribute(node, "y", 0f);
+                location.GridX = ReadIntAttribute(node, "gridX", 0);
+                location.GridY = ReadIntAttribute(node, "gridY", 0);
                 location.Radius = ReadFloatAttribute(node, "radius", 0f);
                 location.Searchable = ReadBoolAttribute(node, "searchable", true);
                 location.DiscoveredAtStart = ReadBoolAttribute(node, "discoveredAtStart", true);
+                location.VisibleAtStart = ReadBoolAttribute(node, "visibleAtStart", true);
+                location.HiddenUntilDiscovered = ReadBoolAttribute(node, "hiddenUntilDiscovered", false);
+                location.IconId = AttributeOrChild(node, "iconId", "IconId");
                 location.MarkerId = AttributeOrChild(node, "markerId", "MarkerId");
                 location.BoundaryId = AttributeOrChild(node, "boundaryId", "BoundaryId");
                 location.TerrainId = AttributeOrChild(node, "terrainId", "TerrainId");
                 location.LootTableId = AttributeOrChild(node, "lootTableId", "LootTableId");
+                location.ReplaceGeneratedLoot = ReadBoolAttribute(node, "replaceGeneratedLoot", false);
                 location.EncounterTableId = AttributeOrChild(node, "encounterTableId", "EncounterTableId");
                 location.RequiredGateId = AttributeOrChild(node, "requiredGateId", "RequiredGateId");
                 location.Danger = ReadIntAttribute(node, "danger", 0);
@@ -96,13 +102,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "kind", location.Kind);
                 writer.WriteAttributeString("x", location.X.ToString(CultureInfo.InvariantCulture));
                 writer.WriteAttributeString("y", location.Y.ToString(CultureInfo.InvariantCulture));
+                WriteNonZeroIntAttribute(writer, "gridX", location.GridX);
+                WriteNonZeroIntAttribute(writer, "gridY", location.GridY);
                 WritePositiveFloatAttribute(writer, "radius", location.Radius);
                 writer.WriteAttributeString("searchable", location.Searchable ? "true" : "false");
                 writer.WriteAttributeString("discoveredAtStart", location.DiscoveredAtStart ? "true" : "false");
+                writer.WriteAttributeString("visibleAtStart", location.VisibleAtStart ? "true" : "false");
+                writer.WriteAttributeString("hiddenUntilDiscovered", location.HiddenUntilDiscovered ? "true" : "false");
+                WriteAttribute(writer, "iconId", location.IconId);
                 WriteAttribute(writer, "markerId", location.MarkerId);
                 WriteAttribute(writer, "boundaryId", location.BoundaryId);
                 WriteAttribute(writer, "terrainId", location.TerrainId);
                 WriteAttribute(writer, "lootTableId", location.LootTableId);
+                if (location.ReplaceGeneratedLoot)
+                    writer.WriteAttributeString("replaceGeneratedLoot", "true");
                 WriteAttribute(writer, "encounterTableId", location.EncounterTableId);
                 WriteAttribute(writer, "requiredGateId", location.RequiredGateId);
                 WriteNonZeroIntAttribute(writer, "danger", location.Danger);
@@ -271,7 +284,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                         MinQuantity = ReadIntAttribute(entryNode, "min", 1),
                         MaxQuantity = ReadIntAttribute(entryNode, "max", 1),
                         Weight = ReadIntAttribute(entryNode, "weight", 1),
-                        Chance = ReadFloatAttribute(entryNode, "chance", 1f)
+                        Chance = ReadFloatAttribute(entryNode, "chance", 1f),
+                        Hidden = ReadBoolAttribute(entryNode, "hidden", false),
+                        HiddenUnlockItemId = AttributeOrChild(entryNode, "hiddenUnlockItemId", "HiddenUnlockItemId")
                     });
                 }
                 ReadProperties(Child(node, "Properties"), table.Properties);
@@ -304,6 +319,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     writer.WriteAttributeString("max", entry.MaxQuantity.ToString(CultureInfo.InvariantCulture));
                     writer.WriteAttributeString("weight", entry.Weight.ToString(CultureInfo.InvariantCulture));
                     writer.WriteAttributeString("chance", entry.Chance.ToString(CultureInfo.InvariantCulture));
+                    if (entry.Hidden)
+                        writer.WriteAttributeString("hidden", "true");
+                    WriteAttribute(writer, "hiddenUnlockItemId", entry.HiddenUnlockItemId);
                     writer.WriteEndElement();
                 }
                 writer.WriteEndElement();
@@ -320,6 +338,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 MapEncounterTableDefinition table = new MapEncounterTableDefinition();
                 table.Id = AttributeOrChild(node, "id", "Id");
                 table.DisplayName = AttributeOrChild(node, "displayName", "DisplayName");
+                table.OpenGroundChance = ReadIntAttribute(node, "openGroundChance", -1);
+                table.SearchNpcRevealChance = ReadIntAttribute(node, "searchNpcRevealChance", -1);
+                table.AnimalEncounterChance = ReadIntAttribute(node, "animalEncounterChance", -1);
+                table.FactionEncounterChance = ReadIntAttribute(node, "factionEncounterChance", -1);
                 foreach (XmlElement entryNode in DirectChildren(Child(node, "Entries") ?? node, "Entry"))
                 {
                     MapEncounterEntryDefinition entry = new MapEncounterEntryDefinition();
@@ -353,6 +375,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteStartElement("EncounterTable");
                 WriteAttribute(writer, "id", table.Id);
                 WriteAttribute(writer, "displayName", table.DisplayName);
+                WriteNonNegativeIntAttribute(writer, "openGroundChance", table.OpenGroundChance);
+                WriteNonNegativeIntAttribute(writer, "searchNpcRevealChance", table.SearchNpcRevealChance);
+                WriteNonNegativeIntAttribute(writer, "animalEncounterChance", table.AnimalEncounterChance);
+                WriteNonNegativeIntAttribute(writer, "factionEncounterChance", table.FactionEncounterChance);
                 writer.WriteStartElement("Entries");
                 for (int e = 0; table.Entries != null && e < table.Entries.Count; e++)
                 {
@@ -607,6 +633,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
         private static void WriteNonZeroIntAttribute(XmlWriter writer, string name, int value)
         {
             if (value != 0)
+                writer.WriteAttributeString(name, value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void WriteNonNegativeIntAttribute(XmlWriter writer, string name, int value)
+        {
+            if (value >= 0)
                 writer.WriteAttributeString(name, value.ToString(CultureInfo.InvariantCulture));
         }
     }

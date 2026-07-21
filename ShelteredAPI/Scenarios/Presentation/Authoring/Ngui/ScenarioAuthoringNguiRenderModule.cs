@@ -6,6 +6,7 @@ using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
@@ -42,6 +43,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         private float _coordinateScale = 1f;
         private string _lastSignature;
         private bool _windowMenuOpen;
+        private bool _historyOpen;
+        private ScenarioDraftSnapshotInfo _historyRestoreCandidate;
+        private ScenarioDraftSnapshotInfo _historyDeleteCandidate;
+        private ScenarioDraftSnapshotInfo[] _historyRows = new ScenarioDraftSnapshotInfo[0];
 
         public string ModuleId
         {
@@ -77,6 +82,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
 
         public void Render(ScenarioAuthoringPresentationSnapshot snapshot)
         {
+            if (ScenarioOpeningCutsceneAuthoringService.IsPreviewActive)
+            {
+                Hide();
+                return;
+            }
+
             if (snapshot == null || snapshot.State == null || !snapshot.State.IsActive)
             {
                 Hide();
@@ -91,26 +102,36 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             if (inputCapture != null)
                 inputCapture.BeginFrame(_coordinateScale);
 
-            string signature = BuildSignature(snapshot);
-            bool rebuild = !string.Equals(signature, _lastSignature, StringComparison.Ordinal)
-                || Math.Abs(UnityEngine.Input.GetAxis("Mouse ScrollWheel")) > 0.001f;
-            if (rebuild)
+            try
             {
-                _lastSignature = signature;
-                ClearOverlay();
-                BuildShell(snapshot);
-            }
+                bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+                bool reloadPending = snapshot.State != null && snapshot.State.ReloadPending;
+                string signature = BuildSignature(snapshot);
+                bool rebuild = !string.Equals(signature, _lastSignature, StringComparison.Ordinal)
+                    || Math.Abs(UnityEngine.Input.GetAxis("Mouse ScrollWheel")) > 0.001f;
+                if (rebuild)
+                {
+                    _lastSignature = signature;
+                    ClearOverlay();
+                    BuildShell(snapshot);
+                }
 
-            RegisterInteractiveRects(inputCapture);
-            if (inputCapture != null)
+                RegisterInteractiveRects(inputCapture);
+                if (inputCapture != null)
+                {
+                    inputCapture.SetPopupOpen(!isPlaytesting && !reloadPending && (_windowMenuOpen
+                        || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.Settings != null)
+                        || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.SpritePickerDocument != null)
+                        || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.ContextMenu != null && snapshot.ShellViewModel.ContextMenu.Visible)));
+                    inputCapture.SetKeyboardCaptured(!isPlaytesting && !reloadPending
+                        && snapshot.ShellViewModel != null
+                        && (snapshot.ShellViewModel.Settings != null || snapshot.ShellViewModel.SpritePickerDocument != null));
+                }
+            }
+            finally
             {
-                inputCapture.SetPopupOpen(_windowMenuOpen
-                    || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.Settings != null)
-                    || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.SpritePickerDocument != null)
-                    || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.ContextMenu != null && snapshot.ShellViewModel.ContextMenu.Visible));
-                inputCapture.SetKeyboardCaptured(snapshot.ShellViewModel != null
-                    && (snapshot.ShellViewModel.Settings != null || snapshot.ShellViewModel.SpritePickerDocument != null));
-                inputCapture.CompleteFrame();
+                if (inputCapture != null)
+                    inputCapture.CompleteFrame();
             }
         }
 
@@ -147,13 +168,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         {
             _interactiveRects.Clear();
             ScenarioAuthoringShellViewModel shell = snapshot.ShellViewModel;
-            if (shell == null || !snapshot.State.ShellVisible)
+            bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+            bool reloadPending = snapshot.State != null && snapshot.State.ReloadPending;
+            if (shell == null || (!snapshot.State.ShellVisible && !isPlaytesting && !reloadPending))
                 return;
 
             Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(_scaledWidth);
             Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(_scaledWidth, hudReserveRect);
             Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(_scaledWidth, _scaledHeight);
             Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(_scaledWidth, topRect, statusRect);
+            if (isPlaytesting)
+            {
+                DrawPlaytestStrip(statusRect, snapshot.State);
+                return;
+            }
 
             Rect windowsButton = DrawTopBar(topRect, shell);
             DrawToolRail(contentRect, snapshot.State);
@@ -173,6 +201,77 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
 
             if (shell.Settings != null)
                 DrawSettingsModal(shell.Settings, hudReserveRect);
+
+            if (_historyOpen)
+                DrawHistoryModal(hudReserveRect);
+        }
+
+        private void DrawHistoryModal(Rect reserveRect)
+        {
+            ScenarioDraftSnapshotService snapshots = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+            if (snapshots == null) return;
+            _historyRows = snapshots.ListSnapshots();
+            float width = Math.Min(880f, reserveRect.width - 64f);
+            float height = Math.Min(570f, reserveRect.height - 48f);
+            Rect rect = new Rect(reserveRect.x + ((reserveRect.width - width) * 0.5f), reserveRect.y + ((reserveRect.height - height) * 0.5f), width, height);
+            DrawPanel("HistoryModal", rect, _panelAltColor, true, BaseDepth + 40);
+            DrawLabel("HistoryTitle", rect, new Rect(18f, 14f, rect.width - 72f, 30f), "DRAFT HISTORY", 22, _titleColor, NGUIText.Alignment.Left, BaseDepth + 44);
+            DrawLabel("HistorySubtitle", rect, new Rect(18f, 42f, rect.width - 72f, 20f), "Restore a protected draft without overwriting your last manual save.", 13, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
+            DrawButton(new Rect(rect.xMax - 46f, rect.y + 14f, 28f, 28f), CommandAction("editor.history.close", "X", false), false, "HistoryClose");
+
+            if (_historyRestoreCandidate != null || _historyDeleteCandidate != null)
+            {
+                bool restoring = _historyRestoreCandidate != null;
+                ScenarioDraftSnapshotInfo candidate = restoring ? _historyRestoreCandidate : _historyDeleteCandidate;
+                Rect confirm = new Rect(rect.x + 18f, rect.y + 78f, rect.width - 36f, 166f);
+                DrawPanel("HistoryConfirmPanel", confirm, _panelColor, false, BaseDepth + 42);
+                DrawLabel("HistoryConfirmTitle", confirm, new Rect(16f, 14f, confirm.width - 32f, 28f), restoring ? "RESTORE SAVED DRAFT?" : "DELETE SAVED DRAFT?", 18, restoring ? _titleColor : new Color(0.95f, 0.62f, 0.48f, 1f), NGUIText.Alignment.Left, BaseDepth + 46);
+                string confirmation = restoring
+                    ? "Restore '" + candidate.Name + "'? The current draft is autosaved first. This becomes the working draft, while your manual save stays unchanged until you choose Save."
+                    : "Delete '" + candidate.Name + "'? This removes only this history entry. The current draft and manual save are not changed.";
+                DrawLabel("HistoryConfirm", confirm, new Rect(16f, 48f, confirm.width - 32f, 54f), confirmation, 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 46);
+                string confirmAction = restoring ? "editor.history.confirm_restore" : "editor.history.confirm_delete";
+                string cancelAction = restoring ? "editor.history.cancel_restore" : "editor.history.cancel_delete";
+                DrawButton(new Rect(confirm.x + 16f, confirm.y + 116f, 126f, 32f), CommandAction(confirmAction, restoring ? "Restore draft" : "Delete version", true), false, "HistoryConfirmPrimary");
+                DrawButton(new Rect(confirm.x + 150f, confirm.y + 116f, 94f, 32f), CommandAction(cancelAction, "Cancel", false), false, "HistoryConfirmCancel");
+                RegisterRect(rect);
+                return;
+            }
+
+            Rect recovery = new Rect(rect.x + 18f, rect.y + 72f, rect.width - 36f, 58f);
+            DrawPanel("HistoryRecovery", recovery, _panelColor, false, BaseDepth + 42);
+            DrawLabel("HistoryRecoveryTitle", recovery, new Rect(14f, 8f, 116f, 20f), "RECOVERY", 14, _titleColor, NGUIText.Alignment.Left, BaseDepth + 46);
+            DrawLabel("HistoryManual", recovery, new Rect(132f, 8f, recovery.width - 146f, 20f), "Last manual save: " + snapshots.GetLastManualSaveText(), 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 46);
+            DrawLabel("HistoryRecoveryHelp", recovery, new Rect(14f, 31f, recovery.width - 28f, 18f), "Every restore first creates a recovery autosave of the draft you have open now.", 12, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 46);
+
+            float gap = 12f;
+            float groupWidth = (rect.width - 36f - gap) * 0.5f;
+            Rect autosaves = new Rect(rect.x + 18f, rect.y + 142f, groupWidth, rect.height - 160f);
+            Rect versions = new Rect(autosaves.xMax + gap, autosaves.y, groupWidth, autosaves.height);
+            DrawHistoryGroup(autosaves, "AUTOSAVES", true, "Autosaves appear after edits and before a restore. Up to five recent copies are kept.");
+            DrawHistoryGroup(versions, "NAMED VERSIONS", false, "Named versions stay here until you delete them. Use Version in the status bar to create one.");
+            RegisterRect(rect);
+        }
+
+        private void DrawHistoryGroup(Rect group, string title, bool autosave, string emptyHelp)
+        {
+            DrawPanel("HistoryGroup" + (autosave ? "Auto" : "Named"), group, _panelColor, false, BaseDepth + 42);
+            DrawLabel("HistoryGroupTitle" + (autosave ? "Auto" : "Named"), group, new Rect(14f, 10f, group.width - 28f, 22f), title, 15, _titleColor, NGUIText.Alignment.Left, BaseDepth + 46);
+            int shown = 0;
+            for (int i = 0; i < _historyRows.Length && shown < 5; i++)
+            {
+                ScenarioDraftSnapshotInfo row = _historyRows[i];
+                if (row == null || row.IsAutosave != autosave) continue;
+                float localY = 38f + (shown * 58f);
+                DrawLabel("HistoryRow" + i, group, new Rect(14f, localY, group.width - 160f, 20f), row.Name + "  -  " + row.AgeText, 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 46);
+                DrawLabel("HistorySummary" + i, group, new Rect(14f, localY + 22f, group.width - 160f, 28f), string.IsNullOrEmpty(row.ChangeSummary) ? "Protected draft snapshot" : row.ChangeSummary, 11, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 46);
+                float buttonY = group.y + localY + 8f;
+                DrawButton(new Rect(group.xMax - 142f, buttonY, 64f, 28f), CommandAction("editor.history.restore." + i, "Restore", false), false, "HistoryRestore" + i);
+                DrawButton(new Rect(group.xMax - 72f, buttonY, 58f, 28f), CommandAction("editor.history.delete." + i, "Delete", false), false, "HistoryDelete" + i);
+                shown++;
+            }
+            if (shown == 0)
+                DrawLabel("HistoryEmpty" + (autosave ? "Auto" : "Named"), group, new Rect(14f, 44f, group.width - 28f, 58f), emptyHelp, 12, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 46);
         }
 
         private Rect DrawTopBar(Rect rect, ScenarioAuthoringShellViewModel shell)
@@ -273,19 +372,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             DrawPanel("ToolRail", rect, _panelColor, true, BaseDepth);
 
             float y = rect.y + 10f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Select, ScenarioAuthoringActionIds.ActionToolSelect, "SEL", "Select", "ToolSelect");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "OBJ", "Objects", "ToolObjects");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Shelter, ScenarioAuthoringActionIds.ActionToolShelter, "STR", "Structure", "ToolStructure");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 78f), state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "WIR", "Walls\nWiring", "ToolWiring");
-            y += 84f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "AST", "Assets", "ToolAssets");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "WIN", "Win/Loss", "ToolWinLoss");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Family, ScenarioAuthoringActionIds.ActionToolPeople, "PPL", "People", "ToolPeople");
+            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "BLD", "Build", "ToolBuild");
             RegisterRect(rect);
         }
 
@@ -318,7 +405,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             x += 104f;
             DrawButton(new Rect(x, rect.y + 8f, 74f, 32f), CommandAction(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear", false), false, "CommandClear");
             x += 82f;
-            DrawButton(new Rect(x, rect.y + 8f, 82f, 32f), CommandAction(ScenarioAuthoringActionIds.ActionPlaytest, "Playtest", ScenarioAuthoringRuntimeGuards.IsPlaytesting()), false, "CommandPlaytest");
+            DrawButton(new Rect(x, rect.y + 8f, 82f, 32f), PlaytestAction("Playtest"), false, "CommandPlaytest");
             RegisterRect(rect);
         }
 
@@ -337,8 +424,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 x += width + 8f;
             }
 
+            DrawButton(new Rect(rect.xMax - 382f, rect.y + 8f, 74f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionHistorySaveVersion, "Version", false), false, "StatusVersion");
+            DrawButton(new Rect(rect.xMax - 300f, rect.y + 8f, 72f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionHistoryShow, "History", false), false, "StatusHistory");
             DrawButton(new Rect(rect.xMax - 220f, rect.y + 8f, 72f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionSave, "Save", true), false, "StatusSave");
-            DrawButton(new Rect(rect.xMax - 142f, rect.y + 8f, 86f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionPlaytest, ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Stop Test" : "Playtest", ScenarioAuthoringRuntimeGuards.IsPlaytesting()), false, "StatusPlaytest");
+            DrawButton(new Rect(rect.xMax - 142f, rect.y + 8f, 86f, 30f), PlaytestAction(ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Stop Test" : "Playtest"), false, "StatusPlaytest");
             DrawButton(new Rect(rect.xMax - 50f, rect.y + 8f, 42f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionShellToggle, "X", false), false, "StatusHide");
             RegisterRect(rect);
         }
@@ -379,20 +468,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 }
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Hierarchy, StringComparison.OrdinalIgnoreCase))
                 {
-                    rects[window.Id] = new Rect(viewportLeft, contentRect.y + 40f, Mathf.Min(360f, Math.Max(300f, window.Width)), Mathf.Min(470f, contentRect.height - 160f));
+                    rects[window.Id] = ScenarioAuthoringShellLayout.BuildFloatingWindowRect(window, contentRect, i);
                 }
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.SelectionStack, StringComparison.OrdinalIgnoreCase))
                 {
-                    rects[window.Id] = new Rect(viewportLeft, contentRect.yMax - 356f, Mathf.Min(360f, Math.Max(300f, window.Width)), 268f);
+                    rects[window.Id] = ScenarioAuthoringShellLayout.BuildFloatingWindowRect(window, contentRect, i);
                 }
                 else
                 {
-                    Rect workspace = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, false);
-                    float width = Mathf.Min(window.Width > 0f ? window.Width : 720f, Math.Max(520f, viewportRight - viewportLeft));
-                    float height = Mathf.Min(window.Height > 0f ? window.Height : 420f, Math.Max(260f, contentRect.height - 120f));
-                    float x = workspace.x + ((workspace.width - width) * 0.5f) + ((i % 3) * 18f);
-                    float y = workspace.y + ((workspace.height - height) * 0.5f) + ((i % 2) * 18f);
-                    rects[window.Id] = ScenarioAuthoringShellLayout.ClampAwayFromHud(new Rect(x, y, width, height), _scaledWidth, _scaledHeight, ScenarioAuthoringShellLayout.BuildHudReserveRect(_scaledWidth));
+                    rects[window.Id] = ScenarioAuthoringShellLayout.BuildFloatingWindowRect(window, contentRect, i);
                 }
             }
 
@@ -548,6 +632,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         {
             float rectWidth = 260f;
             float rectHeight = Math.Min(340f, 72f + Count(menu.Actions) * 30f);
+            for (int i = 0; menu.Actions != null && i < menu.Actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = menu.Actions[i];
+                if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
+                    rectHeight = Math.Min(340f, rectHeight + MeasureContextReasonHeight(action.DisabledReason, rectWidth - 24f));
+            }
             Rect rect = menu.CenterOnScreen
                 ? ScenarioAuthoringShellLayout.BuildCenteredPopupRect(_scaledWidth, _scaledHeight, rectWidth, rectHeight, hudReserveRect)
                 : ScenarioAuthoringShellLayout.ClampAwayFromHud(new Rect(menu.AnchorX, menu.AnchorY, rectWidth, rectHeight), _scaledWidth, _scaledHeight, hudReserveRect);
@@ -557,10 +647,126 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             float y = rect.y + 56f;
             for (int i = 0; menu.Actions != null && i < menu.Actions.Length; i++)
             {
-                DrawButton(new Rect(rect.x + 10f, y, rect.width - 20f, 24f), menu.Actions[i], false, "ContextAction" + i);
+                ScenarioAuthoringInspectorAction action = menu.Actions[i];
+                DrawButton(new Rect(rect.x + 10f, y, rect.width - 20f, 24f), action, false, "ContextAction" + i);
                 y += 28f;
+                if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
+                {
+                    float reasonHeight = MeasureContextReasonHeight(action.DisabledReason, rect.width - 24f);
+                    DrawLabel("ContextActionReason" + i, rect, new Rect(12f, y - rect.y, rect.width - 24f, reasonHeight), FormatContextReason(action.DisabledReason, rect.width - 24f), 11, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 104);
+                    y += reasonHeight;
+                }
             }
             RegisterRect(rect);
+        }
+
+        private void DrawPlaytestStrip(Rect rect, ScenarioAuthoringState state)
+        {
+            bool reloadPending = state != null && state.ReloadPending;
+            string reloadReason = reloadPending && !string.IsNullOrEmpty(state.ReloadPendingReason)
+                ? state.ReloadPendingReason
+                : "Scenario world is reloading; controls are disabled until the editor reconnects.";
+            DrawPanel("PlaytestStrip", rect, _statusColor, false, BaseDepth);
+            if (reloadPending)
+            {
+                DrawLabel("PlaytestState", rect, new Rect(18f, 13f, Math.Max(120f, rect.width - 380f), 20f), "Restarting playtest", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+            }
+            else
+            {
+                DrawLabel("PlaytestState", rect, new Rect(18f, 13f, 136f, 20f), "Playtest running", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+                DrawLabel("PlaytestTime", rect, new Rect(166f, 13f, 150f, 20f), "Day " + GameTime.Day + " " + GameTime.Hour.ToString("D2") + ":" + GameTime.Minute.ToString("D2"), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+                DrawLabel("PlaytestSeed", rect, new Rect(328f, 13f, Math.Max(80f, rect.width - 580f), 20f), "ModRandom seed: " + ModRandom.CurrentSeed.ToString(), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+            }
+            DrawButton(new Rect(rect.xMax - 226f, rect.y + 8f, 92f, 30f), reloadPending ? DisabledCommandAction(ScenarioAuthoringActionIds.ActionPlaytestRestart, "Restart", reloadReason) : CommandAction(ScenarioAuthoringActionIds.ActionPlaytestRestart, "Restart", false), false, "PlaytestRestart");
+            DrawButton(new Rect(rect.xMax - 126f, rect.y + 8f, 112f, 30f), reloadPending ? DisabledCommandAction(ScenarioAuthoringActionIds.ActionPlaytest, "Stop Test", reloadReason) : CommandAction(ScenarioAuthoringActionIds.ActionPlaytest, "Stop Test", true), false, "PlaytestStop");
+            RegisterRect(rect);
+        }
+
+        private static float MeasureContextReasonHeight(string reason, float width)
+        {
+            if (string.IsNullOrEmpty(reason))
+                return 0f;
+
+            return Math.Min(54f, Math.Max(18f, CountContextReasonLines(reason, width) * 15f + 3f));
+        }
+
+        private static string FormatContextReason(string reason, float width)
+        {
+            if (string.IsNullOrEmpty(reason))
+                return string.Empty;
+
+            int maxChars = Math.Max(24, Mathf.FloorToInt(width / 6.2f));
+            int lines = CountContextReasonLines(reason, width);
+            if (lines <= 1)
+                return reason;
+
+            string[] words = reason.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            StringBuilder builder = new StringBuilder();
+            int lineLength = 0;
+            int writtenLines = 1;
+            for (int i = 0; i < words.Length; i++)
+            {
+                string word = words[i];
+                int nextLength = lineLength == 0 ? word.Length : lineLength + 1 + word.Length;
+                if (nextLength > maxChars && lineLength > 0 && writtenLines < 3)
+                {
+                    builder.Append('\n');
+                    lineLength = 0;
+                    writtenLines++;
+                }
+                else if (lineLength > 0)
+                {
+                    builder.Append(' ');
+                    lineLength++;
+                }
+
+                if (writtenLines >= 3 && lineLength + word.Length > maxChars)
+                {
+                    builder.Append(ShortenStatic(word, Math.Max(3, maxChars - lineLength)));
+                    return builder.ToString();
+                }
+
+                builder.Append(word);
+                lineLength += word.Length;
+            }
+
+            return builder.ToString();
+        }
+
+        private static int CountContextReasonLines(string reason, float width)
+        {
+            if (string.IsNullOrEmpty(reason))
+                return 0;
+
+            int maxChars = Math.Max(24, Mathf.FloorToInt(width / 6.2f));
+            int lines = 1;
+            int lineLength = 0;
+            string[] words = reason.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < words.Length; i++)
+            {
+                int wordLength = words[i].Length;
+                int nextLength = lineLength == 0 ? wordLength : lineLength + 1 + wordLength;
+                if (nextLength > maxChars && lineLength > 0)
+                {
+                    lines++;
+                    lineLength = wordLength;
+                }
+                else
+                {
+                    lineLength = nextLength;
+                }
+            }
+
+            return Math.Min(3, lines);
+        }
+
+        private static string ShortenStatic(string value, int max)
+        {
+            if (string.IsNullOrEmpty(value) || max <= 0 || value.Length <= max)
+                return value ?? string.Empty;
+            if (max <= 3)
+                return value.Substring(0, max);
+            return value;
         }
 
         private void DrawDocumentModal(string id, ScenarioAuthoringInspectorDocument document, Rect hudReserveRect, float preferredWidth, float preferredHeight)
@@ -764,6 +970,81 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             UIEventListener listener = UIEventListener.Get(go);
             listener.onClick = delegate(GameObject sender)
             {
+                if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionHistoryShow, StringComparison.Ordinal))
+                {
+                    _historyOpen = !_historyOpen;
+                    _historyRestoreCandidate = null;
+                    _historyDeleteCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.close", StringComparison.Ordinal))
+                {
+                    _historyOpen = false;
+                    _historyRestoreCandidate = null;
+                    _historyDeleteCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.cancel_restore", StringComparison.Ordinal))
+                {
+                    _historyRestoreCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.cancel_delete", StringComparison.Ordinal))
+                {
+                    _historyDeleteCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.confirm_restore", StringComparison.Ordinal))
+                {
+                    string error = null;
+                    ScenarioDraftSnapshotService history = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+                    bool restored = history != null && history.Restore(_historyRestoreCandidate, out error);
+                    ScenarioAuthoringBackendService.Instance.SetStatusMessage(restored ? "Saved version restored into the current draft. Save when you are ready." : "Restore failed: " + error);
+                    _historyRestoreCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.confirm_delete", StringComparison.Ordinal))
+                {
+                    string error = null;
+                    ScenarioDraftSnapshotService history = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+                    bool deleted = history != null && history.Delete(_historyDeleteCandidate, out error);
+                    ScenarioAuthoringBackendService.Instance.SetStatusMessage(deleted ? "Saved history entry deleted." : "Could not delete history entry: " + error);
+                    _historyDeleteCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                int index;
+                if (TryGetHistoryRowIndex(actionId, "editor.history.restore.", out index))
+                {
+                    if (index >= 0 && index < _historyRows.Length)
+                    {
+                        _historyRestoreCandidate = _historyRows[index];
+                        _historyDeleteCandidate = null;
+                    }
+                    ForceRebuild();
+                    return;
+                }
+                if (TryGetHistoryRowIndex(actionId, "editor.history.delete.", out index))
+                {
+                    if (index >= 0 && index < _historyRows.Length)
+                    {
+                        _historyDeleteCandidate = _historyRows[index];
+                        _historyRestoreCandidate = null;
+                    }
+                    ForceRebuild();
+                    return;
+                }
                 if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionShellToggleWindowMenu, StringComparison.Ordinal))
                 {
                     _windowMenuOpen = !_windowMenuOpen;
@@ -835,6 +1116,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             ScenarioAuthoringState state = snapshot.State;
             ScenarioAuthoringShellViewModel shell = snapshot.ShellViewModel;
             builder.Append(state.IsActive).Append('|')
+                .Append(state.ReloadPending).Append('|')
+                .Append(state.ReloadPendingReason).Append('|')
+                .Append(ScenarioAuthoringRuntimeGuards.IsPlaytesting()).Append('|')
+                .Append(ModRandom.CurrentSeed).Append('|')
                 .Append(_scaledWidth).Append('|')
                 .Append(_scaledHeight).Append('|')
                 .Append(state.ShellVisible).Append('|')
@@ -843,7 +1128,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 .Append(state.ActiveSelectionStackIndex).Append('|')
                 .Append(state.SelectionStackSignature).Append('|')
                 .Append(state.StatusMessage).Append('|')
-                .Append(_windowMenuOpen);
+                .Append(_windowMenuOpen).Append('|').Append(_historyOpen).Append('|')
+                .Append(_historyRestoreCandidate != null ? _historyRestoreCandidate.FilePath : string.Empty).Append('|')
+                .Append(_historyDeleteCandidate != null ? _historyDeleteCandidate.FilePath : string.Empty);
 
             AppendActions(builder, shell != null ? shell.Tabs : null);
             AppendActions(builder, shell != null ? shell.ToolbarActions : null);
@@ -854,7 +1141,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             if (shell != null && shell.Settings != null)
                 builder.Append("|settings");
             if (shell != null && shell.ContextMenu != null)
+            {
                 builder.Append("|ctx").Append(shell.ContextMenu.Visible).Append(shell.ContextMenu.Title).Append(shell.ContextMenu.Detail);
+                AppendActions(builder, shell.ContextMenu.Actions);
+            }
             return builder.ToString();
         }
 
@@ -864,7 +1154,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             {
                 ScenarioAuthoringInspectorAction action = actions[i];
                 if (action != null)
-                    builder.Append('|').Append(action.Id).Append(action.Label).Append(action.Enabled).Append(action.Emphasized).Append(action.Badge);
+                    builder.Append('|').Append(action.Id).Append(action.Label).Append(action.Enabled).Append(action.Emphasized).Append(action.Badge).Append(action.Detail).Append(action.Hint).Append(action.DisabledReason);
             }
         }
 
@@ -878,7 +1168,66 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
 
                 builder.Append("|win").Append(window.Id).Append(window.Visible).Append(window.Collapsed).Append(window.Title);
                 AppendActions(builder, window.HeaderActions);
-                AppendSections(builder, window.Sections);
+                if (window.WorkspaceBody != null)
+                    AppendWorkspace(builder, window.WorkspaceBody);
+                else
+                    AppendSections(builder, window.Sections);
+            }
+        }
+
+        private static void AppendWorkspace(StringBuilder builder, ScenarioAuthoringWorkspaceViewModel workspace)
+        {
+            builder.Append("|workspace").Append(workspace.Id).Append(workspace.LayoutKind).Append(workspace.ActiveSubtabId);
+            for (int i = 0; workspace.Subtabs != null && i < workspace.Subtabs.Length; i++)
+            {
+                ScenarioAuthoringWorkspaceSubtabViewModel subtab = workspace.Subtabs[i];
+                if (subtab == null)
+                    continue;
+                builder.Append("|subtab").Append(subtab.Id).Append(subtab.Label).Append(subtab.Selected);
+                AppendActions(builder, new[] { subtab.SelectAction });
+            }
+
+            ScenarioAuthoringNavigatorViewModel navigator = workspace.Navigator;
+            builder.Append("|navigator").Append(navigator != null ? navigator.Id : null)
+                .Append(navigator != null ? navigator.SelectedEntityId : null)
+                .Append(navigator != null ? navigator.SearchText : null);
+            for (int i = 0; navigator != null && navigator.Groups != null && i < navigator.Groups.Length; i++)
+            {
+                ScenarioAuthoringNavigatorGroupViewModel group = navigator.Groups[i];
+                if (group == null)
+                    continue;
+                builder.Append("|group").Append(group.Id).Append(group.Label).Append(group.Expanded);
+                AppendActions(builder, new[] { group.ToggleAction, group.CreateAction });
+                AppendNavigatorRows(builder, group.Rows);
+            }
+
+            ScenarioAuthoringWorkspaceDocumentViewModel document = workspace.Document;
+            if (document == null)
+                return;
+            builder.Append("|workspace-doc").Append(document.Id).Append(document.Title).Append(document.Subtitle);
+            AppendActions(builder, new[] { document.BackAction });
+            AppendActions(builder, document.HeaderActions);
+            for (int i = 0; document.Breadcrumbs != null && i < document.Breadcrumbs.Length; i++)
+            {
+                ScenarioAuthoringBreadcrumbViewModel breadcrumb = document.Breadcrumbs[i];
+                if (breadcrumb == null)
+                    continue;
+                builder.Append("|crumb").Append(breadcrumb.Label);
+                AppendActions(builder, new[] { breadcrumb.Action });
+            }
+            AppendSections(builder, document.Sections);
+        }
+
+        private static void AppendNavigatorRows(StringBuilder builder, ScenarioAuthoringNavigatorRowViewModel[] rows)
+        {
+            for (int i = 0; rows != null && i < rows.Length; i++)
+            {
+                ScenarioAuthoringNavigatorRowViewModel row = rows[i];
+                if (row == null)
+                    continue;
+                builder.Append("|navrow").Append(row.EntityId).Append(row.Title).Append(row.Subtitle).Append(row.Selected).Append(row.Expanded);
+                AppendActions(builder, new[] { row.SelectAction, row.ToggleAction });
+                AppendNavigatorRows(builder, row.Children);
             }
         }
 
@@ -926,6 +1275,58 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 Label = label,
                 Enabled = true,
                 Emphasized = active
+            };
+        }
+
+        private static bool TryGetHistoryRowIndex(string actionId, string prefix, out int index)
+        {
+            index = -1;
+            return actionId != null && actionId.StartsWith(prefix, StringComparison.Ordinal)
+                && int.TryParse(actionId.Substring(prefix.Length), out index);
+        }
+
+        private static ScenarioAuthoringInspectorAction PlaytestAction(string label)
+        {
+            bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+            string reason = null;
+            bool enabled = isPlaytesting || CanStartPlay(out reason);
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionPlaytest,
+                Label = label,
+                Enabled = enabled,
+                Emphasized = isPlaytesting,
+                Detail = enabled ? null : reason,
+                DisabledReason = enabled ? null : reason
+            };
+        }
+
+        private static bool CanStartPlay(out string reason)
+        {
+            reason = null;
+            try
+            {
+                ScenarioEditorController controller = ScenarioEditorController.Instance;
+                ScenarioEditorSession session = controller != null ? controller.CurrentSession : null;
+                return new ScenarioPlayStartReadiness().CanStartPlay(session != null ? session.WorkingDefinition : null, out reason);
+            }
+            catch (Exception ex)
+            {
+                reason = "Playtest readiness could not be checked: " + ex.Message;
+                return false;
+            }
+        }
+
+        private static ScenarioAuthoringInspectorAction DisabledCommandAction(string id, string label, string reason)
+        {
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = id,
+                Label = label,
+                Enabled = false,
+                Emphasized = false,
+                Detail = reason,
+                DisabledReason = reason
             };
         }
 
@@ -996,7 +1397,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         {
             if (string.IsNullOrEmpty(text) || text.Length <= max)
                 return text ?? string.Empty;
-            return text.Substring(0, Math.Max(0, max - 3)) + "...";
+            return text;
         }
 
         private sealed class RowModel

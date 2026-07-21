@@ -10,9 +10,17 @@ namespace ShelteredAPI.Scenarios.Domain.Scheduling{
         {
             Repeatable = false;
             CooldownMinutes = 0;
+            WindowEndDay = 0;
+            Chance = 1f;
+            JitterMinutes = 0;
+            MaxRuns = 0;
         }
 
         public bool Repeatable { get; set; }
         public int CooldownMinutes { get; set; }
+        public int WindowEndDay { get; set; }
+        public float Chance { get; set; }
+        public int JitterMinutes { get; set; }
+        public int MaxRuns { get; set; }
     }
 }

@@ -16,6 +16,9 @@ namespace ShelteredAPI.Scenarios.Domain.Effects{
         SetWeather = 7,
         SetScenarioFlag = 8,
         RestoreWeather = 9,
-        FireTrigger = 10
+        FireTrigger = 10,
+        WriteJournalEntry = 11,
+        StartConversation = 12,
+        WorldEvent = 13
     }
 }

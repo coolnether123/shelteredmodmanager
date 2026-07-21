@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using ModAPI.Core;
 using ModAPI.Util;
 using ShelteredAPI.Saves.Runtime;
@@ -14,11 +15,17 @@ namespace ShelteredAPI.Saves.Backups
     {
         private const string BlobCompression = SaveBackupBlobCodec.CompressionName;
         private const string BlobExtension = ".bin.slz";
+        private const string RestoreTransactionDirectoryName = "restore-transactions";
+        private const string RestoreRepositoryLockFileName = ".repository.lock";
+        private const int RestoreRepositoryLockTimeoutMilliseconds = 30000;
         private readonly string _root;
 
         public SaveBackupRepository(string root)
         {
             _root = root;
+            string recoveryError;
+            if (!RecoverIncompleteRestoreTransactions(out recoveryError))
+                MMLog.WriteWarning("[SaveBackup] Restore recovery remains unresolved: " + recoveryError);
         }
 
         public string CreateSnapshot(SaveBackupTarget target, SaveBackupReason reason, SaveBackupRetentionPolicy policy)
@@ -30,27 +37,64 @@ namespace ShelteredAPI.Saves.Backups
 
             try
             {
-                EnsureDirectory(_root);
+                using (FileStream repositoryLock = AcquireRestoreRepositoryLock())
+                {
+                    string recoveryError;
+                    if (!RecoverIncompleteRestoreTransactionsUnderLock(out recoveryError))
+                        throw new IOException("Restore recovery is unresolved: " + recoveryError);
 
-                List<SaveBackupFileRecord> files = CaptureFiles(target);
-                if (files.Count == 0)
-                    return null;
+                    EnsureDirectory(_root);
 
-                DateTime createdAt = DateTime.UtcNow;
-                string snapshotId = BuildSnapshotId(createdAt);
-                string timelinePath = GetTimelinePath(target.TimelineKey);
-                EnsureDirectory(timelinePath);
+                    List<SaveBackupFileRecord> files = CaptureFiles(target);
+                    if (files.Count == 0)
+                        return null;
 
-                string manifestPath = Path.Combine(timelinePath, snapshotId + ".json");
-                ManualJsonObject manifest = BuildSnapshotManifest(snapshotId, createdAt, target, reason, files);
-                File.WriteAllText(manifestPath, ManualJson.Serialize(manifest, true));
+                    DateTime createdAt = DateTime.UtcNow;
+                    string snapshotId = BuildSnapshotId(createdAt);
+                    string timelinePath = GetTimelinePath(target.TimelineKey);
+                    EnsureDirectory(timelinePath);
 
-                WriteIndex();
-                ApplyRetention(target.TimelineKey, policy);
+                    string manifestPath = Path.Combine(timelinePath, snapshotId + ".json");
+                    ManualJsonObject manifest = BuildSnapshotManifest(snapshotId, createdAt, target, reason, files);
+                    string manifestJson = ManualJson.Serialize(manifest, true);
+                    byte[] manifestBytes = Encoding.UTF8.GetBytes(manifestJson);
+                    bool manifestPublished = false;
+                    try
+                    {
+                        PublishDurableFile(manifestPath, manifestBytes, false);
+                        manifestPublished = true;
 
-                MMLog.WriteInfo("[SaveBackup] Created snapshot " + snapshotId
-                    + " for " + target.SaveKind + " timeline " + target.TimelineKey + ".");
-                return snapshotId;
+                        ManualJsonObject publishedManifest;
+                        string publishedManifestError;
+                        if (!ManualJson.TryParseObject(
+                            File.ReadAllText(manifestPath),
+                            out publishedManifest,
+                            out publishedManifestError))
+                        {
+                            throw new IOException("Published snapshot manifest is invalid: " + publishedManifestError);
+                        }
+                        if (!string.Equals(
+                            publishedManifest.GetString("snapshotId", string.Empty),
+                            snapshotId,
+                            StringComparison.Ordinal))
+                        {
+                            throw new IOException("Published snapshot manifest identity validation failed.");
+                        }
+                    }
+                    catch
+                    {
+                        if (manifestPublished)
+                            TryDeleteRestoreTemporaryFile(manifestPath);
+                        throw;
+                    }
+
+                    WriteIndex();
+                    ApplyRetention(target.TimelineKey, policy);
+
+                    MMLog.WriteInfo("[SaveBackup] Created snapshot " + snapshotId
+                        + " for " + target.SaveKind + " timeline " + target.TimelineKey + ".");
+                    return snapshotId;
+                }
             }
             catch (Exception ex)
             {
@@ -61,19 +105,29 @@ namespace ShelteredAPI.Saves.Backups
 
         public bool RestoreSnapshot(string manifestPath, out string error)
         {
+            return RestoreSnapshot(manifestPath, null, out error);
+        }
+
+        public bool RestoreSnapshot(
+            string manifestPath,
+            SaveBackupRestoreDestination destination,
+            out string error)
+        {
             error = null;
             try
             {
-                List<RestoreFilePlan> files = BuildRestorePlan(manifestPath);
-                for (int i = 0; i < files.Count; i++)
+                using (FileStream repositoryLock = AcquireRestoreRepositoryLock())
                 {
-                    RestoreFilePlan file = files[i];
-                    EnsureDirectory(Path.GetDirectoryName(file.DestinationPath));
-                    WriteFileAtomically(file.DestinationPath, file.Bytes);
-                }
+                    string recoveryError;
+                    if (!RecoverIncompleteRestoreTransactionsUnderLock(out recoveryError))
+                        throw new IOException("Restore recovery is unresolved: " + recoveryError);
 
-                MMLog.WriteInfo("[SaveBackup] Restored snapshot " + Path.GetFileNameWithoutExtension(manifestPath)
-                    + " with " + files.Count + " file(s).");
+                    RestorePlan plan = BuildRestorePlan(manifestPath, destination);
+                    ExecuteRestorePlan(plan);
+
+                    MMLog.WriteInfo("[SaveBackup] Restored snapshot " + Path.GetFileNameWithoutExtension(manifestPath)
+                        + " with " + plan.Files.Count + " file(s).");
+                }
                 return true;
             }
             catch (Exception ex)
@@ -89,35 +143,42 @@ namespace ShelteredAPI.Saves.Backups
             error = null;
             try
             {
-                if (string.IsNullOrEmpty(manifestPath))
+                using (FileStream repositoryLock = AcquireRestoreRepositoryLock())
                 {
-                    error = "Snapshot manifest path was missing.";
-                    return false;
+                    string recoveryError;
+                    if (!RecoverIncompleteRestoreTransactionsUnderLock(out recoveryError))
+                        throw new IOException("Restore recovery is unresolved: " + recoveryError);
+
+                    if (string.IsNullOrEmpty(manifestPath))
+                    {
+                        error = "Snapshot manifest path was missing.";
+                        return false;
+                    }
+
+                    string fullManifestPath = Path.GetFullPath(manifestPath);
+                    if (!IsPathUnderRoot(_root, fullManifestPath))
+                    {
+                        error = "Snapshot manifest path is outside backup storage.";
+                        return false;
+                    }
+
+                    if (!File.Exists(fullManifestPath))
+                    {
+                        error = "Snapshot manifest was not found.";
+                        return false;
+                    }
+
+                    SaveBackupSnapshotRef snapshot;
+                    TryReadSnapshotRef(fullManifestPath, out snapshot);
+
+                    File.Delete(fullManifestPath);
+                    WriteIndex();
+                    PruneUnreferencedBlobs();
+
+                    MMLog.WriteInfo("[SaveBackup] Deleted snapshot "
+                        + (snapshot != null ? snapshot.SnapshotId : Path.GetFileNameWithoutExtension(fullManifestPath)) + ".");
+                    return true;
                 }
-
-                string fullManifestPath = Path.GetFullPath(manifestPath);
-                if (!IsPathUnderRoot(_root, fullManifestPath))
-                {
-                    error = "Snapshot manifest path is outside backup storage.";
-                    return false;
-                }
-
-                if (!File.Exists(fullManifestPath))
-                {
-                    error = "Snapshot manifest was not found.";
-                    return false;
-                }
-
-                SaveBackupSnapshotRef snapshot;
-                TryReadSnapshotRef(fullManifestPath, out snapshot);
-
-                File.Delete(fullManifestPath);
-                WriteIndex();
-                PruneUnreferencedBlobs();
-
-                MMLog.WriteInfo("[SaveBackup] Deleted snapshot "
-                    + (snapshot != null ? snapshot.SnapshotId : Path.GetFileNameWithoutExtension(fullManifestPath)) + ".");
-                return true;
             }
             catch (Exception ex)
             {
@@ -146,6 +207,50 @@ namespace ShelteredAPI.Saves.Backups
             }
 
             return snapshots;
+        }
+
+        public bool TryFindLatestTimelineKey(
+            string saveKind,
+            string scenarioId,
+            int absoluteSlot,
+            out string timelineKey)
+        {
+            timelineKey = null;
+            if (string.IsNullOrEmpty(saveKind) || absoluteSlot <= 0)
+                return false;
+
+            SaveBackupSnapshotRef latest = null;
+            List<SaveBackupSnapshotRef> refs = ReadAllSnapshotRefs();
+            for (int i = 0; i < refs.Count; i++)
+            {
+                try
+                {
+                    ManualJsonObject root;
+                    string parseError;
+                    if (!ManualJson.TryParseObject(File.ReadAllText(refs[i].ManifestPath), out root, out parseError)
+                        || root == null
+                        || !string.Equals(root.GetString("saveKind", string.Empty), saveKind, StringComparison.OrdinalIgnoreCase)
+                        || !string.Equals(root.GetString("scenarioId", string.Empty), scenarioId ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                        || root.GetInt("absoluteSlot", 0) != absoluteSlot
+                        || string.IsNullOrEmpty(refs[i].TimelineKey))
+                    {
+                        continue;
+                    }
+
+                    if (latest == null || CompareSnapshotRefs(latest, refs[i]) < 0)
+                        latest = refs[i];
+                }
+                catch
+                {
+                    // A concurrently removed or malformed manifest is not a usable recovery timeline.
+                }
+            }
+
+            if (latest == null)
+                return false;
+
+            timelineKey = latest.TimelineKey;
+            return true;
         }
 
         public int CountSnapshots(string timelineKey)
@@ -177,38 +282,60 @@ namespace ShelteredAPI.Saves.Backups
             if (string.IsNullOrEmpty(timelineKey))
                 return 0;
 
-            List<SaveBackupSnapshotRef> refs = ReadTimelineSnapshotRefs(GetTimelinePath(timelineKey));
-            int deleted = 0;
-            for (int i = 0; i < refs.Count; i++)
+            try
             {
-                SaveBackupSnapshotRef snapshot = refs[i];
-                if (!IsSnapshotAfter(snapshot, createdAtUtc, snapshotId))
-                    continue;
+                using (FileStream repositoryLock = AcquireRestoreRepositoryLock())
+                {
+                    string recoveryError;
+                    if (!RecoverIncompleteRestoreTransactionsUnderLock(out recoveryError))
+                        throw new IOException("Restore recovery is unresolved: " + recoveryError);
 
-                try
-                {
-                    File.Delete(snapshot.ManifestPath);
-                    deleted++;
-                    MMLog.WriteDebug("[SaveBackup] Pruned future snapshot " + snapshot.SnapshotId
-                        + " from timeline " + timelineKey + ".");
-                }
-                catch (Exception ex)
-                {
-                    MMLog.WriteWarning("[SaveBackup] Failed to prune future snapshot "
-                        + snapshot.SnapshotId + ": " + ex.Message);
+                    List<SaveBackupSnapshotRef> refs = ReadTimelineSnapshotRefs(GetTimelinePath(timelineKey));
+                    int deleted = 0;
+                    for (int i = 0; i < refs.Count; i++)
+                    {
+                        SaveBackupSnapshotRef snapshot = refs[i];
+                        if (snapshot.IsPinned || !IsSnapshotAfter(snapshot, createdAtUtc, snapshotId))
+                            continue;
+
+                        try
+                        {
+                            File.Delete(snapshot.ManifestPath);
+                            deleted++;
+                            MMLog.WriteDebug("[SaveBackup] Pruned future snapshot " + snapshot.SnapshotId
+                                + " from timeline " + timelineKey + ".");
+                        }
+                        catch (Exception ex)
+                        {
+                            MMLog.WriteWarning("[SaveBackup] Failed to prune future snapshot "
+                                + snapshot.SnapshotId + ": " + ex.Message);
+                        }
+                    }
+
+                    if (deleted > 0)
+                    {
+                        WriteIndex();
+                        PruneUnreferencedBlobs();
+                    }
+
+                    return deleted;
                 }
             }
-
-            if (deleted > 0)
+            catch (Exception ex)
             {
-                WriteIndex();
-                PruneUnreferencedBlobs();
+                MMLog.WriteError("[SaveBackup] Prune snapshots failed closed: " + ex.Message);
+                return 0;
             }
-
-            return deleted;
         }
 
-        private List<RestoreFilePlan> BuildRestorePlan(string manifestPath)
+        private RestorePlan BuildRestorePlan(string manifestPath)
+        {
+            return BuildRestorePlan(manifestPath, null);
+        }
+
+        private RestorePlan BuildRestorePlan(
+            string manifestPath,
+            SaveBackupRestoreDestination restoreDestination)
         {
             if (string.IsNullOrEmpty(manifestPath) || !File.Exists(manifestPath))
                 throw new FileNotFoundException("Backup manifest was not found.", manifestPath);
@@ -216,31 +343,64 @@ namespace ShelteredAPI.Saves.Backups
             string fullManifestPath = Path.GetFullPath(manifestPath);
             if (!IsPathUnderRoot(_root, fullManifestPath))
                 throw new IOException("Backup manifest path is outside backup storage.");
+            EnsureNoReparsePointTraversal(GetDirectoryRoot(_root), fullManifestPath);
 
             ManualJsonObject root;
             string parseError;
             if (!ManualJson.TryParseObject(File.ReadAllText(fullManifestPath), out root, out parseError))
                 throw new IOException("Backup manifest is invalid: " + parseError);
 
-            Dictionary<string, SaveBackupSource> sources = ResolveCurrentRestoreSources(root);
+            Dictionary<string, SaveBackupSource> sources = ResolveCurrentRestoreSources(root, restoreDestination);
             ManualJsonArray fileArray = root.GetArray("files");
             if (fileArray == null || fileArray.Items.Count == 0)
                 throw new IOException("Backup manifest contains no files.");
 
-            List<RestoreFilePlan> plan = new List<RestoreFilePlan>();
+            RestorePlan plan = new RestorePlan();
+            plan.ManifestPath = fullManifestPath;
+            if (restoreDestination != null)
+            {
+                plan.RestoreDestination = new SaveBackupRestoreDestination
+                {
+                    ScenarioId = SaveStorageRouter.NormalizeScenarioId(
+                        root.GetString("scenarioId", string.Empty)),
+                    AbsoluteSlot = restoreDestination.AbsoluteSlot,
+                    ExpectedLineageId = GetCustomSnapshotLineageId(root),
+                    AllowHistoricalSlotWhenUnoccupied =
+                        restoreDestination.AllowHistoricalSlotWhenUnoccupied
+                };
+            }
+            foreach (KeyValuePair<string, SaveBackupSource> pair in sources)
+            {
+                SaveBackupSource source = pair.Value;
+                if (source == null || string.IsNullOrEmpty(source.Path))
+                    continue;
+
+                plan.AllowedRoots.Add(new RestoreAllowedRoot
+                {
+                    Path = Path.GetFullPath(source.Path),
+                    Kind = source.Kind
+                });
+            }
+            HashSet<string> destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < fileArray.Items.Count; i++)
             {
                 ManualJsonObject file = fileArray.Items[i] != null ? fileArray.Items[i].ObjectValue : null;
                 if (file == null)
-                    continue;
+                    throw new IOException("Backup manifest contains an invalid file entry.");
 
                 RestoreFilePlan item = BuildRestoreFilePlan(file, sources);
-                plan.Add(item);
+                if (!destinations.Add(item.DestinationPath))
+                    throw new IOException("Backup manifest contains duplicate restore destinations.");
+                EnsureRestoreDestinationHasNoReparseTraversal(item.DestinationPath, plan.AllowedRoots);
+
+                plan.Files.Add(item);
             }
 
-            if (plan.Count == 0)
+            if (plan.Files.Count == 0)
                 throw new IOException("Backup manifest contains no restorable files.");
 
+            AddExactRestoreDeletions(plan, sources, destinations);
+            ValidateCustomRestorePlanIdentity(root, plan);
             return plan;
         }
 
@@ -444,7 +604,9 @@ namespace ShelteredAPI.Saves.Backups
             return sources;
         }
 
-        private Dictionary<string, SaveBackupSource> ResolveCurrentRestoreSources(ManualJsonObject root)
+        private Dictionary<string, SaveBackupSource> ResolveCurrentRestoreSources(
+            ManualJsonObject root,
+            SaveBackupRestoreDestination restoreDestination)
         {
             Dictionary<string, SaveBackupSource> manifestSources = ReadRestoreSources(root);
             Dictionary<string, SaveBackupSource> resolved = new Dictionary<string, SaveBackupSource>(StringComparer.OrdinalIgnoreCase);
@@ -459,11 +621,14 @@ namespace ShelteredAPI.Saves.Backups
                 if (absoluteSlot <= 0)
                     throw new IOException("Backup manifest custom slot number is invalid.");
 
+                string customSlotRoot = restoreDestination == null
+                    ? DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, false)
+                    : ResolveCustomRestoreDestination(root, restoreDestination);
                 AddResolvedSourceIfPresent(
                     manifestSources,
                     resolved,
                     "slot",
-                    DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, false),
+                    customSlotRoot,
                     SaveBackupSourceKind.Directory);
                 return resolved;
             }
@@ -490,6 +655,196 @@ namespace ShelteredAPI.Saves.Backups
             }
 
             throw new IOException("Backup manifest save kind is unsupported: " + saveKind);
+        }
+
+        private static string ResolveCustomRestoreDestination(
+            ManualJsonObject manifest,
+            SaveBackupRestoreDestination destination)
+        {
+            if (destination == null || destination.AbsoluteSlot <= 0)
+                throw new IOException("Custom restore destination is invalid.");
+
+            string manifestScenario = SaveStorageRouter.NormalizeScenarioId(
+                manifest.GetString("scenarioId", string.Empty));
+            string destinationScenario = SaveStorageRouter.NormalizeScenarioId(destination.ScenarioId);
+            if (!string.Equals(manifestScenario, destinationScenario, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Custom restore destination scenario does not match the snapshot.");
+
+            string lineageId = GetCustomSnapshotLineageId(manifest);
+            if (!string.IsNullOrEmpty(destination.ExpectedLineageId)
+                && !string.Equals(destination.ExpectedLineageId, lineageId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException("Custom restore destination lineage proof does not match the snapshot.");
+            }
+
+            string targetRoot = Path.GetFullPath(
+                DirectoryProvider.SlotRoot(destinationScenario, destination.AbsoluteSlot, false));
+            string scenarioRoot = Path.GetDirectoryName(targetRoot);
+            if (string.IsNullOrEmpty(scenarioRoot))
+                throw new IOException("Custom restore destination scenario root is invalid.");
+            scenarioRoot = Path.GetFullPath(scenarioRoot);
+            string canonicalTargetRoot = Path.GetFullPath(Path.Combine(
+                scenarioRoot,
+                "Slot_" + destination.AbsoluteSlot.ToString(CultureInfo.InvariantCulture)));
+            if (!IsPathInsideDirectory(GetDirectoryRoot(scenarioRoot), targetRoot)
+                || !string.Equals(
+                    targetRoot,
+                    canonicalTargetRoot,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException("Custom restore destination is not a canonical slot path.");
+            }
+            EnsureNoReparsePointTraversal(GetDirectoryRoot(scenarioRoot), targetRoot);
+
+            int matchingLiveSlots = 0;
+            int matchingLiveSlot = 0;
+            if (Directory.Exists(scenarioRoot))
+            {
+                string[] slotRoots = Directory.GetDirectories(scenarioRoot, "Slot_*", SearchOption.TopDirectoryOnly);
+                for (int i = 0; i < slotRoots.Length; i++)
+                {
+                    string slotRoot = Path.GetFullPath(slotRoots[i]);
+                    string slotName = Path.GetFileName(slotRoot);
+                    int slotNumber;
+                    if (string.IsNullOrEmpty(slotName)
+                        || !slotName.StartsWith("Slot_", StringComparison.Ordinal)
+                        || !int.TryParse(
+                            slotName.Substring("Slot_".Length),
+                            NumberStyles.None,
+                            CultureInfo.InvariantCulture,
+                            out slotNumber)
+                        || slotNumber <= 0)
+                    {
+                        continue;
+                    }
+
+                    string canonicalSlotRoot = Path.GetFullPath(
+                        DirectoryProvider.SlotRoot(destinationScenario, slotNumber, false));
+                    if (!string.Equals(slotRoot, canonicalSlotRoot, StringComparison.OrdinalIgnoreCase))
+                        throw new IOException("Custom save repository contains a non-canonical slot path.");
+                    EnsureNoReparsePointTraversal(GetDirectoryRoot(scenarioRoot), slotRoot);
+
+                    if (!File.Exists(Path.Combine(slotRoot, "SaveData.xml")))
+                        continue;
+
+                    string liveLineageId = ReadCustomLineageIdStrict(slotRoot);
+                    if (string.Equals(liveLineageId, lineageId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchingLiveSlots++;
+                        matchingLiveSlot = slotNumber;
+                    }
+                }
+            }
+
+            if (matchingLiveSlots > 1)
+                throw new IOException("Multiple live custom slots own the snapshot lineage.");
+            if (matchingLiveSlots == 1)
+            {
+                if (matchingLiveSlot != destination.AbsoluteSlot)
+                    throw new IOException("Custom restore destination does not own the snapshot lineage.");
+                if (!string.Equals(
+                    ReadCustomLineageIdStrict(targetRoot),
+                    lineageId,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new IOException("Custom restore destination identity does not match the snapshot lineage.");
+                }
+                return targetRoot;
+            }
+
+            int historicalSlot = manifest.GetInt("absoluteSlot", 0);
+            if (!destination.AllowHistoricalSlotWhenUnoccupied
+                || destination.AbsoluteSlot != historicalSlot)
+            {
+                throw new IOException("No live custom slot owns the snapshot lineage.");
+            }
+            if (Directory.Exists(targetRoot)
+                && Directory.GetFileSystemEntries(targetRoot).Length != 0)
+            {
+                throw new IOException("Historical custom restore destination is occupied.");
+            }
+
+            return targetRoot;
+        }
+
+        private static string GetCustomSnapshotLineageId(ManualJsonObject manifest)
+        {
+            string timelineKey = manifest.GetString("timelineKey", string.Empty);
+            const string prefix = "custom:";
+            if (!timelineKey.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Custom snapshot timeline does not contain a lineage.");
+
+            string lineageId = timelineKey.Substring(prefix.Length);
+            if (!IsHexValue(lineageId, 32))
+                throw new IOException("Custom snapshot lineage is invalid.");
+            return lineageId;
+        }
+
+        private static string ReadCustomLineageIdStrict(string slotRoot)
+        {
+            string identityPath = Path.Combine(slotRoot, "backup.identity.json");
+            if (!File.Exists(identityPath))
+                return null;
+            EnsureNoReparsePointTraversal(GetDirectoryRoot(slotRoot), identityPath);
+
+            ManualJsonObject identity;
+            string error;
+            if (!ManualJson.TryParseObject(File.ReadAllText(identityPath), out identity, out error)
+                || identity.GetInt("schemaVersion", 0) != 1)
+            {
+                throw new IOException("Custom slot backup identity is invalid.");
+            }
+
+            string lineageId = identity.GetString("lineageId", string.Empty);
+            if (!IsHexValue(lineageId, 32))
+                throw new IOException("Custom slot backup identity lineage is invalid.");
+            return lineageId;
+        }
+
+        private static void ValidateCustomRestorePlanIdentity(ManualJsonObject manifest, RestorePlan plan)
+        {
+            if (!string.Equals(
+                manifest.GetString("saveKind", string.Empty),
+                "CustomSlot",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                if (plan.RestoreDestination != null)
+                    throw new IOException("A custom restore destination cannot be used for a non-custom snapshot.");
+                return;
+            }
+
+            string expectedLineageId = GetCustomSnapshotLineageId(manifest);
+            int identityFiles = 0;
+            for (int i = 0; i < plan.Files.Count; i++)
+            {
+                RestoreFilePlan file = plan.Files[i];
+                if (!string.Equals(
+                    Path.GetFileName(file.DestinationPath),
+                    "backup.identity.json",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                identityFiles++;
+                ManualJsonObject identity;
+                string error;
+                if (!ManualJson.TryParseObject(
+                    Encoding.UTF8.GetString(file.Bytes ?? new byte[0]),
+                    out identity,
+                    out error)
+                    || identity.GetInt("schemaVersion", 0) != 1
+                    || !string.Equals(
+                        identity.GetString("lineageId", string.Empty),
+                        expectedLineageId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new IOException("Snapshot backup identity does not match its timeline lineage.");
+                }
+            }
+
+            if (identityFiles != 1)
+                throw new IOException("Custom snapshot must contain exactly one backup identity file.");
         }
 
         private static void AddResolvedSourceIfPresent(
@@ -535,18 +890,124 @@ namespace ShelteredAPI.Saves.Backups
             };
         }
 
+        private static void AddExactRestoreDeletions(
+            RestorePlan plan,
+            Dictionary<string, SaveBackupSource> sources,
+            HashSet<string> snapshotDestinations)
+        {
+            HashSet<string> plannedDeletions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<string, SaveBackupSource> pair in sources)
+            {
+                SaveBackupSource source = pair.Value;
+                if (source == null || source.Kind != SaveBackupSourceKind.Directory)
+                    continue;
+
+                string root = GetDirectoryRoot(source.Path);
+                if (!Directory.Exists(root))
+                    continue;
+
+                List<string> existingFiles = GetFilesUnderRoot(root);
+                for (int i = 0; i < existingFiles.Count; i++)
+                {
+                    string existingFile = existingFiles[i];
+                    if (IsRestoreTransactionArtifactPath(existingFile))
+                        continue;
+                    if (!snapshotDestinations.Contains(existingFile) && plannedDeletions.Add(existingFile))
+                        plan.Deletions.Add(existingFile);
+                }
+            }
+        }
+
+        private static void AddInterruptedRestoreDeletions(RestorePlan plan, string transactionId)
+        {
+            HashSet<string> replacements = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < plan.Files.Count; i++)
+                replacements.Add(plan.Files[i].DestinationPath);
+
+            HashSet<string> deletions = new HashSet<string>(plan.Deletions, StringComparer.OrdinalIgnoreCase);
+            for (int rootIndex = 0; rootIndex < plan.AllowedRoots.Count; rootIndex++)
+            {
+                RestoreAllowedRoot allowedRoot = plan.AllowedRoots[rootIndex];
+                if (allowedRoot.Kind != SaveBackupSourceKind.Directory || !Directory.Exists(allowedRoot.Path))
+                    continue;
+
+                List<string> files = GetFilesUnderRoot(GetDirectoryRoot(allowedRoot.Path));
+                for (int fileIndex = 0; fileIndex < files.Count; fileIndex++)
+                {
+                    string destinationPath;
+                    if (!TryGetRestoreArtifactDestination(
+                        files[fileIndex],
+                        transactionId,
+                        "rollback",
+                        out destinationPath))
+                    {
+                        continue;
+                    }
+
+                    destinationPath = Path.GetFullPath(destinationPath);
+                    if (replacements.Contains(destinationPath)
+                        || !IsRestoreDestinationAllowed(destinationPath, plan.AllowedRoots))
+                    {
+                        continue;
+                    }
+
+                    EnsureRestoreDestinationHasNoReparseTraversal(destinationPath, plan.AllowedRoots);
+                    if (deletions.Add(destinationPath))
+                        plan.Deletions.Add(destinationPath);
+                }
+            }
+        }
+
+        private static bool IsRestoreTransactionArtifactPath(string path)
+        {
+            string fileName = Path.GetFileName(path);
+            int restoreIndex = fileName.LastIndexOf(".restore.", StringComparison.OrdinalIgnoreCase);
+            if (restoreIndex <= 33 || !fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int transactionStart = restoreIndex - 32;
+            return transactionStart > 0
+                && fileName[transactionStart - 1] == '.'
+                && IsHexValue(fileName.Substring(transactionStart, 32), 32);
+        }
+
+        private static bool TryGetRestoreArtifactDestination(
+            string artifactPath,
+            string transactionId,
+            string purpose,
+            out string destinationPath)
+        {
+            destinationPath = null;
+            string suffix = "." + transactionId + ".restore." + purpose + ".tmp";
+            if (string.IsNullOrEmpty(artifactPath)
+                || !artifactPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                || artifactPath.Length <= suffix.Length)
+            {
+                return false;
+            }
+
+            destinationPath = artifactPath.Substring(0, artifactPath.Length - suffix.Length);
+            return true;
+        }
+
         private static void VerifyRestoreBytes(ManualJsonObject file, byte[] bytes)
         {
             long expectedSize = GetLong(file, "size", -1);
-            if (expectedSize >= 0 && bytes.Length != expectedSize)
+            if (expectedSize < 0)
+                throw new IOException("Backup blob size metadata is missing.");
+            if (bytes.Length != expectedSize)
                 throw new IOException("Backup blob size check failed.");
 
             string expectedHash = file.GetString("hash", string.Empty);
-            if (!string.IsNullOrEmpty(expectedHash) && !string.Equals(ComputeSha256(bytes), expectedHash, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(expectedHash))
+                throw new IOException("Backup blob hash metadata is missing.");
+            if (!string.Equals(ComputeSha256(bytes), expectedHash, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Backup blob hash check failed.");
 
             long expectedCrc = GetLong(file, "crc32", -1);
-            if (expectedCrc >= 0 && CRC32.Compute(bytes) != unchecked((uint)expectedCrc))
+            if (expectedCrc < 0 || expectedCrc > uint.MaxValue)
+                throw new IOException("Backup blob CRC metadata is missing or invalid.");
+            if (CRC32.Compute(bytes) != unchecked((uint)expectedCrc))
                 throw new IOException("Backup blob CRC check failed.");
         }
 
@@ -565,14 +1026,100 @@ namespace ShelteredAPI.Saves.Backups
                 throw new IOException("Restore root path is missing.");
             if (string.IsNullOrEmpty(relativePath))
                 throw new IOException("Restore relative path is missing.");
+            if (Path.IsPathRooted(relativePath))
+                throw new IOException("Restore relative path must not be rooted.");
 
-            string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                + Path.DirectorySeparatorChar;
+            string fullRoot = GetDirectoryRoot(root);
             string fullPath = Path.GetFullPath(Path.Combine(fullRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-            if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            if (!IsPathInsideDirectory(fullRoot, fullPath))
                 throw new IOException("Backup manifest path escapes its restore root.");
+            EnsureNoReparsePointTraversal(fullRoot, fullPath);
 
             return fullPath;
+        }
+
+        private static string GetDirectoryRoot(string root)
+        {
+            if (string.IsNullOrEmpty(root))
+                throw new IOException("Restore root path is missing.");
+
+            return Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+        }
+
+        private static bool IsPathInsideDirectory(string fullRoot, string path)
+        {
+            string fullPath = Path.GetFullPath(path);
+            return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(fullPath, fullRoot, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void EnsureNoReparsePointTraversal(string fullRoot, string fullPath)
+        {
+            if ((File.Exists(fullPath) || Directory.Exists(fullPath))
+                && (File.GetAttributes(fullPath) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new IOException("Restore path resolves through a reparse point.");
+            }
+
+            string root = Path.GetFullPath(fullRoot);
+            string pathRoot = Path.GetPathRoot(root);
+            if (!string.Equals(root, pathRoot, StringComparison.OrdinalIgnoreCase))
+                root = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string directory = Path.GetDirectoryName(fullPath);
+            while (!string.IsNullOrEmpty(directory)
+                && (string.Equals(directory, root, StringComparison.OrdinalIgnoreCase)
+                    || IsPathInsideDirectory(fullRoot, directory)))
+            {
+                if (Directory.Exists(directory)
+                    && (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Restore path traverses a reparse point under its resolved root.");
+
+                if (string.Equals(directory, root, StringComparison.OrdinalIgnoreCase))
+                    break;
+                directory = Path.GetDirectoryName(directory);
+            }
+        }
+
+        private static List<string> GetFilesUnderRoot(string fullRoot)
+        {
+            if ((File.GetAttributes(fullRoot) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Restore directory root cannot be a reparse point.");
+
+            List<string> files = new List<string>();
+            List<string> pending = new List<string>();
+            pending.Add(fullRoot);
+
+            while (pending.Count > 0)
+            {
+                int last = pending.Count - 1;
+                string directory = pending[last];
+                pending.RemoveAt(last);
+
+                string[] childFiles = Directory.GetFiles(directory);
+                for (int i = 0; i < childFiles.Length; i++)
+                {
+                    string fullFile = Path.GetFullPath(childFiles[i]);
+                    if (!IsPathInsideDirectory(fullRoot, fullFile))
+                        throw new IOException("Existing restore file escapes its resolved root.");
+                    if ((File.GetAttributes(fullFile) & FileAttributes.ReparsePoint) != 0)
+                        throw new IOException("Existing restore file is a reparse point.");
+                    files.Add(fullFile);
+                }
+
+                string[] childDirectories = Directory.GetDirectories(directory);
+                for (int i = 0; i < childDirectories.Length; i++)
+                {
+                    string fullDirectory = Path.GetFullPath(childDirectories[i]);
+                    if (!IsPathInsideDirectory(fullRoot, fullDirectory))
+                        throw new IOException("Existing restore directory escapes its resolved root.");
+                    if ((File.GetAttributes(fullDirectory) & FileAttributes.ReparsePoint) != 0)
+                        continue;
+                    pending.Add(fullDirectory);
+                }
+            }
+
+            return files;
         }
 
         private static SaveBackupSourceKind ReadSourceKind(string value)
@@ -592,19 +1139,757 @@ namespace ShelteredAPI.Saves.Backups
             return long.TryParse(value.NumberText, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) ? parsed : fallback;
         }
 
-        private static void WriteFileAtomically(string path, byte[] bytes)
+        private void ExecuteRestorePlan(RestorePlan plan)
         {
-            string tmp = path + "." + Guid.NewGuid().ToString("N") + ".restore.tmp";
+            string transactionId = Guid.NewGuid().ToString("N");
+            string transactionDirectory = Path.Combine(_root, RestoreTransactionDirectoryName);
+            string journalPath = Path.Combine(transactionDirectory, transactionId + ".json");
+            string committedPath = Path.Combine(transactionDirectory, transactionId + ".committed");
+            string committedTemporaryPath = committedPath + ".tmp";
+            List<RestoreMutation> mutations = new List<RestoreMutation>();
+            bool preserveOriginals = false;
             try
             {
-                File.WriteAllBytes(tmp, bytes ?? new byte[0]);
-                if (File.Exists(path))
-                    File.Delete(path);
-                File.Move(tmp, path);
+                EnsureDirectory(transactionDirectory);
+
+                for (int i = 0; i < plan.Files.Count; i++)
+                {
+                    RestoreFilePlan file = plan.Files[i];
+                    string directory = Path.GetDirectoryName(file.DestinationPath);
+                    EnsureDirectory(directory);
+
+                    RestoreMutation mutation = new RestoreMutation();
+                    mutation.DestinationPath = file.DestinationPath;
+                    mutation.StagedPath = BuildRestoreTemporaryPath(file.DestinationPath, transactionId, "stage");
+                    mutation.RollbackPath = BuildRestoreTemporaryPath(file.DestinationPath, transactionId, "rollback");
+                    mutation.AbsentMarkerPath = BuildRestoreTemporaryPath(file.DestinationPath, transactionId, "absent");
+                    mutation.DiscardPath = BuildRestoreTemporaryPath(file.DestinationPath, transactionId, "discard");
+                    mutation.OriginalExisted = File.Exists(file.DestinationPath);
+                    mutation.HasReplacement = true;
+                    mutation.ReplacementBytes = file.Bytes ?? new byte[0];
+                    mutation.ExpectedSize = mutation.ReplacementBytes.LongLength;
+                    mutation.ExpectedHash = ComputeSha256(mutation.ReplacementBytes);
+                    mutations.Add(mutation);
+                }
+
+                for (int i = 0; i < plan.Deletions.Count; i++)
+                {
+                    RestoreMutation mutation = new RestoreMutation();
+                    mutation.DestinationPath = plan.Deletions[i];
+                    mutation.RollbackPath = BuildRestoreTemporaryPath(mutation.DestinationPath, transactionId, "rollback");
+                    mutation.AbsentMarkerPath = BuildRestoreTemporaryPath(mutation.DestinationPath, transactionId, "absent");
+                    mutation.DiscardPath = BuildRestoreTemporaryPath(mutation.DestinationPath, transactionId, "discard");
+                    mutation.OriginalExisted = File.Exists(mutation.DestinationPath);
+                    mutations.Add(mutation);
+                }
+
+                WriteRestoreTransactionJournal(journalPath, transactionId, plan, mutations);
+
+                for (int i = 0; i < mutations.Count; i++)
+                {
+                    RestoreMutation mutation = mutations[i];
+                    if (!mutation.HasReplacement)
+                        continue;
+
+                    DurableFileWriter.WriteNew(mutation.StagedPath, mutation.ReplacementBytes);
+                    mutation.ReplacementBytes = null;
+                }
+
+                for (int i = 0; i < mutations.Count; i++)
+                    CommitRestoreMutation(mutations[i]);
+
+                string validationError = ValidateCommittedRestoreState(mutations);
+                if (!string.IsNullOrEmpty(validationError))
+                    throw new IOException("Committed restore validation failed: " + validationError);
+
+                WriteDurableTextFile(committedTemporaryPath, transactionId);
+                File.Move(committedTemporaryPath, committedPath);
+            }
+            catch (Exception commitError)
+            {
+                string rollbackError = RollBackRestoreMutations(mutations);
+                if (!string.IsNullOrEmpty(rollbackError))
+                {
+                    preserveOriginals = true;
+                    throw new IOException(commitError.Message + " Rollback also failed: " + rollbackError, commitError);
+                }
+                if (CleanupRestoreTemporaryFiles(mutations)
+                    && TryDeleteRestoreTemporaryFile(journalPath))
+                {
+                    TryDeleteRestoreTemporaryFile(committedPath);
+                    TryDeleteRestoreTemporaryFile(committedTemporaryPath);
+                }
+                else
+                {
+                    preserveOriginals = true;
+                }
+                throw;
             }
             finally
             {
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                if (preserveOriginals)
+                    MMLog.WriteWarning("[SaveBackup] Preserved incomplete restore transaction " + transactionId + " for later recovery.");
+            }
+        }
+
+        private static string BuildRestoreTemporaryPath(string destinationPath, string transactionId, string purpose)
+        {
+            return destinationPath + "." + transactionId + ".restore." + purpose + ".tmp";
+        }
+
+        private static void CommitRestoreMutation(RestoreMutation mutation)
+        {
+            if (File.Exists(mutation.DestinationPath) != mutation.OriginalExisted)
+                throw new IOException("A restore destination changed while the snapshot was being staged.");
+
+            if (mutation.OriginalExisted)
+            {
+                if (mutation.HasReplacement)
+                    ReplaceRestoreFile(mutation.StagedPath, mutation.DestinationPath, mutation.RollbackPath);
+                else
+                    File.Move(mutation.DestinationPath, mutation.RollbackPath);
+                return;
+            }
+
+            if (mutation.HasReplacement)
+            {
+                WriteDurableTextFile(mutation.AbsentMarkerPath, string.Empty);
+                File.Move(mutation.StagedPath, mutation.DestinationPath);
+            }
+        }
+
+        private static void ReplaceRestoreFile(string replacementPath, string destinationPath, string rollbackPath)
+        {
+            try
+            {
+                File.Replace(replacementPath, destinationPath, rollbackPath, true);
+                return;
+            }
+            catch (PlatformNotSupportedException)
+            {
+            }
+            catch (NotSupportedException)
+            {
+            }
+            catch (IOException)
+            {
+                if (File.Exists(rollbackPath))
+                    throw;
+            }
+
+            File.Move(destinationPath, rollbackPath);
+            File.Move(replacementPath, destinationPath);
+        }
+
+        private static string RollBackRestoreMutations(List<RestoreMutation> mutations)
+        {
+            StringBuilder errors = new StringBuilder();
+            for (int i = mutations.Count - 1; i >= 0; i--)
+            {
+                RestoreMutation mutation = mutations[i];
+                try
+                {
+                    if (mutation.OriginalExisted)
+                    {
+                        if (File.Exists(mutation.RollbackPath))
+                        {
+                            if (File.Exists(mutation.DestinationPath))
+                            {
+                                TryDeleteRestoreTemporaryFile(mutation.DiscardPath);
+                                ReplaceRestoreFile(
+                                    mutation.RollbackPath,
+                                    mutation.DestinationPath,
+                                    mutation.DiscardPath);
+                                TryDeleteRestoreTemporaryFile(mutation.DiscardPath);
+                            }
+                            else
+                            {
+                                File.Move(mutation.RollbackPath, mutation.DestinationPath);
+                            }
+                        }
+                        else if (!File.Exists(mutation.DestinationPath))
+                        {
+                            throw new IOException("The durable original and live destination are both missing.");
+                        }
+                    }
+                    else if (mutation.HasReplacement
+                        && File.Exists(mutation.AbsentMarkerPath)
+                        && !File.Exists(mutation.StagedPath)
+                        && File.Exists(mutation.DestinationPath))
+                    {
+                        File.Delete(mutation.DestinationPath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (errors.Length > 0)
+                        errors.Append(" ");
+                    errors.Append(mutation.DestinationPath);
+                    errors.Append(": ");
+                    errors.Append(ex.Message);
+                }
+            }
+
+            return errors.ToString();
+        }
+
+        private static bool CleanupRestoreTemporaryFiles(List<RestoreMutation> mutations)
+        {
+            bool succeeded = true;
+            for (int i = 0; i < mutations.Count; i++)
+            {
+                succeeded = TryDeleteRestoreTemporaryFile(mutations[i].StagedPath) && succeeded;
+                succeeded = TryDeleteRestoreTemporaryFile(mutations[i].RollbackPath) && succeeded;
+                succeeded = TryDeleteRestoreTemporaryFile(mutations[i].AbsentMarkerPath) && succeeded;
+                succeeded = TryDeleteRestoreTemporaryFile(mutations[i].DiscardPath) && succeeded;
+            }
+            return succeeded;
+        }
+
+        private FileStream AcquireRestoreRepositoryLock()
+        {
+            string transactionDirectory = Path.Combine(_root, RestoreTransactionDirectoryName);
+            EnsureDirectory(transactionDirectory);
+            string lockPath = Path.Combine(transactionDirectory, RestoreRepositoryLockFileName);
+            DateTime deadline = DateTime.UtcNow.AddMilliseconds(RestoreRepositoryLockTimeoutMilliseconds);
+
+            while (true)
+            {
+                try
+                {
+                    return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                }
+                catch (IOException)
+                {
+                    if (DateTime.UtcNow >= deadline)
+                        throw new IOException("Timed out waiting for the save restore repository lock.");
+                    Thread.Sleep(25);
+                }
+            }
+        }
+
+        private bool RecoverIncompleteRestoreTransactions(out string error)
+        {
+            error = null;
+            try
+            {
+                using (FileStream repositoryLock = AcquireRestoreRepositoryLock())
+                    return RecoverIncompleteRestoreTransactionsUnderLock(out error);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private bool RecoverIncompleteRestoreTransactionsUnderLock(out string error)
+        {
+            error = null;
+            if (string.IsNullOrEmpty(_root))
+                return true;
+
+            string transactionDirectory = Path.Combine(_root, RestoreTransactionDirectoryName);
+            if (!Directory.Exists(transactionDirectory))
+                return true;
+
+            string[] unpublishedJournals = Directory.GetFiles(
+                transactionDirectory,
+                "*.json.tmp",
+                SearchOption.TopDirectoryOnly);
+            for (int i = 0; i < unpublishedJournals.Length; i++)
+                TryDeleteRestoreTemporaryFile(unpublishedJournals[i]);
+
+            StringBuilder unresolved = new StringBuilder();
+            string[] journalPaths = Directory.GetFiles(transactionDirectory, "*.json", SearchOption.TopDirectoryOnly);
+            for (int journalIndex = 0; journalIndex < journalPaths.Length; journalIndex++)
+            {
+                string journalPath = journalPaths[journalIndex];
+                string transactionId = Path.GetFileNameWithoutExtension(journalPath);
+                string committedPath = Path.Combine(transactionDirectory, transactionId + ".committed");
+                try
+                {
+                    if (!IsHexValue(transactionId, 32))
+                        throw new IOException("Restore transaction file name is not a 32-character hexadecimal GUID.");
+
+                    ManualJsonObject journal;
+                    string parseError;
+                    if (!ManualJson.TryParseObject(File.ReadAllText(journalPath), out journal, out parseError))
+                        throw new IOException("Restore transaction journal is invalid: " + parseError);
+                    if (journal.GetInt("schemaVersion", 0) != 1)
+                        throw new IOException("Restore transaction journal schema is unsupported.");
+                    if (!string.Equals(journal.GetString("transactionId", string.Empty), transactionId, StringComparison.Ordinal))
+                        throw new IOException("Restore transaction journal identity does not match its file name.");
+
+                    string manifestPath = journal.GetString("manifestPath", string.Empty);
+                    if (string.IsNullOrEmpty(manifestPath)
+                        || !Path.IsPathRooted(manifestPath)
+                        || !IsPathUnderRoot(_root, manifestPath))
+                    {
+                        throw new IOException("Restore transaction manifest path is outside backup storage.");
+                    }
+                    manifestPath = Path.GetFullPath(manifestPath);
+                    EnsureNoReparsePointTraversal(GetDirectoryRoot(_root), manifestPath);
+
+                    SaveBackupRestoreDestination restoreDestination = null;
+                    ManualJsonObject destinationJson = journal.GetObject("restoreDestination");
+                    if (destinationJson != null)
+                    {
+                        restoreDestination = new SaveBackupRestoreDestination
+                        {
+                            ScenarioId = destinationJson.GetString("scenarioId", string.Empty),
+                            AbsoluteSlot = destinationJson.GetInt("absoluteSlot", 0),
+                            ExpectedLineageId = destinationJson.GetString("expectedLineageId", string.Empty),
+                            AllowHistoricalSlotWhenUnoccupied =
+                                destinationJson.GetBool("allowHistoricalSlotWhenUnoccupied", false)
+                        };
+                    }
+
+                    RestorePlan validatedPlan = BuildRestorePlan(manifestPath, restoreDestination);
+                    AddInterruptedRestoreDeletions(validatedPlan, transactionId);
+                    ManualJsonArray allowedRootArray = journal.GetArray("allowedRoots");
+                    if (allowedRootArray == null || allowedRootArray.Items.Count == 0)
+                        throw new IOException("Restore transaction journal contains no allowed restore roots.");
+
+                    List<RestoreAllowedRoot> journalRoots = new List<RestoreAllowedRoot>();
+                    HashSet<string> rootKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (int i = 0; i < allowedRootArray.Items.Count; i++)
+                    {
+                        ManualJsonObject item = allowedRootArray.Items[i] != null
+                            ? allowedRootArray.Items[i].ObjectValue
+                            : null;
+                        if (item == null)
+                            throw new IOException("Restore transaction journal contains an invalid allowed root.");
+
+                        string path = item.GetString("path", string.Empty);
+                        string kindText = item.GetString("kind", string.Empty);
+                        if (string.IsNullOrEmpty(path) || !Path.IsPathRooted(path))
+                            throw new IOException("Restore transaction journal contains an invalid allowed root path.");
+                        if (!string.Equals(kindText, SaveBackupSourceKind.File.ToString(), StringComparison.Ordinal)
+                            && !string.Equals(kindText, SaveBackupSourceKind.Directory.ToString(), StringComparison.Ordinal))
+                        {
+                            throw new IOException("Restore transaction journal contains an invalid allowed root kind.");
+                        }
+
+                        RestoreAllowedRoot allowedRoot = new RestoreAllowedRoot();
+                        allowedRoot.Path = Path.GetFullPath(path);
+                        allowedRoot.Kind = string.Equals(kindText, SaveBackupSourceKind.File.ToString(), StringComparison.Ordinal)
+                            ? SaveBackupSourceKind.File
+                            : SaveBackupSourceKind.Directory;
+                        string rootKey = allowedRoot.Kind + "|" + allowedRoot.Path;
+                        if (!rootKeys.Add(rootKey))
+                            throw new IOException("Restore transaction journal contains duplicate allowed roots.");
+                        journalRoots.Add(allowedRoot);
+                    }
+
+                    if (!RestoreAllowedRootsMatch(journalRoots, validatedPlan.AllowedRoots))
+                        throw new IOException("Restore transaction roots do not match the validated snapshot restore plan.");
+
+                    Dictionary<string, RestoreExpectedMutation> expectedMutations =
+                        BuildExpectedRestoreMutations(validatedPlan);
+                    ManualJsonArray mutationArray = journal.GetArray("mutations");
+                    if (mutationArray == null || mutationArray.Items.Count == 0)
+                        throw new IOException("Restore transaction journal contains no mutations.");
+
+                    List<RestoreMutation> mutations = new List<RestoreMutation>();
+                    HashSet<string> destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (int i = 0; i < mutationArray.Items.Count; i++)
+                    {
+                        ManualJsonObject item = mutationArray.Items[i] != null
+                            ? mutationArray.Items[i].ObjectValue
+                            : null;
+                        if (item == null)
+                            throw new IOException("Restore transaction journal contains an invalid mutation.");
+
+                        string destinationPath = item.GetString("destinationPath", string.Empty);
+                        if (string.IsNullOrEmpty(destinationPath) || !Path.IsPathRooted(destinationPath))
+                            throw new IOException("Restore transaction journal contains an invalid destination.");
+
+                        RestoreMutation mutation = new RestoreMutation();
+                        mutation.DestinationPath = Path.GetFullPath(destinationPath);
+                        if (!destinations.Add(mutation.DestinationPath))
+                            throw new IOException("Restore transaction journal contains duplicate destinations.");
+                        if (!IsRestoreDestinationAllowed(mutation.DestinationPath, validatedPlan.AllowedRoots))
+                            throw new IOException("Restore transaction destination is outside the validated restore roots.");
+                        EnsureRestoreDestinationHasNoReparseTraversal(
+                            mutation.DestinationPath,
+                            validatedPlan.AllowedRoots);
+
+                        mutation.OriginalExisted = item.GetBool("originalExisted", false);
+                        mutation.HasReplacement = item.GetBool("hasReplacement", false);
+                        mutation.ExpectedSize = GetLong(item, "expectedSize", -1);
+                        mutation.ExpectedHash = item.GetString("expectedHash", string.Empty);
+                        if (mutation.HasReplacement
+                            && (mutation.ExpectedSize < 0 || !IsHexValue(mutation.ExpectedHash, 64)))
+                        {
+                            throw new IOException("Restore transaction replacement verification metadata is invalid.");
+                        }
+                        if (!mutation.HasReplacement
+                            && (mutation.ExpectedSize != 0 || !string.IsNullOrEmpty(mutation.ExpectedHash)))
+                        {
+                            throw new IOException("Restore transaction deletion verification metadata is invalid.");
+                        }
+
+                        RestoreExpectedMutation expectedMutation;
+                        if (!expectedMutations.TryGetValue(mutation.DestinationPath, out expectedMutation)
+                            || expectedMutation.HasReplacement != mutation.HasReplacement
+                            || expectedMutation.ExpectedSize != mutation.ExpectedSize
+                            || !string.Equals(
+                                expectedMutation.ExpectedHash,
+                                mutation.ExpectedHash,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new IOException("Restore transaction mutation does not exactly match the validated restore plan.");
+                        }
+
+                        mutation.StagedPath = mutation.HasReplacement
+                            ? BuildRestoreTemporaryPath(mutation.DestinationPath, transactionId, "stage")
+                            : null;
+                        mutation.RollbackPath = BuildRestoreTemporaryPath(mutation.DestinationPath, transactionId, "rollback");
+                        mutation.AbsentMarkerPath = BuildRestoreTemporaryPath(mutation.DestinationPath, transactionId, "absent");
+                        mutation.DiscardPath = BuildRestoreTemporaryPath(mutation.DestinationPath, transactionId, "discard");
+                        mutations.Add(mutation);
+                    }
+                    if (destinations.Count != expectedMutations.Count)
+                        throw new IOException("Restore transaction mutations do not match the validated restore plan.");
+
+                    bool isCommitted = File.Exists(committedPath)
+                        && string.Equals(File.ReadAllText(committedPath), transactionId, StringComparison.Ordinal);
+                    if (isCommitted)
+                    {
+                        string validationError = ValidateCommittedRestoreState(mutations);
+                        if (!string.IsNullOrEmpty(validationError))
+                            throw new IOException("Committed restore state is invalid: " + validationError);
+                    }
+                    else
+                    {
+                        string rollbackError = RollBackRestoreMutations(mutations);
+                        if (!string.IsNullOrEmpty(rollbackError))
+                            throw new IOException("Restore transaction rollback failed: " + rollbackError);
+                    }
+
+                    if (!CleanupRestoreTemporaryFiles(mutations))
+                        throw new IOException("Restore transaction cleanup remains incomplete.");
+                    if (!TryDeleteRestoreTemporaryFile(journalPath))
+                        throw new IOException("Restore transaction journal could not be removed.");
+                    TryDeleteRestoreTemporaryFile(committedPath);
+                    TryDeleteRestoreTemporaryFile(committedPath + ".tmp");
+                    MMLog.WriteInfo("[SaveBackup] Recovered restore transaction " + transactionId + ".");
+                }
+                catch (Exception ex)
+                {
+                    if (unresolved.Length > 0)
+                        unresolved.Append(" ");
+                    unresolved.Append(transactionId);
+                    unresolved.Append(": ");
+                    unresolved.Append(ex.Message);
+                    MMLog.WriteWarning("[SaveBackup] Restore transaction " + transactionId
+                        + " remains pending: " + ex.Message);
+                }
+            }
+
+            if (unresolved.Length == 0)
+                return true;
+
+            error = unresolved.ToString();
+            return false;
+        }
+
+        private static bool RestoreAllowedRootsMatch(
+            List<RestoreAllowedRoot> persisted,
+            List<RestoreAllowedRoot> validated)
+        {
+            if (persisted == null || validated == null || persisted.Count != validated.Count)
+                return false;
+
+            for (int i = 0; i < persisted.Count; i++)
+            {
+                bool found = false;
+                for (int j = 0; j < validated.Count; j++)
+                {
+                    if (persisted[i].Kind == validated[j].Kind
+                        && string.Equals(
+                            Path.GetFullPath(persisted[i].Path),
+                            Path.GetFullPath(validated[j].Path),
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool IsRestoreDestinationAllowed(
+            string destinationPath,
+            List<RestoreAllowedRoot> allowedRoots)
+        {
+            if (string.IsNullOrEmpty(destinationPath) || allowedRoots == null)
+                return false;
+
+            string fullDestination = Path.GetFullPath(destinationPath);
+            for (int i = 0; i < allowedRoots.Count; i++)
+            {
+                RestoreAllowedRoot allowedRoot = allowedRoots[i];
+                if (allowedRoot == null || string.IsNullOrEmpty(allowedRoot.Path))
+                    continue;
+
+                if (allowedRoot.Kind == SaveBackupSourceKind.File)
+                {
+                    if (string.Equals(
+                        fullDestination,
+                        Path.GetFullPath(allowedRoot.Path),
+                        StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                else if (IsPathInsideDirectory(GetDirectoryRoot(allowedRoot.Path), fullDestination))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static void EnsureRestoreDestinationHasNoReparseTraversal(
+            string destinationPath,
+            List<RestoreAllowedRoot> allowedRoots)
+        {
+            string fullDestination = Path.GetFullPath(destinationPath);
+            for (int i = 0; i < allowedRoots.Count; i++)
+            {
+                RestoreAllowedRoot allowedRoot = allowedRoots[i];
+                if (allowedRoot == null || string.IsNullOrEmpty(allowedRoot.Path))
+                    continue;
+
+                if (allowedRoot.Kind == SaveBackupSourceKind.File
+                    && string.Equals(
+                        fullDestination,
+                        Path.GetFullPath(allowedRoot.Path),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    EnsureNoReparsePointTraversal(
+                        GetDirectoryRoot(Path.GetDirectoryName(allowedRoot.Path)),
+                        fullDestination);
+                    return;
+                }
+
+                if (allowedRoot.Kind == SaveBackupSourceKind.Directory
+                    && IsPathInsideDirectory(GetDirectoryRoot(allowedRoot.Path), fullDestination))
+                {
+                    EnsureNoReparsePointTraversal(GetDirectoryRoot(allowedRoot.Path), fullDestination);
+                    return;
+                }
+            }
+
+            throw new IOException("Restore transaction destination is outside the validated restore roots.");
+        }
+
+        private static Dictionary<string, RestoreExpectedMutation> BuildExpectedRestoreMutations(RestorePlan plan)
+        {
+            Dictionary<string, RestoreExpectedMutation> expected =
+                new Dictionary<string, RestoreExpectedMutation>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < plan.Files.Count; i++)
+            {
+                RestoreFilePlan file = plan.Files[i];
+                expected.Add(
+                    file.DestinationPath,
+                    new RestoreExpectedMutation
+                    {
+                        HasReplacement = true,
+                        ExpectedSize = (file.Bytes ?? new byte[0]).LongLength,
+                        ExpectedHash = ComputeSha256(file.Bytes ?? new byte[0])
+                    });
+            }
+
+            for (int i = 0; i < plan.Deletions.Count; i++)
+            {
+                expected.Add(
+                    plan.Deletions[i],
+                    new RestoreExpectedMutation
+                    {
+                        HasReplacement = false,
+                        ExpectedSize = 0,
+                        ExpectedHash = string.Empty
+                    });
+            }
+
+            return expected;
+        }
+
+        private static string ValidateCommittedRestoreState(List<RestoreMutation> mutations)
+        {
+            for (int i = 0; i < mutations.Count; i++)
+            {
+                RestoreMutation mutation = mutations[i];
+                if (!mutation.HasReplacement)
+                {
+                    if (File.Exists(mutation.DestinationPath))
+                        return mutation.DestinationPath + " was expected to be deleted.";
+                    continue;
+                }
+
+                if (!File.Exists(mutation.DestinationPath))
+                    return mutation.DestinationPath + " is missing.";
+
+                FileInfo file = new FileInfo(mutation.DestinationPath);
+                if (file.Length != mutation.ExpectedSize)
+                    return mutation.DestinationPath + " has an unexpected size.";
+                if (!string.Equals(
+                    ComputeSha256(File.ReadAllBytes(mutation.DestinationPath)),
+                    mutation.ExpectedHash,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    return mutation.DestinationPath + " has an unexpected hash.";
+                }
+            }
+            return null;
+        }
+
+        private static bool IsHexValue(string value, int requiredLength)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length != requiredLength)
+                return false;
+
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (!((c >= '0' && c <= '9')
+                    || (c >= 'a' && c <= 'f')
+                    || (c >= 'A' && c <= 'F')))
+                    return false;
+            }
+            return true;
+        }
+
+        private static void WriteRestoreTransactionJournal(
+            string journalPath,
+            string transactionId,
+            RestorePlan plan,
+            List<RestoreMutation> mutations)
+        {
+            ManualJsonObject journal = new ManualJsonObject();
+            journal.Set("schemaVersion", ManualJsonValue.Number(1));
+            journal.Set("transactionId", ManualJsonValue.String(transactionId));
+            journal.Set("manifestPath", ManualJsonValue.String(plan.ManifestPath));
+            if (plan.RestoreDestination != null)
+            {
+                ManualJsonObject destination = new ManualJsonObject();
+                destination.Set(
+                    "scenarioId",
+                    ManualJsonValue.String(plan.RestoreDestination.ScenarioId));
+                destination.Set(
+                    "absoluteSlot",
+                    ManualJsonValue.Number(plan.RestoreDestination.AbsoluteSlot));
+                destination.Set(
+                    "expectedLineageId",
+                    ManualJsonValue.String(plan.RestoreDestination.ExpectedLineageId));
+                destination.Set(
+                    "allowHistoricalSlotWhenUnoccupied",
+                    ManualJsonValue.Boolean(plan.RestoreDestination.AllowHistoricalSlotWhenUnoccupied));
+                journal.Set("restoreDestination", ManualJsonValue.Object(destination));
+            }
+
+            ManualJsonArray allowedRootArray = new ManualJsonArray();
+            for (int i = 0; i < plan.AllowedRoots.Count; i++)
+            {
+                RestoreAllowedRoot allowedRoot = plan.AllowedRoots[i];
+                ManualJsonObject item = new ManualJsonObject();
+                item.Set("path", ManualJsonValue.String(allowedRoot.Path));
+                item.Set("kind", ManualJsonValue.String(allowedRoot.Kind.ToString()));
+                allowedRootArray.Add(ManualJsonValue.Object(item));
+            }
+            journal.Set("allowedRoots", ManualJsonValue.Array(allowedRootArray));
+
+            ManualJsonArray mutationArray = new ManualJsonArray();
+            for (int i = 0; i < mutations.Count; i++)
+            {
+                RestoreMutation mutation = mutations[i];
+                ManualJsonObject item = new ManualJsonObject();
+                item.Set("destinationPath", ManualJsonValue.String(mutation.DestinationPath));
+                item.Set("originalExisted", ManualJsonValue.Boolean(mutation.OriginalExisted));
+                item.Set("hasReplacement", ManualJsonValue.Boolean(mutation.HasReplacement));
+                item.Set("expectedSize", ManualJsonValue.Number(mutation.ExpectedSize));
+                item.Set("expectedHash", ManualJsonValue.String(mutation.ExpectedHash));
+                mutationArray.Add(ManualJsonValue.Object(item));
+            }
+            journal.Set("mutations", ManualJsonValue.Array(mutationArray));
+
+            string temporaryPath = journalPath + ".tmp";
+            WriteDurableTextFile(temporaryPath, ManualJson.Serialize(journal, true));
+            File.Move(temporaryPath, journalPath);
+        }
+
+        private static void WriteDurableTextFile(string path, string text)
+        {
+            WriteDurableBytesFile(path, Encoding.UTF8.GetBytes(text ?? string.Empty));
+        }
+
+        private static void PublishDurableFile(string destinationPath, byte[] bytes, bool allowExisting)
+        {
+            string temporaryPath = destinationPath + "." + Guid.NewGuid().ToString("N") + ".publish.tmp";
+            try
+            {
+                WriteDurableBytesFile(temporaryPath, bytes);
+                ValidatePublishedBytes(temporaryPath, bytes);
+
+                if (File.Exists(destinationPath))
+                {
+                    if (!allowExisting)
+                        throw new IOException("Durable publication destination already exists.");
+                }
+                else
+                {
+                    File.Move(temporaryPath, destinationPath);
+                }
+
+                ValidatePublishedBytes(destinationPath, bytes);
+            }
+            finally
+            {
+                TryDeleteRestoreTemporaryFile(temporaryPath);
+            }
+        }
+
+        private static void ValidatePublishedBytes(string path, byte[] expectedBytes)
+        {
+            if (!File.Exists(path))
+                throw new IOException("Durable publication output is missing.");
+
+            FileInfo file = new FileInfo(path);
+            if (file.Length != expectedBytes.LongLength
+                || !string.Equals(
+                    ComputeSha256(File.ReadAllBytes(path)),
+                    ComputeSha256(expectedBytes),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException("Durable publication content validation failed.");
+            }
+        }
+
+        private static void WriteDurableBytesFile(string path, byte[] bytes)
+        {
+            DurableFileWriter.WriteNew(path, bytes);
+        }
+
+        private static bool TryDeleteRestoreTemporaryFile(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return true;
+
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+                return !File.Exists(path);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[SaveBackup] Failed to clean restore temporary file: " + ex.Message);
+                return false;
             }
         }
 
@@ -646,21 +1931,42 @@ namespace ShelteredAPI.Saves.Backups
             string blobRelativePath = GetBlobRelativePath(hash);
             string blobPath = Path.Combine(_root, blobRelativePath);
 
-            if (!File.Exists(blobPath))
+            if (File.Exists(blobPath))
+            {
+                byte[] existingBytes = SaveBackupBlobCodec.ReadDecompressed(blobPath);
+                if (existingBytes.LongLength != bytes.LongLength
+                    || !string.Equals(ComputeSha256(existingBytes), hash, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new IOException("Existing backup blob failed content validation: " + hash);
+                }
+            }
+            else
             {
                 EnsureDirectory(Path.GetDirectoryName(blobPath));
-                string tmp = blobPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                string codecTemporaryPath = blobPath + "." + Guid.NewGuid().ToString("N") + ".codec.tmp";
                 try
                 {
-                    SaveBackupBlobCodec.WriteCompressed(tmp, bytes);
-                    if (File.Exists(blobPath))
-                        File.Delete(tmp);
-                    else
-                        File.Move(tmp, blobPath);
+                    SaveBackupBlobCodec.WriteCompressed(codecTemporaryPath, bytes);
+                    byte[] codecRoundTrip = SaveBackupBlobCodec.ReadDecompressed(codecTemporaryPath);
+                    if (codecRoundTrip.LongLength != bytes.LongLength
+                        || !string.Equals(ComputeSha256(codecRoundTrip), hash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new IOException("New backup blob failed codec round-trip validation: " + hash);
+                    }
+
+                    byte[] compressedBytes = File.ReadAllBytes(codecTemporaryPath);
+                    PublishDurableFile(blobPath, compressedBytes, true);
+
+                    byte[] publishedBytes = SaveBackupBlobCodec.ReadDecompressed(blobPath);
+                    if (publishedBytes.LongLength != bytes.LongLength
+                        || !string.Equals(ComputeSha256(publishedBytes), hash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new IOException("Published backup blob failed content validation: " + hash);
+                    }
                 }
                 finally
                 {
-                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    TryDeleteRestoreTemporaryFile(codecTemporaryPath);
                 }
             }
 
@@ -694,9 +2000,21 @@ namespace ShelteredAPI.Saves.Backups
             root.Set("absoluteSlot", ManualJsonValue.Number(target.AbsoluteSlot));
             root.Set("saveId", ManualJsonValue.String(target.SaveId));
             root.Set("saveType", ManualJsonValue.String(target.SaveType.ToString()));
-            root.Set("isPinned", ManualJsonValue.Boolean(false));
-            root.Set("pinnedAtUtc", ManualJsonValue.String(string.Empty));
-            root.Set("pinReason", ManualJsonValue.String(string.Empty));
+            bool isSafetySnapshot = reason == SaveBackupReason.BeforeRestore
+                || reason == SaveBackupReason.BeforeDelete;
+            root.Set("isPinned", ManualJsonValue.Boolean(isSafetySnapshot));
+            root.Set(
+                "pinnedAtUtc",
+                ManualJsonValue.String(
+                    isSafetySnapshot
+                        ? createdAt.ToString("o", CultureInfo.InvariantCulture)
+                        : string.Empty));
+            root.Set(
+                "pinReason",
+                ManualJsonValue.String(
+                    isSafetySnapshot
+                        ? reason.ToString()
+                        : string.Empty));
 
             ManualJsonArray sources = new ManualJsonArray();
             for (int i = 0; i < target.Sources.Count; i++)
@@ -1049,6 +2367,42 @@ namespace ShelteredAPI.Saves.Backups
         {
             public string DestinationPath;
             public byte[] Bytes;
+        }
+
+        private sealed class RestorePlan
+        {
+            public string ManifestPath;
+            public SaveBackupRestoreDestination RestoreDestination;
+            public readonly List<RestoreFilePlan> Files = new List<RestoreFilePlan>();
+            public readonly List<string> Deletions = new List<string>();
+            public readonly List<RestoreAllowedRoot> AllowedRoots = new List<RestoreAllowedRoot>();
+        }
+
+        private sealed class RestoreAllowedRoot
+        {
+            public string Path;
+            public SaveBackupSourceKind Kind;
+        }
+
+        private sealed class RestoreExpectedMutation
+        {
+            public bool HasReplacement;
+            public long ExpectedSize;
+            public string ExpectedHash;
+        }
+
+        private sealed class RestoreMutation
+        {
+            public string DestinationPath;
+            public string StagedPath;
+            public string RollbackPath;
+            public string AbsentMarkerPath;
+            public string DiscardPath;
+            public bool OriginalExisted;
+            public bool HasReplacement;
+            public byte[] ReplacementBytes;
+            public long ExpectedSize;
+            public string ExpectedHash;
         }
     }
 }

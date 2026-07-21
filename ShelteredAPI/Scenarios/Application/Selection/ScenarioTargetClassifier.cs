@@ -20,6 +20,17 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             string adapter = (target.AdapterId ?? string.Empty).ToLowerInvariant();
             string combined = path + " " + name + " " + adapter;
 
+            if (string.Equals(target.AdapterId, "ShelteredAPI.WeatherEffects", StringComparison.OrdinalIgnoreCase))
+            {
+                return Create(
+                    ScenarioTargetScope.BunkerInside,
+                    0.9f,
+                    "Weather/effect sprite target exposed through the Art browser.",
+                    "adapter",
+                    ScenarioTargetScope.BunkerBackground,
+                    ScenarioTargetScope.BunkerSurface);
+            }
+
             ScenarioTargetClassification componentClassification = ClassifyByComponents(target, gameObject, combined);
             if (componentClassification != null)
                 return componentClassification;

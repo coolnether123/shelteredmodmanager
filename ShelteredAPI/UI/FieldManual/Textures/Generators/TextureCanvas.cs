@@ -3,25 +3,48 @@ using UnityEngine;
 namespace ShelteredAPI.UI.FieldManual.Textures.Generators
 {
     /// <summary>
-    /// Mutable Color[] buffer with helpers for primitive drawing. Keeps generator code
+    /// Mutable 8-bit pixel buffer with helpers for primitive drawing. Keeps generator code
     /// declarative — generators describe pixels, not Texture2D plumbing.
     /// </summary>
     internal sealed class TextureCanvas
     {
         public readonly int Width;
         public readonly int Height;
-        public readonly Color[] Pixels;
+        public readonly Color32[] Pixels;
 
         public TextureCanvas(int width, int height)
         {
             Width = Mathf.Max(1, width);
             Height = Mathf.Max(1, height);
-            Pixels = new Color[Width * Height];
+            Pixels = new Color32[Width * Height];
         }
 
         public void Fill(Color color)
         {
             for (int i = 0; i < Pixels.Length; i++) Pixels[i] = color;
+        }
+
+        public void FillOpaque(Color color)
+        {
+            Color32 opaque = new Color(color.r, color.g, color.b, 1f);
+            for (int i = 0; i < Pixels.Length; i++) Pixels[i] = opaque;
+        }
+
+        public void CutChamferedCorners(int cut)
+        {
+            int safeCut = Mathf.Max(0, cut);
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    bool outside = IsCornerCut(x, y, safeCut)
+                        || IsCornerCut(Width - x - 1, y, safeCut)
+                        || IsCornerCut(x, Height - y - 1, safeCut)
+                        || IsCornerCut(Width - x - 1, Height - y - 1, safeCut);
+                    if (outside)
+                        Pixels[(y * Width) + x] = new Color32(0, 0, 0, 0);
+                }
+            }
         }
 
         public void SetPixel(int x, int y, Color color)
@@ -104,9 +127,16 @@ namespace ShelteredAPI.UI.FieldManual.Textures.Generators
             var tex = new Texture2D(Width, Height, TextureFormat.ARGB32, false);
             tex.filterMode = filter;
             tex.wrapMode = TextureWrapMode.Clamp;
-            tex.SetPixels(Pixels);
-            tex.Apply(false, false);
+            tex.SetPixels32(Pixels);
+            // Procedural chrome is immutable after creation. Discarding Unity's
+            // readable CPU copy keeps the shared process-lifetime cache GPU-only.
+            tex.Apply(false, true);
             return tex;
+        }
+
+        private static bool IsCornerCut(int x, int y, int cut)
+        {
+            return x < cut && y < cut && x + y < cut;
         }
     }
 }

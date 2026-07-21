@@ -13,7 +13,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Inspector{
             string iconText = null,
             string detail = null,
             string badge = null,
-            Sprite previewSprite = null)
+            Sprite previewSprite = null,
+            string disabledReason = null)
         {
             return new ScenarioAuthoringInspectorAction
             {
@@ -25,7 +26,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Inspector{
                 IconText = iconText,
                 PreviewSprite = previewSprite,
                 Enabled = enabled,
-                Emphasized = emphasized
+                Emphasized = emphasized,
+                DisabledReason = disabledReason
             };
         }
 

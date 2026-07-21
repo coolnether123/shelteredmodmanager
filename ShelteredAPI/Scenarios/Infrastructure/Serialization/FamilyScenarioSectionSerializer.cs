@@ -40,6 +40,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                     FutureSurvivorDefinition survivor = new FutureSurvivorDefinition();
                     survivor.Id = ScenarioXmlSerializerUtil.AttributeOrChild(futureElement, "id", "Id");
+                    survivor.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(futureElement);
+                    ScenarioActorXmlSerializer.ReadActorComponents(futureElement, survivor.ActorComponents);
                     survivor.AskToJoin = ScenarioXmlSerializerUtil.ReadBoolAttribute(futureElement, "askToJoin", true);
                     survivor.Arrival = ScenarioXmlSerializerUtil.ReadScheduleTime(ScenarioXmlSerializerUtil.Child(futureElement, "Arrival"));
                     XmlElement survivorElement = ScenarioXmlSerializerUtil.Child(futureElement, "Survivor");
@@ -79,6 +81,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteStartElement("FutureSurvivor");
                 ScenarioXmlSerializerUtil.WriteAttribute(writer, "id", survivor.Id);
                 writer.WriteAttributeString("askToJoin", survivor.AskToJoin.ToString());
+                ScenarioActorXmlSerializer.WriteActorRef(writer, survivor.ActorRef);
+                ScenarioActorXmlSerializer.WriteActorComponents(writer, survivor.ActorComponents);
                 ScenarioXmlSerializerUtil.WriteScheduleTime(writer, "Arrival", survivor.Arrival);
                 WriteFamilyMember(writer, "Survivor", survivor.Survivor);
                 writer.WriteEndElement();
@@ -94,6 +98,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 return member;
 
             member.Name = ScenarioXmlSerializerUtil.ReadText(memberElement, "Name");
+            member.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(memberElement);
+            ScenarioActorXmlSerializer.ReadActorComponents(memberElement, member.ActorComponents);
             member.Gender = ScenarioXmlSerializerUtil.ReadEnum(memberElement, "Gender", ScenarioGender.Any);
             XmlElement age = ScenarioXmlSerializerUtil.Child(memberElement, "Age");
             if (age != null)
@@ -144,7 +150,34 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
 
             member.Appearance = ReadFamilyAppearance(ScenarioXmlSerializerUtil.Child(memberElement, "Appearance"));
+            member.Conditions = ReadFamilyConditions(ScenarioXmlSerializerUtil.Child(memberElement, "Condition"));
             return member;
+        }
+
+        private static FamilyMemberConditionConfig ReadFamilyConditions(XmlElement element)
+        {
+            FamilyMemberConditionConfig conditions = new FamilyMemberConditionConfig();
+            if (element == null)
+                return conditions;
+
+            conditions.Hunger = ReadNullableIntAttribute(element, "hunger");
+            conditions.Thirst = ReadNullableIntAttribute(element, "thirst");
+            conditions.Fatigue = ReadNullableIntAttribute(element, "fatigue");
+            conditions.Dirtiness = ReadNullableIntAttribute(element, "dirtiness");
+            conditions.Toilet = ReadNullableIntAttribute(element, "toilet");
+            conditions.Stress = ReadNullableIntAttribute(element, "stress");
+            return conditions;
+        }
+
+        private static int? ReadNullableIntAttribute(XmlElement element, string name)
+        {
+            if (element == null || string.IsNullOrEmpty(name) || !element.HasAttribute(name))
+                return null;
+
+            int value;
+            return int.TryParse(element.GetAttribute(name), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
+                ? (int?)value
+                : null;
         }
 
         private static FamilyMemberAppearanceConfig ReadFamilyAppearance(XmlElement element)
@@ -201,6 +234,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
             writer.WriteStartElement(elementName);
             ScenarioXmlSerializerUtil.WriteElement(writer, "Name", member.Name);
+            ScenarioActorXmlSerializer.WriteActorRef(writer, member.ActorRef);
+            ScenarioActorXmlSerializer.WriteActorComponents(writer, member.ActorComponents);
             ScenarioXmlSerializerUtil.WriteElement(writer, "Gender", member.Gender.ToString());
             writer.WriteStartElement("Age");
             ScenarioXmlSerializerUtil.WriteNullableElement(writer, "Exact", member.ExactAge);
@@ -233,7 +268,42 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
             writer.WriteEndElement();
             WriteFamilyAppearance(writer, member.Appearance);
+            WriteFamilyConditions(writer, member.Conditions);
             writer.WriteEndElement();
+        }
+
+        private static void WriteFamilyConditions(XmlWriter writer, FamilyMemberConditionConfig conditions)
+        {
+            if (!HasAnyFamilyCondition(conditions))
+                return;
+
+            writer.WriteStartElement("Condition");
+            WriteNullableAttribute(writer, "hunger", conditions.Hunger);
+            WriteNullableAttribute(writer, "thirst", conditions.Thirst);
+            WriteNullableAttribute(writer, "fatigue", conditions.Fatigue);
+            WriteNullableAttribute(writer, "dirtiness", conditions.Dirtiness);
+            WriteNullableAttribute(writer, "toilet", conditions.Toilet);
+            WriteNullableAttribute(writer, "stress", conditions.Stress);
+            writer.WriteEndElement();
+        }
+
+        private static bool HasAnyFamilyCondition(FamilyMemberConditionConfig conditions)
+        {
+            return conditions != null
+                && (conditions.Hunger.HasValue
+                    || conditions.Thirst.HasValue
+                    || conditions.Fatigue.HasValue
+                    || conditions.Dirtiness.HasValue
+                    || conditions.Toilet.HasValue
+                    || conditions.Stress.HasValue);
+        }
+
+        private static void WriteNullableAttribute(XmlWriter writer, string name, int? value)
+        {
+            if (writer == null || string.IsNullOrEmpty(name) || !value.HasValue)
+                return;
+
+            writer.WriteAttributeString(name, value.Value.ToString(CultureInfo.InvariantCulture));
         }
 
         private static void WriteFamilyAppearance(XmlWriter writer, FamilyMemberAppearanceConfig appearance)

@@ -129,7 +129,19 @@ namespace ShelteredAPI.Scenarios.Definitions{
             scenarioFilePath = info.FilePath;
             try
             {
-                definition = _definitionSerializer.Load(info.FilePath);
+                string recoveryMessage;
+                bool recovered;
+                if (!_definitionSerializer.TryLoadWithRecovery(info.FilePath, out definition, out recoveryMessage, out recovered))
+                {
+                    errorMessage = string.IsNullOrEmpty(recoveryMessage) ? "Scenario XML could not be loaded." : recoveryMessage;
+                    return false;
+                }
+
+                if (recovered)
+                {
+                    MMLog.WriteWarning("[ScenarioDefinitionReader] " + recoveryMessage);
+                }
+
                 return true;
             }
             catch (Exception ex)

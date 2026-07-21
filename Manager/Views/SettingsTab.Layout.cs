@@ -40,6 +40,7 @@ namespace Manager.Views
                 _contentPanel.Width = contentWidth;
 
                 y = LayoutAppearanceSection(x, y);
+                y = LayoutSavesSection(x, y);
                 y = LayoutNexusSection(x, y, contentWidth);
                 y = LayoutRuntimeFeaturesSection(x, y, contentWidth);
                 y = LayoutDeveloperSection(x, y);
@@ -74,6 +75,7 @@ namespace Manager.Views
             return Math.Max(SettingsTabLayout.MinContentWidth, viewportWidth);
         }
 
+        // 1. Appearance - manager look only.
         private int LayoutAppearanceSection(int x, int y)
         {
             _themeLabel.Location = new Point(x, y);
@@ -82,15 +84,21 @@ namespace Manager.Views
             _darkModeCheckBox.Location = new Point(x + 10, y);
             y += 42;
 
+            return y;
+        }
+
+        // 2. Saves - slot organization then backup retention.
+        private int LayoutSavesSection(int x, int y)
+        {
+            _savesLabel.Location = new Point(x, y);
+            y += 30;
+
             _autoCondenseLabel.Location = new Point(x + 10, y);
             y += 24;
 
             _autoCondenseCombo.Location = new Point(x + 10, y);
             _autoCondenseCombo.Width = 240;
-            y += 52;
-
-            _saveBackupsLabel.Location = new Point(x, y);
-            y += 30;
+            y += 44;
 
             _saveBackupRetentionLabel.Location = new Point(x + 10, y);
             y += 24;
@@ -115,9 +123,6 @@ namespace Manager.Views
             _enableNexusCheckBox.Location = new Point(x + 10, y);
             y += 32;
 
-            _enableExperimentalPublishCheckBox.Location = new Point(x + 10, y);
-            y += 32;
-
             _nexusApiKeyLabel.Location = new Point(x + 10, y + 4);
             _nexusApiKeyTextBox.Location = new Point(x + 155, y);
             _nexusApiHelpButton.Location = new Point(x + 395, y - 1);
@@ -131,6 +136,9 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Location = new Point(x + 10, y);
             _nexusDownloadSummaryLabel.Width = summaryWidth;
             y += 44;
+
+            _includeNexusPrereleaseCheckBox.Location = new Point(x + 10, y);
+            y += 30;
 
             _nexusAdvancedToggleLink.Location = new Point(x + 10, y);
             y += 24;

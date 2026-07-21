@@ -22,9 +22,9 @@ namespace Manager.Core.Services
             {
                 id = CustomScenarioEditorOptionId,
                 owner = "ShelteredAPI",
-                label = "Custom Scenario Editor",
-                description = "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.",
-                defaultValue = true,
+                label = "Custom Scenario Authoring (Preview)",
+                description = "Enables the advanced scenario authoring workspace and Add New Scenario entry. Installed custom scenarios remain available while this preview is disabled.",
+                defaultValue = false,
                 requiresRestart = true,
                 sortOrder = 100
             },

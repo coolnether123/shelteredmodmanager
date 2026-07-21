@@ -7,6 +7,7 @@ using System.Text;
 using System.Xml;
 
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Infrastructure.Persistence;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringSettingsService
@@ -18,32 +19,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringSettingsService()
         {
             RegisterFloat("shell.ui_scale", "Shell", "UI Scale", "Overall scale for the authoring shell.", "1.10", 0.85f, 1.50f, 0.05f);
-            RegisterFloat("shell.hover_delay", "Shell", "Hover Tooltip Delay", "Delay before hover details appear.", "0.20", 0f, 2f, 0.05f);
-            RegisterToggle("shell.compact_mode", "Shell", "Compact Mode", "Reduce padding and row height across the shell.", "false");
             RegisterFloat("shell.panel_opacity", "Visuals", "Panel Opacity", "Opacity applied to bunker panels.", "0.82", 0.55f, 1f, 0.05f);
             RegisterToggle("layout.remember_windows", "Layout", "Remember Window Layout", "Persist editor layout between launches.", "true");
-            RegisterToggle("layout.remember_hidden", "Layout", "Remember Hidden Windows", "Persist hidden-window state between launches.", "true");
-            RegisterToggle("layout.auto_open_last_draft", "Layout", "Auto-Open Last Draft", "Reopen the previous draft when authoring starts.", "false");
-            RegisterToggle("input.marquee_selection", "Input", "Marquee Selection", "Enable marquee selection where a tool supports it.", "false");
+            RegisterToggle("visuals.ui_animations", "Visuals", "UI Animations", "Enable animated authoring UI transitions.", "true");
             RegisterToggle("visuals.show_grid", "Visuals", "Show Grid", "Show the shelter grid while authoring.", "true");
             RegisterToggle("visuals.snap_to_grid", "Visuals", "Snap To Grid", "Snap authored placements and previews to shelter cells.", "true");
-            RegisterFloat("visuals.grid_size", "Visuals", "Grid Size", "Authoring grid size in shelter pixels.", "32.00", 8f, 96f, 4f);
-            RegisterToggle("visuals.stronger_hover", "Visuals", "Stronger Hover Outlines", "Use stronger hover and focus outlines.", "true");
-            RegisterToggle("visuals.show_hover_inspector", "Visuals", "Show Hover Inspector", "Show target details near the pointer while selecting.", "true");
-            RegisterToggle("visuals.show_selection_stack", "Visuals", "Show Selection Stack", "Show all selectable targets under the pointer.", "true");
-            RegisterToggle("visuals.show_hidden_objects", "Visuals", "Show Hidden Objects", "Include inactive or hidden targets where authoring can resolve them.", "false");
-            RegisterToggle("layers.lock_background", "Layers", "Lock Background Layer", "Prevent accidental background selection.", "false");
-            RegisterToggle("layers.lock_surface", "Layers", "Lock Surface Layer", "Prevent accidental surface selection.", "false");
-            RegisterToggle("layers.lock_inside", "Layers", "Lock Inside Layer", "Prevent accidental bunker-inside selection.", "false");
-            RegisterChoice("shell.renderer_mode", "Shell", "Renderer Mode", "Preferred scenario editor renderer.", "imgui", new[] { "imgui", "ngui" }, new[] { "Shell IMGUI", "NGUI Experimental" });
-            RegisterToggle("input.playtest_auto_pause", "Input", "Playtest Auto-Pause On Open", "Pause the scenario when the shell reopens during playtest.", "false");
+            RegisterToggle("layers.lock_background", "Layers", "Lock Backdrop Layer (Prevents Selecting)", "Prevent accidental backdrop/background selection.", "false");
+            RegisterToggle("layers.lock_surface", "Layers", "Lock Surface Layer (Prevents Selecting)", "Prevent accidental exterior surface selection.", "false");
+            RegisterToggle("layers.lock_inside", "Layers", "Lock Inside Layer (Prevents Selecting)", "Prevent accidental bunker-inside selection.", "false");
+            RegisterChoice("shell.renderer_mode", "Advanced", "Renderer Mode", "Preferred scenario editor renderer.", "imgui", new[] { "imgui", "ngui" }, new[] { "Shell IMGUI", "NGUI Experimental" });
             RegisterToggle("input.block_vanilla_camera", "Input", "Block Vanilla Camera Input While Shell Focused", "Suppress vanilla camera pan and zoom while the shell owns pointer focus.", "true");
             RegisterFloat("input.scroll_speed", "Input", "Scroll Speed", "Scroll speed for lists and event timelines.", "1.00", 0.50f, 3f, 0.10f);
             RegisterInteger("sprite.zoom", "Sprite Tools", "Sprite Editor Default Zoom", "Default zoom for the in-game sprite editor.", "8", 1f, 32f, 1f);
             RegisterToggle("sprite.checkerboard", "Sprite Tools", "Sprite Editor Checkerboard", "Show a checkerboard behind transparent pixels.", "true");
-            RegisterToggle("sprite.confirm_overwrite", "Sprite Tools", "Save PNG Overwrite Confirmation", "Confirm before overwriting an existing authored PNG.", "true");
-            RegisterReadOnly("sprite.asset_root", "Sprite Tools", "Asset Root Path", "Preview of the mod-owned sprite output path.", ScenarioAuthoringStoragePaths.GetAssetsRootPath());
-            RegisterToggle("debug.overlays", "Debug", "Debug Overlays", "Draw shell layout and dump scene classification diagnostics.", "false");
+            RegisterToggle("inspector.pin_edit_mode", "Advanced", "Edit Pinned Facts", "Show pin controls beside inspector facts.", "false");
+            RegisterToggle("debug.show_advanced_details", "Advanced", "Show Advanced Details", "Show internal ids and runtime diagnostics in editor windows.", "false");
+            RegisterToggle("debug.overlays", "Advanced", "Debug Overlays", "Draw shell layout and dump scene classification diagnostics.", "false");
         }
 
         public ScenarioAuthoringSettingDefinition[] GetDefinitions()
@@ -71,7 +62,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return _cached.Copy();
 
                 ScenarioAuthoringSettingsSnapshot snapshot = BuildDefaults();
-                string path = ScenarioAuthoringStoragePaths.GetSettingsFilePath();
+                string path = ShelteredAPI.Scenarios.Infrastructure.Persistence.ScenarioAuthoringStoragePaths.GetSettingsFilePath();
                 if (!File.Exists(path))
                 {
                     _cached = snapshot;
@@ -110,7 +101,26 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             lock (_sync)
             {
-                _cached = BuildDefaults();
+                ScenarioAuthoringSettingsSnapshot previous = _cached != null ? _cached.Copy() : Load();
+                ScenarioAuthoringSettingsSnapshot reset = BuildDefaults();
+                string[] preservedKeys =
+                {
+                    TutorialContent.CompletedKey,
+                    TutorialContent.SkippedKey,
+                    TutorialContent.StepKey,
+                    TutorialContent.HelpPageKey,
+                    TutorialContent.HelpTopicKey
+                };
+
+                for (int i = 0; i < preservedKeys.Length; i++)
+                {
+                    string key = preservedKeys[i];
+                    string value = previous != null ? previous.Get(key, null) : null;
+                    if (value != null)
+                        reset.Set(key, value);
+                }
+
+                _cached = reset;
                 Save(_cached);
                 return _cached.Copy();
             }
@@ -142,8 +152,21 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         .AppendLine("\" />");
                 }
 
+                for (int i = 0; snapshot.Values != null && i < snapshot.Values.Count; i++)
+                {
+                    ScenarioAuthoringSettingValue value = snapshot.Values[i];
+                    if (value == null || string.IsNullOrEmpty(value.Id) || IsDefined(value.Id))
+                        continue;
+
+                    builder.Append("  <Setting id=\"")
+                        .Append(Escape(value.Id))
+                        .Append("\" value=\"")
+                        .Append(Escape(value.Value ?? string.Empty))
+                        .AppendLine("\" />");
+                }
+
                 builder.AppendLine("</ScenarioAuthoringSettings>");
-                File.WriteAllText(ScenarioAuthoringStoragePaths.GetSettingsFilePath(), builder.ToString());
+                File.WriteAllText(ShelteredAPI.Scenarios.Infrastructure.Persistence.ScenarioAuthoringStoragePaths.GetSettingsFilePath(), builder.ToString());
             }
         }
 
@@ -236,6 +259,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return string.IsNullOrEmpty(value)
                 ? string.Empty
                 : SecurityElement.Escape(value);
+        }
+
+        private bool IsDefined(string id)
+        {
+            for (int i = 0; i < _definitions.Count; i++)
+            {
+                ScenarioAuthoringSettingDefinition definition = _definitions[i];
+                if (definition != null && string.Equals(definition.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private void RegisterToggle(string id, string section, string label, string description, string defaultValue)

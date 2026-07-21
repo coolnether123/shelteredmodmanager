@@ -27,7 +27,7 @@ namespace Manager.Views
             _autoCondenseCombo.BackColor = Color.FromArgb(60, 60, 62);
             _autoCondenseCombo.ForeColor = Color.White;
             _autoCondenseCombo.FlatStyle = FlatStyle.Flat;
-            _saveBackupsLabel.ForeColor = Color.White;
+            _savesLabel.ForeColor = Color.White;
             _saveBackupRetentionLabel.ForeColor = Color.White;
             _saveBackupRetentionCombo.BackColor = Color.FromArgb(60, 60, 62);
             _saveBackupRetentionCombo.ForeColor = Color.White;
@@ -38,12 +38,12 @@ namespace Manager.Views
 
             _nexusLabel.ForeColor = Color.White;
             _enableNexusCheckBox.ForeColor = Color.White;
-            _enableExperimentalPublishCheckBox.ForeColor = Color.White;
             _nexusApiKeyLabel.ForeColor = Color.White;
             _nexusApiKeyTextBox.BackColor = Color.FromArgb(60, 60, 62);
             _nexusApiKeyTextBox.ForeColor = Color.White;
             _nexusAccountSummaryLabel.ForeColor = Color.White;
             _nexusDownloadSummaryLabel.ForeColor = Color.Gainsboro;
+            _includeNexusPrereleaseCheckBox.ForeColor = Color.White;
             _nexusAdvancedToggleLink.LinkColor = Color.LightBlue;
             _nexusAdvancedPanel.BackColor = Color.FromArgb(50, 50, 52);
             _nexusDomainLabel.ForeColor = Color.White;
@@ -66,7 +66,6 @@ namespace Manager.Views
             _debugLogScopeCombo.FlatStyle = FlatStyle.Flat;
             _skipHarmonyCheckBox.ForeColor = Color.White;
             _ignoreOrderCheckBox.ForeColor = Color.White;
-            _includeNexusPrereleaseCheckBox.ForeColor = Color.White;
 
             ApplyButtonTheme(_nexusApiHelpButton, true);
             ApplyButtonTheme(_nexusApiRevealButton, true);
@@ -86,7 +85,7 @@ namespace Manager.Views
             _autoCondenseCombo.BackColor = SystemColors.Window;
             _autoCondenseCombo.ForeColor = SystemColors.WindowText;
             _autoCondenseCombo.FlatStyle = FlatStyle.Standard;
-            _saveBackupsLabel.ForeColor = SystemColors.ControlText;
+            _savesLabel.ForeColor = SystemColors.ControlText;
             _saveBackupRetentionLabel.ForeColor = SystemColors.ControlText;
             _saveBackupRetentionCombo.BackColor = SystemColors.Window;
             _saveBackupRetentionCombo.ForeColor = SystemColors.WindowText;
@@ -97,12 +96,12 @@ namespace Manager.Views
 
             _nexusLabel.ForeColor = SystemColors.ControlText;
             _enableNexusCheckBox.ForeColor = SystemColors.ControlText;
-            _enableExperimentalPublishCheckBox.ForeColor = SystemColors.ControlText;
             _nexusApiKeyLabel.ForeColor = SystemColors.ControlText;
             _nexusApiKeyTextBox.BackColor = SystemColors.Window;
             _nexusApiKeyTextBox.ForeColor = SystemColors.WindowText;
             _nexusAccountSummaryLabel.ForeColor = SystemColors.ControlText;
             _nexusDownloadSummaryLabel.ForeColor = SystemColors.ControlText;
+            _includeNexusPrereleaseCheckBox.ForeColor = SystemColors.ControlText;
             _nexusAdvancedToggleLink.LinkColor = SystemColors.HotTrack;
             _nexusAdvancedPanel.BackColor = SystemColors.Control;
             _nexusDomainLabel.ForeColor = SystemColors.ControlText;
@@ -125,7 +124,6 @@ namespace Manager.Views
             _debugLogScopeCombo.FlatStyle = FlatStyle.Standard;
             _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
             _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
-            _includeNexusPrereleaseCheckBox.ForeColor = SystemColors.ControlText;
 
             ApplyButtonTheme(_nexusApiHelpButton, false);
             ApplyButtonTheme(_nexusApiRevealButton, false);

@@ -36,6 +36,14 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public int BlockedGameplayAssets;
         }
 
+        internal sealed class PointerAidModel
+        {
+            public string TargetCell;
+            public string Footprint;
+            public bool CanPlace;
+            public string Reason;
+        }
+
         private sealed class ActivePlacementSession
         {
             public ScenarioSpriteCatalogService.SpriteCandidate Candidate;
@@ -45,6 +53,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public string SortingLayerName;
             public int SortingOrder;
             public PlacementResolution LastResolution;
+            public bool SnapToGridDefault;
         }
 
         private sealed class PlacementResolution
@@ -55,6 +64,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public int? GridY;
             public bool CanPlace;
             public bool OverrideFit;
+            public string Reason;
         }
 
         private const string DefaultPlacementSortingLayerName = "Objects";
@@ -116,16 +126,18 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             {
                 model.ActiveCandidateToken = _activePlacement.Candidate != null ? _activePlacement.Candidate.Token : null;
                 model.ActiveCandidateLabel = _activePlacement.Candidate != null ? _activePlacement.Candidate.Label : null;
-                model.PlacementSummary = "Placing '" + SafeLabel(_activePlacement.Candidate != null ? _activePlacement.Candidate.Label : null) + "'. Move over the bunker to snap; hold Shift to place freely.";
+                model.PlacementSummary = BuildPlacementSummary(_activePlacement.Candidate, _activePlacement.SnapToGridDefault);
             }
             else
             {
                 ScenarioSpriteCatalogService.SpriteCandidate activeCandidate = FindCandidate(model, BuildPlacementReferenceToken(activePlacement));
                 model.ActiveCandidateToken = activeCandidate != null ? activeCandidate.Token : BuildPlacementReferenceToken(activePlacement);
                 model.ActiveCandidateLabel = activeCandidate != null ? activeCandidate.Label : BuildPlacementReferenceLabel(activePlacement);
+                ScenarioAuthoringState currentState = ScenarioAuthoringBackendService.Instance.CurrentState;
+                bool snapToGrid = currentState == null || currentState.Settings == null || currentState.Settings.GetBool("visuals.snap_to_grid", true);
                 model.PlacementSummary = activePlacement != null
                     ? "Placement '" + (activePlacement.Id ?? "<placement>") + "' is selected."
-                    : "Selecting a sprite starts a snapped scene sprite placement preview.";
+                    : "Selecting a sprite starts a " + (snapToGrid ? "snapped" : "free") + " scene sprite placement preview.";
             }
             return model;
         }
@@ -133,6 +145,23 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         public bool HasActivePlacement
         {
             get { return _activePlacement != null && _activePlacement.PreviewObject != null; }
+        }
+
+        internal PointerAidModel GetPointerAidModel()
+        {
+            if (!HasActivePlacement || _activePlacement.LastResolution == null)
+                return null;
+
+            PlacementResolution resolution = _activePlacement.LastResolution;
+            return new PointerAidModel
+            {
+                TargetCell = resolution.GridX.HasValue && resolution.GridY.HasValue
+                    ? resolution.GridX.Value + "," + resolution.GridY.Value
+                    : "free",
+                Footprint = BuildFootprint(_activePlacement),
+                CanPlace = resolution.CanPlace,
+                Reason = resolution.Reason
+            };
         }
 
         public void Invalidate()
@@ -154,21 +183,22 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (state == null || session == null || session.WorkingDefinition == null || ScenarioAuthoringRuntimeGuards.IsPlaytesting())
                 return CancelActivePlacement("Scene sprite placement cancelled because authoring is no longer in live-edit mode.", out message);
 
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
-                return CancelActivePlacement("Scene sprite placement cancelled.", out message);
-
             ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
-            if (inputCapture != null && inputCapture.PointerOverAuthoringUi)
-                return false;
+            if ((inputCapture == null || !inputCapture.KeyboardShortcutHandled)
+                && UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+                return CancelActivePlacement("Scene sprite placement cancelled.", out message);
 
             Vector3 worldPoint;
             if (TryGetMouseWorldPoint(out worldPoint))
-                UpdatePreview(session.WorkingDefinition, worldPoint, IsPlacementOverrideHeld());
+                UpdatePreview(session.WorkingDefinition, worldPoint, ResolveSnapToGrid(state));
+
+            if (inputCapture != null && inputCapture.ShouldSuppressWorldInputNow())
+                return false;
 
             if (UnityEngine.Input.GetMouseButtonUp(1))
                 return CancelActivePlacement("Scene sprite placement cancelled.", out message);
 
-            if (UnityEngine.Input.GetMouseButtonUp(0))
+            if (UnityEngine.Input.GetMouseButtonUp(0) && !IsEditorCameraDragPanning())
                 return CompleteActivePlacement(state, session, out message);
 
             return false;
@@ -251,9 +281,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             Vector3 worldPoint;
             if (TryGetMouseWorldPoint(out worldPoint))
-                UpdatePreview(session.WorkingDefinition, worldPoint, IsPlacementOverrideHeld());
+                UpdatePreview(session.WorkingDefinition, worldPoint, ResolveSnapToGrid(state));
 
-            message = "Placing '" + SafeLabel(candidate.Label) + "'. Move over the bunker to snap; hold Shift to place freely.";
+            _activePlacement.SnapToGridDefault = ResolveSnapToGrid(state);
+            message = BuildPlacementSummary(candidate, _activePlacement.SnapToGridDefault);
             MMLog.WriteInfo("[ScenarioSceneSpritePlacementAuthoring] " + message);
             return true;
         }
@@ -320,16 +351,19 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             placement.SortingOrder = _activePlacement.SortingOrder;
             AssignMissingIdentity(session);
 
+            ScenarioSpriteCatalogService.SpriteCandidate repeatCandidate = _activePlacement.Candidate;
             string label = SafeLabel(_activePlacement.Candidate.Label);
             string placementId = SafeLabel(placement.Id);
             CancelActivePlacement(null);
             MarkAssetsDirty(session);
             _sceneSpritePlacementEngine.Activate(session.WorkingDefinition, state != null ? state.ActiveScenarioFilePath : null, null);
             Invalidate();
+            ScenarioHierarchyAuthoringContentBuilder.InvalidateLiveObjectCache();
 
             message = isNew
                 ? "Placed scene sprite '" + label + "' as '" + placementId + "'."
                 : "Updated placed scene sprite '" + placementId + "'.";
+            RestartPlacementForRepeat(state, session, repeatCandidate, ref message);
             MMLog.WriteInfo("[ScenarioSceneSpritePlacementAuthoring] " + message);
             return true;
         }
@@ -362,6 +396,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             MarkAssetsDirty(session);
             _sceneSpritePlacementEngine.Activate(session.WorkingDefinition, state.ActiveScenarioFilePath, null);
             Invalidate();
+            ScenarioHierarchyAuthoringContentBuilder.InvalidateLiveObjectCache();
             message = "Removed scene sprite placement '" + SafeLabel(placement.Id) + "'.";
             MMLog.WriteInfo("[ScenarioSceneSpritePlacementAuthoring] " + message);
             return true;
@@ -549,19 +584,15 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Assets))
-                session.DirtyFlags.Add(ScenarioDirtySection.Assets);
-
-            session.CurrentEditCategory = ScenarioEditCategory.Assets;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
         }
 
-        private void UpdatePreview(ScenarioDefinition definition, Vector3 worldPoint, bool overrideFit)
+        private void UpdatePreview(ScenarioDefinition definition, Vector3 worldPoint, bool snapToGrid)
         {
             if (!HasActivePlacement)
                 return;
 
-            PlacementResolution resolution = ResolvePlacement(definition, _activePlacement, worldPoint, overrideFit);
+            PlacementResolution resolution = ResolvePlacement(definition, _activePlacement, worldPoint, snapToGrid);
             _activePlacement.LastResolution = resolution;
             _activePlacement.PreviewObject.transform.position = resolution.Position;
             SetPreviewColor(_activePlacement, resolution.CanPlace, resolution.OverrideFit);
@@ -571,19 +602,21 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             ScenarioDefinition definition,
             ActivePlacementSession session,
             Vector3 worldPoint,
-            bool overrideFit)
+            bool snapToGrid)
         {
-            if (overrideFit)
+            if (!snapToGrid)
             {
                 worldPoint.z = 0f;
+                bool insideBounds = IsFreePlacementWithinBounds(session, worldPoint);
                 return new PlacementResolution
                 {
                     Position = worldPoint,
                     SnapToGrid = false,
                     GridX = null,
                     GridY = null,
-                    CanPlace = true,
-                    OverrideFit = true
+                    CanPlace = insideBounds,
+                    OverrideFit = true,
+                    Reason = insideBounds ? "Valid free placement." : "Sprite footprint extends outside the shelter bounds."
                 };
             }
 
@@ -602,7 +635,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     GridX = null,
                     GridY = null,
                     CanPlace = false,
-                    OverrideFit = false
+                    OverrideFit = false,
+                    Reason = "No initialized shelter cell is under the pointer."
                 };
             }
 
@@ -617,7 +651,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     GridX = preferredX,
                     GridY = preferredY,
                     CanPlace = true,
-                    OverrideFit = false
+                    OverrideFit = false,
+                    Reason = "Valid target."
                 };
             }
 
@@ -630,8 +665,45 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 GridX = preferredX,
                 GridY = preferredY,
                 CanPlace = false,
-                OverrideFit = false
+                OverrideFit = false,
+                Reason = ResolveFitFailureReason(definition, session, grid, preferredX, preferredY)
             };
+        }
+
+        private static string ResolveFitFailureReason(
+            ScenarioDefinition definition,
+            ActivePlacementSession session,
+            ShelterRoomGrid grid,
+            int gridX,
+            int gridY)
+        {
+            ShelterRoomGrid.GridCell cell = grid != null ? grid.GetCell(gridX, gridY) : null;
+            if (!IsUsableBunkerCell(cell))
+                return "Scene sprites require a room, room-top, or surface cell.";
+            if (session == null || session.Candidate == null || session.Candidate.Sprite == null)
+                return "The selected sprite has no placeable preview footprint.";
+
+            Vector3 position = ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY);
+            Bounds bounds = CreateSpriteBounds(session.Candidate.Sprite, position);
+            if (!IsWithinGridBounds(grid, bounds))
+                return "Sprite footprint extends outside the shelter bounds.";
+            if (OverlapsExistingPlacement(definition, session.ExistingPlacementId, bounds, gridX, gridY))
+                return "Sprite footprint overlaps an existing scene placement.";
+            return "Scene sprite placement is blocked at this cell.";
+        }
+
+        private static string BuildFootprint(ActivePlacementSession session)
+        {
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            Sprite sprite = session != null && session.Candidate != null ? session.Candidate.Sprite : null;
+            if (grid == null || sprite == null || grid.grid_cell_width <= 0.001f || grid.grid_cell_height <= 0.001f)
+                return "1 x 1 (1 cell)";
+
+            Bounds bounds = CreateSpriteBounds(sprite, Vector3.zero);
+            int width = Math.Max(1, Mathf.CeilToInt(bounds.size.x / grid.grid_cell_width));
+            int height = Math.Max(1, Mathf.CeilToInt(bounds.size.y / grid.grid_cell_height));
+            int cells = width * height;
+            return width + " x " + height + " (" + cells + (cells == 1 ? " cell)" : " cells)");
         }
 
         private static bool CanFitAt(
@@ -654,6 +726,16 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 return false;
 
             return !OverlapsExistingPlacement(definition, session.ExistingPlacementId, bounds, gridX, gridY);
+        }
+
+        private static bool IsFreePlacementWithinBounds(ActivePlacementSession session, Vector3 worldPoint)
+        {
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            if (grid == null || session == null || session.Candidate == null || session.Candidate.Sprite == null)
+                return true;
+
+            Bounds bounds = CreateSpriteBounds(session.Candidate.Sprite, worldPoint);
+            return IsWithinGridBounds(grid, bounds);
         }
 
         private static bool IsUsableBunkerCell(ShelterRoomGrid.GridCell cell)
@@ -758,9 +840,19 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             return true;
         }
 
-        private static bool IsPlacementOverrideHeld()
+        private static bool ResolveSnapToGrid(ScenarioAuthoringState state)
         {
-            return UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift);
+            bool snapToGrid = state == null || state.Settings == null || state.Settings.GetBool("visuals.snap_to_grid", true);
+            bool shiftHeld = UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift);
+            return shiftHeld ? !snapToGrid : snapToGrid;
+        }
+
+        private static string BuildPlacementSummary(ScenarioSpriteCatalogService.SpriteCandidate candidate, bool snapToGrid)
+        {
+            string label = SafeLabel(candidate != null ? candidate.Label : null);
+            return snapToGrid
+                ? "Placing '" + label + "'. Scene sprites snap to bunker cells; hold Shift to place freely."
+                : "Placing '" + label + "'. Scene sprites place freely inside shelter bounds; hold Shift to snap to cells.";
         }
 
         private bool CancelActivePlacement(string fallbackMessage)
@@ -780,6 +872,42 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (preview != null)
                 UnityEngine.Object.Destroy(preview);
             return true;
+        }
+
+        private void RestartPlacementForRepeat(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession session,
+            ScenarioSpriteCatalogService.SpriteCandidate candidate,
+            ref string message)
+        {
+            if (candidate == null || candidate.Sprite == null || session == null || session.WorkingDefinition == null)
+                return;
+
+            _activePlacement = CreatePlacementSession(candidate, null, state != null ? state.SelectedTarget : null);
+            if (_activePlacement == null)
+            {
+                message = (message ?? string.Empty) + " Repeat placement stopped because the preview could not be recreated.";
+                return;
+            }
+
+            Vector3 worldPoint;
+            if (TryGetMouseWorldPoint(out worldPoint))
+                UpdatePreview(session.WorkingDefinition, worldPoint, ResolveSnapToGrid(state));
+
+            _activePlacement.SnapToGridDefault = ResolveSnapToGrid(state);
+        }
+
+        private static bool IsEditorCameraDragPanning()
+        {
+            try
+            {
+                ScenarioAuthoringEditorCameraService camera = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>();
+                return camera != null && camera.ShouldSuppressSelectionClickThisFrame();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string DecodeActionToken(string encoded)

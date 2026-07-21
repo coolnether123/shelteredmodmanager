@@ -74,6 +74,75 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     return true;
             }
 
+            // Runtime keys can collide across inactive prefab/resource copies
+            // that share a texture and sprite name. Prefer the copy that is
+            // actually rendering in the loaded scene so a persisted pixel
+            // patch is rebuilt from the player's visible asset.
+            SpriteRenderer[] activeRenderers = Resources.FindObjectsOfTypeAll<SpriteRenderer>();
+            for (int i = 0; activeRenderers != null && i < activeRenderers.Length; i++)
+            {
+                SpriteRenderer renderer = activeRenderers[i];
+                Sprite renderedSprite = renderer != null ? renderer.sprite : null;
+                if (renderer == null
+                    || !renderer.gameObject.activeInHierarchy
+                    || renderedSprite == null
+                    || !string.Equals(CreateRuntimeSpriteKey(renderedSprite), runtimeSpriteKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                sprite = renderedSprite;
+                return true;
+            }
+
+            // If no active renderer owns the key, compare every matching
+            // resource copy instead of accepting Resources' nondeterministic
+            // enumeration order. Transparent placeholder/prefab copies score
+            // below the real source artwork used to seed older runtime-key
+            // patches.
+            Sprite[] matchingSprites = Resources.FindObjectsOfTypeAll<Sprite>();
+            Sprite bestMatchingSprite = null;
+            double bestAlphaScore = -1d;
+            for (int i = 0; matchingSprites != null && i < matchingSprites.Length; i++)
+            {
+                Sprite candidate = matchingSprites[i];
+                if (candidate == null
+                    || candidate.texture == null
+                    || !string.Equals(CreateRuntimeSpriteKey(candidate), runtimeSpriteKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                double alphaScore = 0d;
+                try
+                {
+                    Rect rect = candidate.textureRect;
+                    Color[] pixels = candidate.texture.GetPixels(
+                        Mathf.RoundToInt(rect.x),
+                        Mathf.RoundToInt(rect.y),
+                        Mathf.Max(1, Mathf.RoundToInt(rect.width)),
+                        Mathf.Max(1, Mathf.RoundToInt(rect.height)));
+                    for (int pixelIndex = 0; pixels != null && pixelIndex < pixels.Length; pixelIndex++)
+                        alphaScore += pixels[pixelIndex].a;
+                }
+                catch
+                {
+                    alphaScore = 0d;
+                }
+
+                if (bestMatchingSprite == null || alphaScore > bestAlphaScore)
+                {
+                    bestMatchingSprite = candidate;
+                    bestAlphaScore = alphaScore;
+                }
+            }
+
+            if (bestMatchingSprite != null)
+            {
+                sprite = bestMatchingSprite;
+                return true;
+            }
+
             List<LoadedSpriteReference> loaded = GetLoadedSprites();
             for (int i = 0; i < loaded.Count; i++)
             {
@@ -131,6 +200,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 AddLoadedSprite(byKey, resourceSprites[i]);
             }
 
+            AddParticleSystemTextureSprites(byKey);
             AddCharacterTextureSprites(byKey);
 
             List<LoadedSpriteReference> result = new List<LoadedSpriteReference>(byKey.Values);
@@ -154,6 +224,54 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 TextureName = sprite.texture != null && !string.IsNullOrEmpty(sprite.texture.name) ? sprite.texture.name : "<texture>",
                 Sprite = sprite
             };
+        }
+
+        internal static Sprite CreateFullTextureSprite(Texture2D texture, string spriteName)
+        {
+            if (texture == null)
+                return null;
+
+            Sprite sprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, texture.width, texture.height),
+                new Vector2(0.5f, 0.5f),
+                100f);
+            if (sprite != null)
+                sprite.name = !string.IsNullOrEmpty(spriteName) ? spriteName : (!string.IsNullOrEmpty(texture.name) ? texture.name : "<texture>");
+            return sprite;
+        }
+
+        private static void AddParticleSystemTextureSprites(Dictionary<string, LoadedSpriteReference> byKey)
+        {
+            if (byKey == null)
+                return;
+
+            ParticleSystemRenderer[] renderers = Resources.FindObjectsOfTypeAll<ParticleSystemRenderer>();
+            for (int i = 0; renderers != null && i < renderers.Length; i++)
+            {
+                ParticleSystemRenderer renderer = renderers[i];
+                Material material = renderer != null ? renderer.sharedMaterial : null;
+                Texture2D texture = material != null ? material.mainTexture as Texture2D : null;
+                if (texture == null)
+                    continue;
+
+                string spriteName = !string.IsNullOrEmpty(texture.name) ? texture.name : (renderer.name + "_particle");
+                string runtimeSpriteKey = CreateRuntimeSpriteKey(texture, spriteName);
+                if (string.IsNullOrEmpty(runtimeSpriteKey) || byKey.ContainsKey(runtimeSpriteKey))
+                    continue;
+
+                Sprite sprite = CreateFullTextureSprite(texture, spriteName);
+                if (sprite == null)
+                    continue;
+
+                byKey[runtimeSpriteKey] = new LoadedSpriteReference
+                {
+                    RuntimeSpriteKey = runtimeSpriteKey,
+                    SpriteName = spriteName,
+                    TextureName = !string.IsNullOrEmpty(texture.name) ? texture.name : "<particle texture>",
+                    Sprite = sprite
+                };
+            }
         }
 
         private static void AddCharacterTextureSprites(Dictionary<string, LoadedSpriteReference> byKey)
@@ -189,15 +307,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 if (string.IsNullOrEmpty(runtimeSpriteKey) || byKey.ContainsKey(runtimeSpriteKey))
                     continue;
 
-                Sprite sprite = Sprite.Create(
-                    entry.m_texture,
-                    new Rect(0f, 0f, entry.m_texture.width, entry.m_texture.height),
-                    new Vector2(0.5f, 0.5f),
-                    100f);
+                Sprite sprite = CreateFullTextureSprite(entry.m_texture, entry.m_id);
                 if (sprite == null)
                     continue;
-
-                sprite.name = entry.m_id;
                 byKey[runtimeSpriteKey] = new LoadedSpriteReference
                 {
                     RuntimeSpriteKey = runtimeSpriteKey,

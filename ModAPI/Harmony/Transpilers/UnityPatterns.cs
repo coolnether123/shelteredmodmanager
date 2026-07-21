@@ -101,10 +101,10 @@ namespace ModAPI.Harmony
             string overrideMethod)
         {
             ValidateStaticMethod(overrideType, overrideMethod, typeof(float));
-            
-            return t.ReplaceAllCalls(
-                typeof(Time), "get_deltaTime",
-                overrideType, overrideMethod);
+
+            t.ForCall(typeof(Time), "get_deltaTime")
+             .ReplaceAllWith(overrideType, overrideMethod);
+            return t;
         }
         
         #endregion

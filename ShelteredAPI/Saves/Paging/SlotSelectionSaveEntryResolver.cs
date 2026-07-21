@@ -63,8 +63,9 @@ namespace ShelteredAPI.Saves.Paging
                 else
                     PopulateCustomEntry(visible, customSaves, displaySlot);
 
-                if (visible.Entry != null)
-                    result.Add(visible);
+                // Empty slots remain relevant when their live save was deleted or
+                // became unreadable but a backup timeline still exists.
+                result.Add(visible);
             }
 
             return result;

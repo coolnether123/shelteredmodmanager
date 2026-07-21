@@ -14,11 +14,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     {
         private static readonly FieldInfo BaseCharacterFirstNameField = typeof(BaseCharacter).GetField("m_firstName", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterMaleField = typeof(BaseCharacter).GetField("m_male", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo FamilyManagerGameOverField = typeof(FamilyManager).GetField("game_over", BindingFlags.NonPublic | BindingFlags.Instance);
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
+        private readonly ScenarioActorResolver _actorResolver;
 
-        public FamilyApplyService(ScenarioCharacterAppearanceService characterAppearanceService)
+        public FamilyApplyService(
+            ScenarioCharacterAppearanceService characterAppearanceService,
+            ScenarioActorResolver actorResolver)
         {
             _characterAppearanceService = characterAppearanceService;
+            _actorResolver = actorResolver;
         }
 
         public void Apply(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)
@@ -33,56 +38,144 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
 
             List<FamilyMember> members = FamilyManager.Instance.GetAllFamilyMembers();
-            if (members == null || members.Count == 0)
+            if (members == null)
+                members = new List<FamilyMember>();
+            bool authoredStartRequired = definition.FamilySetup.OverrideVanillaFamily
+                || (definition.LaunchSetup != null && definition.LaunchSetup.Mode == ScenarioLaunchSetupMode.Direct);
+
+            if (members.Count == 0 && authoredStartRequired)
+            {
+                int spawnedCount = SpawnMissingMembers(definition, scenarioFilePath, result, 0);
+                if (spawnedCount > 0)
+                    ClearGameOverAfterFamilySpawn();
+                else
+                    result.AddMessage("No spawned family members found; authored family spawn failed.");
+                return;
+            }
+
+            if (members.Count == 0)
             {
                 result.AddMessage("No spawned family members found; family changes skipped.");
                 return;
             }
 
-            int limit = Math.Min(members.Count, definition.FamilySetup.Members.Count);
-            for (int i = 0; i < limit; i++)
+            for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
             {
-                FamilyMember member = members[i];
                 FamilyMemberConfig config = definition.FamilySetup.Members[i];
-                if (member == null || config == null)
+                if (config == null)
                     continue;
 
-                if (!string.IsNullOrEmpty(config.Name) && BaseCharacterFirstNameField != null)
+                FamilyMember member = ResolveAuthoredMember(definition, config, i, members);
+                if (member == null && authoredStartRequired)
                 {
-                    BaseCharacterFirstNameField.SetValue(member, config.Name);
-                    member.name = config.Name;
-                    result.FamilyChanges++;
+                    SpawnConfiguredMember(definition, scenarioFilePath, result, config);
+                    continue;
                 }
 
-                if (config.Gender != ScenarioGender.Any && BaseCharacterMaleField != null)
-                {
-                    BaseCharacterMaleField.SetValue(member, config.Gender == ScenarioGender.Male);
-                    result.FamilyChanges++;
-                }
+                if (member != null)
+                    ApplyConfiguredMember(definition, scenarioFilePath, result, member, config);
+            }
+        }
 
-                ApplyStats(member, config, result);
-                ApplyTraits(member, config, result);
-                ApplySkills(member, config, result);
-                ApplyAppearance(definition, scenarioFilePath, member, config, result);
+        private int SpawnMissingMembers(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result, int startIndex)
+        {
+            int spawnedCount = 0;
+            if (definition == null || definition.FamilySetup == null || definition.FamilySetup.Members == null)
+                return spawnedCount;
+
+            for (int i = Math.Max(0, startIndex); i < definition.FamilySetup.Members.Count; i++)
+            {
+                FamilyMemberConfig config = definition.FamilySetup.Members[i];
+                if (SpawnConfiguredMember(definition, scenarioFilePath, result, config))
+                    spawnedCount++;
             }
 
-            if (definition.FamilySetup.OverrideVanillaFamily && definition.FamilySetup.Members.Count > members.Count)
+            return spawnedCount;
+        }
+
+        private FamilyMember ResolveAuthoredMember(ScenarioDefinition definition, FamilyMemberConfig config, int index, List<FamilyMember> members)
+        {
+            FamilyMember resolved;
+            if (_actorResolver != null
+                && config != null
+                && config.ActorRef != null
+                && _actorResolver.TryResolveFamilyMember(definition, config.ActorRef, out resolved))
             {
-                for (int i = members.Count; i < definition.FamilySetup.Members.Count; i++)
-                {
-                    FamilyMemberConfig config = definition.FamilySetup.Members[i];
-                    FamilyMember spawned;
-                    string spawnMessage;
-                    if (ScenarioFamilyMemberFactory.Spawn(config, out spawned, out spawnMessage))
-                    {
-                        result.FamilyChanges++;
-                        ApplyAppearance(definition, scenarioFilePath, spawned, config, result);
-                    }
-                    else if (!string.IsNullOrEmpty(spawnMessage))
-                    {
-                        result.AddMessage(spawnMessage);
-                    }
-                }
+                return resolved;
+            }
+
+            return members != null && index >= 0 && index < members.Count ? members[index] : null;
+        }
+
+        private bool SpawnConfiguredMember(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result, FamilyMemberConfig config)
+        {
+            FamilyMember spawned;
+            string spawnMessage;
+            if (ScenarioFamilyMemberFactory.Spawn(config, out spawned, out spawnMessage))
+            {
+                result.FamilyChanges++;
+                ApplyAppearance(definition, scenarioFilePath, spawned, config, result);
+                BindMaterializedMember(definition, config != null ? config.ActorRef : null, spawned, result);
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(spawnMessage))
+                result.AddMessage(spawnMessage);
+            return false;
+        }
+
+        private void ApplyConfiguredMember(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result, FamilyMember member, FamilyMemberConfig config)
+        {
+            if (member == null || config == null)
+                return;
+
+            if (!string.IsNullOrEmpty(config.Name) && BaseCharacterFirstNameField != null)
+            {
+                BaseCharacterFirstNameField.SetValue(member, config.Name);
+                member.name = config.Name;
+                result.FamilyChanges++;
+            }
+
+            if (config.Gender != ScenarioGender.Any && BaseCharacterMaleField != null)
+            {
+                BaseCharacterMaleField.SetValue(member, config.Gender == ScenarioGender.Male);
+                result.FamilyChanges++;
+            }
+
+            ApplyMeshAlignment(member, config, result);
+
+            ApplyStats(member, config, result);
+            ApplyTraits(member, config, result);
+            ApplyConditions(member, config, result);
+            ApplySkills(member, config, result);
+            ApplyAppearance(definition, scenarioFilePath, member, config, result);
+            BindMaterializedMember(definition, config.ActorRef, member, result);
+        }
+
+        private void BindMaterializedMember(ScenarioDefinition definition, ScenarioActorRef actorRef, FamilyMember member, ScenarioApplyResult result)
+        {
+            if (_actorResolver == null || actorRef == null || member == null)
+                return;
+
+            string bindMessage;
+            if (!_actorResolver.BindMaterializedFamilyMember(definition, actorRef, member, out bindMessage)
+                && !string.IsNullOrEmpty(bindMessage))
+            {
+                result.AddMessage(bindMessage);
+            }
+        }
+
+        private static void ClearGameOverAfterFamilySpawn()
+        {
+            if (FamilyManager.Instance == null || FamilyManagerGameOverField == null)
+                return;
+
+            try
+            {
+                FamilyManagerGameOverField.SetValue(FamilyManager.Instance, false);
+            }
+            catch
+            {
             }
         }
 
@@ -98,6 +191,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             string message;
             if (_characterAppearanceService.ApplyConfiguredAppearance(definition, scenarioFilePath, config, member, out message))
+                result.FamilyChanges++;
+            else if (!string.IsNullOrEmpty(message))
+                result.AddMessage(message);
+        }
+
+        private void ApplyMeshAlignment(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
+        {
+            if (_characterAppearanceService == null || member == null || config == null)
+                return;
+
+            string message;
+            if (_characterAppearanceService.AlignLiveMesh(config, member, out message))
                 result.FamilyChanges++;
             else if (!string.IsNullOrEmpty(message))
                 result.AddMessage(message);
@@ -128,10 +233,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                     continue;
                 }
 
-                int level = Mathf.Clamp(stat.Value, 0, 20);
-                target.SetInitialLevel(level, 20);
+                int level = ScenarioFamilyMemberFactory.ClampStat(stat.Value);
+                target.SetInitialLevel(level, ScenarioFamilyMemberFactory.StatMax);
                 result.FamilyChanges++;
             }
+        }
+
+        private static void ApplyConditions(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
+        {
+            if (member == null || config == null)
+                return;
+
+            if (ScenarioFamilyMemberFactory.ApplyConditions(member, config) && result != null)
+                result.FamilyChanges++;
         }
 
         private static void ApplyTraits(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
@@ -145,20 +259,45 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 Traits.Strength strength;
                 if (TryParseStrengthTrait(traitId, out strength))
                 {
+                    if (member.traits.HasStrength(strength))
+                        continue;
+
+                    Traits.Weakness pairedWeakness;
+                    if (ScenarioFamilyMemberFactory.TryGetPairedWeakness(strength, out pairedWeakness)
+                        && member.traits.HasWeakness(pairedWeakness))
+                    {
+                        result.AddMessage("Strength trait conflicts with active paired weakness: " + traitId);
+                        continue;
+                    }
+
                     if (member.traits.AddStrength(strength))
                         result.FamilyChanges++;
                     else
-                        result.AddMessage("Strength trait was already active or blocked by its paired weakness: " + traitId);
+                        result.AddMessage("Strength trait could not be applied: " + traitId);
                     continue;
                 }
 
                 Traits.Weakness weakness;
                 if (TryParseWeaknessTrait(traitId, out weakness))
                 {
+                    if (member.traits.HasWeakness(weakness))
+                    {
+                        member.traits.SetWeaknessVisible(weakness, true);
+                        continue;
+                    }
+
+                    Traits.Strength pairedStrength;
+                    if (ScenarioFamilyMemberFactory.TryGetPairedStrength(weakness, out pairedStrength)
+                        && member.traits.HasStrength(pairedStrength))
+                    {
+                        result.AddMessage("Weakness trait conflicts with active paired strength: " + traitId);
+                        continue;
+                    }
+
                     if (member.traits.AddWeakness(weakness, true))
                         result.FamilyChanges++;
                     else
-                        result.AddMessage("Weakness trait was already active or blocked by its paired strength: " + traitId);
+                        result.AddMessage("Weakness trait could not be applied: " + traitId);
                     continue;
                 }
 

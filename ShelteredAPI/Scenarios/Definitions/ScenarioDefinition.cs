@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 
 using ModAPI.Scenarios;
 
@@ -9,6 +10,7 @@ using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Bunker;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Objects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -24,6 +26,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
         Stasis = 2
     }
 
+    internal static class ScenarioBaseFamilyChoices
+    {
+        public const string KeepCurrentCast = "KeepCurrentCast";
+        public const string UseBaseDefaultFamily = "UseBaseDefaultFamily";
+    }
+
     /// <summary>
     /// Gender selector for authored family members or NPCs.
     /// Use <see cref="Any"/> when the runtime should keep or choose the default value.
@@ -36,6 +44,33 @@ namespace ShelteredAPI.Scenarios.Definitions{
     }
 
     /// <summary>
+    /// Optional actor-system reference for scenario-authored people and actor-bound conditions or effects.
+    /// Actor identity is tried first, then binding, then scenario-owned synthetic fallback.
+    /// </summary>
+    public sealed class ScenarioActorRef
+    {
+        public string Kind { get; set; }
+        public int LocalId { get; set; }
+        public string Domain { get; set; }
+        public string BindingType { get; set; }
+        public string BindingKey { get; set; }
+        public string DisplayNameFallback { get; set; }
+        public string RequiredModId { get; set; }
+    }
+
+    /// <summary>
+    /// Persisted actor component payload envelope. Unknown component payloads stay as JSON text so
+    /// scenarios can round-trip when the owning mod is temporarily unavailable.
+    /// </summary>
+    public sealed class ScenarioActorComponentDefinition
+    {
+        public string ComponentId { get; set; }
+        public string OwnerModId { get; set; }
+        public int Version { get; set; }
+        public string PayloadJson { get; set; }
+    }
+
+    /// <summary>
     /// Persistent scenario definition. This type is deliberately a neutral data holder:
     /// it must not grow Sheltered or Unity references, because mod tools and the editor
     /// need to read scenario packs without booting a game scene.
@@ -44,6 +79,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
     {
         public ScenarioDefinition()
         {
+            Tags = new List<string>();
             Dependencies = new List<string>();
             ModDependencies = new List<ScenarioModDependencyDefinition>();
             BaseGameMode = ScenarioBaseGameMode.Survival;
@@ -51,6 +87,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             ScenarioCharacters = new List<ScenarioNpcDefinition>();
             ScenarioFlow = new ScenarioFlowDefinition();
             FamilySetup = new FamilySetupDefinition();
+            LaunchSetup = ScenarioLaunchSetupDefinition.CreateDefault();
             StartingInventory = new StartingInventoryDefinition();
             BunkerEdits = new BunkerEditsDefinition();
             TriggersAndEvents = new TriggersAndEventsDefinition();
@@ -60,23 +97,34 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Scoring = new ScenarioScoringDefinition();
             AssetReferences = new AssetReferencesDefinition();
             BunkerGrid = new ScenarioBunkerGridDefinition();
+            BackendWorlds = new ScenarioBackendWorldsDefinition();
             Gates = new List<ScenarioGateDefinition>();
             ScheduledActions = new List<ScenarioScheduledActionDefinition>();
+            Journal = new JournalDefinition();
+            Conversations = new ScenarioConversationAuthoringDefinition();
+            VanillaSuppression = new ScenarioVanillaSuppressionDefinition();
+            AuthorTestChecklist = new ScenarioAuthorTestChecklist();
         }
 
         public string Id { get; set; }
         public string DisplayName { get; set; }
         public string Description { get; set; }
+        public string Goal { get; set; }
         public string Author { get; set; }
         public string Version { get; set; }
+        internal string Credits { get; set; }
+        internal List<string> Tags { get; private set; }
         public List<string> Dependencies { get; private set; }
         public List<ScenarioModDependencyDefinition> ModDependencies { get; private set; }
         public ScenarioBaseGameMode BaseGameMode { get; set; }
+        internal string BaseFamilyChoice { get; set; }
         public long? SeedOverride { get; set; }
         public ScenarioSelectionRulesDefinition SelectionRules { get; set; }
         public List<ScenarioNpcDefinition> ScenarioCharacters { get; private set; }
         public ScenarioFlowDefinition ScenarioFlow { get; set; }
         public FamilySetupDefinition FamilySetup { get; set; }
+        /// <summary>Controls the player-facing difficulty and family setup flow when this scenario is launched.</summary>
+        public ScenarioLaunchSetupDefinition LaunchSetup { get; set; }
         public StartingInventoryDefinition StartingInventory { get; set; }
         public BunkerEditsDefinition BunkerEdits { get; set; }
         public TriggersAndEventsDefinition TriggersAndEvents { get; set; }
@@ -86,8 +134,259 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public ScenarioScoringDefinition Scoring { get; set; }
         public AssetReferencesDefinition AssetReferences { get; set; }
         public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
+        internal ScenarioBackendWorldsDefinition BackendWorlds { get; set; }
         public List<ScenarioGateDefinition> Gates { get; private set; }
         public List<ScenarioScheduledActionDefinition> ScheduledActions { get; private set; }
+        public JournalDefinition Journal { get; set; }
+        public ScenarioConversationAuthoringDefinition Conversations { get; set; }
+        public ScenarioVanillaSuppressionDefinition VanillaSuppression { get; set; }
+        internal ScenarioAuthorTestChecklist AuthorTestChecklist { get; set; }
+    }
+
+    /// <summary>Player setup flow used when a published custom scenario starts.</summary>
+    public enum ScenarioLaunchSetupMode
+    {
+        /// <summary>Keep Sheltered's complete difficulty and family customisation flow.</summary>
+        FullSetup = 0,
+        /// <summary>Skip setup and enter the authored scenario immediately.</summary>
+        Direct = 1,
+        /// <summary>Show setup while author-fixed difficulty categories remain locked.</summary>
+        Guided = 2
+    }
+
+    /// <summary>Stable identifiers for Sheltered's vanilla difficulty categories.</summary>
+    public static class ScenarioDifficultyCategoryIds
+    {
+        /// <summary>Rain frequency category (values 0-3).</summary>
+        public const string Rain = "rain";
+        /// <summary>Map resource abundance category (values 0-3).</summary>
+        public const string Resources = "resources";
+        /// <summary>Shelter breach frequency category (values 0-3).</summary>
+        public const string Breach = "breach";
+        /// <summary>Faction density category (values 0-3).</summary>
+        public const string Faction = "faction";
+        /// <summary>Populace mood category (values 0-3).</summary>
+        public const string Mood = "mood";
+        /// <summary>Expedition map size category (values 0-2).</summary>
+        public const string MapSize = "map-size";
+        /// <summary>Fog-of-war category (0 off, 1 on).</summary>
+        public const string Fog = "fog";
+
+        /// <summary>Returns whether an id names a vanilla difficulty category supported by this API version.</summary>
+        public static bool IsKnown(string id)
+        {
+            return string.Equals(id, Rain, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Resources, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Breach, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Faction, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Mood, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, MapSize, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, Fog, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>An authored value and whether Guided mode lets the player change it.</summary>
+    public sealed class ScenarioDifficultyCategoryDefinition
+    {
+        /// <summary>Stable id from <see cref="ScenarioDifficultyCategoryIds"/>.</summary>
+        public string Id { get; set; }
+        /// <summary>Vanilla integer setting selected by the author.</summary>
+        public int AuthoredValue { get; set; }
+        /// <summary>Whether Guided mode lets the player change this category.</summary>
+        public bool PlayerSelectable { get; set; }
+    }
+
+    /// <summary>Scenario-authored policy for the vanilla launch setup experience.</summary>
+    public sealed class ScenarioLaunchSetupDefinition
+    {
+        /// <summary>Creates an empty FullSetup policy; prefer <see cref="CreateDefault"/> for the complete vanilla category inventory.</summary>
+        public ScenarioLaunchSetupDefinition()
+        {
+            Mode = ScenarioLaunchSetupMode.FullSetup;
+            Categories = new List<ScenarioDifficultyCategoryDefinition>();
+        }
+
+        /// <summary>Setup flow used when a player chooses PLAY.</summary>
+        public ScenarioLaunchSetupMode Mode { get; set; }
+        /// <summary>Authored values and Guided-mode selection policy, keyed by stable category id.</summary>
+        public List<ScenarioDifficultyCategoryDefinition> Categories { get; private set; }
+
+        /// <summary>Creates a FullSetup policy containing all vanilla categories at Normal defaults.</summary>
+        public static ScenarioLaunchSetupDefinition CreateDefault()
+        {
+            ScenarioLaunchSetupDefinition setup = new ScenarioLaunchSetupDefinition();
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Rain, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Resources, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Breach, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Faction, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Mood, 1));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.MapSize, 0));
+            setup.Categories.Add(Category(ScenarioDifficultyCategoryIds.Fog, 0));
+            return setup;
+        }
+
+        private static ScenarioDifficultyCategoryDefinition Category(string id, int value)
+        {
+            return new ScenarioDifficultyCategoryDefinition { Id = id, AuthoredValue = value, PlayerSelectable = true };
+        }
+    }
+
+    public sealed class ScenarioVanillaSuppressionDefinition
+    {
+        public bool RandomVisitors { get; set; }
+        public bool Binman { get; set; }
+        public bool Raids { get; set; }
+        public bool StasisVisitors { get; set; }
+        public bool RadioBroadcastOdds { get; set; }
+    }
+
+    public enum ScenarioConversationTriggerSource
+    {
+        Random = 0,
+        Event = 1,
+        Timeline = 2
+    }
+
+    public enum ScenarioConversationParticipantFallback
+    {
+        None = 0,
+        AnyFamily = 1,
+        NearestIdleFamily = 2,
+        Initiator = 3,
+        Partner = 4
+    }
+
+    public sealed class ScenarioConversationAuthoringDefinition
+    {
+        public ScenarioConversationAuthoringDefinition()
+        {
+            Settings = new ScenarioConversationSuppressionDefinition();
+            Conversations = new List<ScenarioConversationDefinition>();
+        }
+
+        public ScenarioConversationSuppressionDefinition Settings { get; set; }
+        public List<ScenarioConversationDefinition> Conversations { get; private set; }
+    }
+
+    public sealed class ScenarioConversationSuppressionDefinition
+    {
+        public ScenarioConversationSuppressionDefinition()
+        {
+            SuppressedVanillaCategories = new List<string>();
+            SuppressedVanillaTopicKeys = new List<string>();
+        }
+
+        public bool SuppressVanillaRandomChatter { get; set; }
+        public List<string> SuppressedVanillaCategories { get; private set; }
+        public List<string> SuppressedVanillaTopicKeys { get; private set; }
+    }
+
+    public sealed class ScenarioConversationDefinition
+    {
+        public ScenarioConversationDefinition()
+        {
+            Trigger = new ScenarioConversationTriggerDefinition();
+            Participants = new List<ScenarioConversationParticipantDefinition>();
+            Conditions = new List<ScenarioConditionRef>();
+            Lines = new List<ScenarioConversationLineDefinition>();
+            Tags = new List<string>();
+        }
+
+        public string Id { get; set; }
+        public ScenarioConversationTriggerDefinition Trigger { get; set; }
+        public List<ScenarioConversationParticipantDefinition> Participants { get; private set; }
+        public List<ScenarioConditionRef> Conditions { get; private set; }
+        public List<ScenarioConversationLineDefinition> Lines { get; private set; }
+        public List<string> Tags { get; private set; }
+    }
+
+    public sealed class ScenarioConversationTriggerDefinition
+    {
+        public ScenarioConversationTriggerDefinition()
+        {
+            Source = ScenarioConversationTriggerSource.Random;
+            Weight = 1f;
+            Time = new ScenarioScheduleTime();
+        }
+
+        public ScenarioConversationTriggerSource Source { get; set; }
+        public float Weight { get; set; }
+        public string TriggerId { get; set; }
+        public float CooldownDays { get; set; }
+        public bool Once { get; set; }
+        public ScenarioScheduleTime Time { get; set; }
+    }
+
+    public sealed class ScenarioConversationParticipantDefinition
+    {
+        public ScenarioConversationParticipantDefinition()
+        {
+            Required = true;
+            Fallback = ScenarioConversationParticipantFallback.None;
+        }
+
+        public string Slot { get; set; }
+        public string StoryCharacterId { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public ScenarioConversationParticipantFallback Fallback { get; set; }
+        public bool Required { get; set; }
+    }
+
+    public sealed class ScenarioConversationLineDefinition
+    {
+        public string SpeakerSlot { get; set; }
+        public string TextKey { get; set; }
+        public string RawText { get; set; }
+        public float DelaySeconds { get; set; }
+    }
+
+    internal sealed class ScenarioBackendWorldsDefinition
+    {
+        public ScenarioBackendWorldsDefinition()
+        {
+            Worlds = new List<ScenarioBackendWorldDefinition>();
+        }
+
+        public List<ScenarioBackendWorldDefinition> Worlds { get; private set; }
+
+        public ScenarioBackendWorldDefinition GetOrCreate(ScenarioBaseGameMode baseMode)
+        {
+            ScenarioBackendWorldDefinition world = Find(baseMode);
+            if (world != null)
+                return world;
+
+            world = new ScenarioBackendWorldDefinition();
+            world.BaseMode = baseMode;
+            Worlds.Add(world);
+            return world;
+        }
+
+        public ScenarioBackendWorldDefinition Find(ScenarioBaseGameMode baseMode)
+        {
+            for (int i = 0; Worlds != null && i < Worlds.Count; i++)
+            {
+                ScenarioBackendWorldDefinition world = Worlds[i];
+                if (world != null && world.BaseMode == baseMode)
+                    return world;
+            }
+
+            return null;
+        }
+    }
+
+    internal sealed class ScenarioBackendWorldDefinition
+    {
+        public ScenarioBackendWorldDefinition()
+        {
+            BunkerEdits = new BunkerEditsDefinition();
+            BunkerGrid = new ScenarioBunkerGridDefinition();
+            SceneSpritePlacements = new List<SceneSpritePlacement>();
+        }
+
+        public ScenarioBaseGameMode BaseMode { get; set; }
+        public BunkerEditsDefinition BunkerEdits { get; set; }
+        public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
+        public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
     }
 
     /// <summary>
@@ -153,9 +452,13 @@ namespace ShelteredAPI.Scenarios.Definitions{
             StatSetting = "Random_Low";
             Stats = new ScenarioNpcStatsDefinition();
             CarriedItems = new List<ItemEntry>();
+            ActorComponents = new List<ScenarioActorComponentDefinition>();
         }
 
         public string CharacterId { get; set; }
+        public string DisplayName { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public List<ScenarioActorComponentDefinition> ActorComponents { get; private set; }
         public string PresetId { get; set; }
         public string WeaponItemId { get; set; }
         public string EquippedItem1Id { get; set; }
@@ -422,9 +725,13 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Traits = new List<string>();
             Skills = new List<SkillOverride>();
             Appearance = new FamilyMemberAppearanceConfig();
+            Conditions = new FamilyMemberConditionConfig();
+            ActorComponents = new List<ScenarioActorComponentDefinition>();
         }
 
         public string Name { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public List<ScenarioActorComponentDefinition> ActorComponents { get; private set; }
         public ScenarioGender Gender { get; set; }
         public int? ExactAge { get; set; }
         public int? MinAge { get; set; }
@@ -433,6 +740,21 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public List<string> Traits { get; private set; }
         public List<SkillOverride> Skills { get; private set; }
         public FamilyMemberAppearanceConfig Appearance { get; set; }
+        public FamilyMemberConditionConfig Conditions { get; set; }
+    }
+
+    /// <summary>
+    /// Optional runtime-applied starting condition overrides for an authored survivor.
+    /// Values match vanilla BehaviourStat values, where higher values mean a stronger need or problem.
+    /// </summary>
+    public class FamilyMemberConditionConfig
+    {
+        public int? Hunger { get; set; }
+        public int? Thirst { get; set; }
+        public int? Fatigue { get; set; }
+        public int? Dirtiness { get; set; }
+        public int? Toilet { get; set; }
+        public int? Stress { get; set; }
     }
 
     /// <summary>
@@ -475,7 +797,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
     /// <summary>
     /// Starting and scheduled inventory changes for a scenario.
-    /// Use <see cref="OverrideRandomStart"/> to replace vanilla random starting supplies.
+    /// In authoring, <see cref="Items"/> mirrors native shelter storage and is the scenario's starting inventory.
+    /// Use <see cref="OverrideRandomStart"/> only to suppress vanilla random-start item pools when the scenario is applied.
     /// </summary>
     public class StartingInventoryDefinition
     {
@@ -519,9 +842,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Arrival = new ScenarioScheduleTime();
             Survivor = new FamilyMemberConfig();
             AskToJoin = true;
+            ActorComponents = new List<ScenarioActorComponentDefinition>();
         }
 
         public string Id { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public List<ScenarioActorComponentDefinition> ActorComponents { get; private set; }
         public ScenarioScheduleTime Arrival { get; set; }
         public bool AskToJoin { get; set; }
         public FamilyMemberConfig Survivor { get; set; }
@@ -573,6 +899,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public int? WireSpriteIndex { get; set; }
         public string WallRuntimeSpriteKey { get; set; }
         public string WireRuntimeSpriteKey { get; set; }
+        public bool WallCleared { get; set; }
+        public bool WireCleared { get; set; }
     }
 
     /// <summary>
@@ -887,6 +1215,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             SpritePatches = new List<SpritePatchDefinition>();
             SpriteSwaps = new List<SpriteSwapRule>();
             SceneSpritePlacements = new List<SceneSpritePlacement>();
+            AssetCredits = new List<ScenarioAssetCreditDefinition>();
         }
 
         public List<SpriteRef> CustomSprites { get; private set; }
@@ -894,6 +1223,13 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public List<SpritePatchDefinition> SpritePatches { get; private set; }
         public List<SpriteSwapRule> SpriteSwaps { get; private set; }
         public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
+        internal List<ScenarioAssetCreditDefinition> AssetCredits { get; private set; }
+    }
+
+    internal sealed class ScenarioAssetCreditDefinition
+    {
+        public string RelativePath { get; set; }
+        public string Credit { get; set; }
     }
 
     /// <summary>
@@ -904,7 +1240,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
     {
         Auto = 0,
         SpriteRenderer = 1,
-        UI2DSprite = 2
+        UI2DSprite = 2,
+        ParticleSystemRenderer = 3
     }
 
     /// <summary>
@@ -917,6 +1254,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public string SpriteId { get; set; }
         public string RelativePath { get; set; }
         public string RuntimeSpriteKey { get; set; }
+        public int? AnimationFrameIndex { get; set; }
+        public string AnimationFrameRuntimeSpriteKey { get; set; }
         public int? Day { get; set; }
         public ScenarioSpriteTargetComponentKind TargetComponent { get; set; }
     }

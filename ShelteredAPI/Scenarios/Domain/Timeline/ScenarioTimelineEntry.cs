@@ -24,5 +24,11 @@ namespace ShelteredAPI.Scenarios.Domain.Timeline{
         public ScenarioTimelineEntryStatus Status { get; set; }
         public string Warning { get; set; }
         public string Source { get; set; }
+        public string SourceKind { get; set; }
+        public string SourceCollection { get; set; }
+        public int SourceIndex { get; set; }
+        public string SourceId { get; set; }
+        public string OwnerWindowId { get; set; }
+        public string FocusActionId { get; set; }
     }
 }

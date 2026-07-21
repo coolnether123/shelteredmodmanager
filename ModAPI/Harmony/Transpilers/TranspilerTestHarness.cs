@@ -125,6 +125,135 @@ namespace ModAPI.Harmony
             results.AddRange(RunRecipeExpansionHarnessCases());
             results.AddRange(RunIntentionalFailureDiagnosticCases());
             results.AddRange(RunRecipeSignatureSafetyHarnessCases());
+            results.Add(RngFacadeRedirectHarnessCase());
+            results.AddRange(RunDomainRedirectHarnessCases());
+            return results.ToReadOnlyList();
+        }
+
+        /// <summary>
+        /// Guards the batch domain-redirect helper (<c>RedirectCallsAppendingLiteral</c>) used by the
+        /// RNG manifest: it must push the tag literal and redirect on a matching signature, and refuse
+        /// (leaving IL intact) when the replacement signature does not account for the appended argument.
+        /// </summary>
+        public static IReadOnlyList<string> RunDomainRedirectHarnessCases()
+        {
+            var results = new List<string>();
+            MethodInfo unityRange = AccessTools.Method(typeof(UnityEngine.Random), "Range", new Type[] { typeof(int), typeof(int) });
+            MethodInfo bridgeDomainRange = AccessTools.Method(typeof(Core.ModRandomBridge), "Range", new Type[] { typeof(int), typeof(int), typeof(string) });
+            MethodInfo bridgeDomainValue = AccessTools.Method(typeof(Core.ModRandomBridge), "Value", new Type[] { typeof(string) });
+
+            // Positive: exact redirect appending the domain literal.
+            var positive = FromInstructions(
+                new CodeInstruction(OpCodes.Ldc_I4_0),
+                new CodeInstruction(OpCodes.Ldc_I4_5),
+                new CodeInstruction(OpCodes.Call, unityRange),
+                new CodeInstruction(OpCodes.Ret));
+            FluentReplacementResult positiveResult = positive.RedirectCallsAppendingLiteral(unityRange, bridgeDomainRange, "map", "harness domain redirect");
+            var positiveInstrs = positive.Instructions().ToList();
+            bool tagPushed = positiveInstrs.Any(i => i != null && i.opcode == OpCodes.Ldstr && Equals(i.operand, "map"));
+            bool redirected = positiveInstrs.Any(i => i != null && i.Calls(bridgeDomainRange));
+            results.Add(positiveResult == FluentReplacementResult.PatternReplaced && tagPushed && redirected
+                ? "PASS domain redirect appends tag and redirects"
+                : $"FAIL domain redirect appends tag and redirects: result={positiveResult}, tagPushed={tagPushed}, redirected={redirected}");
+
+            // Negative: replacement signature does not account for the appended argument; must refuse
+            // (UnsafeMatch) and leave the original call intact.
+            var negative = FromInstructions(
+                new CodeInstruction(OpCodes.Ldc_I4_0),
+                new CodeInstruction(OpCodes.Ldc_I4_5),
+                new CodeInstruction(OpCodes.Call, unityRange),
+                new CodeInstruction(OpCodes.Ret));
+            FluentReplacementResult negativeResult = negative.RedirectCallsAppendingLiteral(unityRange, bridgeDomainValue, "map", "harness domain redirect negative");
+            bool originalIntact = negative.Instructions().Any(i => i != null && i.Calls(unityRange));
+            results.Add(negativeResult == FluentReplacementResult.UnsafeMatch && originalIntact
+                ? "PASS domain redirect refuses wrong signature"
+                : $"FAIL domain redirect refuses wrong signature: result={negativeResult}, originalIntact={originalIntact}");
+
+            return results.ToReadOnlyList();
+        }
+
+        /// <summary>Guards the fluent same-stack redirect shape used by the RNG facade.</summary>
+        private static string RngFacadeRedirectHarnessCase()
+        {
+            MethodInfo unityRange = AccessTools.Method(typeof(UnityEngine.Random), "Range", new Type[] { typeof(int), typeof(int) });
+            MethodInfo bridgeRange = AccessTools.Method(typeof(Core.ModRandomBridge), "Range", new Type[] { typeof(int), typeof(int) });
+            var transpiler = FromInstructions(
+                new CodeInstruction(OpCodes.Ldc_I4_0),
+                new CodeInstruction(OpCodes.Ldc_I4_5),
+                new CodeInstruction(OpCodes.Call, unityRange),
+                new CodeInstruction(OpCodes.Ret));
+            FluentReplacementResult result = transpiler.ReplaceCalls(unityRange).WithCall(bridgeRange, "RNG facade redirect");
+            bool redirected = result == FluentReplacementResult.PatternReplaced && transpiler.Instructions().Any(i => i.Calls(bridgeRange));
+            return redirected ? "PASS RNG facade fluent redirect" : "FAIL RNG facade fluent redirect";
+        }
+
+        /// <summary>
+        /// Runs every built-in harness case (pattern discovery, recipe expansion, intentional
+        /// failure diagnostics, signature safety, and anchor mapping) and returns their compact
+        /// pass/fail summaries. Each line begins with "PASS" or "FAIL".
+        /// </summary>
+        /// <remarks>
+        /// This is the single entry point a developer or agent should call to smoke-test the fluent
+        /// transpiler after touching the framework. Pair it with <see cref="AssertAllHarnessCasesPass"/>
+        /// to turn the results into a hard failure.
+        /// </remarks>
+        public static IReadOnlyList<string> RunAllHarnessCases()
+        {
+            var results = new List<string>();
+            results.AddRange(RunPatternDiscoveryHarnessCases());
+            results.AddRange(RunAnchorMapHarnessCases());
+            return results.ToReadOnlyList();
+        }
+
+        /// <summary>
+        /// Runs <see cref="RunAllHarnessCases"/> and throws if any case reports a failure.
+        /// Suitable for wiring into an automated smoke test.
+        /// </summary>
+        public static void AssertAllHarnessCasesPass()
+        {
+            var failures = RunAllHarnessCases()
+                .Where(line => line != null && line.StartsWith("FAIL", StringComparison.Ordinal))
+                .ToList();
+
+            if (failures.Count > 0)
+            {
+                throw new Exception(
+                    "TranspilerTestHarness reported " + failures.Count + " failing case(s):\n  " +
+                    string.Join("\n  ", failures.ToArray()));
+            }
+        }
+
+        /// <summary>
+        /// Verifies the Cartographer anchor mapper produces stable, de-duplicated anchor indices.
+        /// This guards the O(n) adjacency-scoring path used by MatchIntent/FindNextAnchor.
+        /// </summary>
+        public static IReadOnlyList<string> RunAnchorMapHarnessCases()
+        {
+            var results = new List<string>();
+
+            var transpiler = FromInstructions(
+                new CodeInstruction(OpCodes.Ldarg_0),
+                new CodeInstruction(OpCodes.Ldstr, "ANCHOR_ALPHA"),
+                new CodeInstruction(OpCodes.Ldstr, "ANCHOR_BETA"),
+                new CodeInstruction(OpCodes.Ret));
+
+            AnchorReport report = transpiler.MapAnchors();
+
+            var indices = report.SafeAnchors.Select(a => a.Index).ToList();
+            bool foundUniqueStrings = indices.Contains(1) && indices.Contains(2);
+            bool noDuplicateIndices = indices.Count == indices.Distinct().Count();
+            bool adjacencyBoosted = report.SafeAnchors.All(a => a.UniquenessScore >= 1.2f);
+
+            results.Add(foundUniqueStrings
+                ? "PASS anchor map finds unique string anchors: [" + string.Join(",", indices.Select(i => i.ToString()).ToArray()) + "]"
+                : "FAIL anchor map finds unique string anchors: expected indices 1 and 2, got [" + string.Join(",", indices.Select(i => i.ToString()).ToArray()) + "]");
+            results.Add(noDuplicateIndices
+                ? "PASS anchor map indices are unique"
+                : "FAIL anchor map indices are unique: got duplicates in [" + string.Join(",", indices.Select(i => i.ToString()).ToArray()) + "]");
+            results.Add(adjacencyBoosted
+                ? "PASS anchor map adjacency scoring applied"
+                : "FAIL anchor map adjacency scoring applied: an anchor scored below threshold");
+
             return results.ToReadOnlyList();
         }
 

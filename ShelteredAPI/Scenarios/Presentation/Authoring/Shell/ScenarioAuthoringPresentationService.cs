@@ -1,17 +1,21 @@
 using ModAPI.Core;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Composition;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAuthoringPresentationService
     {
+        private const int PresentationBuildLogSampleFrames = 300;
         private readonly object _sync = new object();
         private readonly List<IScenarioAuthoringRenderModule> _modules = new List<IScenarioAuthoringRenderModule>();
         private readonly IScenarioAuthoringBackend _backend;
         private IScenarioAuthoringRenderModule _activeModule;
         private string _lastResolvedModuleId;
         private bool _missingModuleLogged;
+        private int _presentationBuildFrame;
 
         public static ScenarioAuthoringPresentationService Instance
         {
@@ -80,14 +84,43 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
             }
 
+            _presentationBuildFrame++;
+            bool sampleBuildCost = _presentationBuildFrame >= PresentationBuildLogSampleFrames;
+            if (sampleBuildCost)
+                _presentationBuildFrame = 0;
+
+            Stopwatch buildTimer = sampleBuildCost ? Stopwatch.StartNew() : null;
+            ScenarioAuthoringShellViewModel shellViewModel = _backend.GetShellViewModel();
+            long shellViewTicks = sampleBuildCost ? buildTimer.ElapsedTicks : 0L;
+            ScenarioAuthoringInspectorDocument shellDocument = _backend.GetShellDocument();
+            long shellDocumentTicks = sampleBuildCost ? buildTimer.ElapsedTicks : 0L;
+            ScenarioAuthoringInspectorDocument inspectorDocument = _backend.GetInspectorDocument();
+            long inspectorTicks = sampleBuildCost ? buildTimer.ElapsedTicks : 0L;
+            ScenarioAuthoringInspectorDocument hoverDocument = _backend.GetHoverDocument();
+            long totalTicks = sampleBuildCost ? buildTimer.ElapsedTicks : 0L;
+
             module.Render(new ScenarioAuthoringPresentationSnapshot
             {
                 State = state,
-                ShellViewModel = _backend.GetShellViewModel(),
-                ShellDocument = _backend.GetShellDocument(),
-                InspectorDocument = _backend.GetInspectorDocument(),
-                HoverDocument = _backend.GetHoverDocument()
+                ShellViewModel = shellViewModel,
+                ShellDocument = shellDocument,
+                InspectorDocument = inspectorDocument,
+                HoverDocument = hoverDocument
             });
+
+            if (sampleBuildCost)
+            {
+                double millisecondsPerTick = 1000d / Stopwatch.Frequency;
+                MMLog.WriteInfo(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "[ScenarioAuthoringPresentation] Sampled document build cost (1/{0} frames): shellView={1:0.###}ms, shellDocument={2:0.###}ms, inspector={3:0.###}ms, hover={4:0.###}ms, total={5:0.###}ms.",
+                    PresentationBuildLogSampleFrames,
+                    shellViewTicks * millisecondsPerTick,
+                    (shellDocumentTicks - shellViewTicks) * millisecondsPerTick,
+                    (inspectorTicks - shellDocumentTicks) * millisecondsPerTick,
+                    (totalTicks - inspectorTicks) * millisecondsPerTick,
+                    totalTicks * millisecondsPerTick));
+            }
         }
 
         private IScenarioAuthoringRenderModule ResolveModule()

@@ -64,6 +64,7 @@ For the internal ownership history and verifier policy, see [ModAPI/ShelteredAPI
 | I want to... | Use... | Guide |
 |--------------|--------|-------|
 | Register items, recipes, loot, assets, or localization | `ShelteredContent` | [Content Guide](ShelteredAPI_Content_Guide.md) |
+| Create data-driven items, recipes, costs, and icons without writing a plugin | Desktop Content Workshop | [Content Workshop Guide](Content_Workshop_Guide.md) |
 | Store ordinary mod state with a save | `ctx.SaveSystem` | [Settings and Persistence](SETTINGS.md) |
 | Inspect or operate on Sheltered save slots | `ShelteredSaves`, `ShelteredSaveEvents` | [ShelteredAPI Guide](ShelteredAPI_Guide.md#facade-chooser) |
 | Listen for game, UI, faction, or scheduled time events | `ShelteredEvents` | [Events Guide](Events_Guide.md) |
@@ -83,7 +84,7 @@ These surfaces are useful after a first plugin is working. Preview or experiment
 | Focused UI clone/bind/color/lifecycle helpers | API preview | [`ShelteredUI` signatures](API_Signatures_Reference.md#ui-extensions-smm-20) |
 | Expedition map context, generation intent, markers, and actor projections | API preview | [`ShelteredMap` signatures](API_Signatures_Reference.md#expedition-map-context-smm-20) and [`ShelteredMapMarkers` signatures](API_Signatures_Reference.md#map-markers-smm-20) |
 | Player queue snapshots, conservative restore, and change notification | API preview | [`ShelteredQueues` signatures](API_Signatures_Reference.md#player-queues-smm-20) |
-| Custom scenario XML/code registration, authoring, runtime triggers, and scoring snapshots | Supported 2.0 surface | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
+| Custom scenario XML/code registration, playback, runtime triggers, and scoring snapshots | Supported 2.0 surface; in-game authoring workspace is an opt-in preview | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
 | Spine settings UI | Supported | [Spine Settings Guide](Spine_Settings_Guide.md) |
 | Patch metadata, conflict reports, and cooperative patching | Current neutral API | [Patch Governance](Patch_Governance.md) |
 | Save manifests and structured support-bundle capture | API preview / support tooling | [`ShelteredSupportBundle` signatures](API_Signatures_Reference.md#save-manifest--support-bundle-smm-20) |

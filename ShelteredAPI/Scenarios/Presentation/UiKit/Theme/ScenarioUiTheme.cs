@@ -6,16 +6,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     /// panel opacity setting. Themes are cheap value objects: build a new one
     /// when settings change instead of mutating an existing instance.
     ///
-    /// Surface layering convention: base panels apply <see cref="WithPanelOpacity"/>,
-    /// raised surfaces (cards, headers) apply <see cref="WithRaisedOpacity"/>,
-    /// and active fills (selected buttons/tabs) apply <see cref="WithActiveOpacity"/>.
-    /// Each step nudges alpha up so layers visually separate even at low opacity.
+    /// Material surfaces are always opaque. The legacy panel-opacity setting is
+    /// retained for serialized compatibility and may only scale SurfaceScrim.
     /// </summary>
     internal sealed class ScenarioUiTheme
     {
-        private const float RaisedOpacityBoost = 0.06f;
-        private const float ActiveOpacityBoost = 0.10f;
-
         private readonly IScenarioUiPalette _palette;
         private readonly IScenarioUiMetrics _metrics;
         private readonly float _panelOpacity;
@@ -32,33 +27,32 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         public float PanelOpacity { get { return _panelOpacity; } }
 
         /// <summary>
-        /// Returns the palette colour with the theme's panel opacity applied.
-        /// Use for base panels (the bottom-most surface in a stack).
+        /// Compatibility helper. Material fills are intentionally returned opaque.
         /// </summary>
         public Color WithPanelOpacity(Color baseColor)
         {
-            return ScaleAlpha(baseColor, _panelOpacity);
+            return Opaque(baseColor);
         }
 
         /// <summary>
-        /// Returns the palette colour with the raised-surface opacity applied
-        /// (panel opacity + a small boost). Use for cards, headers, and other
-        /// surfaces that sit on top of <see cref="WithPanelOpacity"/> base.
+        /// Compatibility helper. Raised material fills are intentionally opaque.
         /// </summary>
         public Color WithRaisedOpacity(Color baseColor)
         {
-            return ScaleAlpha(baseColor, Mathf.Min(1f, _panelOpacity + RaisedOpacityBoost));
+            return Opaque(baseColor);
         }
 
         /// <summary>
-        /// Returns the palette colour with the active-fill opacity applied
-        /// (panel opacity + a larger boost). Use for currently selected
-        /// buttons, tabs, and pills so they read clearly even when the user
-        /// has dialled panel opacity down.
+        /// Compatibility helper. Active material fills are intentionally opaque.
         /// </summary>
         public Color WithActiveOpacity(Color baseColor)
         {
-            return ScaleAlpha(baseColor, Mathf.Min(1f, _panelOpacity + ActiveOpacityBoost));
+            return Opaque(baseColor);
+        }
+
+        public Color ScrimColor
+        {
+            get { return ScaleAlpha(_palette.SurfaceScrim, _panelOpacity); }
         }
 
         /// <summary>
@@ -107,6 +101,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         private static Color ScaleAlpha(Color baseColor, float alphaMultiplier)
         {
             return new Color(baseColor.r, baseColor.g, baseColor.b, baseColor.a * alphaMultiplier);
+        }
+
+        private static Color Opaque(Color baseColor)
+        {
+            return new Color(baseColor.r, baseColor.g, baseColor.b, 1f);
         }
     }
 }

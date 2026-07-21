@@ -148,7 +148,7 @@ namespace ModAPI.Core
             ManualJsonObject root;
             string error;
             if (!ManualJson.TryParseObject(json, out root, out error))
-                throw new InvalidDataException(error ?? "seed.json root was not an object.");
+                throw new FormatException(error ?? "seed.json root was not an object.");
 
             SeedData data = new SeedData();
             data.version = root.GetInt("version", data.version);

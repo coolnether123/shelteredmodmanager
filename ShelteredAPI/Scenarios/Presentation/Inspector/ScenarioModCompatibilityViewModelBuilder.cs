@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.UI.Internal.Settings;
@@ -15,6 +16,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Inspector{
             items.Add(ScenarioInspectorItemFactory.Property("Optional Mods", Count(report != null ? report.OptionalMods : null)));
             items.Add(ScenarioInspectorItemFactory.Property("Missing Required", Count(report != null ? report.MissingRequiredMods : null)));
             items.Add(ScenarioInspectorItemFactory.Property("Version Mismatches", Count(report != null ? report.VersionMismatches : null)));
+            if (HasModGatingFlags(report))
+            {
+                items.Add(ScenarioInspectorItemFactory.ActionItem(
+                    ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicModGating,
+                        "Resolve Mod Gating",
+                        "Open guidance for required mods, version mismatches, and missing references.",
+                        true,
+                        false,
+                        "MOD")));
+            }
 
             AddDependencies(items, "Missing", report != null ? report.MissingRequiredMods : null);
             AddDependencies(items, "Required", report != null ? report.RequiredMods : null);
@@ -46,5 +58,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Inspector{
             return values != null ? values.Count.ToString() : "0";
         }
 
+        private static bool HasModGatingFlags(ScenarioModCompatibilityReport report)
+        {
+            return report != null
+                && ((report.MissingRequiredMods != null && report.MissingRequiredMods.Count > 0)
+                    || (report.VersionMismatches != null && report.VersionMismatches.Count > 0)
+                    || (report.UnknownReferences != null && report.UnknownReferences.Count > 0));
+        }
     }
 }

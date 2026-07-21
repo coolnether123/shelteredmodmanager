@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -6,13 +6,18 @@ using ModAPI.Core;
 
 using ModAPI.Scenarios;
 
+using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Persistence;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Validation;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Diagnostics{
     internal interface IScenarioDependencyResolver
@@ -56,14 +61,20 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             _pipeline = new ScenarioValidationPipeline(new IScenarioValidationRule[]
             {
                 new CoreScenarioRule(),
+                new ScenarioMetadataValidationRule(),
+                new ScenarioCharacterValidationRule(),
+                new ScenarioStoryFlowValidationRule(),
+                new ScenarioConversationValidationRule(),
                 new DependencyValidationRule(this),
                 new AssetValidationRule(),
                 new FamilyValidationRule(),
+                new LaunchSetupValidationRule(),
                 new InventoryValidationRule(),
                 new BunkerValidationRule(),
                 new QuestMapValidationRule(),
                 new MapValidationRule(),
                 new SchedulingValidationRule(),
+                new WinLossValidationRule(),
                 new ScoringValidationRule(),
                 new ObjectStartStateValidationRule(),
                 new BunkerDependencyValidationRule(),
@@ -240,11 +251,21 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     result.AddError("Starting inventory item #" + i + " is missing itemId.");
                 else if (item.Quantity <= 0)
                     result.AddError("Starting inventory item '" + item.ItemId + "' must have quantity greater than zero.");
+                else
+                {
+                    ItemManager.ItemType itemType;
+                    if (!ContentInjector.ResolveItemType(item.ItemId, out itemType))
+                        result.AddError("Starting inventory item '" + item.ItemId + "' is not a known item id.");
+                }
             }
         }
 
         private static void ValidateFamily(ScenarioDefinition definition, string scenarioFilePath, ScenarioValidationResult result)
         {
+            string playStartReason;
+            if (!new ScenarioPlayStartReadiness().CanStartPlay(definition, out playStartReason))
+                result.AddWarning(ScenarioPlayStartReadiness.EmptyCastWarning);
+
             if (definition == null || definition.FamilySetup == null || definition.FamilySetup.Members == null)
                 return;
 
@@ -252,6 +273,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
             {
                 FamilyMemberConfig member = definition.FamilySetup.Members[i];
+                ValidateFamilyMemberConfig(member, "family survivor #" + i.ToString(CultureInfo.InvariantCulture), result);
                 FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
                 if (appearance == null || string.IsNullOrEmpty(packRoot))
                     continue;
@@ -262,6 +284,181 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     ValidateAssetPath(packRoot, appearance.TorsoTexturePath, "family torso texture", result);
                 if (TrimToNull(appearance.LegTexturePath) != null)
                     ValidateAssetPath(packRoot, appearance.LegTexturePath, "family leg texture", result);
+            }
+
+            for (int i = 0; definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                FutureSurvivorDefinition future = definition.FamilySetup.FutureSurvivors[i];
+                ValidateFamilyMemberConfig(
+                    future != null ? future.Survivor : null,
+                    "future survivor #" + i.ToString(CultureInfo.InvariantCulture),
+                    result);
+            }
+        }
+
+        private static void ValidateFamilyMemberConfig(FamilyMemberConfig member, string fallbackLabel, ScenarioValidationResult result)
+        {
+            if (member == null || result == null)
+                return;
+
+            string survivorName = TrimToNull(member.Name) ?? fallbackLabel ?? "survivor";
+            for (int i = 0; member.Stats != null && i < member.Stats.Count; i++)
+            {
+                StatOverride stat = member.Stats[i];
+                if (stat == null)
+                    continue;
+
+                if (stat.Value < ScenarioFamilyMemberFactory.StatMin || stat.Value > ScenarioFamilyMemberFactory.StatMax)
+                {
+                    result.AddWarning("Family survivor '" + survivorName + "' has stat '" + (stat.StatId ?? string.Empty)
+                        + "' outside the supported 1-20 range: " + stat.Value.ToString(CultureInfo.InvariantCulture)
+                        + ". It will be clamped to 1-20 at runtime.");
+                }
+            }
+
+            ValidateFamilyMemberConditions(member, survivorName, result);
+
+            Traits.Strength strength;
+            Traits.Weakness weakness;
+            if (ScenarioSurvivorTraitConflictRules.HasConflict(member, out strength, out weakness))
+            {
+                result.AddWarning("Family survivor '" + survivorName + "' has conflicting trait pair: Strength:"
+                    + strength + " and Weakness:" + weakness
+                    + ". The conflicting weakness will be removed at runtime.");
+            }
+        }
+
+        private static void ValidateFamilyMemberConditions(FamilyMemberConfig member, string survivorName, ScenarioValidationResult result)
+        {
+            if (member == null || member.Conditions == null || result == null)
+                return;
+
+            ValidateConditionValue(survivorName, "Hunger", member.Conditions.Hunger, result);
+            ValidateConditionValue(survivorName, "Thirst", member.Conditions.Thirst, result);
+            ValidateConditionValue(survivorName, "Fatigue", member.Conditions.Fatigue, result);
+            ValidateConditionValue(survivorName, "Dirtiness", member.Conditions.Dirtiness, result);
+            ValidateConditionValue(survivorName, "Toilet", member.Conditions.Toilet, result);
+            ValidateConditionValue(survivorName, "Stress", member.Conditions.Stress, result);
+        }
+
+        private static void ValidateConditionValue(string survivorName, string conditionId, int? value, ScenarioValidationResult result)
+        {
+            if (!value.HasValue || value.Value >= ScenarioFamilyMemberFactory.ConditionMin && value.Value <= ScenarioFamilyMemberFactory.ConditionMax)
+                return;
+
+            result.AddWarning("Family survivor '" + survivorName + "' has condition '" + conditionId
+                + "' outside the supported 0-100 range: " + value.Value.ToString(CultureInfo.InvariantCulture)
+                + ". It will be clamped to 0-100 at runtime.");
+        }
+
+        private static void ValidateScenarioCharacters(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null || definition.ScenarioCharacters == null || result == null)
+                return;
+
+            HashSet<string> characterIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < definition.ScenarioCharacters.Count; i++)
+            {
+                ScenarioNpcDefinition character = definition.ScenarioCharacters[i];
+                string label = "Scenario character #" + i.ToString(CultureInfo.InvariantCulture);
+                if (character == null)
+                {
+                    result.AddError(label + " is null.");
+                    continue;
+                }
+
+                string id = TrimToNull(character.CharacterId);
+                if (id == null)
+                {
+                    result.AddError(label + " is missing characterId.");
+                }
+                else if (characterIds.Contains(id))
+                {
+                    result.AddError("Duplicate scenario character id: " + id);
+                }
+                else
+                {
+                    characterIds.Add(id);
+                    label = "Scenario character '" + id + "'";
+                }
+
+                ValidateNpcItem(character.WeaponItemId, label, "weapon", result, false);
+                ValidateNpcItem(character.EquippedItem1Id, label, "equipped item 1", result, true);
+                ValidateNpcItem(character.EquippedItem2Id, label, "equipped item 2", result, true);
+                ValidateItemEntries(character.CarriedItems, label + " carried item", result);
+                ValidateNpcStats(character.Stats, label, result);
+                ValidateNpcEnums(character, label, result);
+
+                if (character.NumRandomItems < 0)
+                    result.AddError(label + " numRandomItems cannot be negative.");
+            }
+        }
+
+        private static void ValidateNpcItem(string itemId, string label, string field, ScenarioValidationResult result, bool allowUndefined)
+        {
+            string id = TrimToNull(itemId);
+            if (id == null || (allowUndefined && string.Equals(id, "Undefined", StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            ItemManager.ItemType itemType;
+            if (!ContentInjector.ResolveItemType(id, out itemType))
+                result.AddError(label + " references unknown " + field + " item id '" + id + "'.");
+        }
+
+        private static void ValidateItemEntries(List<ItemEntry> items, string label, ScenarioValidationResult result)
+        {
+            for (int i = 0; items != null && i < items.Count; i++)
+            {
+                ItemEntry item = items[i];
+                string itemId = TrimToNull(item != null ? item.ItemId : null);
+                if (itemId == null)
+                {
+                    result.AddError(label + " #" + i.ToString(CultureInfo.InvariantCulture) + " is missing itemId.");
+                    continue;
+                }
+
+                if (item.Quantity <= 0)
+                    result.AddError(label + " '" + itemId + "' must have quantity greater than zero.");
+                ValidateNpcItem(itemId, label, "carried", result, false);
+            }
+        }
+
+        private static void ValidateNpcStats(ScenarioNpcStatsDefinition stats, string label, ScenarioValidationResult result)
+        {
+            if (stats == null)
+                return;
+
+            ValidateNpcStat(stats.Strength, label, "Strength", result);
+            ValidateNpcStat(stats.Dexterity, label, "Dexterity", result);
+            ValidateNpcStat(stats.Charisma, label, "Charisma", result);
+            ValidateNpcStat(stats.Perception, label, "Perception", result);
+            ValidateNpcStat(stats.Intelligence, label, "Intelligence", result);
+        }
+
+        private static void ValidateNpcStat(int value, string label, string statName, ScenarioValidationResult result)
+        {
+            if (value < 0 || value > 20)
+            {
+                result.AddWarning(label + " has " + statName + " outside the supported 0-20 range: "
+                    + value.ToString(CultureInfo.InvariantCulture) + ". It will be clamped or ignored by runtime stat setup.");
+            }
+        }
+
+        private static void ValidateNpcEnums(ScenarioNpcDefinition character, string label, ScenarioValidationResult result)
+        {
+            string statSetting = TrimToNull(character.StatSetting);
+            if (statSetting == null)
+                return;
+
+            try
+            {
+                object parsed = Enum.Parse(typeof(QuestDefBase.QuestCharacter.StatSetting), statSetting, true);
+                if (parsed == null || !Enum.IsDefined(typeof(QuestDefBase.QuestCharacter.StatSetting), parsed))
+                    result.AddError(label + " has invalid statSetting '" + statSetting + "'.");
+            }
+            catch
+            {
+                result.AddError(label + " has invalid statSetting '" + statSetting + "'.");
             }
         }
 
@@ -301,10 +498,27 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 if (TrimToNull(placement.PrefabReference) == null && TrimToNull(placement.DefinitionReference) == null)
                     result.AddError("Object placement #" + i + " must define prefab or definition.");
 
+                AddUnsupportedObjectPlacementWarnings(placement, i, result);
+
                 ScenarioPlacementDefinitionKind kind;
                 if (ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind))
                     ValidateSpecialPlacement(placement, i, kind, result);
             }
+        }
+
+        private static void AddUnsupportedObjectPlacementWarnings(ObjectPlacement placement, int index, ScenarioValidationResult result)
+        {
+            if (placement == null || result == null)
+                return;
+
+            if (TrimToNull(placement.PrefabReference) != null)
+                result.AddWarning("Object placement #" + index + " PrefabReference is not applied at runtime yet.");
+            if (TrimToNull(placement.RequiredFoundationId) != null)
+                result.AddWarning("Object placement #" + index + " RequiredFoundationId is not applied at runtime yet.");
+            if (TrimToNull(placement.RequiredBunkerExpansionId) != null)
+                result.AddWarning("Object placement #" + index + " RequiredBunkerExpansionId is not applied at runtime yet.");
+            if (TrimToNull(placement.UnlockGateId) != null && TrimToNull(placement.ScheduledActivationId) == null)
+                result.AddWarning("Object placement #" + index + " UnlockGateId is not applied at runtime yet.");
         }
 
         private static void ValidateQuests(ScenarioDefinition definition, ScenarioValidationResult result)
@@ -575,7 +789,24 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
                 if (placement.GridY.HasValue && placement.GridY.Value < 0)
                     result.AddError("Scene sprite placement #" + i + " has negative gridY.");
+
+                AddUnsupportedSceneSpritePlacementWarnings(placement, i, result);
             }
+        }
+
+        private static void AddUnsupportedSceneSpritePlacementWarnings(SceneSpritePlacement placement, int index, ScenarioValidationResult result)
+        {
+            if (placement == null || result == null)
+                return;
+
+            if (TrimToNull(placement.RequiredFoundationId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " RequiredFoundationId is not applied at runtime yet.");
+            if (TrimToNull(placement.RequiredBunkerExpansionId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " RequiredBunkerExpansionId is not applied at runtime yet.");
+            if (TrimToNull(placement.UnlockGateId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " UnlockGateId is not applied at runtime yet.");
+            if (TrimToNull(placement.ScheduledActivationId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " ScheduledActivationId is not applied at runtime yet.");
         }
 
         private static bool HasSpriteReference(AssetReferencesDefinition assets, string spriteId)
@@ -678,7 +909,6 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
                     summary.AddError("core.meta.invalid_base_mode", "Scenario BaseMode is invalid: " + definition.BaseGameMode);
                 ValidateSelectionRules(definition, summary);
-                ValidateScenarioFlow(definition, summary);
             }
 
             private static void ValidateSelectionRules(ScenarioDefinition definition, ValidationSummary summary)
@@ -708,6 +938,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     return;
 
                 HashSet<string> stageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                HashSet<string> characterIds = BuildScenarioCharacterIds(definition);
                 for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
                 {
                     ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
@@ -721,6 +952,15 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
                     if (stage.UnansweredNextDays < 0)
                         summary.AddError("core.flow.invalid_unanswered_delay", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' has a negative unanswered delay.");
+
+                    for (int c = 0; stage.CharacterIds != null && c < stage.CharacterIds.Count; c++)
+                    {
+                        string characterId = TrimToNull(stage.CharacterIds[c]);
+                        if (characterId == null)
+                            summary.AddError("core.flow.character_required", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' has an empty character id.");
+                        else if (!IsKnownScenarioCharacter(characterIds, characterId))
+                            summary.AddError("core.flow.unknown_character", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' references unknown character id '" + characterId + "'.");
+                    }
                 }
 
                 for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
@@ -732,6 +972,114 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     if (!stageIds.Contains(stage.UnansweredNextStage))
                         summary.AddError("core.flow.missing_unanswered_stage", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' routes unanswered intercoms to missing stage '" + stage.UnansweredNextStage + "'.");
                 }
+
+                for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
+                    ValidateIntercomStages(definition.ScenarioFlow.Stages[i], i, stageIds, characterIds, summary);
+            }
+
+            private static void ValidateIntercomStages(ScenarioFlowStageDefinition stage, int stageIndex, HashSet<string> stageIds, HashSet<string> characterIds, ValidationSummary summary)
+            {
+                if (stage == null || stage.IntercomStages == null)
+                    return;
+
+                HashSet<string> intercomIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < stage.IntercomStages.Count; i++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
+                    string id = TrimToNull(intercom != null ? intercom.Id : null);
+                    if (id == null)
+                        summary.AddError("core.flow.intercom_id_required", "Scenario flow stage '" + (stage.Id ?? ("#" + stageIndex.ToString())) + "' intercom #" + i.ToString() + " requires an id.");
+                    else if (!intercomIds.Add(id))
+                        summary.AddError("core.flow.duplicate_intercom", "Scenario flow stage '" + (stage.Id ?? ("#" + stageIndex.ToString())) + "' has duplicate intercom id '" + id + "'.");
+                }
+
+                for (int i = 0; i < stage.IntercomStages.Count; i++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
+                    if (intercom == null)
+                        continue;
+                    string label = stage.Id + "/" + (intercom.Id ?? ("#" + i.ToString()));
+                    ValidateIntercomTarget(summary, intercomIds, intercom.NextId, label, "NextId");
+                    ValidateIntercomTarget(summary, intercomIds, intercom.AlternateNextId, label, "AlternateNextId");
+                    for (int r = 0; intercom.RandomizedNextIds != null && r < intercom.RandomizedNextIds.Count; r++)
+                        ValidateIntercomTarget(summary, intercomIds, intercom.RandomizedNextIds[r], label, "RandomizedNextIds");
+                    for (int o = 0; intercom.Options != null && o < intercom.Options.Count; o++)
+                    {
+                        ScenarioDialogueOptionDefinition option = intercom.Options[o];
+                        if (TrimToNull(option != null ? option.TextKey : null) == null)
+                            summary.AddError("core.flow.option_key_required", "Scenario flow option #" + o.ToString() + " in '" + label + "' has an empty text key.");
+                        ValidateIntercomTarget(summary, intercomIds, option != null ? option.NextId : null, label, "Option NextId");
+                    }
+                    for (int d = 0; intercom.Dialogue != null && d < intercom.Dialogue.Count; d++)
+                    {
+                        ScenarioDialogueLineDefinition line = intercom.Dialogue[d];
+                        if (TrimToNull(line != null ? line.TextKey : null) == null)
+                            summary.AddError("core.flow.dialogue_key_required", "Scenario flow dialogue #" + d.ToString() + " in '" + label + "' has an empty text key.");
+                    }
+                    if (intercom.StageChange != null && TrimToNull(intercom.StageChange.Id) != null && !stageIds.Contains(intercom.StageChange.Id))
+                        summary.AddError("core.flow.missing_stage_change", "Scenario flow intercom '" + label + "' changes to missing stage '" + intercom.StageChange.Id + "'.");
+                    for (int c = 0; intercom.CharacterIdsToRecruit != null && c < intercom.CharacterIdsToRecruit.Count; c++)
+                    {
+                        string characterId = TrimToNull(intercom.CharacterIdsToRecruit[c]);
+                        if (characterId != null && !IsKnownScenarioCharacter(characterIds, characterId))
+                            summary.AddError("core.flow.unknown_recruit", "Scenario flow intercom '" + label + "' recruits unknown character id '" + characterId + "'.");
+                    }
+                    ValidateItemEntries(summary, intercom.Items, "reward item", label);
+                    ValidateItemEntries(summary, intercom.ItemsToRemove, "removal item", label);
+                    if (intercom.EndOptions != null)
+                    {
+                        ValidateItemEntries(summary, intercom.EndOptions.RewardItems, "end reward item", label);
+                        ValidateItemEntries(summary, intercom.EndOptions.TradeItems, "trade item", label);
+                    }
+                }
+            }
+
+            private static void ValidateIntercomTarget(ValidationSummary summary, HashSet<string> intercomIds, string value, string label, string field)
+            {
+                string id = TrimToNull(value);
+                if (id != null && !intercomIds.Contains(id))
+                    summary.AddError("core.flow.missing_intercom_target", "Scenario flow intercom '" + label + "' " + field + " references missing intercom '" + id + "'.");
+            }
+
+            private static void ValidateItemEntries(ValidationSummary summary, List<ItemEntry> items, string label, string owner)
+            {
+                for (int i = 0; items != null && i < items.Count; i++)
+                {
+                    ItemEntry item = items[i];
+                    string itemId = TrimToNull(item != null ? item.ItemId : null);
+                    if (itemId == null)
+                    {
+                        summary.AddError("core.flow.item_id_required", "Scenario flow " + label + " #" + i.ToString() + " in '" + owner + "' is missing item id.");
+                        continue;
+                    }
+                    if (item.Quantity <= 0)
+                        summary.AddError("core.flow.item_quantity_invalid", "Scenario flow " + label + " '" + itemId + "' in '" + owner + "' must have quantity greater than zero.");
+                    ItemManager.ItemType itemType;
+                    if (!ContentInjector.ResolveItemType(itemId, out itemType))
+                        summary.AddError("core.flow.item_unknown", "Scenario flow " + label + " '" + itemId + "' in '" + owner + "' is not a known item id.");
+                }
+            }
+
+            private static HashSet<string> BuildScenarioCharacterIds(ScenarioDefinition definition)
+            {
+                HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; definition != null && definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
+                {
+                    string id = TrimToNull(definition.ScenarioCharacters[i] != null ? definition.ScenarioCharacters[i].CharacterId : null);
+                    if (id != null)
+                        ids.Add(id);
+                }
+                ids.Add("LeadNpc");
+                ids.Add("Npc2");
+                ids.Add("Npc3");
+                ids.Add("Npc4");
+                ids.Add("BackgroundNpc");
+                return ids;
+            }
+
+            private static bool IsKnownScenarioCharacter(HashSet<string> characterIds, string id)
+            {
+                return characterIds != null && characterIds.Contains(id);
             }
         }
 
@@ -749,6 +1097,105 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 ScenarioValidationResult legacy = new ScenarioValidationResult();
                 _owner.ValidateDependencies(definition, legacy);
                 CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class WinLossValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                if (definition == null || summary == null)
+                    return;
+
+                WinLossConditionsDefinition winLoss = definition.WinLossConditions;
+                int winCount = Count(winLoss != null ? winLoss.WinConditions : null);
+                int lossCount = Count(winLoss != null ? winLoss.LossConditions : null);
+                if (winCount + lossCount == 0)
+                {
+                    summary.AddWarning("win_loss.no_end_state", "[Victory] No victory or failure condition is defined; the scenario can run forever.");
+                    return;
+                }
+
+                ValidateConditions(winLoss != null ? winLoss.WinConditions : null, "victory", summary);
+                ValidateConditions(winLoss != null ? winLoss.LossConditions : null, "failure", summary);
+            }
+
+            private static void ValidateConditions(List<ConditionDef> conditions, string label, ValidationSummary summary)
+            {
+                HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; conditions != null && i < conditions.Count; i++)
+                {
+                    ConditionDef condition = conditions[i];
+                    string scope = "[Victory] " + label + " condition #" + i.ToString(CultureInfo.InvariantCulture);
+                    if (condition == null)
+                    {
+                        summary.AddError("win_loss.condition.null", scope + " is null.");
+                        continue;
+                    }
+
+                    string id = TrimToNull(condition.Id);
+                    if (id == null)
+                        summary.AddError("win_loss.condition.id_required", scope + " requires an id.");
+                    else if (!ids.Add(id))
+                        summary.AddError("win_loss.condition.duplicate", "[Victory] " + label + " condition id is duplicated: " + id);
+
+                    ScenarioWinLossConditionDescriptor descriptor;
+                    if (!ScenarioWinLossConditionSupport.TryGetDescriptor(condition.Type, out descriptor))
+                    {
+                        summary.AddError("win_loss.condition.unsupported_type", scope + " uses unsupported condition type '" + (condition.Type ?? string.Empty) + "'.");
+                        continue;
+                    }
+
+                    ValidateDescriptorFields(condition, descriptor, scope, summary);
+                }
+            }
+
+            private static void ValidateDescriptorFields(
+                ConditionDef condition,
+                ScenarioWinLossConditionDescriptor descriptor,
+                string scope,
+                ValidationSummary summary)
+            {
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Time)
+                {
+                    int day = ScenarioPropertyBag.GetInt(condition.Properties, "day", ScenarioPropertyBag.GetInt(condition.Properties, "days", 0));
+                    int hour = ScenarioPropertyBag.GetInt(condition.Properties, "hour", 0);
+                    int minute = ScenarioPropertyBag.GetInt(condition.Properties, "minute", 0);
+                    if (day <= 0 || hour < 0 || hour > 23 || minute < 0 || minute > 59)
+                        summary.AddError("win_loss.condition.invalid_time", scope + " has invalid day/hour/minute values.");
+                    return;
+                }
+
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Quantity)
+                {
+                    string itemId = ScenarioPropertyBag.FirstString(condition.Properties, "itemId", "targetId");
+                    int quantity = ScenarioPropertyBag.GetInt(condition.Properties, "quantity", 1);
+                    if (TrimToNull(itemId) == null)
+                        summary.AddError("win_loss.condition.item_required", scope + " requires an itemId property.");
+                    if (quantity <= 0)
+                        summary.AddError("win_loss.condition.quantity", scope + " quantity must be greater than zero.");
+                    return;
+                }
+
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Flag)
+                {
+                    string flagId = ScenarioPropertyBag.FirstString(condition.Properties, "flagId", "targetId");
+                    if (TrimToNull(flagId) == null)
+                        summary.AddError("win_loss.condition.flag_required", scope + " requires a flagId property.");
+                    return;
+                }
+
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Target)
+                {
+                    string target = ScenarioPropertyBag.FirstString(condition.Properties, "questId", "survivorId", "name", "bunkerExpansionId", "technologyId", "triggerId", "targetId");
+                    if (TrimToNull(target) == null)
+                        summary.AddError("win_loss.condition.target_required", scope + " requires a target id property.");
+                }
+            }
+
+            private static int Count(List<ConditionDef> conditions)
+            {
+                return conditions != null ? conditions.Count : 0;
             }
         }
 
@@ -814,6 +1261,16 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             {
                 ScenarioValidationResult legacy = new ScenarioValidationResult();
                 ValidateAssets(definition, scenarioFilePath, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class ScenarioCharacterValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                ValidateScenarioCharacters(definition, legacy);
                 CopyIssues(legacy, summary);
             }
         }

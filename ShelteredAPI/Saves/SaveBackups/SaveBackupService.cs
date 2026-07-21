@@ -4,7 +4,6 @@ using System.IO;
 using System.Reflection;
 using ModAPI.Core;
 using ModAPI.Harmony;
-using ModAPI.Util;
 using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Saves.Backups
@@ -43,7 +42,7 @@ namespace ShelteredAPI.Saves.Backups
                 SaveBackupTarget target;
                 if (TryCreateVanillaTarget(type, out target))
                 {
-                    CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, false, true);
+                    BackupTargetBeforeOverwrite(target, false);
                 }
             }
             catch (Exception ex)
@@ -52,41 +51,154 @@ namespace ShelteredAPI.Saves.Backups
             }
         }
 
-        internal static void BackupCustomEntryBeforeOverwrite(SaveEntry entry)
+        internal static bool BackupCustomEntryBeforeOverwrite(SaveEntry entry)
         {
             try
             {
+                if (!ReadRetentionPolicy().IsEnabled)
+                    return true;
+
                 SaveBackupTarget target;
                 if (!TryCreateCustomTarget(entry, out target))
                 {
+                    string scenarioId = entry != null
+                        ? SaveStorageRouter.NormalizeScenarioId(entry.scenarioId)
+                        : string.Empty;
+                    string savePath = entry != null && entry.absoluteSlot > 0
+                        ? DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot, false)
+                        : string.Empty;
                     MMLog.WriteInfo("[SaveBackup] Custom overwrite snapshot skipped. " + DescribeCustomTargetFailure(entry));
-                    return;
+                    return string.IsNullOrEmpty(savePath) || !File.Exists(savePath);
                 }
 
-                string snapshotId = CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, true);
+                if (WasCapturedInCurrentSavePass(target.TimelineKey))
+                    return true;
+
+                string snapshotId = BackupTargetBeforeOverwrite(target, true);
                 MMLog.WriteInfo("[SaveBackup] Custom overwrite snapshot request. scenario="
                     + target.ScenarioId + ", absoluteSlot=" + target.AbsoluteSlot
                     + ", saveId=" + target.SaveId + ", timeline=" + target.TimelineKey
                     + ", created=" + (!string.IsNullOrEmpty(snapshotId) ? snapshotId : "<none>") + ".");
+                return !string.IsNullOrEmpty(snapshotId);
             }
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[SaveBackup] Custom overwrite backup skipped: " + ex.Message);
+                return false;
             }
         }
 
-        internal static void BackupVanillaBeforeOverwrite(SaveManager.SaveType type)
+        internal static bool BackupVanillaBeforeOverwrite(SaveManager.SaveType type)
         {
             try
             {
+                if (!ReadRetentionPolicy().IsEnabled)
+                    return true;
+
                 SaveBackupTarget target;
                 if (TryCreateVanillaTarget(type, out target))
-                    CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, true);
+                {
+                    if (WasCapturedInCurrentSavePass(target.TimelineKey))
+                        return true;
+                    return !string.IsNullOrEmpty(BackupTargetBeforeOverwrite(target, true));
+                }
+
+                VanillaSaveRoute route;
+                if (!VanillaSaveRouting.TryGetRoute(type, out route))
+                    return false;
+
+                string vanillaPath = SaveRegistryCore.GetVanillaSavePath(route.VanillaSlotNumber);
+                return string.IsNullOrEmpty(vanillaPath) || !File.Exists(vanillaPath);
             }
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[SaveBackup] Vanilla overwrite backup skipped: " + ex.Message);
+                return false;
             }
+        }
+
+        internal static bool BackupBeforeDelete(string scenarioId, int absoluteSlot, out string error)
+        {
+            error = null;
+            if (absoluteSlot <= 0)
+            {
+                error = "The save slot is invalid.";
+                return false;
+            }
+
+            string storageScenarioId = SaveStorageRouter.NormalizeScenarioId(scenarioId);
+            SaveBackupTarget target;
+            SaveManager.SaveType vanillaSaveType = SaveManager.SaveType.Invalid;
+            if (SaveStorageRouter.IsStandardScenario(storageScenarioId))
+            {
+                switch (absoluteSlot)
+                {
+                    case 1: vanillaSaveType = SaveManager.SaveType.Slot1; break;
+                    case 2: vanillaSaveType = SaveManager.SaveType.Slot2; break;
+                    case 3: vanillaSaveType = SaveManager.SaveType.Slot3; break;
+                }
+            }
+            else
+            {
+                VanillaSaveRoute specialRoute;
+                if (VanillaSaveRouting.TryGetRouteByStorageScenarioId(storageScenarioId, out specialRoute)
+                    && specialRoute.AbsoluteSlot == absoluteSlot)
+                {
+                    vanillaSaveType = specialRoute.SaveType;
+                }
+            }
+
+            if (vanillaSaveType != SaveManager.SaveType.Invalid)
+            {
+                VanillaSaveRoute route;
+                if (!VanillaSaveRouting.TryGetRoute(vanillaSaveType, out route))
+                {
+                    error = "The vanilla save route could not be resolved.";
+                    return false;
+                }
+
+                string vanillaPath = SaveRegistryCore.GetVanillaSavePath(route.VanillaSlotNumber);
+                if (string.IsNullOrEmpty(vanillaPath) || !File.Exists(vanillaPath))
+                    return true;
+
+                if (!TryCreateVanillaTarget(vanillaSaveType, out target))
+                {
+                    error = "The current vanilla save could not be captured before deletion.";
+                    return false;
+                }
+            }
+            else
+            {
+                string savePath = DirectoryProvider.EntryPath(storageScenarioId, absoluteSlot, false);
+                if (!File.Exists(savePath))
+                    return true;
+
+                SaveEntry entry = SaveStorageRouter.GetRegistry(storageScenarioId).GetSaveBySlot(absoluteSlot);
+                if (entry == null || !TryCreateCustomTarget(entry, out target))
+                {
+                    error = "The current custom save could not be captured before deletion.";
+                    return false;
+                }
+            }
+
+            SaveBackupRetentionPolicy safetySnapshotPolicy = new SaveBackupRetentionPolicy
+            {
+                Mode = SaveBackupRetentionMode.Forever,
+                SnapshotLimit = 0
+            };
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            string snapshotId = repository.CreateSnapshot(
+                target,
+                SaveBackupReason.BeforeDelete,
+                safetySnapshotPolicy);
+            if (string.IsNullOrEmpty(snapshotId))
+            {
+                error = "The current save could not be preserved, so deletion was cancelled.";
+                return false;
+            }
+
+            MMLog.WriteInfo("[SaveBackup] Preserved current head before deletion as " + snapshotId + ".");
+            return true;
         }
 
         internal static bool TryGetCustomTimelineKey(SaveEntry entry, out string timelineKey)
@@ -130,6 +242,16 @@ namespace ShelteredAPI.Saves.Backups
             return repository.ListSnapshots(timelineKey, sortOrder);
         }
 
+        internal static bool TryFindTimelineKey(
+            string saveKind,
+            string scenarioId,
+            int absoluteSlot,
+            out string timelineKey)
+        {
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            return repository.TryFindLatestTimelineKey(saveKind, scenarioId, absoluteSlot, out timelineKey);
+        }
+
         internal static int CountSnapshots(string timelineKey)
         {
             SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
@@ -158,7 +280,44 @@ namespace ShelteredAPI.Saves.Backups
             }
 
             SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
-            return repository.RestoreSnapshot(snapshot.Ref.ManifestPath, out error);
+            if (snapshot.IsVanilla)
+            {
+                if (!CreatePreRestoreSafetySnapshot(snapshot, null, out error))
+                    return false;
+
+                return repository.RestoreSnapshot(snapshot.Ref.ManifestPath, out error);
+            }
+
+            SaveEntry currentEntry;
+            SaveBackupRestoreDestination destination;
+            if (!TryResolveCustomRestoreDestination(snapshot, out currentEntry, out destination, out error))
+                return false;
+
+            if (currentEntry != null
+                && !CreatePreRestoreSafetySnapshot(snapshot, currentEntry, out error))
+            {
+                return false;
+            }
+
+            if (!repository.RestoreSnapshot(snapshot.Ref.ManifestPath, destination, out error))
+                return false;
+
+            snapshot.ScenarioId = destination.ScenarioId;
+            snapshot.AbsoluteSlot = destination.AbsoluteSlot;
+            if (currentEntry != null)
+            {
+                if (snapshot.Entry != null)
+                    currentEntry.saveInfo = snapshot.Entry.saveInfo;
+                snapshot.SaveId = currentEntry.id;
+                snapshot.Entry = currentEntry;
+            }
+            else if (snapshot.Entry != null)
+            {
+                snapshot.Entry.absoluteSlot = destination.AbsoluteSlot;
+                snapshot.Entry.scenarioId = destination.ScenarioId;
+            }
+
+            return true;
         }
 
         internal static bool DeleteSnapshot(SaveBackupSnapshotInfo snapshot, out string error)
@@ -173,56 +332,9 @@ namespace ShelteredAPI.Saves.Backups
             SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
             bool deleted = repository.DeleteSnapshot(snapshot.Ref.ManifestPath, out error);
             if (deleted)
-                ClearBranchMarkerIfTarget(snapshot.Ref);
+                ClearBranchMarker(snapshot.Ref.TimelineKey);
 
             return deleted;
-        }
-
-        internal static void ArmBranchTruncation(SaveBackupSnapshotInfo snapshot)
-        {
-            if (snapshot == null || snapshot.Ref == null || string.IsNullOrEmpty(snapshot.Ref.TimelineKey))
-                return;
-
-            try
-            {
-                if (CountSnapshotsAfter(snapshot) <= 0)
-                {
-                    ClearBranchMarker(snapshot.Ref.TimelineKey);
-                    return;
-                }
-
-                string markerPath = GetBranchMarkerPath(snapshot.Ref.TimelineKey);
-                Directory.CreateDirectory(Path.GetDirectoryName(markerPath));
-
-                ManualJsonObject root = new ManualJsonObject();
-                root.Set("schemaVersion", ManualJsonValue.Number(1));
-                root.Set("timelineKey", ManualJsonValue.String(snapshot.Ref.TimelineKey));
-                root.Set("snapshotId", ManualJsonValue.String(snapshot.Ref.SnapshotId));
-                root.Set("snapshotCreatedAtUtc", ManualJsonValue.String(snapshot.Ref.CreatedAtUtc.ToString("o")));
-                root.Set("armedAtUtc", ManualJsonValue.String(DateTime.UtcNow.ToString("o")));
-                File.WriteAllText(markerPath, ManualJson.Serialize(root, true));
-
-                MMLog.WriteInfo("[SaveBackup] Armed branch truncation for timeline "
-                    + snapshot.Ref.TimelineKey + " at snapshot " + snapshot.Ref.SnapshotId + ".");
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[SaveBackup] Failed to arm branch truncation: " + ex.Message);
-            }
-        }
-
-        private static void ClearBranchMarkerIfTarget(SaveBackupSnapshotRef snapshotRef)
-        {
-            if (snapshotRef == null || string.IsNullOrEmpty(snapshotRef.TimelineKey))
-                return;
-
-            string armedSnapshotId;
-            DateTime armedSnapshotCreatedAtUtc;
-            if (!TryReadBranchMarker(snapshotRef.TimelineKey, out armedSnapshotId, out armedSnapshotCreatedAtUtc))
-                return;
-
-            if (string.Equals(armedSnapshotId, snapshotRef.SnapshotId, StringComparison.OrdinalIgnoreCase))
-                ClearBranchMarker(snapshotRef.TimelineKey);
         }
 
         private static bool TryCreateCustomTarget(SaveEntry entry, out SaveBackupTarget target)
@@ -337,7 +449,10 @@ namespace ShelteredAPI.Saves.Backups
             if (skipIfAlreadyCaptured && WasCapturedInCurrentSavePass(target.TimelineKey))
                 return null;
 
-            ApplyPendingBranchTruncation(target.TimelineKey);
+            // Older builds armed destructive branch truncation after restoring an
+            // earlier snapshot. Backups are recovery points, so retain both the
+            // older and newer history instead of deleting either branch.
+            ClearBranchMarker(target.TimelineKey);
 
             SaveBackupRetentionPolicy policy = ReadRetentionPolicy();
             if (policy == null || !policy.IsEnabled)
@@ -351,75 +466,128 @@ namespace ShelteredAPI.Saves.Backups
             return snapshotId;
         }
 
-        private static void ApplyPendingBranchTruncation(string timelineKey)
+        private static string BackupTargetBeforeOverwrite(SaveBackupTarget target, bool skipIfAlreadyCaptured)
         {
-            if (string.IsNullOrEmpty(timelineKey))
-                return;
-
-            string snapshotId;
-            DateTime snapshotCreatedAtUtc;
-            if (!TryReadBranchMarker(timelineKey, out snapshotId, out snapshotCreatedAtUtc))
-                return;
-
-            try
-            {
-                SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
-                int deleted = repository.PruneSnapshotsAfter(timelineKey, snapshotCreatedAtUtc, snapshotId);
-                MMLog.WriteInfo("[SaveBackup] Applied branch truncation for timeline "
-                    + timelineKey + ". Deleted future snapshots: " + deleted + ".");
-            }
-            finally
-            {
-                ClearBranchMarker(timelineKey);
-            }
+            return CreateSnapshot(
+                target,
+                SaveBackupReason.BeforeOverwrite,
+                skipIfAlreadyCaptured,
+                true);
         }
 
-        private static bool TryReadBranchMarker(string timelineKey, out string snapshotId, out DateTime snapshotCreatedAtUtc)
+        private static bool TryResolveCustomRestoreDestination(
+            SaveBackupSnapshotInfo snapshot,
+            out SaveEntry currentEntry,
+            out SaveBackupRestoreDestination destination,
+            out string error)
         {
-            snapshotId = null;
-            snapshotCreatedAtUtc = DateTime.MinValue;
+            currentEntry = null;
+            destination = null;
+            error = null;
 
-            string markerPath = GetBranchMarkerPath(timelineKey);
-            if (!File.Exists(markerPath))
-                return false;
-
-            try
+            const string timelinePrefix = "custom:";
+            string timelineKey = snapshot.Ref != null ? snapshot.Ref.TimelineKey : string.Empty;
+            if (string.IsNullOrEmpty(timelineKey)
+                || !timelineKey.StartsWith(timelinePrefix, StringComparison.OrdinalIgnoreCase)
+                || timelineKey.Length <= timelinePrefix.Length)
             {
-                ManualJsonObject root;
-                string error;
-                if (!ManualJson.TryParseObject(File.ReadAllText(markerPath), out root, out error))
-                {
-                    ClearBranchMarker(timelineKey);
-                    return false;
-                }
-
-                string markerTimeline = root.GetString("timelineKey", string.Empty);
-                if (!string.Equals(markerTimeline, timelineKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    ClearBranchMarker(timelineKey);
-                    return false;
-                }
-
-                DateTime parsed;
-                if (!DateTime.TryParse(
-                    root.GetString("snapshotCreatedAtUtc", string.Empty),
-                    null,
-                    System.Globalization.DateTimeStyles.AdjustToUniversal,
-                    out parsed))
-                {
-                    ClearBranchMarker(timelineKey);
-                    return false;
-                }
-
-                snapshotId = root.GetString("snapshotId", string.Empty);
-                snapshotCreatedAtUtc = parsed.ToUniversalTime();
-                return !string.IsNullOrEmpty(snapshotId);
-            }
-            catch
-            {
-                ClearBranchMarker(timelineKey);
+                error = "The custom snapshot lineage is invalid.";
                 return false;
             }
+
+            string lineageId = timelineKey.Substring(timelinePrefix.Length);
+            string scenarioId = SaveStorageRouter.NormalizeScenarioId(snapshot.ScenarioId);
+            SaveEntry[] entries = SaveStorageRouter.GetRegistry(scenarioId).ListSaves();
+            int matchCount = 0;
+            for (int i = 0; i < entries.Length; i++)
+            {
+                SaveEntry candidate = entries[i];
+                if (candidate == null || candidate.absoluteSlot <= 0)
+                    continue;
+
+                string slotRoot = DirectoryProvider.SlotRoot(scenarioId, candidate.absoluteSlot, false);
+                string candidateLineageId = SaveBackupLineageStore.TryReadCustomLineageId(slotRoot);
+                if (!string.Equals(candidateLineageId, lineageId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                matchCount++;
+                currentEntry = candidate;
+            }
+
+            if (matchCount > 1)
+            {
+                error = "Multiple live custom saves own this snapshot lineage.";
+                currentEntry = null;
+                return false;
+            }
+
+            destination = new SaveBackupRestoreDestination
+            {
+                ScenarioId = scenarioId,
+                AbsoluteSlot = currentEntry != null ? currentEntry.absoluteSlot : snapshot.AbsoluteSlot,
+                ExpectedLineageId = lineageId,
+                AllowHistoricalSlotWhenUnoccupied = currentEntry == null
+            };
+            return true;
+        }
+
+        private static bool CreatePreRestoreSafetySnapshot(
+            SaveBackupSnapshotInfo snapshot,
+            SaveEntry resolvedCustomEntry,
+            out string error)
+        {
+            error = null;
+            SaveBackupTarget target;
+
+            if (snapshot.IsVanilla)
+            {
+                VanillaSaveRoute route;
+                if (!VanillaSaveRouting.TryGetRoute(snapshot.SaveType, out route))
+                {
+                    error = "The current vanilla save route could not be resolved.";
+                    return false;
+                }
+
+                string vanillaPath = SaveRegistryCore.GetVanillaSavePath(route.VanillaSlotNumber);
+                if (string.IsNullOrEmpty(vanillaPath) || !File.Exists(vanillaPath))
+                    return true;
+
+                if (!TryCreateVanillaTarget(snapshot.SaveType, out target))
+                {
+                    error = "The current vanilla save could not be captured before restore.";
+                    return false;
+                }
+            }
+            else
+            {
+                if (resolvedCustomEntry == null)
+                    return true;
+
+                if (!TryCreateCustomTarget(resolvedCustomEntry, out target))
+                {
+                    error = "The current custom save could not be captured before restore.";
+                    return false;
+                }
+            }
+
+            SaveBackupRetentionPolicy safetySnapshotPolicy = new SaveBackupRetentionPolicy
+            {
+                Mode = SaveBackupRetentionMode.Forever,
+                SnapshotLimit = 0
+            };
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            string safetySnapshotId = repository.CreateSnapshot(
+                target,
+                SaveBackupReason.BeforeRestore,
+                safetySnapshotPolicy);
+            if (string.IsNullOrEmpty(safetySnapshotId))
+            {
+                error = "The current save could not be preserved, so the restore was cancelled.";
+                return false;
+            }
+
+            MMLog.WriteInfo("[SaveBackup] Preserved current head before restore as " + safetySnapshotId + ".");
+            return true;
         }
 
         private static void ClearBranchMarker(string timelineKey)

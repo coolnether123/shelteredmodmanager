@@ -7,6 +7,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal sealed class ScenarioRuntimeOrchestrator : IScenarioRuntimeOrchestrator
     {
@@ -114,7 +115,10 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             string applyKey = _runtimeBindingService.CurrentRevision
                 + "|" + binding.ScenarioId + "|" + (binding.VersionApplied ?? string.Empty);
             if (string.Equals(_lastAppliedKey, applyKey, StringComparison.OrdinalIgnoreCase))
+            {
+                CompleteScenarioStartHandoff(binding.ScenarioId);
                 return;
+            }
             if (IsApplyStillBlocked(applyKey))
                 return;
 
@@ -133,16 +137,28 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
             try
             {
+                string seedMessage;
+                ScenarioSeedPolicy.TryApplyForScenario(definition, "runtime binding apply", out seedMessage);
                 ScenarioApplyResult apply = _applier.ApplyAll(definition, scenarioFilePath);
+                if (!string.IsNullOrEmpty(seedMessage))
+                    apply.AddMessage(seedMessage);
                 _lastAppliedKey = applyKey;
                 ClearApplyBlocked();
                 MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Applied active scenario binding: " + binding.ScenarioId
                     + " messages=" + apply.Messages.Length + ".");
+                CompleteScenarioStartHandoff(binding.ScenarioId);
             }
             catch (Exception ex)
             {
                 MarkApplyBlocked(applyKey, binding.ScenarioId, ScenarioRuntimeApplyBlockReason.RuntimeApplyException, ex.Message);
             }
+        }
+
+        private static void CompleteScenarioStartHandoff(string scenarioId)
+        {
+            ScenarioLoadingTransitionGuard.TryCompleteManagedTransition(
+                null,
+                "custom scenario '" + (scenarioId ?? string.Empty) + "'");
         }
 
         private bool TryResolveDefinition(ScenarioRuntimeBinding binding, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation)

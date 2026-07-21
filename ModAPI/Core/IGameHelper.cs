@@ -51,6 +51,8 @@ namespace ModAPI.Core
         public const string ActorEvents = "GameRuntime.ActorEvents";
         /// <summary>Actor serialization service.</summary>
         public const string ActorSerialization = "GameRuntime.ActorSerialization";
+        /// <summary>Scenario actor-authoring capability registry.</summary>
+        public const string ActorAuthoringCapabilities = "GameRuntime.ActorAuthoringCapabilities";
         /// <summary>Content ID resolution service.</summary>
         public const string ContentResolution = "GameRuntime.ContentResolution";
         /// <summary>Game lifecycle event source.</summary>

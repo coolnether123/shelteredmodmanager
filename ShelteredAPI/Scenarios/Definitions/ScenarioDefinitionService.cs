@@ -4,6 +4,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Registration;
 using ShelteredAPI.UI.FieldManual.Textures;
 namespace ShelteredAPI.Scenarios.Definitions{
@@ -97,31 +98,51 @@ namespace ShelteredAPI.Scenarios.Definitions{
             if (!_definitionReader.TryLoad(scenarioId, out definition, out scenarioFilePath, out validation))
                 throw new InvalidOperationException("Scenario XML failed validation: " + FormatValidationIssues(validation));
 
+            return BuildPlayableScenarioDef(definition);
+        }
+
+        // Builds the zero-stage carrier used by completion-only diagnostics and
+        // scenarios without a playable story flow.
+        internal static ScenarioDef BuildScenarioDef(ScenarioDefinition definition)
+        {
+            return BuildScenarioDefCore(definition, false);
+        }
+
+        // Installed scenarios and authoring playtests need the authored vanilla
+        // ScenarioFlow projected into ScenarioStage objects. QuestManager then
+        // owns the intercom visitor, choices, dialogue, and branch transitions,
+        // while the exact-clock scheduler remains responsible for neutral actions.
+        internal static ScenarioDef BuildPlayableScenarioDef(ScenarioDefinition definition)
+        {
+            return BuildScenarioDefCore(definition, true);
+        }
+
+        private static ScenarioDef BuildScenarioDefCore(ScenarioDefinition definition, bool includeStoryFlow)
+        {
+            if (definition == null)
+                throw new ArgumentNullException("definition");
+
             ShelteredScenarioDefBuilder builder = new ShelteredScenarioDefBuilder()
                 .SetId(definition.Id)
                 .SetNameKey(!string.IsNullOrEmpty(definition.DisplayName) ? definition.DisplayName : definition.Id)
                 .SetDescriptionKey(definition.Description ?? string.Empty)
                 .ApplySelectionRules(definition.SelectionRules, definition.BaseGameMode);
 
+            ScenarioCharacterRuntimeNameRegistry.Register(definition);
+
             for (int i = 0; definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
                 builder.AddScenarioCharacter(definition.ScenarioCharacters[i]);
 
-            if (definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null && definition.ScenarioFlow.Stages.Count > 0)
+            for (int i = 0; includeStoryFlow
+                && definition.ScenarioFlow != null
+                && definition.ScenarioFlow.Stages != null
+                && i < definition.ScenarioFlow.Stages.Count; i++)
             {
-                for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
-                    builder.AddFlowStage(definition.ScenarioFlow.Stages[i]);
+                ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
+                if (stage != null && stage.IntercomStages != null && stage.IntercomStages.Count > 0)
+                    builder.AddFlowStage(stage);
             }
-            else
-            {
-                string stageId = definition.Id + ".main";
-                if (definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers.Count > 0
-                    && !string.IsNullOrEmpty(definition.TriggersAndEvents.Triggers[0].Id))
-                {
-                    stageId = definition.TriggersAndEvents.Triggers[0].Id;
-                }
 
-                builder.AddSimpleStage(stageId);
-            }
             return builder.Build();
         }
 

@@ -1384,6 +1384,12 @@ namespace ShelteredAPI.Actors.Internal
             if (member == null) return component;
             component.FirstName = member.firstName;
             component.LastName = member.lastName;
+            component.IsMale = member.isMale;
+            component.MeshId = member.meshId;
+            component.SkinColor = member.skinColor;
+            component.HairColor = member.hairColor;
+            component.ShirtColor = member.shirtColor;
+            component.PantsColor = member.pantsColor;
             component.Health = member.health;
             component.MaxHealth = member.maxHealth;
             return component;

@@ -8,10 +8,12 @@ using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioEditorController : IScenarioEditorService
     {
+        private const string RecoveryStatusMessage = "This draft was recovered from a backup after the main file was unreadable; review and save.";
         private readonly IScenarioEditorSessionStore _sessionStore;
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly IScenarioDefinitionValidator _validator;
@@ -21,6 +23,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
+        private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioDraftSnapshotService _snapshotService;
+        private readonly ScenarioPlayStartReadiness _playStartReadiness = new ScenarioPlayStartReadiness();
 
         public static ScenarioEditorController Instance
         {
@@ -41,7 +46,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             IScenarioPauseService pauseService,
             IScenarioSpriteSwapEngine spriteSwapEngine,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
-            ScenarioObjectIdentityAssignmentService identityAssignmentService)
+            ScenarioObjectIdentityAssignmentService identityAssignmentService,
+            ScenarioActorResolver actorResolver,
+            ScenarioDraftSnapshotService snapshotService)
         {
             _sessionStore = sessionStore;
             _serializer = serializer;
@@ -52,6 +59,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
             _identityAssignmentService = identityAssignmentService;
+            _actorResolver = actorResolver;
+            _snapshotService = snapshotService;
         }
 
         public ScenarioEditorSession EnterEditMode(ScenarioBaseGameMode baseMode)
@@ -67,12 +76,28 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public ScenarioEditorSession LoadEditMode(string scenarioFilePath)
         {
-            ScenarioDefinition definition = _serializer.Load(scenarioFilePath);
+            ScenarioDefinition definition;
+            string recoveryMessage;
+            bool recovered;
+            if (!_serializer.TryLoadWithRecovery(scenarioFilePath, out definition, out recoveryMessage, out recovered))
+                throw new InvalidOperationException(string.IsNullOrEmpty(recoveryMessage) ? "Scenario XML could not be loaded." : recoveryMessage);
+
             ScenarioEditorSession session = CreateSession(definition);
             ScenarioObjectIdentityAssignmentSummary migration = _identityAssignmentService.AssignMissingIds(session);
+            if (recovered)
+            {
+                session.LoadWarning = RecoveryStatusMessage;
+                session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            }
             _sessionStore.Set(session, scenarioFilePath);
 
+            ScenarioDraftSnapshotInfo newerAutosave;
+            if (_snapshotService != null && _snapshotService.TryGetNewerAutosave(scenarioFilePath, out newerAutosave))
+                session.LoadWarning = "A newer autosave is available from " + newerAutosave.AgeText + ". Open History to review and restore it; your manual draft was not changed.";
+
             PauseForEditor();
+            if (!string.IsNullOrEmpty(recoveryMessage))
+                MMLog.WriteWarning("[ScenarioEditorController] " + recoveryMessage);
             if (migration.AssignedCount > 0)
                 MMLog.WriteInfo("[ScenarioEditorController] Assigned " + migration.AssignedCount + " missing scenario object id(s) while loading old scenario XML.");
             MMLog.WriteInfo("[ScenarioEditorController] Loaded scenario edit session from " + scenarioFilePath + ".");
@@ -94,39 +119,49 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioObjectIdentityAssignmentSummary identityMigration = _identityAssignmentService.AssignMissingIds(session);
             if (identityMigration.AssignedCount > 0)
                 MMLog.WriteInfo("[ScenarioEditorController] Assigned " + identityMigration.AssignedCount + " missing scenario object id(s) before validation.");
+            int assignedActors = _actorResolver != null ? _actorResolver.AssignMissingCastActorRefs(session.WorkingDefinition) : 0;
+            if (assignedActors > 0)
+                MMLog.WriteInfo("[ScenarioEditorController] Assigned " + assignedActors + " missing scenario actor ref(s) before validation.");
 
-            ScenarioValidationResult validation = _validator.Validate(session.WorkingDefinition, path);
-            if (validation == null)
-            {
-                validation = new ScenarioValidationResult();
-                validation.AddError("Scenario validation did not return a result.");
-                MMLog.WriteWarning("[ScenarioEditorController] Save blocked because validation returned no result.");
-                return validation;
-            }
-
-            if (!validation.IsValid)
-            {
-                MMLog.WriteWarning("[ScenarioEditorController] Save blocked by scenario validation for " + path + ".");
-                return validation;
-            }
+            ScenarioValidationResult validation = ValidateForSave(session.WorkingDefinition, path);
 
             _serializer.Save(session.WorkingDefinition, path);
+            // Saving atomically replaces scenario.xml, which changes the exact
+            // file stamp used by the draft metadata cache. Republish the entry
+            // now so main-thread draft views can resolve and reopen this draft
+            // without performing XML I/O on the Unity thread.
+            _serializer.LoadInfo(path, ScenarioAuthoringDraftRepository.DraftOwnerId);
             session.OriginalDefinition = ScenarioDefinitionCloner.Clone(session.WorkingDefinition);
             session.DirtyFlags.Clear();
             _sessionStore.Set(session, path);
-            MMLog.WriteInfo("[ScenarioEditorController] Saved scenario definition to " + path + ".");
+            if (validation != null && !validation.IsValid)
+                MMLog.WriteWarning("[ScenarioEditorController] Saved scenario definition with validation errors to " + path + ".");
+            else
+                MMLog.WriteInfo("[ScenarioEditorController] Saved scenario definition to " + path + ".");
             return validation;
         }
 
         public ScenarioApplyResult BeginPlaytest()
         {
             ScenarioEditorSession session = RequireSession();
+            string playStartReason;
+            if (!_playStartReadiness.CanStartPlay(session.WorkingDefinition, out playStartReason))
+            {
+                ScenarioApplyResult blockedByStartState = new ScenarioApplyResult();
+                blockedByStartState.AddMessage("Playtest blocked: " + playStartReason);
+                MMLog.WriteWarning("[ScenarioEditorController] Playtest blocked by start-state readiness: " + playStartReason);
+                return blockedByStartState;
+            }
+
             ScenarioValidationResult validation;
             try
             {
                 ScenarioObjectIdentityAssignmentSummary identityMigration = _identityAssignmentService.AssignMissingIds(session);
                 if (identityMigration.AssignedCount > 0)
                     MMLog.WriteInfo("[ScenarioEditorController] Assigned " + identityMigration.AssignedCount + " missing scenario object id(s) before playtest validation.");
+                int assignedActors = _actorResolver != null ? _actorResolver.AssignMissingCastActorRefs(session.WorkingDefinition) : 0;
+                if (assignedActors > 0)
+                    MMLog.WriteInfo("[ScenarioEditorController] Assigned " + assignedActors + " missing scenario actor ref(s) before playtest validation.");
 
                 validation = _validator.Validate(session.WorkingDefinition, _sessionStore.CurrentFilePath);
             }
@@ -138,7 +173,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return failedValidation;
             }
 
-            if (validation != null && !validation.IsValid)
+            if (validation == null)
+            {
+                ScenarioApplyResult failedClosed = new ScenarioApplyResult();
+                failedClosed.AddMessage("Playtest blocked because scenario validation did not return a result.");
+                MMLog.WriteWarning("[ScenarioEditorController] Playtest blocked because validation returned no result.");
+                return failedClosed;
+            }
+
+            if (!validation.IsValid)
             {
                 ScenarioApplyResult blocked = new ScenarioApplyResult();
                 ScenarioValidationIssue[] issues = validation.Issues;
@@ -234,8 +277,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             definition.Id = "com.author.scenario.new";
             definition.DisplayName = "New Custom Scenario";
             definition.Description = string.Empty;
-            definition.Author = "unknown";
-            definition.Version = "0.1.0";
+            definition.Author = ScenarioMetadataDefaults.DefaultAuthor;
+            definition.Version = ScenarioMetadataDefaults.DefaultVersion;
             definition.BaseGameMode = baseMode;
             definition.SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(baseMode);
             return definition;
@@ -247,6 +290,28 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null)
                 throw new InvalidOperationException("No scenario editor session is active.");
             return session;
+        }
+
+        private ScenarioValidationResult ValidateForSave(ScenarioDefinition definition, string path)
+        {
+            try
+            {
+                ScenarioValidationResult validation = _validator.Validate(definition, path);
+                if (validation != null)
+                    return validation;
+
+                ScenarioValidationResult missing = new ScenarioValidationResult();
+                missing.AddError("Scenario validation did not return a result.");
+                MMLog.WriteWarning("[ScenarioEditorController] Validation returned no result while saving " + path + "; saving draft anyway.");
+                return missing;
+            }
+            catch (Exception ex)
+            {
+                ScenarioValidationResult failed = new ScenarioValidationResult();
+                failed.AddError("Scenario validation failed before save: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioEditorController] Validation failed while saving " + path + "; saving draft anyway. " + ex.Message);
+                return failed;
+            }
         }
 
         private void PauseForEditor()

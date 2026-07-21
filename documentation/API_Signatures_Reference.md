@@ -29,7 +29,7 @@ Use this file for type names and method shapes only. For setup, assembly selecti
 | Compatibility exports | [Save Manifest / Support Bundle](#save-manifest--support-bundle-smm-20) |
 | Documentation contract | [Documentation Model](#documentation-model-smm-20) |
 
-> Status note: runtime UI/store/cooking signatures are API preview, and custom scenario authoring/runtime/scoring surfaces are experimental in 2.0. See the linked task guides before publishing against those areas.
+> Status note: runtime UI/store/cooking signatures and the advanced in-game custom scenario authoring workspace are preview surfaces. Custom scenario registration, playback, runtime bindings, and scoring snapshots are supported 2.0 surfaces. See the linked task guides before publishing against preview areas.
 - Shared SMM 2.0 naming and DTO rules are defined in [ShelteredAPI Guide: Shared Facade Conventions](ShelteredAPI_Guide.md#shared-facade-conventions).
 
 ## Plugin Lifecycle (`ModAPI.Core`)
@@ -1371,6 +1371,7 @@ public class ScenarioDefinition
     public string Author { get; set; }
     public string Version { get; set; }
     public FamilySetupDefinition FamilySetup { get; set; }
+    public ScenarioLaunchSetupDefinition LaunchSetup { get; set; }
     public StartingInventoryDefinition StartingInventory { get; set; }
     public BunkerEditsDefinition BunkerEdits { get; set; }
     public WinLossConditionsDefinition WinLossConditions { get; set; }
@@ -1513,6 +1514,21 @@ public enum ModThreadStaleResultPolicy
     DeliverAll = 0,
     SkipIfSuperseded = 1,
     CancelPreviousAndSkip = 2
+}
+
+public enum ScenarioLaunchSetupMode { FullSetup, Direct, Guided }
+
+public sealed class ScenarioLaunchSetupDefinition
+{
+    public ScenarioLaunchSetupMode Mode { get; set; }
+    public List<ScenarioDifficultyCategoryDefinition> Categories { get; }
+}
+
+public sealed class ScenarioDifficultyCategoryDefinition
+{
+    public string Id { get; set; }
+    public int AuthoredValue { get; set; }
+    public bool PlayerSelectable { get; set; }
 }
 
 public sealed class ModThreadOptions

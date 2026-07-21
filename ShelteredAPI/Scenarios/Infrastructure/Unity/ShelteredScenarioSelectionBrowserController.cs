@@ -75,6 +75,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             public int LastLoggedPagingPage = -1;
             public int LastLoggedPagingTotalPages = -1;
             public int LastLoggedPagingScenarioCount = -1;
+            public int ScenarioCount;
             public string LastLoggedScenarioTextKey;
             public readonly List<UIButton> OriginalButtons = new List<UIButton>();
             public readonly List<UIButton> CustomButtons = new List<UIButton>();
@@ -169,15 +170,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                     return;
                 }
 
-                RefreshDefinitionCatalogSafely();
-                CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
                 UIButton sourceButton = scenarioButtons[scenarioButtons.Count - 1];
                 if (sourceButton == null || sourceButton.gameObject == null)
                     return;
 
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Initialize start. panel=" + panel.GetInstanceID()
                     + " vanillaButtons=" + scenarioButtons.Count
-                    + " discoveredScenarios=" + scenarios.Length
                     + " sourceButton=" + sourceButton.name + ".");
 
                 if (state.OriginalButtons.Count == 0)
@@ -204,11 +202,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 scenarioButtons.Add(hubButton);
                 state.BaseButtonCount = scenarioButtons.Count - 1;
                 state.HubButton = hubButton;
-                EnsurePagingUi(panel, state, sourceButton);
                 state.ButtonsCreated = true;
 
-                MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Added custom scenario hub and paging UI. panel="
-                    + panel.GetInstanceID() + " scenarios=" + scenarios.Length + " layout=" + DescribeLayoutMetrics(state.LayoutMetrics) + ".");
+                MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Added custom scenario hub. panel="
+                    + panel.GetInstanceID() + " layout=" + DescribeLayoutMetrics(state.LayoutMetrics) + ".");
             }
             catch (Exception ex)
             {
@@ -319,9 +316,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 if (selectionPanel != null)
                     selectionPanel.m_inputEnabled = false;
 
-                RefreshDefinitionCatalogSafely();
-                CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-                UpdatePagingUi(state, scenarios.Length);
+                UpdatePagingUi(state, state.ScenarioCount);
 
                 if (UnityEngine.Input.GetKeyDown(KeyCode.RightArrow))
                     TryChangePage(panel, state, 1);
@@ -338,7 +333,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                         scenarioHighScore,
                         stasisScoreLabelsRoot,
                         HubLabel,
-                        BuildBrowserDescription(state, scenarios.Length));
+                        BuildBrowserDescription(state, state.ScenarioCount));
                 }
             }
             catch
@@ -377,6 +372,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public bool HandleCancel(ScenarioSelectionPanel panel, List<UIButton> scenarioButtons)
         {
+            if (ScenarioBookBrowserPanel.TryHandleCancel())
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Cancel routed to scenario book. panel="
+                    + (panel != null ? panel.GetInstanceID().ToString() : "<null>") + ".");
+                return false;
+            }
+
             BrowserPanelState state = GetExistingState(panel);
             if (state == null || !state.IsCustomMode)
             {
@@ -403,6 +405,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Cleanup. panel=" + instanceId
                 + " customButtons=" + state.CustomButtons.Count + ".");
+            // The book can be destroyed after the vanilla panel during a synchronous
+            // launch transition. Discard its suppression state now so its OnDestroy
+            // cannot reactivate objects that this panel is already destroying.
+            ScenarioBookBrowserPanel.NotifyUnderlyingPanelTeardown(panel);
             state.IsCustomMode = false;
             ShelteredCustomScenarioRuntimeState.SetCustomModeActive(false);
             UIFlowGuard.BlockSlotClicksToggle(false);
@@ -442,6 +448,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             RefreshDefinitionCatalogSafely();
             CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
+            state.ScenarioCount = scenarios.Length;
             ClampPage(state, scenarios.Length);
             ScenarioListEntry[] entries = BuildVisibleEntries(state, scenarios);
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Preparing custom mode contents. panel=" + panel.GetInstanceID()
@@ -468,6 +475,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (sourceButton == null)
                 return;
 
+            // The current scenario-book flow only needs the hub button. Keep the
+            // legacy inline paging controls lazy so cloning their hidden NGUI
+            // hierarchy never delays the vanilla scenario panel opening.
+            EnsurePagingUi(panel, state, sourceButton);
             ScenarioLayoutMetrics metrics = GetOrCreateLayoutMetrics(state, sourceButton);
             scenarioButtons.Clear();
 
@@ -780,7 +791,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return;
             }
 
-            ShelteredDeferredPatchTriggers.EnsureEditorRuntime("ScenarioSelectionPanel Add New");
+            ShelteredDeferredPatchTriggers.ApplyEditorDeferred("ScenarioSelectionPanel Add New");
 
             UILabel nameLabel = null;
             UILabel descriptionLabel = null;
@@ -793,7 +804,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 highScoreLabel = Traverse.Create(panel).Field("m_scenarioHighScore").GetValue<UILabel>();
                 stasisScoreLabelsRoot = Traverse.Create(panel).Field("m_stasis_scoreLabelsRoot").GetValue<GameObject>();
                 SaveManager.SaveType launchSaveType = GetLaunchVirtualSaveType();
-                ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(ScenarioBaseGameMode.Survival, launchSaveType);
+                ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(ScenarioBaseGameMode.Survival, launchSaveType, true);
                 string id = draft != null && !string.IsNullOrEmpty(draft.DraftId) ? draft.DraftId : "new scenario";
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Add New clicked. panel=" + panel.GetInstanceID()
                     + " draftId=" + id + ".");
@@ -827,6 +838,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                         ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                         draftStartupSave,
                         launchSaveType,
+                        draft.BaseMode,
                         "authoring draft '" + id + "'",
                         out draftError))
                 {
@@ -1279,8 +1291,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 {
                     UIFlowGuard.BlockSlotClicksToggle(true);
                     ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-                    if (panel != null)
-                        UIUtil.PushClickBlocker(panel.transform, 99999);
                 }
                 else if (panel != null)
                 {

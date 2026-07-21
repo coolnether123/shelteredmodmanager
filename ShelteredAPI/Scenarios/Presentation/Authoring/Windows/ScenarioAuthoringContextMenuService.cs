@@ -7,6 +7,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
     {
         private readonly object _sync = new object();
         private ScenarioAuthoringContextMenuModel _model = new ScenarioAuthoringContextMenuModel();
+        private int _revision;
+
+        public int Revision
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _revision;
+                }
+            }
+        }
 
         public ScenarioAuthoringContextMenuModel Current
         {
@@ -33,6 +45,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
                     CenterOnScreen = centerOnScreen,
                     Actions = actions ?? new ScenarioAuthoringInspectorAction[0]
                 };
+                _revision++;
             }
         }
 
@@ -40,7 +53,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
         {
             lock (_sync)
             {
+                // SyncTarget(null) runs every authoring frame. Closing an already
+                // closed menu must be a no-op or its revision invalidates the
+                // entire cached shell projection, including the asset catalog.
+                if (_model == null
+                    || (!_model.Visible
+                        && string.IsNullOrEmpty(_model.Title)
+                        && string.IsNullOrEmpty(_model.Detail)
+                        && _model.AnchorX == 0f
+                        && _model.AnchorY == 0f
+                        && !_model.CenterOnScreen
+                        && (_model.Actions == null || _model.Actions.Length == 0)))
+                {
+                    return;
+                }
+
                 _model = new ScenarioAuthoringContextMenuModel();
+                _revision++;
             }
         }
 

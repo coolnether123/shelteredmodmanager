@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 
@@ -58,6 +59,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private string _cachedScenarioFilePath;
         private int _cachedFrame = -1;
         private SpriteCatalog _cachedCatalog;
+        private bool _refreshingCatalog;
         internal ScenarioSpriteCatalogService(ScenarioSpriteRuntimeResolver resolver, IScenarioSpriteAssetResolver assetResolver)
         {
             _resolver = resolver;
@@ -81,12 +83,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 && string.Equals(_cachedCurrentSpriteKey, currentSpriteKey, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(_cachedScenarioFilePath, scenarioFilePath, StringComparison.OrdinalIgnoreCase)
                 && _cachedCustomSpriteSignature == customSpriteSignature
-                && (_cachedFrame < 0 || Time.frameCount - _cachedFrame < 30))
+                && (_cachedFrame < 0 || Time.frameCount - _cachedFrame < 300))
             {
                 return CloneCatalog(_cachedCatalog);
             }
 
             SpriteCatalog catalog = BuildCatalog(session.WorkingDefinition, target, resolvedTarget, scenarioFilePath, _familyMatcher, _assetResolver);
+            bool sameCatalogScope = _cachedCatalog != null
+                && string.Equals(_cachedTargetPath, targetPath, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(_cachedScenarioFilePath, scenarioFilePath, StringComparison.OrdinalIgnoreCase);
+            if (sameCatalogScope)
+            {
+                ScheduleCatalogRefresh(catalog, targetPath, currentSpriteKey, scenarioFilePath, customSpriteSignature);
+                return CloneCatalog(_cachedCatalog);
+            }
+
+            SortCatalog(catalog);
             _cachedTargetPath = targetPath;
             _cachedCurrentSpriteKey = currentSpriteKey;
             _cachedScenarioFilePath = scenarioFilePath;
@@ -104,6 +116,47 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             _cachedCustomSpriteSignature = 0;
             _cachedFrame = -1;
             _cachedCatalog = null;
+            _refreshingCatalog = false;
+        }
+
+        private void ScheduleCatalogRefresh(
+            SpriteCatalog catalog,
+            string targetPath,
+            string currentSpriteKey,
+            string scenarioFilePath,
+            int customSpriteSignature)
+        {
+            if (_refreshingCatalog || catalog == null)
+                return;
+
+            _refreshingCatalog = true;
+            SpriteCatalog snapshot = CloneCatalog(catalog);
+            ModThreads.RunAsync(
+                delegate()
+                {
+                    SortCatalog(snapshot);
+                    return snapshot;
+                },
+                delegate(SpriteCatalog sorted)
+                {
+                    _cachedTargetPath = targetPath;
+                    _cachedCurrentSpriteKey = currentSpriteKey;
+                    _cachedScenarioFilePath = scenarioFilePath;
+                    _cachedCustomSpriteSignature = customSpriteSignature;
+                    _cachedFrame = Time.frameCount;
+                    _cachedCatalog = CloneCatalog(sorted);
+                    _refreshingCatalog = false;
+                },
+                delegate(Exception ex)
+                {
+                    _refreshingCatalog = false;
+                },
+                new ModThreadOptions
+                {
+                    SourceId = "ScenarioSpriteCatalog",
+                    WorkKey = "sprite_catalog",
+                    StaleResultPolicy = ModThreadStaleResultPolicy.SkipIfSuperseded
+                });
         }
 
         private static SpriteCatalog BuildCatalog(
@@ -129,9 +182,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 ? familyMatcher.DescribeTarget(authoringTarget, target)
                 : null;
             bool allowEnvironmentPalette = IsEnvironmentArtTarget(authoringTarget);
+            bool allowWeatherEffectPalette = IsWeatherEffectArtTarget(authoringTarget);
             if (familyMatcher == null || !familyMatcher.HasVerifiedFamily(targetFamily))
             {
-                if (!allowEnvironmentPalette)
+                if (!allowEnvironmentPalette && !allowWeatherEffectPalette)
                 {
                     AddCustomSpriteCandidates(
                         definition,
@@ -147,8 +201,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 }
 
                 catalog.FamilyFiltered = false;
-                catalog.FilterSummary = "Scenario environment art";
-                catalog.GuidanceMessage = "Showing same-size loaded environment sprites so scenario wall and background art can be reused across built-in scenarios.";
+                catalog.FilterSummary = allowWeatherEffectPalette ? "Weather & effects art" : "Scenario environment art";
+                catalog.GuidanceMessage = allowWeatherEffectPalette
+                    ? "Showing same-size loaded weather and particle textures. Overrides save as sprite swaps and apply to the particle renderer material."
+                    : "Showing same-size loaded environment sprites so scenario wall and background art can be reused across built-in scenarios.";
             }
 
             List<ScenarioSpriteReferenceLibrary.LoadedSpriteReference> loadedSprites = ScenarioSpriteReferenceLibrary.GetLoadedSprites();
@@ -170,8 +226,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     && familyMatcher != null
                     && familyMatcher.IsExactVerifiedMatch(targetFamily, candidateFamily);
                 if (!exactMatch && !allowEnvironmentPalette)
-                    continue;
+                {
+                    if (!allowWeatherEffectPalette)
+                        continue;
+                }
                 if (!exactMatch && allowEnvironmentPalette && !IsEnvironmentCandidate(loaded, candidateFamily))
+                    continue;
+                if (!exactMatch && allowWeatherEffectPalette && !IsWeatherEffectCandidate(loaded, candidateFamily))
                     continue;
 
                 catalog.VanillaCandidates.Add(new SpriteCandidate
@@ -200,21 +261,33 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 catalog.GuidanceMessage = allowEnvironmentPalette && !catalog.FamilyFiltered
                     ? "No same-size loaded environment sprites were found for this scenario art target."
-                    : "No verified runtime replacements were found for the selected family '"
+                    : (allowWeatherEffectPalette && !catalog.FamilyFiltered
+                        ? "No same-size loaded weather/effect textures were found for this particle target."
+                        : "No verified runtime replacements were found for the selected family '"
                         + (familyMatcher != null ? familyMatcher.DescribeVerifiedFamily(targetFamily) : "<unknown>")
-                        + "'. The editor will not widen the list to same-size sprites.";
+                        + "'. The editor will not widen the list to same-size sprites.");
             }
             else
             {
                 catalog.GuidanceMessage = allowEnvironmentPalette && !catalog.FamilyFiltered
                     ? "Showing same-size loaded environment sprites, including built-in scenario room/background sheets when Unity has them loaded."
-                    : "Showing verified runtime replacements for the in-game family '"
+                    : (allowWeatherEffectPalette && !catalog.FamilyFiltered
+                        ? "Showing same-size loaded weather/effect textures. Scenario custom sprite patches are listed separately."
+                        : "Showing verified runtime replacements for the in-game family '"
                         + familyMatcher.DescribeVerifiedFamily(targetFamily)
-                        + "'. Scenario custom sprite patches are listed separately.";
+                        + "'. Scenario custom sprite patches are listed separately.");
             }
-            catalog.VanillaCandidates.Sort(CompareCandidate);
-            catalog.ModdedCandidates.Sort(CompareCandidate);
             return catalog;
+        }
+
+        private static void SortCatalog(SpriteCatalog catalog)
+        {
+            if (catalog == null)
+                return;
+            if (catalog.VanillaCandidates != null)
+                catalog.VanillaCandidates.Sort(CompareCandidate);
+            if (catalog.ModdedCandidates != null)
+                catalog.ModdedCandidates.Sort(CompareCandidate);
         }
 
         internal static void AddCustomSpriteCandidates(
@@ -404,6 +477,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             }
         }
 
+        private static bool IsWeatherEffectArtTarget(ScenarioAuthoringTarget target)
+        {
+            return ScenarioWeatherEffectSpriteCatalogService.IsWeatherEffectTarget(target);
+        }
+
         internal static bool IsGeneratedPatchRuntimeKey(string runtimeSpriteKey)
         {
             return !string.IsNullOrEmpty(runtimeSpriteKey)
@@ -429,6 +507,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 + " "
                 + ((loaded != null ? loaded.TextureName : null) ?? string.Empty);
             return ContainsAny(combined, "wall", "background", "backdrop", "room", "bunker", "shelter", "surrounded", "stasis", "scenario");
+        }
+
+        private static bool IsWeatherEffectCandidate(
+            ScenarioSpriteReferenceLibrary.LoadedSpriteReference loaded,
+            ScenarioSpriteFamilyMatcher.FamilyProfile candidateFamily)
+        {
+            if (candidateFamily != null && !string.IsNullOrEmpty(candidateFamily.KindKey))
+            {
+                if (ContainsAny(candidateFamily.KindKey, "weather", "rain", "sand", "storm", "dust", "snow", "fog", "cloud", "particle", "effect"))
+                    return true;
+            }
+
+            string combined = ((loaded != null ? loaded.SpriteName : null) ?? string.Empty)
+                + " "
+                + ((loaded != null ? loaded.TextureName : null) ?? string.Empty);
+            return ContainsAny(combined, "weather", "rain", "sand", "storm", "dust", "snow", "fog", "cloud", "particle", "effect");
         }
 
         private static bool ContainsAny(string value, params string[] parts)

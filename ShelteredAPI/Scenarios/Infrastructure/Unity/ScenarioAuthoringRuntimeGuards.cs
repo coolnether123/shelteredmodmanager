@@ -24,7 +24,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (!ScenarioWorldReady.IsShelterSceneActive())
                 return false;
 
-            return IsAuthoringPending() && !IsAuthoringActive();
+            return (IsAuthoringPending() && !IsAuthoringActive())
+                || ShouldMaintainPausedSimulation();
         }
 
         public static bool IsPlaytesting()
@@ -36,9 +37,52 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return session != null && session.PlaytestState == ScenarioPlaytestState.Playtesting;
         }
 
+        public static bool IsOpeningCutscenePreviewActive()
+        {
+            return IsAuthoringActive() && ScenarioOpeningCutsceneAuthoringService.IsPreviewActive;
+        }
+
+        public static bool IsMapAuthoringActive()
+        {
+            if (!IsAuthoringActive())
+                return false;
+
+            ScenarioAuthoringState state = GetState();
+            return state != null && state.MapAuthoringActive;
+        }
+
+        public static bool IsStorageAuthoringActive()
+        {
+            if (!IsAuthoringActive())
+                return false;
+
+            ScenarioAuthoringState state = GetState();
+            return state != null && state.StorageAuthoringActive;
+        }
+
+        public static bool IsVanillaInteractionActive()
+        {
+            if (!IsAuthoringActive())
+                return false;
+
+            ScenarioAuthoringState state = GetState();
+            return state != null && state.VanillaInteractionActive;
+        }
+
+        public static bool IsVanillaAuthoringPanelActive()
+        {
+            return IsVanillaInteractionActive();
+        }
+
         public static bool ShouldCaptureGameplayInput()
         {
             if (!IsAuthoringActive())
+                return false;
+
+            if (IsVanillaInteractionActive())
+                return false;
+
+            if (IsOpeningCutscenePreviewActive())
                 return false;
 
             ScenarioAuthoringState state = GetState();
@@ -48,17 +92,23 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public static bool ShouldResolveSelection()
         {
-            return ShouldCaptureGameplayInput();
+            return ShouldCaptureGameplayInput() && !IsVanillaAuthoringPanelActive();
         }
 
         public static bool ShouldMaintainPausedSimulation()
         {
+            if (IsOpeningCutscenePreviewActive())
+                return false;
+
+            if (IsVanillaInteractionActive())
+                return false;
+
             return IsAuthoringActive() && !IsPlaytesting();
         }
 
         public static bool ShouldSuppressGlobalGameplayUi()
         {
-            return ShouldCaptureGameplayInput();
+            return ShouldCaptureGameplayInput() && !IsVanillaAuthoringPanelActive();
         }
 
         public static bool ShouldBlockGameplayAxis(PlatformInput.InputAxis axis)
@@ -70,6 +120,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             {
                 case PlatformInput.InputAxis.CameraHorizontal:
                 case PlatformInput.InputAxis.CameraVertical:
+                    if (IsVanillaAuthoringPanelActive())
+                        return false;
                     ScenarioAuthoringState state = GetState();
                     return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
                         .ShouldBlockCameraInput(state, IsPlaytesting());
@@ -83,20 +135,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (!IsAuthoringActive())
                 return false;
 
-            ScenarioAuthoringState state = GetState();
-            return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
-                .ShouldConsumeScroll(state, IsPlaytesting())
-                && axis == PlatformInput.MenuInputAxis.UIscroll;
-        }
-
-        public static bool ShouldSuppressCtrlCameraBehavior()
-        {
-            if (!IsAuthoringActive())
+            if (IsVanillaAuthoringPanelActive())
                 return false;
 
             ScenarioAuthoringState state = GetState();
             return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
-                .ShouldSuppressCtrlCameraBehavior(state, IsPlaytesting());
+                .ShouldConsumeScroll(state, IsPlaytesting())
+                && axis == PlatformInput.MenuInputAxis.UIscroll;
         }
 
         public static bool ShouldBlockGameplayButton(PlatformInput.InputButton button)
@@ -104,9 +149,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (!ShouldCaptureGameplayInput())
                 return false;
 
+            if (IsVanillaInteractionActive())
+                return false;
+
             switch (button)
             {
                 case PlatformInput.InputButton.Cancel:
+                case PlatformInput.InputButton.OpenMap:
+                case PlatformInput.InputButton.Zoom:
+                case PlatformInput.InputButton.CameraSpeed:
+                    if (IsVanillaAuthoringPanelActive())
+                        return false;
+                    return true;
                 case PlatformInput.InputButton.CancelJob:
                 case PlatformInput.InputButton.Action:
                 case PlatformInput.InputButton.Interact:
@@ -118,11 +172,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 case PlatformInput.InputButton.AcceptTransmission:
                 case PlatformInput.InputButton.Dismiss:
                 case PlatformInput.InputButton.Pause:
-                case PlatformInput.InputButton.OpenMap:
                 case PlatformInput.InputButton.Clipboard:
                 case PlatformInput.InputButton.Info:
-                case PlatformInput.InputButton.Zoom:
-                case PlatformInput.InputButton.CameraSpeed:
                     return true;
                 default:
                     return false;

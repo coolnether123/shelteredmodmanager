@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring.Supplies;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -10,6 +11,22 @@ using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioGameplayScheduleAuthoringService
     {
+        private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioAuthoringInventoryProjectionService _inventoryProjectionService;
+
+        public ScenarioGameplayScheduleAuthoringService()
+            : this(null, null)
+        {
+        }
+
+        public ScenarioGameplayScheduleAuthoringService(
+            ScenarioActorResolver actorResolver,
+            ScenarioAuthoringInventoryProjectionService inventoryProjectionService)
+        {
+            _actorResolver = actorResolver;
+            _inventoryProjectionService = inventoryProjectionService;
+        }
+
         public bool TryHandleAction(ScenarioEditorSession session, string actionId, out string message)
         {
             message = null;
@@ -25,13 +42,32 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryStartingAdd, StringComparison.Ordinal))
-                return AddStartingInventoryItem(session, out message);
+                return FinishStartingInventoryMutation(session, AddStartingInventoryItem(session, out message), "add starting item", ref message);
+            int presetIndex;
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, ScenarioSuppliesPresetCatalog.Count, out presetIndex))
+            {
+                bool presetChanged = ApplyStarterPreset(session, presetIndex, out message);
+                if (presetChanged)
+                    FinishStartingInventoryMutation(session, true, "apply starter loadout", ref message);
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionSuppliesMergeDuplicates, StringComparison.Ordinal))
+            {
+                bool mergeChanged = MergeStartingInventoryDuplicates(session, out message);
+                if (mergeChanged)
+                    FinishStartingInventoryMutation(session, true, "merge duplicate starting items", ref message);
+                return true;
+            }
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleAdd, StringComparison.Ordinal))
                 return AddInventoryChange(session, ScenarioInventoryChangeKind.Add, out message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleRemove, StringComparison.Ordinal))
                 return AddInventoryChange(session, ScenarioInventoryChangeKind.Remove, out message);
             if (TryHandleInventoryChange(session, actionId, out message))
+            {
+                if (IsStartingInventoryAction(actionId))
+                    FinishStartingInventoryMutation(session, true, "edit starting item", ref message);
                 return true;
+            }
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, StringComparison.Ordinal))
                 return AddWeatherEvent(session, out message);
@@ -50,7 +86,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
-        private static bool AddFutureSurvivor(ScenarioEditorSession session, out string message)
+        private bool AddFutureSurvivor(ScenarioEditorSession session, out string message)
         {
             FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
             FutureSurvivorDefinition survivor = new FutureSurvivorDefinition();
@@ -59,6 +95,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             survivor.Survivor = ScenarioFamilyMemberFactory.CreateDefaultConfig(
                 "New Survivor " + (family.FutureSurvivors.Count + 1).ToString(),
                 ScenarioGender.Any);
+            if (_actorResolver != null)
+                _actorResolver.EnsureFutureSurvivorRef(session.WorkingDefinition, survivor, family.FutureSurvivors.Count);
             family.FutureSurvivors.Add(survivor);
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
             message = "Added future survivor arrival for " + ScenarioAuthoringSchedule.Format(survivor.Arrival) + ".";
@@ -74,7 +112,56 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             inventory.OverrideRandomStart = true;
             inventory.Items.Add(entry);
             MarkInventoryDirty(session);
-            message = "Added starting stockpile item '" + entry.ItemId + "'.";
+            message = "Added shelter storage item '" + entry.ItemId + "'.";
+            return true;
+        }
+
+        private static bool ApplyStarterPreset(ScenarioEditorSession session, int presetIndex, out string message)
+        {
+            message = null;
+            ScenarioSuppliesPresetCatalog.PresetInfo preset = ScenarioSuppliesPresetCatalog.ByIndex(presetIndex);
+            if (preset == null)
+            {
+                message = "Unknown starter loadout preset.";
+                return false;
+            }
+
+            ScenarioDefinition definition = session.WorkingDefinition;
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null)
+                history.RecordAuthoringChange(definition, "Apply " + preset.DisplayName + " loadout", ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+
+            StartingInventoryDefinition inventory = EnsureInventory(definition);
+            List<ItemEntry> stacks = ScenarioSuppliesPresetCatalog.BuildStacks(preset);
+            inventory.Items.Clear();
+            for (int i = 0; i < stacks.Count; i++)
+                inventory.Items.Add(stacks[i]);
+            ScenarioSuppliesInventoryNormalizer.Normalize(inventory.Items);
+            if (inventory.Items.Count > 0)
+                inventory.OverrideRandomStart = true;
+
+            MarkInventoryDirty(session);
+            message = "Applied " + preset.DisplayName + " starter loadout (" + inventory.Items.Count + " stack(s)).";
+            return true;
+        }
+
+        private static bool MergeStartingInventoryDuplicates(ScenarioEditorSession session, out string message)
+        {
+            ScenarioDefinition definition = session.WorkingDefinition;
+            StartingInventoryDefinition inventory = EnsureInventory(definition);
+            if (!ScenarioSuppliesInventoryNormalizer.NeedsNormalize(inventory.Items))
+            {
+                message = "No duplicate or empty starting stacks to merge.";
+                return false;
+            }
+
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null)
+                history.RecordAuthoringChange(definition, "Merge duplicate starting items", ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+
+            ScenarioSuppliesInventoryNormalizer.NormalizeResult result = ScenarioSuppliesInventoryNormalizer.Normalize(inventory.Items);
+            MarkInventoryDirty(session);
+            message = "Merged " + result.MergedStacks + " duplicate stack(s) and removed " + result.RemovedStacks + " empty stack(s).";
             return true;
         }
 
@@ -108,6 +195,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static bool AddScheduledQuest(ScenarioEditorSession session, out string message)
         {
+            RecordQuestCreation(session, "Add quest popup");
             QuestAuthoringDefinition quests = EnsureQuests(session.WorkingDefinition);
             QuestDefinition quest = new QuestDefinition();
             QuestDef libraryQuest = FindFirstUnusedCatalogQuest(quests);
@@ -119,12 +207,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 quest.Id = "quest_" + (quests.Quests.Count + 1).ToString();
                 quest.Title = "Scheduled Quest " + (quests.Quests.Count + 1).ToString();
-                quest.Description = "Created from the scenario editor. Replace the id with a QuestLibrary id before playtesting.";
+                quest.Description = "Created in the scenario editor. Choose a quest from the library before playtesting.";
             }
             quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
             quests.Quests.Add(quest);
             MarkQuestDirty(session);
-            message = "Added quest '" + quest.Id + "' for " + ScenarioAuthoringSchedule.Format(quest.ScheduledStart) + ".";
+            message = "Added a quest popup for " + ScenarioAuthoringSchedule.Format(quest.ScheduledStart) + ".";
             return true;
         }
 
@@ -136,13 +224,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (!ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix, catalog.Count, out catalogIndex))
                 return false;
 
+            RecordQuestCreation(session, "Add library quest");
             QuestAuthoringDefinition quests = EnsureQuests(session.WorkingDefinition);
             QuestDefinition quest = new QuestDefinition();
             ApplyLibraryQuest(quest, catalog[catalogIndex]);
             quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
             quests.Quests.Add(quest);
             MarkQuestDirty(session);
-            message = "Added quest '" + quest.Id + "' from QuestLibrary.";
+            message = "Added the selected library quest to Authored.";
             return true;
         }
 
@@ -151,7 +240,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             QuestManager manager = QuestManager.instance;
             if (manager == null)
             {
-                message = "QuestManager is not ready; active quest capture skipped.";
+                message = "Live quests are not available yet; nothing was captured.";
                 return true;
             }
 
@@ -212,8 +301,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 inventory.OverrideRandomStart = !inventory.OverrideRandomStart;
                 MarkInventoryDirty(session);
                 message = inventory.OverrideRandomStart
-                    ? "Starting stockpile now overrides random starting items."
-                    : "Random starting items are allowed alongside authored stockpile items.";
+                    ? "Vanilla random-start item pools will be suppressed when this scenario applies."
+                    : "Vanilla random-start item pools are allowed when this scenario applies.";
                 return true;
             }
 
@@ -223,7 +312,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 inventory.Items.RemoveAt(index);
                 MarkInventoryDirty(session);
-                message = "Removed starting stockpile item.";
+                message = "Removed shelter storage item.";
                 return true;
             }
 
@@ -232,7 +321,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ItemEntry entry = inventory.Items[index];
                 entry.Quantity = Math.Max(1, entry.Quantity + delta);
                 MarkInventoryDirty(session);
-                message = "Updated starting stockpile quantity to " + entry.Quantity + ".";
+                message = "Updated shelter storage quantity to " + entry.Quantity + ".";
                 return true;
             }
 
@@ -241,7 +330,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ItemEntry entry = inventory.Items[index];
                 entry.ItemId = ScenarioInventoryItemCatalog.CycleItemId(entry.ItemId, delta);
                 MarkInventoryDirty(session);
-                message = "Changed starting stockpile item to '" + entry.ItemId + "'.";
+                message = "Changed shelter storage item to '" + entry.ItemId + "'.";
+                return true;
+            }
+
+            string itemToken;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, inventory.Items.Count, out index, out itemToken))
+            {
+                ItemEntry entry = inventory.Items[index];
+                entry.ItemId = DecodeToken(itemToken);
+                MarkInventoryDirty(session);
+                message = "Changed shelter storage item to '" + entry.ItemId + "'.";
                 return true;
             }
 
@@ -281,7 +380,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            return TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, inventory.ScheduledChanges.Count, delegate(int itemIndex) { return inventory.ScheduledChanges[itemIndex].When; }, session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory, out message);
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix, inventory.ScheduledChanges.Count, out index, out itemToken))
+            {
+                TimedInventoryChangeDefinition change = inventory.ScheduledChanges[index];
+                change.ItemId = DecodeToken(itemToken);
+                MarkInventoryDirty(session);
+                message = "Changed timed inventory item to '" + change.ItemId + "'.";
+                return true;
+            }
+
+            if (TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, inventory.ScheduledChanges.Count, delegate(int itemIndex) { return inventory.ScheduledChanges[itemIndex].When; }, session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory, out message))
+                return true;
+
+            return TryStepScheduleMinute(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleMinutePrefix, inventory.ScheduledChanges.Count, delegate(int itemIndex) { return inventory.ScheduledChanges[itemIndex].When; }, session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory, out message);
         }
 
         private static bool TryHandleWeatherEvent(ScenarioEditorSession session, string actionId, out string message)
@@ -296,7 +407,30 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Removed weather event.";
                 return true;
             }
-            return TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, events.WeatherEvents.Count, delegate(int index) { return events.WeatherEvents[index].When; }, session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers, out message);
+
+            int index;
+            string token;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleStatePrefix, events.WeatherEvents.Count, out index, out token))
+            {
+                events.WeatherEvents[index].WeatherState = DecodeToken(token);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Weather event state set to " + events.WeatherEvents[index].WeatherState + ".";
+                return true;
+            }
+
+            int delta;
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix, events.WeatherEvents.Count, out index, out delta))
+            {
+                events.WeatherEvents[index].DurationHours = Math.Max(0, events.WeatherEvents[index].DurationHours + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Weather duration set to " + events.WeatherEvents[index].DurationHours + " hour(s).";
+                return true;
+            }
+
+            if (TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, events.WeatherEvents.Count, delegate(int itemIndex) { return events.WeatherEvents[itemIndex].When; }, session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers, out message))
+                return true;
+
+            return TryStepScheduleMinute(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleMinutePrefix, events.WeatherEvents.Count, delegate(int itemIndex) { return events.WeatherEvents[itemIndex].When; }, session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers, out message);
         }
 
         private static bool TryHandleQuest(ScenarioEditorSession session, string actionId, out string message)
@@ -335,12 +469,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 QuestDefinition copy = CopyQuest(quests.Quests[index], quests.Quests.Count + 1);
                 quests.Quests.Insert(index + 1, copy);
                 MarkQuestDirty(session);
-                message = "Duplicated quest '" + copy.Id + "'.";
+                message = "Duplicated the selected quest popup.";
                 return true;
             }
 
             if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix, quests.Quests.Count, out index, out delta))
                 return CycleQuestId(session, quests.Quests[index], delta, out message);
+
+            string startMode;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionQuestStartModePrefix, quests.Quests.Count, out index, out startMode))
+                return SetQuestStartMode(session, quests.Quests[index], session.WorkingDefinition, startMode, out message);
 
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionQuestStartModePrefix, quests.Quests.Count, out index))
                 return ToggleQuestStartMode(session, quests.Quests[index], session.WorkingDefinition, out message);
@@ -420,6 +558,31 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return true;
         }
 
+        private static bool TryStepScheduleMinute(string actionId, string minutePrefix, int count, ScheduleGetter getter, ScenarioEditorSession session, ScenarioDirtySection section, ScenarioEditCategory category, out string message)
+        {
+            message = null;
+            int index;
+            int delta;
+            if (!ScenarioAuthoringActionParser.TrySignedIndex(actionId, minutePrefix, count, out index, out delta))
+                return false;
+
+            ScenarioScheduleTime time = getter(index);
+            if (time == null)
+            {
+                message = "This item has no schedule to edit.";
+                return false;
+            }
+            time.Minute = ScenarioAuthoringSchedule.Clamp(time.Minute + delta, 0, 59);
+            ScenarioAuthoringMutation.MarkDirty(session, section, category);
+            message = "Updated scheduled minute to " + time.Minute + ".";
+            return true;
+        }
+
+        private static string DecodeToken(string token)
+        {
+            return string.IsNullOrEmpty(token) ? string.Empty : Uri.UnescapeDataString(token);
+        }
+
         private static bool CycleQuestId(ScenarioEditorSession session, QuestDefinition quest, int delta, out string message)
         {
             message = null;
@@ -429,7 +592,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             List<QuestDef> catalog = GetQuestCatalog();
             if (catalog.Count == 0)
             {
-                message = "QuestLibrary is not ready; quest id cannot be cycled.";
+                message = "The quest library is not available yet, so the source could not be changed.";
                 return true;
             }
 
@@ -437,7 +600,55 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int next = current < 0 ? 0 : Wrap(current + delta, catalog.Count);
             ApplyLibraryQuest(quest, catalog[next]);
             MarkQuestDirty(session);
-            message = "Quest id changed to '" + quest.Id + "'.";
+            message = "Changed the selected quest library entry.";
+            return true;
+        }
+
+        private static void RecordQuestCreation(ScenarioEditorSession session, string description)
+        {
+            if (session == null || session.WorkingDefinition == null)
+                return;
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null)
+                history.RecordAuthoringChange(
+                    session.WorkingDefinition,
+                    description,
+                    ScenarioDirtySection.Triggers,
+                    ScenarioEditCategory.Triggers);
+        }
+
+        private static bool SetQuestStartMode(
+            ScenarioEditorSession session,
+            QuestDefinition quest,
+            ScenarioDefinition definition,
+            string mode,
+            out string message)
+        {
+            message = null;
+            if (quest == null)
+                return true;
+
+            if (string.Equals(mode, "scheduled", StringComparison.OrdinalIgnoreCase))
+            {
+                quest.StartTriggerId = null;
+                if (quest.ScheduledStart == null)
+                    quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
+                MarkQuestDirty(session);
+                message = "Quest popup now starts on its schedule.";
+                return true;
+            }
+
+            if (string.Equals(mode, "triggered", StringComparison.OrdinalIgnoreCase))
+            {
+                quest.ScheduledStart = null;
+                if (string.IsNullOrEmpty(quest.StartTriggerId))
+                    quest.StartTriggerId = EnsureFirstTriggerId(definition);
+                MarkQuestDirty(session);
+                message = "Quest popup now starts from the selected authored trigger.";
+                return true;
+            }
+
+            message = "Unknown quest start option.";
             return true;
         }
 
@@ -451,14 +662,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 quest.ScheduledStart = null;
                 quest.StartTriggerId = EnsureFirstTriggerId(definition);
-                message = "Quest now starts from trigger '" + quest.StartTriggerId + "'.";
+                message = "Quest popup now starts from the selected authored trigger.";
             }
             else
             {
                 quest.StartTriggerId = null;
                 if (quest.ScheduledStart == null)
                     quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
-                message = "Quest now starts from its schedule.";
+                message = "Quest popup now starts from its schedule.";
             }
 
             MarkQuestDirty(session);
@@ -480,7 +691,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             quest.StartTriggerId = ids[next];
             quest.ScheduledStart = null;
             MarkQuestDirty(session);
-            message = "Quest trigger set to '" + quest.StartTriggerId + "'.";
+            message = "Selected a different authored trigger for this quest popup.";
             return true;
         }
 
@@ -497,8 +708,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             quest.CompletionConditionId = string.IsNullOrEmpty(ids[next]) ? null : ids[next];
             MarkQuestDirty(session);
             message = string.IsNullOrEmpty(quest.CompletionConditionId)
-                ? "Quest completion condition cleared."
-                : "Quest completion condition set to '" + quest.CompletionConditionId + "'.";
+                ? "Cleared the quest completion requirement."
+                : "Selected a quest completion requirement.";
             return true;
         }
 
@@ -507,13 +718,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             QuestDef def = FindQuestDef(quest != null ? quest.Id : null);
             if (quest == null || def == null)
             {
-                message = "QuestLibrary definition was not found for this quest id.";
+                message = "The selected quest library entry could not be found.";
                 return true;
             }
 
             quest.Title = BuildQuestTitle(def);
             MarkQuestDirty(session);
-            message = "Quest title synced from QuestLibrary.";
+            message = "Updated the popup title from the quest library.";
             return true;
         }
 
@@ -522,13 +733,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             QuestDef def = FindQuestDef(quest != null ? quest.Id : null);
             if (quest == null || def == null)
             {
-                message = "QuestLibrary definition was not found for this quest id.";
+                message = "The selected quest library entry could not be found.";
                 return true;
             }
 
             quest.Description = !string.IsNullOrEmpty(def.descriptionKey) ? def.descriptionKey : "QuestLibrary entry " + def.id;
             MarkQuestDirty(session);
-            message = "Quest description synced from QuestLibrary.";
+            message = "Updated the popup description from the quest library.";
             return true;
         }
 
@@ -536,20 +747,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             if (quest == null || string.IsNullOrEmpty(quest.Id))
             {
-                message = "Quest id is missing.";
+                message = "Choose a quest library entry before previewing this popup.";
                 return true;
             }
 
             if (QuestManager.instance == null)
             {
-                message = "QuestManager is not ready; quest was not spawned.";
+                message = "Live quest preview is not available yet.";
                 return true;
             }
 
             bool spawned = QuestManager.instance.SpawnQuestWithId(quest.Id);
             message = spawned
-                ? "Spawned quest '" + quest.Id + "' for preview."
-                : "QuestManager rejected quest '" + quest.Id + "'. Check availability, max active quests, and QuestLibrary id.";
+                ? "Opened the quest popup preview."
+                : "The game could not open this quest popup. Check availability and the number of active quests.";
             return true;
         }
 
@@ -724,6 +935,29 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private static void MarkInventoryDirty(ScenarioEditorSession session)
         {
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+        }
+
+        private bool FinishStartingInventoryMutation(ScenarioEditorSession session, bool changed, string reason, ref string message)
+        {
+            if (!changed || _inventoryProjectionService == null)
+                return changed;
+
+            string projectionMessage;
+            if (_inventoryProjectionService.TryProject(session, reason, out projectionMessage) && !string.IsNullOrEmpty(projectionMessage))
+                message = string.IsNullOrEmpty(message) ? projectionMessage : message + " " + projectionMessage;
+            return changed;
+        }
+
+        private static bool IsStartingInventoryAction(string actionId)
+        {
+            if (string.IsNullOrEmpty(actionId))
+                return false;
+
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryStartingOverrideToggle, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingRemovePrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, StringComparison.Ordinal);
         }
 
         private static FamilySetupDefinition EnsureFamily(ScenarioDefinition definition)

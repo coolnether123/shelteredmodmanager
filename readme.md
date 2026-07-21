@@ -32,7 +32,8 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 - Plugin loader with dependency resolution and load order management
 - Unlimited custom save slots with mod tracking and verification
 - Neutral `ModAPI.dll` framework APIs plus `ShelteredAPI.dll` integration for items, recipes, events, scenarios, UI hooks, saves, input, and Harmony patching
-- Experimental custom scenario browser, XML scenario packs, scenario authoring, trigger runtime, scheduled effects, and win/loss runtime support
+- Custom scenario browser, XML scenario packs, trigger runtime, scheduled effects, and win/loss runtime support, with advanced authoring available as an opt-in preview
+- Desktop Content Workshop for data-driven items, recipes, crafting costs, icons, validation, export, and local installation without requiring a scenario
 - Rebindable Sheltered and mod-defined keybindings with conflict detection and persistence
 - Zero-boilerplate mod development with `ModManagerBase`, attribute settings, and Spine settings UI
 - Per-mod isolated persistence and save-backed compatibility helpers
@@ -48,6 +49,7 @@ The 2.0 line is a breaking clean API line. It separates the neutral modding fram
 
 - **ModAPI/ShelteredAPI split:** `ModAPI.dll` owns neutral contracts; `ShelteredAPI.dll` owns Sheltered content, saves, input, UI, events, actors, and scenarios.
 - **Custom scenarios:** XML packs and code registrations appear in the in-game scenario browser, with dependency lockout, custom save binding, triggers, scheduled effects, and win/loss outcomes.
+- **Content Workshop:** the desktop manager can create content-only or hybrid mod packages with custom items, recipes, costs, recycling, and icons through a shared pixel editor.
 - **Release-gated safety fixes:** custom-scenario save APIs reject built-in save ids, scenario XML saves use temp/validate/replace with backups, Unity log filtering never suppresses errors/asserts/exceptions, and Nexus installs verify copied files before success.
 - **Rebindable controls:** Vanilla Sheltered actions and mod-defined input actions share one keybinding UI with persisted bindings and conflict handling.
 - **Modern developer experience:** `ModManagerBase`, attribute settings, Spine settings UI, event bus, isolated persistence, Harmony helpers, and runtime diagnostics remain supported.
@@ -247,7 +249,7 @@ Currently available:
 - Neutral plugin lifecycle, settings, persistence, event-bus, actor-contract, and Harmony helper APIs via `ModAPI.dll`
 - Item, food, recipe, scenario, save, UI, input, event, and manager-backed hooks via `ShelteredAPI.dll`
 - Event subscriptions for day cycles, save/load, UI panels, combat starts, faction events, party returns, and inter-mod messages
-- Experimental custom scenario XML packs, code registrations, trigger runtime, scheduled effects, and win/loss runtime
+- Custom scenario XML packs, code registrations, trigger runtime, scheduled effects, and win/loss runtime; advanced in-game authoring is an opt-in preview
 - Rebindable vanilla and mod-defined keybindings
 - Runtime inspector (F9)
 
