@@ -13,7 +13,9 @@ namespace ShelteredAPI.Saves.Backups
     internal enum SaveBackupReason
     {
         BeforeOverwrite = 0,
-        Manual = 1
+        Manual = 1,
+        BeforeRestore = 2,
+        BeforeDelete = 3
     }
 
     internal enum SaveBackupSourceKind
@@ -43,7 +45,7 @@ namespace ShelteredAPI.Saves.Backups
             return new SaveBackupRetentionPolicy
             {
                 Mode = SaveBackupRetentionMode.Limited,
-                SnapshotLimit = 3
+                SnapshotLimit = 10
             };
         }
     }
@@ -64,6 +66,14 @@ namespace ShelteredAPI.Saves.Backups
         public string Id;
         public string Path;
         public SaveBackupSourceKind Kind;
+    }
+
+    internal sealed class SaveBackupRestoreDestination
+    {
+        public string ScenarioId;
+        public int AbsoluteSlot;
+        public string ExpectedLineageId;
+        public bool AllowHistoricalSlotWhenUnoccupied;
     }
 
     internal sealed class SaveBackupFileRecord

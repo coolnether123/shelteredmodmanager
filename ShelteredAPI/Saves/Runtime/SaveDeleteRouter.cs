@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Backups;
 
 namespace ShelteredAPI.Saves.Runtime
 {
@@ -52,10 +53,30 @@ namespace ShelteredAPI.Saves.Runtime
             return DeleteAbsoluteSlot("Standard", absoluteSlot, reason);
         }
 
+        internal static bool DeleteAbsoluteSlot(
+            int absoluteSlot,
+            string reason,
+            out string error)
+        {
+            return DeleteAbsoluteSlot("Standard", absoluteSlot, reason, out error);
+        }
+
         internal static bool DeleteAbsoluteSlot(string scenarioId, int absoluteSlot, string reason)
         {
+            string error;
+            return DeleteAbsoluteSlot(scenarioId, absoluteSlot, reason, out error);
+        }
+
+        internal static bool DeleteAbsoluteSlot(
+            string scenarioId,
+            int absoluteSlot,
+            string reason,
+            out string error)
+        {
+            error = null;
             if (absoluteSlot <= 0)
             {
+                error = "The selected save slot is invalid.";
                 MMLog.WriteWarning(string.Format("[SaveDeleteRouter] Refusing delete for invalid absolute slot: {0}. Reason={1}", absoluteSlot, reason ?? "unknown"));
                 return false;
             }
@@ -63,6 +84,20 @@ namespace ShelteredAPI.Saves.Runtime
             try
             {
                 string storageScenarioId = SaveStorageRouter.NormalizeScenarioId(scenarioId);
+                if (!SaveBackupService.BackupBeforeDelete(
+                    storageScenarioId,
+                    absoluteSlot,
+                    out error))
+                {
+                    MMLog.WriteError(string.Format(
+                        "[SaveDeleteRouter] Delete cancelled because the current save could not be preserved. scenario={0}, slot={1}, reason={2}, error={3}",
+                        storageScenarioId,
+                        absoluteSlot,
+                        reason ?? "unknown",
+                        error ?? "unknown"));
+                    return false;
+                }
+
                 bool deleted = SaveStorageRouter.DeleteBySlot(storageScenarioId, absoluteSlot);
                 MMLog.WriteInfo(string.Format("[SaveDeleteRouter] Delete scenario={0} slot {1} result={2}. Reason={3}",
                     storageScenarioId, absoluteSlot, deleted, reason ?? "unknown"));
@@ -70,6 +105,7 @@ namespace ShelteredAPI.Saves.Runtime
             }
             catch (Exception ex)
             {
+                error = ex.Message;
                 MMLog.WriteError(string.Format("[SaveDeleteRouter] DeleteAbsoluteSlot failed for scenario={0} slot {1}. Reason={2}. Error={3}",
                     scenarioId ?? "Standard", absoluteSlot, reason ?? "unknown", ex));
                 return false;

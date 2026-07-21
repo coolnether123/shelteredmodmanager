@@ -23,7 +23,7 @@ namespace ShelteredAPI.Saves.Paging
 
         public static bool ShouldShow(int futureSnapshotCount)
         {
-            return futureSnapshotCount > 0 && ModPrefs.GetInt(HideWarningPrefKey, 0) == 0;
+            return ModPrefs.GetInt(HideWarningPrefKey, 0) == 0;
         }
 
         public static void Show(SaveEntry entry, int futureSnapshotCount, Action onConfirm, Action onCancel)
@@ -82,20 +82,21 @@ namespace ShelteredAPI.Saves.Paging
             string family = entry != null && entry.saveInfo != null && !string.IsNullOrEmpty(entry.saveInfo.familyName)
                 ? entry.saveInfo.familyName
                 : "this save";
-            string plural = futureSnapshotCount == 1 ? "snapshot" : "snapshots";
             string message =
                 "Loading this snapshot rolls back " + family + ".\n\n" +
-                "The next save made from it will delete " + futureSnapshotCount + " newer backup " + plural + "\n" +
-                "for this save, then continue the backup timeline from here.";
+                "Current progress is preserved first as a safety snapshot.\n" +
+                "Newer snapshots remain available in this archive.";
 
             UILabel body = CreateLabel(root, "Body", message,
-                new Vector3(0, 45, 0), 20, ColorText, uiFont, ttfFont, 100);
+                new Vector3(0, 50, 0), 19, ColorText, uiFont, ttfFont, 100);
             body.alignment = NGUIText.Alignment.Center;
-            body.width = WINDOW_WIDTH - 80;
-            body.overflowMethod = UILabel.Overflow.ResizeHeight;
+            body.pivot = UIWidget.Pivot.Center;
+            body.width = WINDOW_WIDTH - 70;
+            body.height = 120;
+            body.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             GameObject checkbox = BuildCheckbox(root, uiFont, ttfFont);
-            checkbox.transform.localPosition = new Vector3(0, -95, 0);
+            checkbox.transform.localPosition = new Vector3(0, -82, 0);
 
             int buttonY = -WINDOW_HEIGHT / 2 + 62;
             CreateButton(root, "LoadBtn", "LOAD SNAPSHOT",
@@ -111,20 +112,24 @@ namespace ShelteredAPI.Saves.Paging
             container.layer = root.gameObject.layer;
 
             GameObject box = CreateTexturedBox(container.transform, "CheckboxBg",
-                new Vector3(-145, 0, 0), 22, 22, new Color(0.3f, 0.25f, 0.2f, 1f), 100, false);
+                new Vector3(-150, 0, 0), 22, 22, new Color(0.3f, 0.25f, 0.2f, 1f), 100, false);
 
             UILabel mark = CreateLabel(container.transform, "Checkmark", "X",
-                new Vector3(-145, 0, 0), 18, new Color(0.35f, 0.95f, 0.35f), uiFont, ttfFont, 101);
+                new Vector3(-150, 0, 0), 18, new Color(0.35f, 0.95f, 0.35f), uiFont, ttfFont, 101);
             mark.alignment = NGUIText.Alignment.Center;
             mark.gameObject.SetActive(false);
 
             UILabel label = CreateLabel(container.transform, "CheckboxLabel",
-                "I understand - don't warn me again",
-                new Vector3(-115, 0, 0), 16, ColorSubtext, uiFont, ttfFont, 100);
-            label.alignment = NGUIText.Alignment.Left;
+                "Don't show this warning again",
+                new Vector3(10, 0, 0), 16, ColorSubtext, uiFont, ttfFont, 100);
+            label.alignment = NGUIText.Alignment.Center;
+            label.pivot = UIWidget.Pivot.Center;
+            label.width = 300;
+            label.height = 32;
+            label.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             BoxCollider collider = box.AddComponent<BoxCollider>();
-            collider.size = new Vector3(330, 34, 1);
+            collider.size = new Vector3(340, 36, 1);
             collider.center = new Vector3(150, 0, 0);
 
             UIButton button = box.AddComponent<UIButton>();

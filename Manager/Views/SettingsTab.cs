@@ -234,7 +234,7 @@ namespace Manager.Views
             _saveBackupRetentionCountNumeric.Font = new Font("Segoe UI", 10f);
             _saveBackupRetentionCountNumeric.Minimum = 1;
             _saveBackupRetentionCountNumeric.Maximum = 999;
-            _saveBackupRetentionCountNumeric.Value = 3;
+            _saveBackupRetentionCountNumeric.Value = AppSettings.DefaultSaveBackupRetention;
             _saveBackupRetentionCountNumeric.Width = 80;
             _helpToolTip.SetToolTip(_saveBackupRetentionCountNumeric, "Number of unpinned snapshots to keep for each save timeline.");
         }
