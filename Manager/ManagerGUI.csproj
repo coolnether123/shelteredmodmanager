@@ -53,6 +53,13 @@
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ManagerUpdater\ManagerUpdater.csproj">
+      <Project>{A689AF53-9D0E-49E4-9C67-92B302CD4820}</Project>
+      <Name>ManagerUpdater</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
     <!-- Local Unity runtime reference is a developer-machine fallback.
          If your install differs, retarget this HintPath to an equivalent Sheltered managed assembly. -->
     <Reference Include="System.Core" />
@@ -92,6 +99,9 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <Compile Include="Shared\ModAboutReader.cs" />
+    <Compile Include="..\Shared\ManagerPackageContract.cs">
+      <Link>Shared\ManagerPackageContract.cs</Link>
+    </Compile>
     <Compile Include="..\Shared\ContentPacks\ContentPackPathPolicy.cs">
       <Link>Shared\ContentPacks\ContentPackPathPolicy.cs</Link>
     </Compile>
@@ -170,6 +180,7 @@
     <Compile Include="Core\Services\ModPackageSafety.cs" />
     <Compile Include="Core\Services\ArchiveExtraction.cs" />
     <Compile Include="Core\Services\NexusInstallService.cs" />
+    <Compile Include="Core\Services\ManagerSelfUpdateService.cs" />
     <!-- Custom Controls -->
     <Compile Include="Controls\SearchBox.cs">
       <SubType>UserControl</SubType>

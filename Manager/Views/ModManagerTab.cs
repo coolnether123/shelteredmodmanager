@@ -87,6 +87,7 @@ namespace Manager.Views
         /// </summary>
         public void Initialize(ModDiscoveryService discoveryService, LoadOrderService orderService, AppSettings settings, NexusModsService nexusService)
         {
+            bool nexusServiceChanged = !object.ReferenceEquals(_nexusService, nexusService);
             _discoveryService = discoveryService;
             _orderService = orderService;
             _settings = settings;
@@ -95,6 +96,7 @@ namespace Manager.Views
             bool includeNexusPrereleaseFiles = settings != null && settings.IncludeNexusPrereleaseFiles;
             string nexusCacheSignature = BuildNexusCacheSignature(settings);
             if (_hasNexusSyncCache && (
+                nexusServiceChanged ||
                 _lastIncludeNexusPrereleaseFiles != includeNexusPrereleaseFiles ||
                 !string.Equals(_lastNexusCacheSignature, nexusCacheSignature, StringComparison.Ordinal)))
             {
@@ -1030,6 +1032,7 @@ namespace Manager.Views
             return settings.EnableNexusIntegration.ToString() + "|" +
                 (settings.NexusGameDomain ?? string.Empty).Trim().ToLowerInvariant() + "|" +
                 settings.IncludeNexusPrereleaseFiles.ToString() + "|" +
+                (settings.ModsPath ?? string.Empty).Trim().ToLowerInvariant() + "|" +
                 (settings.NexusApiKey ?? string.Empty).Trim();
         }
 
@@ -1068,7 +1071,9 @@ namespace Manager.Views
             mod.NexusPageUrl = !string.IsNullOrEmpty(cached.PageUrl)
                 ? cached.PageUrl
                 : "https://www.nexusmods.com/" + reference.GameDomain + "/mods/" + reference.ModId;
-            mod.HasUpdateAvailable = cached.HasUpdateAvailable;
+            mod.HasUpdateAvailable = NexusVersionComparer.IsRemoteNewer(
+                mod.Version,
+                cached.RemoteVersion);
         }
 
         private void CacheNexusState(ModItem mod, NexusModReference reference)

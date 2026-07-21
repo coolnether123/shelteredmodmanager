@@ -43,6 +43,7 @@ namespace Manager.Core.Services
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteModFile>>> _versionCache = new Dictionary<string, CacheEntry<List<NexusRemoteModFile>>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteModFile>>> _fileListCache = new Dictionary<string, CacheEntry<List<NexusRemoteModFile>>>(StringComparer.OrdinalIgnoreCase);
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
+        private int _cacheGeneration;
 
         private sealed class CacheEntry<T>
         {
@@ -61,6 +62,7 @@ namespace Manager.Core.Services
         {
             lock (_cacheLock)
             {
+                _cacheGeneration++;
                 _modCache.Clear();
                 _latestCache.Clear();
                 _v3ModFileCache.Clear();
@@ -112,11 +114,12 @@ namespace Manager.Core.Services
             if (TryGetCached(_latestCache, cacheKey, out cachedLatest))
                 return cachedLatest;
 
+            int cacheGeneration = GetCacheGeneration();
             string v2Error;
             list = QueryV2LatestMods(gameDomain, count, out v2Error);
             if (string.IsNullOrEmpty(v2Error))
             {
-                StoreCached(_latestCache, cacheKey, list);
+                StoreCached(_latestCache, cacheKey, list, cacheGeneration);
                 return list;
             }
 
@@ -138,6 +141,7 @@ namespace Manager.Core.Services
             if (TryGetCached(_modCache, cacheKey, out cached))
                 return cached;
 
+            int cacheGeneration = GetCacheGeneration();
             var refs = new List<NexusModReference>();
             refs.Add(new NexusModReference { GameDomain = gameDomain, ModId = modId });
             string v2Error;
@@ -147,7 +151,7 @@ namespace Manager.Core.Services
                 NexusRemoteMod v2Mod;
                 if (found.TryGetValue(NormalizeDomain(gameDomain) + ":" + modId.ToString(), out v2Mod))
                 {
-                    StoreCached(_modCache, cacheKey, v2Mod);
+                    StoreCached(_modCache, cacheKey, v2Mod, cacheGeneration);
                     return v2Mod;
                 }
 
@@ -208,6 +212,7 @@ namespace Manager.Core.Services
             if (TryGetCached(_v3ModFileCache, cacheKey, out cached))
                 return cached;
 
+            int cacheGeneration = GetCacheGeneration();
             NexusV3RestResult response = _v3Client.Get("/mods/" + Escape(modUniqueId) + "/files");
             if (!string.IsNullOrEmpty(response.ErrorMessage))
             {
@@ -234,7 +239,7 @@ namespace Manager.Core.Services
                     modFiles.Add(modFile);
             }
 
-            StoreCached(_v3ModFileCache, cacheKey, modFiles);
+            StoreCached(_v3ModFileCache, cacheKey, modFiles, cacheGeneration);
             return modFiles;
         }
 
@@ -253,6 +258,7 @@ namespace Manager.Core.Services
             if (TryGetCached(_versionCache, cacheKey, out cached))
                 return cached;
 
+            int cacheGeneration = GetCacheGeneration();
             NexusV3RestResult response = _v3Client.Get("/mod-files/" + Escape(modFileId) + "/versions");
             if (!string.IsNullOrEmpty(response.ErrorMessage))
             {
@@ -272,7 +278,7 @@ namespace Manager.Core.Services
                     files.Add(file);
             }
 
-            StoreCached(_versionCache, cacheKey, files);
+            StoreCached(_versionCache, cacheKey, files, cacheGeneration);
             return files;
         }
 
@@ -297,6 +303,7 @@ namespace Manager.Core.Services
             if (TryGetCached(_fileListCache, cacheKey, out cached))
                 return cached;
 
+            int cacheGeneration = GetCacheGeneration();
             string readError = null;
             NexusRemoteMod mod = GetModByDomainAndId(gameDomain, modId, out readError);
             if (string.IsNullOrEmpty(readError) && mod != null && mod.GameId > 0)
@@ -305,7 +312,7 @@ namespace Manager.Core.Services
                 List<NexusRemoteModFile> v2Files = QueryV2ModFiles(mod.GameId, modId, out v2FilesError);
                 if (v2Files.Count > 0)
                 {
-                    StoreCached(_fileListCache, cacheKey, v2Files);
+                    StoreCached(_fileListCache, cacheKey, v2Files, cacheGeneration);
                     return v2Files;
                 }
 
@@ -317,7 +324,7 @@ namespace Manager.Core.Services
             List<NexusRemoteModFile> legacyFiles = GetLegacyModFiles(gameDomain, modId, out legacyError);
             if (legacyFiles.Count > 0)
             {
-                StoreCached(_fileListCache, cacheKey, legacyFiles);
+                StoreCached(_fileListCache, cacheKey, legacyFiles, cacheGeneration);
                 return legacyFiles;
             }
 
@@ -331,7 +338,7 @@ namespace Manager.Core.Services
 
             if (files.Count > 0)
             {
-                StoreCached(_fileListCache, cacheKey, files);
+                StoreCached(_fileListCache, cacheKey, files, cacheGeneration);
                 return files;
             }
 
@@ -968,6 +975,8 @@ query modFiles($modId: ID!, $gameId: ID!){
     primary
     manager
     uri
+    description
+    changelogText
   }
 }";
 
@@ -996,6 +1005,11 @@ query modFiles($modId: ID!, $gameId: ID!){
                 file.FileId = ReadFirstIntLike(node, "fileId", "file_id");
                 file.Name = ReadString(node, "name");
                 file.Version = ReadString(node, "version");
+                file.Description = ReadString(node, "description");
+                // GraphQL v2 exposes changelogText and no md5 field (live-introspected
+                // 2026-07-19); md5 arrives only via the REST fallback path.
+                file.Changelog = ReadFirstString(node, "changelogText", "changelog");
+                file.Md5 = ReadFirstString(node, "md5", "MD5");
                 file.UnixDate = ReadInt(node, "date");
                 file.Category = ReadString(node, "category");
                 file.Primary = ReadFirstIntLike(node, "primary", "is_primary");
@@ -1238,6 +1252,9 @@ query modFiles($modId: ID!, $gameId: ID!){
             file.FileId = ReadInt(node, "game_scoped_id");
             file.Name = ReadString(node, "name");
             file.Version = ReadString(node, "version");
+            file.Description = ReadString(node, "description");
+            file.Changelog = ReadString(node, "changelog");
+            file.Md5 = ReadFirstString(node, "md5", "MD5");
             file.Category = ReadString(node, "category");
             file.UploadedAtUtc = ReadDateTime(node, "uploaded_at");
             file.Primary = ReadFirstIntLike(node, "primary", "is_primary");
@@ -1255,6 +1272,9 @@ query modFiles($modId: ID!, $gameId: ID!){
             file.FileId = ReadFirstIntLike(node, "file_id", "fileId", "game_scoped_id");
             file.Name = ReadFirstString(node, "name", "file_name");
             file.Version = ReadFirstString(node, "version", "mod_version");
+            file.Description = ReadFirstString(node, "description", "desc");
+            file.Changelog = ReadFirstString(node, "changelog", "change_log");
+            file.Md5 = ReadFirstString(node, "md5", "MD5");
             file.UnixDate = ReadFirstIntLike(node, "uploaded_timestamp", "date");
             file.Category = ReadFirstString(node, "category_name", "category");
             file.Primary = ReadFirstIntLike(node, "is_primary", "primary");
@@ -1460,13 +1480,27 @@ query modFiles($modId: ID!, $gameId: ID!){
             }
         }
 
-        private void StoreCached<T>(Dictionary<string, CacheEntry<T>> cache, string key, T value)
+        private int GetCacheGeneration()
+        {
+            lock (_cacheLock)
+            {
+                return _cacheGeneration;
+            }
+        }
+
+        private void StoreCached<T>(
+            Dictionary<string, CacheEntry<T>> cache,
+            string key,
+            T value,
+            int generation)
         {
             if (cache == null || string.IsNullOrEmpty(key))
                 return;
 
             lock (_cacheLock)
             {
+                if (generation != _cacheGeneration)
+                    return;
                 cache[key] = new CacheEntry<T>
                 {
                     Value = value,

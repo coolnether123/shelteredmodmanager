@@ -606,6 +606,7 @@ namespace Manager
 
             // Clean up any stale staged Nexus archives/folders from previous runs.
             NexusInstallService.CleanupStartupArtifacts();
+            ManagerSelfUpdateService.CleanupStartupArtifacts();
 
             // Initialize tabs with services and settings
             _gameSetupTab.Initialize(_settings);

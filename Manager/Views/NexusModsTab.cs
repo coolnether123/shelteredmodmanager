@@ -51,9 +51,17 @@ namespace Manager.Views
 
         private NexusModsService _nexusService;
         private NexusInstallService _installService = new NexusInstallService();
+        private ManagerSelfUpdateService _managerUpdateService = new ManagerSelfUpdateService();
         private AppSettings _settings;
         private NexusAccountStatus _accountStatus;
         private string _managerVersion = string.Empty;
+        private string _managerUpdatePromptedVersion = string.Empty;
+        private string _pendingManagerUpdateDomain = string.Empty;
+        private int _pendingManagerUpdateFileId;
+        private string _pendingManagerUpdateVersion = string.Empty;
+        private ManagerUpdateArchiveHashExpectation _pendingManagerUpdateHashExpectation;
+        private DateTime _pendingManagerUpdateExpiresUtc = DateTime.MinValue;
+        private bool _managerUpdateInProgress;
         private int _latestRequestToken;
         private DateTime _lastCheckedUtc = DateTime.MinValue;
         private static readonly TimeSpan LatestFeedCooldown = TimeSpan.FromMinutes(5);
@@ -127,11 +135,6 @@ namespace Manager.Views
                 FinishInstallWithError("Nexus authorization failed: Add your personal Nexus API key in Settings first.");
                 return;
             }
-            if (!_settings.IsModsPathValid)
-            {
-                FinishInstallWithError("Nexus authorization failed: The Mods folder is not configured.");
-                return;
-            }
             if (!string.Equals(link.GameDomain, GetGameDomain(), StringComparison.OrdinalIgnoreCase))
             {
                 FinishInstallWithError("Nexus authorization failed: This Manager only handles downloads for " + GetGameDomain() + ".");
@@ -140,6 +143,16 @@ namespace Manager.Views
             if (link.UserId > 0 && _accountStatus != null && _accountStatus.UserId > 0 && link.UserId != _accountStatus.UserId)
             {
                 FinishInstallWithError("Nexus authorization failed: The browser download belongs to a different Nexus account than the configured API key.");
+                return;
+            }
+            if (link.ModId == _settings.ManagerNexusModId)
+            {
+                HandleAuthorizedManagerUpdate(link);
+                return;
+            }
+            if (!_settings.IsModsPathValid)
+            {
+                FinishInstallWithError("Nexus authorization failed: The Mods folder is not configured.");
                 return;
             }
 
@@ -406,6 +419,8 @@ namespace Manager.Views
                 RebuildPrimaryList();
                 return;
             }
+            if (forceRefresh)
+                _nexusService.ClearCachedResponses();
 
             _feedStatusLabel.Text = "Discover: loading...";
             _refreshButton.Enabled = false;
@@ -468,6 +483,8 @@ namespace Manager.Views
 
             _managerStatusLabel.Text = "SMM: checking...";
             _checkManagerButton.Enabled = false;
+            if (userInitiated)
+                _nexusService.ClearCachedResponses();
 
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -499,7 +516,10 @@ namespace Manager.Views
                         string remoteChannel = FormatReleaseChannelSuffix(remote.Version);
                         string localChannel = FormatReleaseChannelSuffix(_managerVersion);
                         if (comparison < 0)
+                        {
                             _managerStatusLabel.Text = "SMM: update available (" + remoteVersion + remoteChannel + ")";
+                            PromptForManagerUpdate(remote, userInitiated);
+                        }
                         else if (comparison == 0)
                             _managerStatusLabel.Text = "SMM: current (" + localVersion + localChannel + ")";
                         else
@@ -784,8 +804,8 @@ namespace Manager.Views
                     return;
                 }
 
-                if (_accountStatus != null &&
-                    _accountStatus.DirectDownloadAvailability == NexusDirectDownloadAvailability.Limited)
+                if (_accountStatus == null ||
+                    _accountStatus.DirectDownloadAvailability != NexusDirectDownloadAvailability.Available)
                 {
                     try
                     {
@@ -849,6 +869,388 @@ namespace Manager.Views
 
                 FinishInstallSuccess(selected, result);
             });
+        }
+
+        private void PromptForManagerUpdate(NexusRemoteMod remote, bool userInitiated)
+        {
+            if (remote == null)
+                return;
+
+            string version = FormatVersion(remote.Version);
+            if (!userInitiated &&
+                string.Equals(_managerUpdatePromptedVersion, version, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _managerUpdatePromptedVersion = version;
+            string message =
+                "Sheltered Mod Manager " + version + " is available." + Environment.NewLine + Environment.NewLine +
+                "Yes: download and install automatically." + Environment.NewLine +
+                "No: open Nexus and select a manager ZIP you downloaded manually." + Environment.NewLine +
+                "Cancel: install later." + Environment.NewLine + Environment.NewLine +
+                "Both installation paths preserve local settings, restart automatically, and keep a rollback copy.";
+            DialogResult choice = MessageBox.Show(this, message, "SMM Update Available",
+                MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
+            if (choice == DialogResult.Yes)
+                BeginManagerUpdate(remote);
+            else if (choice == DialogResult.No)
+                BeginManualManagerUpdate(remote);
+        }
+
+        private void BeginManagerUpdate(NexusRemoteMod remote)
+        {
+            if (remote == null || _settings == null || _nexusService == null)
+                return;
+            if (_managerUpdateInProgress)
+            {
+                EmitActivity("A manager update is already in progress.");
+                return;
+            }
+            _managerUpdateInProgress = true;
+            if (string.IsNullOrEmpty(_settings.NexusApiKey))
+            {
+                _managerUpdateInProgress = false;
+                BeginManualManagerUpdate(remote);
+                return;
+            }
+            string gameProcessName = !string.IsNullOrEmpty(_settings.GamePath)
+                ? Path.GetFileNameWithoutExtension(_settings.GamePath)
+                : "Sheltered";
+            if (IsProcessRunning(gameProcessName))
+            {
+                FinishManagerUpdateError("Close Sheltered before updating the manager. The game may be using files that must be replaced.");
+                return;
+            }
+
+            _checkManagerButton.Enabled = false;
+            _managerStatusLabel.Text = "SMM: resolving update file...";
+            EmitActivity("Resolving the Sheltered Mod Manager update package.");
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string error;
+                List<NexusRemoteModFile> files = _nexusService.GetModFiles(
+                    remote.GameDomain, remote.ModId, out error);
+                if (!string.IsNullOrEmpty(error) || files == null || files.Count == 0)
+                {
+                    FinishManagerUpdateError(!string.IsNullOrEmpty(error)
+                        ? error
+                        : "Nexus did not return a manager update file.");
+                    return;
+                }
+
+                bool allowPrerelease = _settings.IncludeNexusPrereleaseFiles;
+                NexusRemoteModFile file = NexusReleaseClassifier.IsPrerelease(remote.Version) && allowPrerelease
+                    ? _nexusService.SelectPreferredPrereleaseInstallFile(files)
+                    : _nexusService.SelectPreferredInstallFile(files, false);
+                if (file == null)
+                {
+                    FinishManagerUpdateError("No eligible manager update file was found for the selected release channel.");
+                    return;
+                }
+
+                if (_accountStatus != null &&
+                    _accountStatus.DirectDownloadAvailability == NexusDirectDownloadAvailability.Limited)
+                {
+                    BeginManagerWebsiteAuthorization(remote, file);
+                    return;
+                }
+
+                string downloadUrl = _nexusService.GetDownloadUrl(
+                    remote.GameDomain, remote.ModId, file.FileId, _settings.NexusApiKey, out error);
+                if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
+                {
+                    FinishManagerUpdateError(RewriteDirectDownloadError(error));
+                    return;
+                }
+
+                DownloadAndApplyManagerUpdate(
+                    downloadUrl,
+                    file.Version ?? remote.Version,
+                    BuildManagerUpdateHashExpectation(file, remote));
+            });
+        }
+
+        private void BeginManagerWebsiteAuthorization(NexusRemoteMod remote, NexusRemoteModFile file)
+        {
+            try
+            {
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    _pendingManagerUpdateDomain = remote.GameDomain ?? string.Empty;
+                    _pendingManagerUpdateFileId = file.FileId;
+                    _pendingManagerUpdateVersion = file.Version ?? remote.Version ?? string.Empty;
+                    _pendingManagerUpdateHashExpectation = BuildManagerUpdateHashExpectation(file, remote);
+                    _pendingManagerUpdateExpiresUtc = DateTime.UtcNow.AddMinutes(15);
+
+                    string registrationError;
+                    if (!NexusProtocolHandlerService.BeginTemporaryCapture(Application.ExecutablePath, out registrationError))
+                    {
+                        ClearPendingManagerUpdate();
+                        FinishManagerUpdateError(registrationError);
+                        return;
+                    }
+
+                    string authorizationPage = remote.GetPageUrl() + "?tab=files&file_id=" + file.FileId;
+                    try
+                    {
+                        System.Diagnostics.Process.Start(authorizationPage);
+                        _checkManagerButton.Enabled = false;
+                        _managerStatusLabel.Text = "SMM: waiting for Nexus authorization...";
+                        EmitActivity("Click Mod Manager Download on Nexus. SMM will continue the manager update automatically.");
+                    }
+                    catch (Exception ex)
+                    {
+                        NexusProtocolHandlerService.RestorePreviousHandler();
+                        ClearPendingManagerUpdate();
+                        FinishManagerUpdateError("Could not open the Nexus authorization page: " + ex.Message);
+                    }
+                });
+            }
+            catch
+            {
+                FinishManagerUpdateError("Could not start Nexus website authorization.");
+            }
+        }
+
+        private void HandleAuthorizedManagerUpdate(NexusNxmLink link)
+        {
+            bool matchesPending =
+                _pendingManagerUpdateFileId > 0 &&
+                _pendingManagerUpdateExpiresUtc > DateTime.UtcNow &&
+                string.Equals(link.GameDomain, _pendingManagerUpdateDomain, StringComparison.OrdinalIgnoreCase) &&
+                link.FileId == _pendingManagerUpdateFileId;
+            if (!matchesPending)
+            {
+                FinishManagerUpdateError("The Nexus manager download does not match the pending update request. Start the update from Check SMM Update and try again.");
+                return;
+            }
+
+            string expectedVersion = _pendingManagerUpdateVersion;
+            ManagerUpdateArchiveHashExpectation hashExpectation = _pendingManagerUpdateHashExpectation;
+            ClearPendingManagerUpdate();
+            _checkManagerButton.Enabled = false;
+            _managerStatusLabel.Text = "SMM: authorization received...";
+            EmitActivity("Nexus authorization received for the manager update.");
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string error;
+                List<NexusRemoteModFile> files = _nexusService.GetModFiles(
+                    link.GameDomain, link.ModId, out error);
+                NexusRemoteModFile requestedFile = null;
+                for (int i = 0; files != null && i < files.Count; i++)
+                {
+                    if (files[i] != null && files[i].FileId == link.FileId)
+                    {
+                        requestedFile = files[i];
+                        break;
+                    }
+                }
+                if (!string.IsNullOrEmpty(error) || requestedFile == null)
+                {
+                    FinishManagerUpdateError(!string.IsNullOrEmpty(error)
+                        ? error
+                        : "Nexus did not return the authorized manager file.");
+                    return;
+                }
+
+                string downloadUrl = _nexusService.GetDownloadUrlWithAuthorization(
+                    link.GameDomain, link.ModId, link.FileId, _settings.NexusApiKey,
+                    link.DownloadKey, link.Expires, out error);
+                if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
+                {
+                    FinishManagerUpdateError(RewriteDirectDownloadError(error));
+                    return;
+                }
+
+                DownloadAndApplyManagerUpdate(
+                    downloadUrl,
+                    !string.IsNullOrEmpty(expectedVersion) ? expectedVersion : requestedFile.Version,
+                    hashExpectation);
+            });
+        }
+
+        private void ClearPendingManagerUpdate()
+        {
+            _pendingManagerUpdateDomain = string.Empty;
+            _pendingManagerUpdateFileId = 0;
+            _pendingManagerUpdateVersion = string.Empty;
+            _pendingManagerUpdateHashExpectation = null;
+            _pendingManagerUpdateExpiresUtc = DateTime.MinValue;
+        }
+
+        private static bool IsProcessRunning(string processName)
+        {
+            if (string.IsNullOrEmpty(processName))
+                return false;
+            try
+            {
+                System.Diagnostics.Process[] processes =
+                    System.Diagnostics.Process.GetProcessesByName(processName);
+                bool running = processes != null && processes.Length > 0;
+                for (int i = 0; processes != null && i < processes.Length; i++)
+                    processes[i].Dispose();
+                return running;
+            }
+            catch { return false; }
+        }
+
+        private static ManagerUpdateArchiveHashExpectation BuildManagerUpdateHashExpectation(
+            NexusRemoteModFile file,
+            NexusRemoteMod remote)
+        {
+            var metadata = new StringBuilder();
+            string[] metadataParts =
+            {
+                file != null ? file.Description : null,
+                file != null ? file.Changelog : null,
+                remote != null ? remote.Summary : null,
+                remote != null ? remote.Description : null
+            };
+            for (int i = 0; i < metadataParts.Length; i++)
+            {
+                if (string.IsNullOrEmpty(metadataParts[i]))
+                    continue;
+                if (metadata.Length > 0)
+                    metadata.AppendLine();
+                metadata.Append(metadataParts[i]);
+            }
+
+            return new ManagerUpdateArchiveHashExpectation
+            {
+                ExpectedMd5 = file != null ? file.Md5 : string.Empty,
+                ReleaseMetadata = metadata.ToString()
+            };
+        }
+
+        private void DownloadAndApplyManagerUpdate(
+            string downloadUrl,
+            string expectedVersion,
+            ManagerUpdateArchiveHashExpectation hashExpectation)
+        {
+            SetManagerUpdateStatus("SMM: downloading update...");
+            string error;
+            ManagerUpdateStage stage = _managerUpdateService.DownloadAndStage(
+                downloadUrl, expectedVersion, hashExpectation, out error);
+            if (stage == null || !string.IsNullOrEmpty(error))
+            {
+                FinishManagerUpdateError(!string.IsNullOrEmpty(error)
+                    ? error
+                    : "The manager update could not be staged.");
+                return;
+            }
+            LaunchStagedManagerUpdate(stage);
+        }
+
+        private void LaunchStagedManagerUpdate(ManagerUpdateStage stage)
+        {
+            string gameProcessName = _settings != null && !string.IsNullOrEmpty(_settings.GamePath)
+                ? Path.GetFileNameWithoutExtension(_settings.GamePath)
+                : "Sheltered";
+            if (IsProcessRunning(gameProcessName))
+            {
+                FinishManagerUpdateError("Close Sheltered before applying the manager update.");
+                return;
+            }
+
+            string error;
+            if (!_managerUpdateService.LaunchUpdater(stage, out error))
+            {
+                FinishManagerUpdateError(error);
+                return;
+            }
+
+            try
+            {
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    _managerStatusLabel.Text = "SMM: restarting into " + stage.Version + "...";
+                    EmitActivity("Manager update verified. Restarting SMM.");
+                    Application.Exit();
+                });
+            }
+            catch { }
+        }
+
+        private void BeginManualManagerUpdate(NexusRemoteMod remote)
+        {
+            if (remote == null)
+                return;
+            if (_managerUpdateInProgress)
+            {
+                EmitActivity("A manager update is already in progress.");
+                return;
+            }
+            _managerUpdateInProgress = true;
+            _checkManagerButton.Enabled = false;
+
+            try { System.Diagnostics.Process.Start(remote.GetPageUrl() + "?tab=files"); }
+            catch { }
+
+            using (var dialog = new OpenFileDialog())
+            {
+                dialog.Title = "Select downloaded Sheltered Mod Manager update";
+                dialog.Filter = "ZIP packages (*.zip)|*.zip|All files (*.*)|*.*";
+                dialog.CheckFileExists = true;
+                dialog.Multiselect = false;
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    _managerUpdateInProgress = false;
+                    _checkManagerButton.Enabled = true;
+                    _managerStatusLabel.Text = "SMM: update available (" + FormatVersion(remote.Version) + ")";
+                    EmitActivity("Manual manager update canceled.");
+                    return;
+                }
+
+                string packagePath = dialog.FileName;
+                _managerStatusLabel.Text = "SMM: validating downloaded package...";
+                ThreadPool.QueueUserWorkItem(delegate
+                {
+                    string error;
+                    ManagerUpdateStage stage = _managerUpdateService.StageLocalPackage(
+                        packagePath,
+                        remote.Version,
+                        out error);
+                    if (stage == null || !string.IsNullOrEmpty(error))
+                    {
+                        FinishManagerUpdateError(!string.IsNullOrEmpty(error)
+                            ? error
+                            : "The downloaded manager package could not be staged.");
+                        return;
+                    }
+                    LaunchStagedManagerUpdate(stage);
+                });
+            }
+        }
+
+        private void SetManagerUpdateStatus(string status)
+        {
+            if (IsDisposed || Disposing)
+                return;
+            try
+            {
+                BeginInvoke((MethodInvoker)delegate { _managerStatusLabel.Text = status; });
+            }
+            catch { }
+        }
+
+        private void FinishManagerUpdateError(string message)
+        {
+            if (IsDisposed || Disposing)
+                return;
+            try
+            {
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    _checkManagerButton.Enabled = true;
+                    _managerUpdateInProgress = false;
+                    _managerStatusLabel.Text = "SMM: update failed";
+                    EmitActivity("SMM update failed: " + (message ?? "Unknown error."));
+                    MessageBox.Show(this, message ?? "The manager update failed.",
+                        "SMM Update Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                });
+            }
+            catch { }
         }
 
         private void FinishInstallSuccess(NexusRemoteMod mod, NexusInstallResult result)

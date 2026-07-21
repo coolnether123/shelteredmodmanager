@@ -25,6 +25,11 @@ if ($LASTEXITCODE -ne 0) { throw "Release build failed with exit code $LASTEXITC
 
 & (Join-Path $PSScriptRoot 'Test-NexusManagerContracts.ps1') -RepoRoot $repoRoot
 if ($LASTEXITCODE -ne 0) { throw "Nexus contract checks failed with exit code $LASTEXITCODE." }
+& (Join-Path $PSScriptRoot 'Test-ManagerSelfUpdate.ps1') -RepoRoot $repoRoot
+if ($LASTEXITCODE -ne 0) { throw "Manager self-update tests failed with exit code $LASTEXITCODE." }
+if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'Dist\SMM\ManagerUpdater.exe'))) {
+    throw 'Release output is missing ManagerUpdater.exe.'
+}
 
 if (Test-Path -LiteralPath $stageRoot) { Remove-Item -LiteralPath $stageRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $stageRoot | Out-Null
