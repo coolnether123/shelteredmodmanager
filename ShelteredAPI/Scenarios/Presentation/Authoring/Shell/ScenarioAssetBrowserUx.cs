@@ -17,6 +17,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private const string FavoritesKey = "asset_browser.favorites";
         private const string RecentKey = "asset_browser.recent";
         private const int RecentLimit = 20;
+        private static readonly object MembershipCacheSync = new object();
+        private static readonly CachedMembership FavoritesMembership = new CachedMembership();
+        private static readonly CachedMembership RecentMembership = new CachedMembership();
 
         internal sealed class CategoryLabel
         {
@@ -91,12 +94,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         internal static bool IsFavorite(ScenarioAuthoringState state, string sourceActionId)
         {
-            return ContainsAction(ReadList(state, FavoritesKey), sourceActionId);
+            return GetCachedMembership(state, FavoritesKey).Contains(sourceActionId ?? string.Empty);
         }
 
         internal static bool IsRecent(ScenarioAuthoringState state, string sourceActionId)
         {
-            return ContainsAction(ReadList(state, RecentKey), sourceActionId);
+            return GetCachedMembership(state, RecentKey).Contains(sourceActionId ?? string.Empty);
         }
 
         internal static bool ToggleFavorite(ScenarioAuthoringState state, string sourceActionId)
@@ -209,6 +212,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private static List<string> ReadList(ScenarioAuthoringState state, string key)
         {
             return DeserializeList(state != null && state.Settings != null ? state.Settings.Get(key, string.Empty) : string.Empty);
+        }
+
+        private static HashSet<string> GetCachedMembership(ScenarioAuthoringState state, string key)
+        {
+            string serialized = state != null && state.Settings != null
+                ? state.Settings.Get(key, string.Empty)
+                : string.Empty;
+            CachedMembership cache = string.Equals(key, FavoritesKey, StringComparison.Ordinal)
+                ? FavoritesMembership
+                : RecentMembership;
+            lock (MembershipCacheSync)
+            {
+                if (!string.Equals(cache.Serialized, serialized, StringComparison.Ordinal))
+                {
+                    List<string> values = DeserializeList(serialized);
+                    cache.Serialized = serialized;
+                    cache.Values = new HashSet<string>(values, StringComparer.Ordinal);
+                }
+
+                return cache.Values;
+            }
         }
 
         private static void WriteList(ScenarioAuthoringState state, string key, IList<string> values)
@@ -358,6 +382,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     return i;
             }
             return -1;
+        }
+
+        private sealed class CachedMembership
+        {
+            public string Serialized = string.Empty;
+            public HashSet<string> Values = new HashSet<string>(StringComparer.Ordinal);
         }
     }
 }

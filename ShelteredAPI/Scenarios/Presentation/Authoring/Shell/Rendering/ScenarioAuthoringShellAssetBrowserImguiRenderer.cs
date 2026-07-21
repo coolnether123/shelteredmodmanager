@@ -180,7 +180,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 GUILayout.Label(section.Title ?? "Assets", _smallTitleStyle);
-                DrawAssetBrowserGridSection(section, armPlacementOnCardClick);
+                DrawAssetBrowserGridSection(
+                    section,
+                    armPlacementOnCardClick,
+                    sectionVisibleCount,
+                    scroll.y - 8f,
+                    scroll.y + inner.height + 8f);
                 GUILayout.Space(12f);
                 visibleCount += sectionVisibleCount;
             }
@@ -222,7 +227,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             SetWindowScrollPosition("asset_browser.grid", scroll);
         }
 
-        private void DrawAssetBrowserGridSection(ScenarioAuthoringInspectorSection section, bool armPlacementOnCardClick)
+        private void DrawAssetBrowserGridSection(
+            ScenarioAuthoringInspectorSection section,
+            bool armPlacementOnCardClick,
+            int visibleCount,
+            float visibleTop,
+            float visibleBottom)
         {
             float availableWidth = GetSectionContentWidth();
             float gap = 8f;
@@ -251,9 +261,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 // detail. Keeping it off the compact grid card prevents a
                 // wrapped title, duplicate source name, and OBJ badge from
                 // competing for the same vertical space.
-                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick, true, true, true);
+                if (cardRect.yMax >= visibleTop && cardRect.y <= visibleBottom)
+                    DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick, true, true, true);
                 count++;
-                if (count % columns == 0 && HasMoreVisibleAssetBrowserAction(section, i + 1))
+                if (count % columns == 0 && count < visibleCount)
                 {
                     GUILayout.EndHorizontal();
                     GUILayout.Space(gap);
@@ -366,17 +377,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     _snapshot != null ? _snapshot.State : null,
                     action,
                     _assetBrowserCategoryFilter);
-        }
-
-        private bool HasMoreVisibleAssetBrowserAction(ScenarioAuthoringInspectorSection section, int startIndex)
-        {
-            for (int i = Math.Max(0, startIndex); section != null && section.Items != null && i < section.Items.Length; i++)
-            {
-                ScenarioAuthoringInspectorAction action = section.Items[i] != null ? section.Items[i].Action : null;
-                if (IsVisibleAssetBrowserAction(section, action))
-                    return true;
-            }
-            return false;
         }
 
         private static bool IsAssetBrowserCandidateSection(ScenarioAuthoringInspectorSection section)

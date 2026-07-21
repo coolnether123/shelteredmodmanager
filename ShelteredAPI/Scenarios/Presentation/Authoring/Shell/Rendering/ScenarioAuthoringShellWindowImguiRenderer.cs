@@ -3377,7 +3377,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Rect rect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
                     DrawCandidateCard(rect, item.Action, false, false, buildPaletteSection);
                     count++;
-                    if (count % columns == 0 && HasMoreVisibleCandidate(section, i + 1, candidateSearchText, candidateFilter))
+                    if (count % columns == 0 && count < visibleCandidates)
                     {
                         GUILayout.EndHorizontal();
                         GUILayout.Space(cardGap);
@@ -3984,7 +3984,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (Event.current != null)
                     Event.current.Use();
             }
-            RegisterRichHoverHelpSource(rect, action);
+            bool richHoverRegistered = RegisterRichHoverHelpSource(rect, action);
 
             DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, pressed);
 
@@ -4035,7 +4035,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (stackPreviewAboveLabel)
                 labelHeight = Math.Min(labelHeight, textRect.height);
             string fittedLabel = action.Label ?? string.Empty;
-            string labelTooltip = RegisterRichHoverHelpSource(rect, action) ? string.Empty : BuildFullLabelTooltip(action);
+            string labelTooltip = richHoverRegistered ? string.Empty : BuildFullLabelTooltip(action);
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), new GUIContent(fittedLabel, labelTooltip), labelStyle);
             string detail = suppressSecondaryText
                 ? null
@@ -4878,26 +4878,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = pulseColor;
             ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
             GUI.color = oldColor;
-        }
-
-        private static bool HasMoreVisibleCandidate(
-            ScenarioAuthoringInspectorSection section,
-            int startIndex,
-            string searchText,
-            string candidateFilter)
-        {
-            for (int i = Math.Max(0, startIndex); section != null && section.Items != null && i < section.Items.Length; i++)
-            {
-                ScenarioAuthoringInspectorItem item = section.Items[i];
-                if (item != null
-                    && item.Action != null
-                    && CandidateActionMatches(section, item.Action, searchText, candidateFilter))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private static int CountFilteredCandidateActions(
