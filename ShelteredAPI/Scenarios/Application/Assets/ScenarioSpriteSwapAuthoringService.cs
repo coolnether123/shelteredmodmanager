@@ -535,7 +535,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (!EnsurePreviewSession(model.Target, out message))
                 return false;
 
-            Texture2D editableTexture = CreateEditableTexture(sourceSprite);
+            Sprite targetGeometrySprite = _previewSession != null && _previewSession.BaselineSprite != null
+                ? _previewSession.BaselineSprite
+                : model.Target.CurrentSprite;
+            Texture2D editableTexture = CreateEditableTexture(sourceSprite, targetGeometrySprite);
             if (editableTexture == null)
             {
                 message = "The selected sprite could not be copied into the custom editor.";
@@ -543,10 +546,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             ClearCustomEditorSession();
-            Sprite previewSprite = CreatePreviewSprite(editableTexture, sourceSprite);
+            Sprite previewSprite = CreatePreviewSprite(editableTexture, targetGeometrySprite);
             string customSpriteId = BuildCustomSpriteId(model.Target.TargetPath);
             Color initialColor = FindInitialBrushColor(editableTexture);
-            Texture2D baselineTexture = CreateEditableTexture(sourceSprite);
+            Texture2D baselineTexture = CreateEditableTexture(sourceSprite, targetGeometrySprite);
             string baseSpriteId = sourceCandidate != null ? sourceCandidate.SpriteId : null;
             string baseRelativePath = sourceCandidate != null ? sourceCandidate.RelativePath : null;
             string baseRuntimeSpriteKey = sourceCandidate != null ? sourceCandidate.RuntimeSpriteKey : null;
@@ -3004,26 +3007,47 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 && int.TryParse(parts[1], out pixelY);
         }
 
-        private static Texture2D CreateEditableTexture(Sprite source)
+        private static Texture2D CreateEditableTexture(Sprite source, Sprite targetGeometry = null)
         {
             if (source == null || source.texture == null)
                 return null;
 
             Rect sourceRect = source.textureRect;
-            int width = Mathf.Max(1, Mathf.RoundToInt(sourceRect.width));
-            int height = Mathf.Max(1, Mathf.RoundToInt(sourceRect.height));
+            int sourceWidth = Mathf.Max(1, Mathf.RoundToInt(sourceRect.width));
+            int sourceHeight = Mathf.Max(1, Mathf.RoundToInt(sourceRect.height));
+            Rect targetRect = targetGeometry != null ? targetGeometry.rect : sourceRect;
+            int width = Mathf.Max(1, Mathf.RoundToInt(targetRect.width));
+            int height = Mathf.Max(1, Mathf.RoundToInt(targetRect.height));
             Texture2D texture = new Texture2D(width, height, TextureFormat.ARGB32, false);
             texture.filterMode = FilterMode.Point;
             texture.wrapMode = TextureWrapMode.Clamp;
 
             try
             {
-                Color[] pixels = source.texture.GetPixels(
+                Color[] sourcePixels = source.texture.GetPixels(
                     Mathf.RoundToInt(sourceRect.x),
                     Mathf.RoundToInt(sourceRect.y),
-                    width,
-                    height);
-                texture.SetPixels(pixels);
+                    sourceWidth,
+                    sourceHeight);
+                if (sourceWidth == width && sourceHeight == height)
+                {
+                    texture.SetPixels(sourcePixels);
+                }
+                else
+                {
+                    Color[] targetPixels = new Color[width * height];
+                    for (int y = 0; y < height; y++)
+                    {
+                        int sourceY = Mathf.Min(sourceHeight - 1, (y * sourceHeight) / height);
+                        for (int x = 0; x < width; x++)
+                        {
+                            int sourceX = Mathf.Min(sourceWidth - 1, (x * sourceWidth) / width);
+                            targetPixels[(y * width) + x] = sourcePixels[(sourceY * sourceWidth) + sourceX];
+                        }
+                    }
+
+                    texture.SetPixels(targetPixels);
+                }
                 texture.Apply();
                 return texture;
             }

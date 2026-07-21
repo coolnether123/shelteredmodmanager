@@ -195,8 +195,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             Vector2 baselinePivot = new Vector2(
                 baseline.Sprite.pivot.x / baselineRect.width,
                 baseline.Sprite.pivot.y / baselineRect.height);
+            float baselinePixelsPerUnit = Mathf.Max(0.001f, baseline.Sprite.pixelsPerUnit);
+            float baselineWorldWidth = baselineRect.width / baselinePixelsPerUnit;
+            float baselineWorldHeight = baselineRect.height / baselinePixelsPerUnit;
+            float widthPixelsPerUnit = replacementRect.width / Mathf.Max(0.001f, baselineWorldWidth);
+            float heightPixelsPerUnit = replacementRect.height / Mathf.Max(0.001f, baselineWorldHeight);
+            // A Sprite has one pixels-per-unit value. Matching aspect ratios
+            // preserve both vanilla dimensions exactly; a mismatched asset is
+            // fitted inside the vanilla bounds without scaling the live object.
+            float alignedPixelsPerUnit = Mathf.Max(widthPixelsPerUnit, heightPixelsPerUnit);
             if ((replacementPivot - baselinePivot).sqrMagnitude <= 0.000001f
-                && Mathf.Abs(replacement.pixelsPerUnit - baseline.Sprite.pixelsPerUnit) <= 0.001f)
+                && Mathf.Abs(replacement.pixelsPerUnit - alignedPixelsPerUnit) <= 0.001f)
             {
                 return replacement;
             }
@@ -210,7 +219,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 replacement.texture,
                 replacement.textureRect,
                 baselinePivot,
-                baseline.Sprite.pixelsPerUnit);
+                alignedPixelsPerUnit);
             if (aligned == null)
                 return replacement;
 
