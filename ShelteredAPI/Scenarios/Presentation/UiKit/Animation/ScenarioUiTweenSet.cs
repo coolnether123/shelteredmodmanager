@@ -41,6 +41,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             return !string.IsNullOrEmpty(key) && _tweens.TryGetValue(key, out tween) && tween.IsRunning;
         }
 
+        public bool Contains(string key)
+        {
+            return !string.IsNullOrEmpty(key) && _tweens.ContainsKey(key);
+        }
+
         public void Play(string key, float from, float to, float duration, ScenarioUiEasing easing)
         {
             ScenarioUiTween tween = GetOrCreate(key, from);

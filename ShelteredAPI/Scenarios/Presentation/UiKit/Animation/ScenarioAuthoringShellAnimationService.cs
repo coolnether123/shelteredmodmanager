@@ -198,18 +198,28 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         {
             if (string.IsNullOrEmpty(actionId) || !_enabled)
                 return hovered ? 1f : 0f;
+            if (!hovered && !_tweens.Contains(actionId))
+                return 0f;
 
             _tweens.PlayFromCurrent(actionId, hovered ? 1f : 0f, ButtonHoverDuration, ScenarioUiEasing.EaseInOut, hovered ? 1f : 0f);
-            return _tweens.GetValue(actionId, hovered ? 1f : 0f);
+            float value = _tweens.GetValue(actionId, hovered ? 1f : 0f);
+            if (!hovered && !_tweens.IsRunning(actionId) && value <= 0.001f)
+                _tweens.Remove(actionId);
+            return value;
         }
 
         public float GetButtonPress(string key, bool pressed)
         {
             if (string.IsNullOrEmpty(key) || !_enabled)
                 return pressed ? 1f : 0f;
+            if (!pressed && !_tweens.Contains(key))
+                return 0f;
 
             _tweens.PlayFromCurrent(key, pressed ? 1f : 0f, pressed ? ButtonPressDuration : ButtonRecoverDuration, ScenarioUiEasing.EaseInOut, 0f);
-            return _tweens.GetValue(key, pressed ? 1f : 0f);
+            float value = _tweens.GetValue(key, pressed ? 1f : 0f);
+            if (!pressed && !_tweens.IsRunning(key) && value <= 0.001f)
+                _tweens.Remove(key);
+            return value;
         }
 
         public float GetButtonPressForAction(string actionId, bool pressed)
@@ -220,11 +230,16 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             string key;
             if (!_buttonPressKeys.TryGetValue(actionId, out key))
             {
+                if (!pressed)
+                    return 0f;
                 key = string.Concat("button:", actionId, ":press");
                 _buttonPressKeys.Add(actionId, key);
             }
 
-            return GetButtonPress(key, pressed);
+            float value = GetButtonPress(key, pressed);
+            if (!pressed && !_tweens.Contains(key))
+                _buttonPressKeys.Remove(actionId);
+            return value;
         }
 
         public float GetPopupProgress(bool visible, bool windowMenu)
