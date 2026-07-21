@@ -55,7 +55,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringSettingsViewModel settings,
             ScenarioAuthoringHelpViewModel help)
         {
-            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            List<ScenarioAuthoringInspectorAction> actions = new UniqueActionList();
             AddMapFilters(actions);
             AddGroupActions(actions, PixelGroups, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, "Toggle pixel-editor group");
             AddGroupActions(actions, HomeGroups, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, "Toggle Home group");
@@ -88,7 +88,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ScenarioAuthoringInspectorAction[] rendererActions,
             IList<ScenarioGlobalSearchEntry> entries)
         {
-            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            List<ScenarioAuthoringInspectorAction> actions = new UniqueActionList();
             AddRange(actions, rendererActions);
             for (int i = 0; entries != null && i < entries.Count; i++)
             {
@@ -112,7 +112,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         public static ScenarioAuthoringShellWindowViewModel BuildContractWindow(ScenarioAuthoringShellViewModel shell)
         {
-            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            List<ScenarioAuthoringInspectorAction> actions = new UniqueActionList();
             AddRange(actions, shell != null ? shell.Tabs : null);
             AddRange(actions, shell != null ? shell.ToolbarActions : null);
             AddRange(actions, shell != null ? shell.LayoutActions : null);
@@ -420,6 +420,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private static void AddExisting(List<ScenarioAuthoringInspectorAction> actions, ScenarioAuthoringInspectorAction action)
         {
             if (action == null || string.IsNullOrEmpty(action.Id)) return;
+            UniqueActionList uniqueActions = actions as UniqueActionList;
+            if (uniqueActions != null)
+            {
+                uniqueActions.AddUnique(action);
+                return;
+            }
             for (int i = 0; i < actions.Count; i++)
                 if (string.Equals(actions[i].Id, action.Id, StringComparison.Ordinal)) return;
             actions.Add(action);
@@ -574,9 +580,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private static void Add(List<ScenarioAuthoringInspectorAction> actions, string id, string label, bool emphasized)
         {
-            for (int i = 0; i < actions.Count; i++)
-                if (string.Equals(actions[i].Id, id, StringComparison.Ordinal)) return;
-            actions.Add(new ScenarioAuthoringInspectorAction { Id = id, Label = label, Enabled = true, Emphasized = emphasized });
+            AddExisting(actions, new ScenarioAuthoringInspectorAction { Id = id, Label = label, Enabled = true, Emphasized = emphasized });
+        }
+
+        private sealed class UniqueActionList : List<ScenarioAuthoringInspectorAction>
+        {
+            private readonly HashSet<string> _ids = new HashSet<string>(StringComparer.Ordinal);
+
+            public void AddUnique(ScenarioAuthoringInspectorAction action)
+            {
+                if (action != null && !string.IsNullOrEmpty(action.Id) && _ids.Add(action.Id))
+                    Add(action);
+            }
         }
     }
 
