@@ -18,9 +18,26 @@ namespace ModAPI.Core
             "0Harmony"
         };
 
+        private static readonly string[] HostOwnedAssemblyNames = new[]
+        {
+            "mscorlib",
+            "System",
+            "netstandard",
+            "Microsoft.CSharp",
+            "Mono.Security",
+            "UnityEngine",
+            "Assembly-CSharp",
+            "Assembly-CSharp-firstpass",
+            "Pathfinding.ClipperLib",
+            "Pathfinding.Poly2Tri"
+        };
+
         internal static bool IsSharedRuntimeAssemblyName(string simpleName)
         {
             if (string.IsNullOrEmpty(simpleName))
+                return false;
+
+            if (IsHostOwnedAssemblyName(simpleName))
                 return false;
 
             for (int i = 0; i < AlwaysSharedRuntimeAssemblyNames.Length; i++)
@@ -40,6 +57,9 @@ namespace ModAPI.Core
             string simpleName = null;
             try { simpleName = Path.GetFileNameWithoutExtension(assemblyPath); }
             catch { return false; }
+
+            if (IsHostOwnedAssemblyName(simpleName))
+                return true;
 
             return IsSharedRuntimeAssemblyName(simpleName);
         }
@@ -75,6 +95,9 @@ namespace ModAPI.Core
                     if (string.IsNullOrEmpty(simpleName) || !seen.Add(simpleName))
                         continue;
 
+                    if (IsHostOwnedAssemblyName(simpleName))
+                        continue;
+
                     if (string.Equals(simpleName, "ModAPI", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(simpleName, "ModAPI.Core", StringComparison.OrdinalIgnoreCase))
                     {
@@ -99,6 +122,9 @@ namespace ModAPI.Core
         internal static Assembly ResolveSharedAssembly(string simpleName)
         {
             if (string.IsNullOrEmpty(simpleName))
+                return null;
+
+            if (IsHostOwnedAssemblyName(simpleName))
                 return null;
 
             if (string.Equals(simpleName, "ModAPI", StringComparison.OrdinalIgnoreCase)
@@ -134,6 +160,9 @@ namespace ModAPI.Core
             if (string.IsNullOrEmpty(simpleName))
                 return null;
 
+            if (IsHostOwnedAssemblyName(simpleName))
+                return null;
+
             try
             {
                 string[] directories = GetSharedRuntimeDirectories();
@@ -153,6 +182,22 @@ namespace ModAPI.Core
             catch { }
 
             return null;
+        }
+
+        private static bool IsHostOwnedAssemblyName(string simpleName)
+        {
+            if (string.IsNullOrEmpty(simpleName))
+                return false;
+
+            for (int i = 0; i < HostOwnedAssemblyNames.Length; i++)
+            {
+                if (string.Equals(HostOwnedAssemblyNames[i], simpleName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return simpleName.StartsWith("System.", StringComparison.OrdinalIgnoreCase)
+                || simpleName.StartsWith("UnityEngine.", StringComparison.OrdinalIgnoreCase)
+                || simpleName.StartsWith("Assembly-CSharp-", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string[] GetSharedRuntimeDirectories()
