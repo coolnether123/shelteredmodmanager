@@ -2,12 +2,22 @@ using System.Collections.Generic;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Selection;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
+    internal enum ScenarioLibrarySortMode
+    {
+        PinnedFirst,
+        RecentlyPlayed,
+        RecentlyDownloaded,
+        CreationDate,
+        Name
+    }
+
     internal enum ScenarioBookBrowserViewKind
     {
         Types,
         Scenarios,
         Saves,
-        DraftDetails
+        DraftDetails,
+        InstallScenarios
     }
 
     internal enum ScenarioBookType
@@ -26,7 +36,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         StartScenario,
         OpenDraft,
         CreateDraft,
-        LoadSave
+        DuplicateDraft,
+        DeleteDraft,
+        RecoveryResume,
+        RecoveryCleanup,
+        LoadSave,
+        OpenScenarioSaves,
+        OpenInstallScenarios,
+        OpenScenarioDownloadsFolder,
+        InstallPackage,
+        UninstallPackage
     }
 
     internal sealed class ScenarioBookRowModel
@@ -35,19 +54,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string Title;
         public string Detail;
         public string Badge;
+        public string SectionLabel;
         public bool IsLocked;
         public bool CanDelete;
         public ScenarioBookType Type;
         public ScenarioCatalogEntry Scenario;
         public SaveEntry Save;
         public ScenarioBookSaveDetailModel SaveDetail;
+        public string RecoveryScenarioId;
+        public string RecoverySaveId;
+        public SaveManager.SaveType RecoverySaveType;
+        public ScenarioPackageImportCandidate ImportCandidate;
+        public bool IsPinned;
+        public ScenarioLibrarySortMode LibrarySortMode;
     }
 
     internal sealed class ScenarioBookDraftEditorModel
     {
         public ScenarioCatalogEntry Scenario;
+        public string DraftId;
         public string DisplayName;
         public string Description;
+        public ScenarioBookDraftFactsModel Facts;
     }
 
     internal sealed class ScenarioBookSaveDetailModel

@@ -1,7 +1,9 @@
 <Project>
   <PropertyGroup>
-    <ShelteredInstallDir Condition="'$(ShelteredInstallDir)' == ''">A:\SteamLibrary\steamapps\common\Sheltered\</ShelteredInstallDir>
-    <ShelteredManagedDir Condition="'$(ShelteredManagedDir)' == ''">$(ShelteredInstallDir)Sheltered_Data\Managed\</ShelteredManagedDir>
+    <!-- Epic's x64 EOS build is the canonical live-test target. Override either
+         property for alternate installs (including the legacy Steam build). -->
+    <ShelteredInstallDir Condition="'$(ShelteredInstallDir)' == ''">D:\Epic Games Games\Sheltered\</ShelteredInstallDir>
+    <ShelteredManagedDir Condition="'$(ShelteredManagedDir)' == ''">$(ShelteredInstallDir)ShelteredWindows64_EOS_Data\Managed\</ShelteredManagedDir>
     <SmmHarmonyDll Condition="'$(SmmHarmonyDll)' == ''">$(MSBuildThisFileDirectory)mods\0Harmony\Assemblies\0Harmony.dll</SmmHarmonyDll>
   </PropertyGroup>
 </Project>

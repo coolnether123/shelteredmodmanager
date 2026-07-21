@@ -31,16 +31,11 @@ namespace ShelteredAPI.UI.Compatibility
 
         public static void RefreshIfMissing()
         {
-            if (!_initialized)
-            {
+            // Bitmap fonts are optional for IMGUI. Treating a missing bitmap
+            // font as an invalid cache caused every style lookup to repeat a
+            // global Unity resource scan from OnGUI.
+            if (!_initialized || _cachedTTFFont == null)
                 Initialize();
-                return;
-            }
-
-            if (_cachedBitmapFont != null && _cachedTTFFont != null) return;
-
-            _initialized = false;
-            Initialize();
         }
 
         public static void SeedFromGameObject(GameObject root, string reason)
@@ -48,13 +43,28 @@ namespace ShelteredAPI.UI.Compatibility
             if (root == null) return;
             try
             {
-                var label = root.GetComponentsInChildren<UILabel>(true)
+                UILabel[] labels = root.GetComponentsInChildren<UILabel>(true);
+                var bitmapLabel = labels
                     .FirstOrDefault(l => l != null && l.bitmapFont != null);
-                if (label == null || label.bitmapFont == null) return;
+                var ttfLabel = labels
+                    .FirstOrDefault(l => l != null && l.trueTypeFont != null);
 
-                _preferredBitmapFont = label.bitmapFont;
-                _cachedBitmapFont = label.bitmapFont;
-                MMLog.WriteInfo("[UIFontCache] Seeded bitmap font from " + reason + ": " + label.bitmapFont.name);
+                if (bitmapLabel != null)
+                {
+                    _preferredBitmapFont = bitmapLabel.bitmapFont;
+                    _cachedBitmapFont = bitmapLabel.bitmapFont;
+                }
+                if (ttfLabel != null)
+                    _cachedTTFFont = ttfLabel.trueTypeFont;
+
+                // Seed while the scene hierarchy is stable, outside OnGUI.
+                // Initialize supplies the built-in TTF fallback when the
+                // source hierarchy contains bitmap labels only.
+                _initialized = false;
+                Initialize();
+                MMLog.WriteInfo("[UIFontCache] Seeded fonts from " + reason
+                    + ". Bitmap: " + (_cachedBitmapFont ? _cachedBitmapFont.name : "null")
+                    + ", TTF: " + (_cachedTTFFont ? _cachedTTFFont.name : "null"));
             }
             catch (Exception ex)
             {
@@ -68,63 +78,16 @@ namespace ShelteredAPI.UI.Compatibility
 
             try
             {
-                UILabel sampleLabel = null;
-
                 if (_preferredBitmapFont != null)
-                {
                     _cachedBitmapFont = _preferredBitmapFont;
-                }
 
-                // Prefer a live in-scene label with bitmap font.
-                if (_cachedBitmapFont == null)
-                {
-                    sampleLabel = Resources.FindObjectsOfTypeAll<UILabel>()
-                        .FirstOrDefault(l => l != null && l.gameObject != null && l.gameObject.activeInHierarchy && l.bitmapFont != null);
-                    if (sampleLabel != null)
-                    {
-                        _cachedBitmapFont = sampleLabel.bitmapFont;
-                    }
-                }
-
-                // Fallback to any loaded label (active or inactive).
-                if (_cachedBitmapFont == null)
-                {
-                    sampleLabel = Resources.FindObjectsOfTypeAll<UILabel>()
-                        .FirstOrDefault(l => l != null && l.bitmapFont != null);
-                    if (sampleLabel != null)
-                    {
-                        _cachedBitmapFont = sampleLabel.bitmapFont;
-                    }
-                }
-
-                // Final fallback: loaded UIFont assets.
-                if (_cachedBitmapFont == null)
-                {
-                    _cachedBitmapFont = Resources.FindObjectsOfTypeAll<UIFont>()
-                        .FirstOrDefault(f => f != null);
-                }
-
-                // Try to find a TTF font from active labels first.
-                var ttfSample = Resources.FindObjectsOfTypeAll<UILabel>()
-                    .FirstOrDefault(l => l != null && l.gameObject != null && l.gameObject.activeInHierarchy && l.trueTypeFont != null);
-
-                if (ttfSample == null)
-                {
-                    ttfSample = Resources.FindObjectsOfTypeAll<UILabel>()
-                        .FirstOrDefault(l => l != null && l.trueTypeFont != null);
-                }
-
-                if (ttfSample != null && ttfSample.trueTypeFont != null)
-                {
-                    _cachedTTFFont = ttfSample.trueTypeFont;
-                }
-
-                // Fallback to built-in Arial if no TTF found yet
+                // Never enumerate Unity's global object registry here. This
+                // method can be reached while IMGUI is rendering, and Unity
+                // 5.3/Mono can crash natively while wrapping objects returned
+                // by FindObjectsOfTypeAll during that phase.
                 if (_cachedTTFFont == null)
-                {
                     _cachedTTFFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                }
-                
+
                 _initialized = true;
                 MMLog.Write($"[UIFontCache] Initialized. Bitmap: {(_cachedBitmapFont ? _cachedBitmapFont.name : "null")}, TTF: {(_cachedTTFFont ? _cachedTTFFont.name : "null")}");
             }

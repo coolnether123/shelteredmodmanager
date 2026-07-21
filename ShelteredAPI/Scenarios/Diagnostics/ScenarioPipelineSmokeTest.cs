@@ -43,6 +43,77 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             }
         }
 
+        internal static ScenarioValidationResult RunMetadataContract()
+        {
+            ScenarioValidationResult result = new ScenarioValidationResult();
+            string path = Path.Combine(Path.GetTempPath(), "sheltered-metadata-contract-" + Guid.NewGuid().ToString("N") + ".xml");
+            try
+            {
+                ScenarioDefinition definition = new ScenarioDefinition();
+                definition.Id = "com.example.metadata.contract";
+                definition.DisplayName = "Metadata Contract";
+                definition.Description = "Verifies packaging metadata survives a saved draft reload.";
+                definition.Author = "Contract Author";
+                definition.Version = "2.3.4";
+                definition.Credits = "Test contributors";
+                definition.Tags.Add("story");
+                definition.Tags.Add("contract");
+
+                ScenarioDefinitionSerializer serializer = new ScenarioDefinitionSerializer();
+                serializer.Save(definition, path);
+                ScenarioDefinition reloaded = serializer.Load(path);
+                if (reloaded == null
+                    || reloaded.Id != definition.Id
+                    || reloaded.DisplayName != definition.DisplayName
+                    || reloaded.Description != definition.Description
+                    || reloaded.Author != definition.Author
+                    || reloaded.Version != definition.Version
+                    || reloaded.Credits != definition.Credits
+                    || reloaded.Tags.Count != 2
+                    || reloaded.Tags[0] != "story"
+                    || reloaded.Tags[1] != "contract")
+                {
+                    result.AddError("Metadata save/reload contract failed.");
+                }
+
+                ScenarioDefinition placeholders = new ScenarioDefinition();
+                placeholders.Id = "com.example.placeholder.contract";
+                placeholders.DisplayName = ScenarioMetadataDefaults.DefaultTitle;
+                placeholders.Author = ScenarioMetadataDefaults.DefaultAuthor;
+                placeholders.Version = ScenarioMetadataDefaults.DefaultVersion;
+                ScenarioValidationResult validation = new ScenarioValidator(new NoDependencyWarnings()).Validate(placeholders, path);
+                if (!HasWarning(validation, "placeholder title")
+                    || !HasWarning(validation, "author as 'unknown'")
+                    || !HasWarning(validation, "no description")
+                    || !HasWarning(validation, "default version 0.1.0"))
+                {
+                    result.AddError("Metadata placeholder validation contract failed.");
+                }
+            }
+            finally
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+
+            return result;
+        }
+
+        private static bool HasWarning(ScenarioValidationResult validation, string text)
+        {
+            ScenarioValidationIssue[] issues = validation != null ? validation.Issues : null;
+            for (int i = 0; issues != null && i < issues.Length; i++)
+            {
+                if (issues[i] != null
+                    && issues[i].Severity == ScenarioIssueSeverity.Warning
+                    && issues[i].Message != null
+                    && issues[i].Message.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+
+            return false;
+        }
+
         private static ScenarioValidationResult RunSingleFile(string scenarioFile)
         {
             ScenarioDefinitionSerializer serializer = new ScenarioDefinitionSerializer();

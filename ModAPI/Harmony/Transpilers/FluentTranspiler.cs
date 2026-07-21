@@ -333,7 +333,7 @@ namespace ModAPI.Harmony
             {
                 string details = (genericArguments != null ? $"<{string.Join(", ", genericArguments.Select(t => t.Name).ToArray())}>" : "") +
                                  (parameterTypes != null ? $"({string.Join(", ", parameterTypes.Select(t => t.Name).ToArray())})" : "");
-                AddSoftFailure($"No match for call {type.Name}.{methodName}{details}");
+                AddSoftFailure($"FindCall found no call to {type.Name}.{methodName}{details} from the current cursor. Fix: confirm the method name/overload and that the call still exists in this build (another transpiler may have already rewritten it); widen with parameterTypes = null or use MapAnchors()/ExportAnchors() to locate the real site.");
             }
             else
             {
@@ -669,6 +669,10 @@ namespace ModAPI.Harmony
             var cm = CodeMatch.Calls(method);
             cm.name = name;
             _matcher.MatchStartForward(cm);
+            if (!_matcher.IsValid)
+            {
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for call {FluentTranspilerFormatting.FormatMethod(method)}");
+            }
             return this;
         }
 
@@ -677,6 +681,10 @@ namespace ModAPI.Harmony
             var cm = CodeMatch.LoadsField(field);
             cm.name = name;
             _matcher.MatchStartForward(cm);
+            if (!_matcher.IsValid)
+            {
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for field load {FluentTranspilerFormatting.FormatField(field)}");
+            }
             return this;
         }
 
@@ -685,6 +693,10 @@ namespace ModAPI.Harmony
             var cm = CodeMatch.StoresField(field);
             cm.name = name;
             _matcher.MatchStartForward(cm);
+            if (!_matcher.IsValid)
+            {
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for field store {FluentTranspilerFormatting.FormatField(field)}");
+            }
             return this;
         }
 
@@ -739,6 +751,11 @@ namespace ModAPI.Harmony
         public FluentTranspiler MatchNewObject(ConstructorInfo ctor, string name = null)
         {
             _matcher.MatchStartForward(new CodeMatch(OpCodes.Newobj, ctor, name));
+            if (!_matcher.IsValid)
+            {
+                string ctorType = ctor != null && ctor.DeclaringType != null ? ctor.DeclaringType.FullName : "<null>";
+                AddSoftFailure(TranspilerDiagnosticCategory.Match, $"No match for newobj {ctorType}");
+            }
             return this;
         }
 
@@ -825,7 +842,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("ReplaceWith: No valid match.");
+                AddSoftFailure("ReplaceWith: no instruction is selected, so there is nothing to replace. Fix: run a Find*/Match* (or a recipe that positions the cursor) that succeeds before ReplaceWith; check SoftFailures for why the preceding match missed.");
                 return this;
             }
             var beforeIndex = _matcher.Pos;
@@ -872,7 +889,9 @@ namespace ModAPI.Harmony
 
             if (method == null)
             {
-                AddWarning($"Method {type.Name}.{methodName} not found");
+                AddWarning($"ReplaceWithCall could not resolve static replacement {type.Name}.{methodName}" +
+                           (parameterTypes != null ? $"({string.Join(", ", parameterTypes.Select(p => p.Name).ToArray())})" : "") +
+                           ". Fix: the replacement hook must be a public/non-public static method; verify the name and the overload's parameter types.");
                 return this;
             }
 
@@ -886,7 +905,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("ReplaceWithCall: No valid match.");
+                AddSoftFailure("ReplaceWithCall: no instruction is selected, so there is no call to redirect. Fix: run a Find*/Match* (e.g. FindCall/MatchCall) that succeeds before ReplaceWithCall, or use the canonical t.ForCall(...).ReplaceAllWith(...) / t.ReplaceCalls(mi).WithCall(mi) which locate the call for you (README §4.1).");
                 return this;
             }
 
@@ -957,7 +976,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("InsertBefore: No valid match.");
+                AddSoftFailure("InsertBefore: no instruction is selected, so there is no anchor to insert before. Fix: run a Find*/Match* that succeeds first; check SoftFailures for why the preceding match missed.");
                 return this;
             }
 
@@ -997,7 +1016,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("InsertBefore: No valid match.");
+                AddSoftFailure("InsertBefore: no instruction is selected, so there is no anchor to insert before. Fix: run a Find*/Match* that succeeds first; check SoftFailures for why the preceding match missed.");
                 return this;
             }
             if (instructions == null)
@@ -1040,7 +1059,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("InsertAfter: No valid match.");
+                AddSoftFailure("InsertAfter: no instruction is selected, so there is no anchor to insert after. Fix: run a Find*/Match* that succeeds first; check SoftFailures for why the preceding match missed.");
                 return this;
             }
 
@@ -1067,7 +1086,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("InsertAfter: No valid match.");
+                AddSoftFailure("InsertAfter: no instruction is selected, so there is no anchor to insert after. Fix: run a Find*/Match* that succeeds first; check SoftFailures for why the preceding match missed.");
                 return this;
             }
             if (instructions == null)
@@ -1096,7 +1115,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("Remove: No valid match.");
+                AddSoftFailure("Remove: no instruction is selected, so there is nothing to remove. Fix: run a Find*/Match* that succeeds first; check SoftFailures for why the preceding match missed.");
                 return this;
             }
 
@@ -1156,34 +1175,21 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid) return this;
 
-            // 1. Try to parse as index
+            // Only a numeric local index is resolvable. Local *names* are not recoverable here:
+            // System.Reflection's LocalVariableInfo (net35) exposes no name, and Harmony hands
+            // transpilers no PDB/debug symbols, so there is nothing to look a name up against.
+            // Refuse a name honestly (as a soft failure) instead of silently emitting nothing.
             if (int.TryParse(localIndexOrName, out int index))
             {
                 _matcher.Insert(new CodeInstruction(GetLdlocOpCode(index), index > 3 ? (object)index : null));
                 return this;
             }
 
-            // 2. Try to find by name via reflection (requires debug symbols on the original method)
-            if (_originalMethod != null)
-            {
-                try
-                {
-                    // Note: Standard LocalVariableInfo doesn't have names. 
-                    // This is a placeholder for environments where names might be injected or available via metadata.
-                    var locals = _originalMethod.GetMethodBody()?.LocalVariables;
-                    if (locals != null)
-                    {
-                        foreach (var local in locals)
-                        {
-                            // In some contexts (like DynamicMethod or specific debug builds), 
-                            // we might be able to resolve names. For now, we log a warning if we can't find it.
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            AddNote($"CaptureLocal: Could not resolve variable '{localIndexOrName}' by name. Use numeric index instead.");
+            AddSoftFailure(TranspilerDiagnosticCategory.Match,
+                $"CaptureLocal could not resolve local name '{localIndexOrName}': local variable names " +
+                "are not available to transpilers on this runtime (net35 reflection exposes no local names " +
+                "and Harmony provides no debug symbols). Fix: pass the numeric local index instead, " +
+                "e.g. CaptureLocal(\"0\").");
             return this;
         }
 
@@ -1218,68 +1224,23 @@ namespace ModAPI.Harmony
         /// Replace ALL occurrences of a specific method call throughout the entire instruction stream.
         /// Handles labels correctly and uses resilient type matching (by Name/FullName).
         /// </summary>
+        /// <remarks>
+        /// Legacy redirect entry point retained for compatibility. The canonical form is
+        /// <c>t.ForCall(sourceType, sourceMethod).ReplaceAllWith(targetType, targetMethod, targetParams)</c>
+        /// — see Transpilers/README.md §4.1. This shim forwards to that single implementation so the
+        /// two paths cannot drift.
+        /// </remarks>
         /// <param name="sourceType">The class containing the method to replace.</param>
         /// <param name="sourceMethod">The name of the method to replace.</param>
         /// <param name="targetType">Your class containing the replacement static method.</param>
         /// <param name="targetMethod">The name of your static replacement method.</param>
         /// <param name="targetParams">Optional parameter types for target overload resolution.</param>
-        public FluentTranspiler ReplaceAllCalls(Type sourceType, string sourceMethod, 
+        [Obsolete("Use t.ForCall(sourceType, sourceMethod).ReplaceAllWith(targetType, targetMethod, targetParams) — see Transpilers/README.md §4.1.", false)]
+        public FluentTranspiler ReplaceAllCalls(Type sourceType, string sourceMethod,
             Type targetType, string targetMethod, Type[] targetParams = null)
         {
-            _matcher.Start();
-            int replacements = 0;
-            
-            var targetMethodInfo = targetParams != null
-                ? targetType.GetMethod(targetMethod, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, null, targetParams, null)
-                : targetType.GetMethod(targetMethod, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-            
-            if (targetMethodInfo == null)
-            {
-                AddWarning($"Target method {targetType.Name}.{targetMethod} not found");
-                return this;
-            }
-            
-            if (!FluentTranspilerRecipeValidation.ValidateStaticMethod(this, targetMethodInfo, nameof(ReplaceAllCalls)))
-            {
-                return this;
-            }
-            
-            while (_matcher.IsValid)
-            {
-                _matcher.MatchStartForward(new CodeMatch(instr =>
-                    (instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt) &&
-                    instr.operand is MethodInfo m &&
-                    (m.DeclaringType == sourceType || sourceType.IsAssignableFrom(m.DeclaringType) || m.DeclaringType.FullName == sourceType.FullName) &&
-                    m.Name == sourceMethod));
-                
-                if (_matcher.IsValid)
-                {
-                    var beforeIndex = _matcher.Pos;
-                    var oldInstr = _matcher.Instruction;
-                    var sourceMethodInfo = oldInstr != null ? oldInstr.operand as MethodInfo : null;
-                    if (!FluentTranspilerRecipeValidation.ValidateReplacementCallSignature(
-                        this,
-                        sourceMethodInfo,
-                        targetMethodInfo,
-                        nameof(ReplaceAllCalls)))
-                    {
-                        _matcher.Advance(1);
-                        continue;
-                    }
-
-                    var newInstr = new CodeInstruction(OpCodes.Call, targetMethodInfo);
-                    SetInstructionSafe(newInstr);
-                    RecordPatchEdit("ReplaceAllCalls", beforeIndex, new[] { oldInstr }, beforeIndex, new[] { newInstr }, $"{sourceType.Name}.{sourceMethod} -> {targetType.Name}.{targetMethod}", "exact");
-                    _matcher.Advance(1);
-                    replacements++;
-                }
-            }
-            
-            if (replacements == 0)
-            {
-                AddSoftFailure($"No instances of {sourceType.Name}.{sourceMethod} found");
-            }
-            
+            this.ForCall(sourceType, sourceMethod)
+                .ReplaceAllWith(targetType, targetMethod, targetParams);
             return this;
         }
 
@@ -1529,7 +1490,7 @@ namespace ModAPI.Harmony
             var instructions = _matcher.Instructions().ToList();
             if (absolutePosition < 0 || absolutePosition >= instructions.Count)
             {
-                AddSoftFailure($"MoveTo: Position {absolutePosition} out of range.");
+                AddSoftFailure($"MoveTo: index {absolutePosition} is out of range (the stream has {instructions.Count} instruction(s), valid indices 0..{instructions.Count - 1}). Fix: an earlier insert/remove likely shifted indices — recompute the target from a fresh Instructions() snapshot or anchor on a Find*/Match* instead of a fixed index.");
                 return this;
             }
             
@@ -1562,7 +1523,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("ReplaceSequence: No valid match.");
+                AddSoftFailure("ReplaceSequence: no instruction is selected, so there is no range to replace. Fix: run a Find*/Match*/FindSequence that succeeds first; check SoftFailures for why the preceding match missed.");
                 return this;
             }
             if (removeCount < 0)
@@ -2338,8 +2299,10 @@ namespace ModAPI.Harmony
                         AddWarning($"Stack Error: {stackError}");
                     }
 
-                    // Validate explicit stack expectations
-                    if (_stackExpectations.Count > 0)
+                    // Validate explicit stack expectations. Both the depth and delta checks read the
+                    // same per-index stack model, so run StackSentinel.Analyze once and reuse it
+                    // (previously this ran up to two extra Analyze passes per Build).
+                    if (_stackExpectations.Count > 0 || _stackDeltaExpectations.Count > 0)
                     {
                         Dictionary<int, List<Type>> stackAnalysis = StackSentinel.Analyze(instructions, _originalMethod, out _);
                         if (stackAnalysis != null)
@@ -2358,15 +2321,7 @@ namespace ModAPI.Harmony
                                     }
                                 }
                             }
-                        }
-                    }
 
-                    // Validate stack delta expectations
-                    if (_stackDeltaExpectations.Count > 0)
-                    {
-                        Dictionary<int, List<Type>> stackAnalysis = StackSentinel.Analyze(instructions, _originalMethod, out _);
-                        if (stackAnalysis != null)
-                        {
                             foreach (var expectation in _stackDeltaExpectations)
                             {
                                 if (stackAnalysis.TryGetValue(expectation.startIndex, out var startStack) &&

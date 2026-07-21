@@ -24,7 +24,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (condition == null)
                 return false;
 
-            string type = Normalize(condition.Type);
+            string type = ScenarioWinLossConditionSupport.Normalize(condition.Type);
             if (type == null)
             {
                 reason = "Win/loss condition type is missing.";
@@ -36,7 +36,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             if (type == "survivedays")
             {
-                int days = ScenarioPropertyBag.GetInt(condition.Properties, "days", 0);
+                // Early template drafts wrote this field as "day".  Accept that
+                // persisted spelling so a valid authored survive-N-days condition
+                // reaches the same threshold after upgrade.
+                int days = ScenarioPropertyBag.GetInt(condition.Properties, "days", ScenarioPropertyBag.GetInt(condition.Properties, "day", 0));
                 if (days <= 0)
                 {
                     reason = "surviveDays condition requires a positive 'days' property.";
@@ -46,8 +49,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 conditionRef.Kind = ScenarioConditionKind.TimeReached;
                 conditionRef.Time = new ScenarioScheduleTime();
                 conditionRef.Time.Day = Math.Max(1, (binding != null ? binding.DayCreated : 1) + days - 1);
-                conditionRef.Time.Hour = 0;
-                conditionRef.Time.Minute = 0;
+                conditionRef.Time.Hour = ScenarioPropertyBag.GetInt(condition.Properties, "hour", 0);
+                conditionRef.Time.Minute = ScenarioPropertyBag.GetInt(condition.Properties, "minute", 0);
                 return true;
             }
 
@@ -132,12 +135,5 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return false;
         }
 
-        private static string Normalize(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return null;
-
-            return value.Trim().Replace("_", string.Empty).Replace("-", string.Empty).ToLowerInvariant();
-        }
     }
 }

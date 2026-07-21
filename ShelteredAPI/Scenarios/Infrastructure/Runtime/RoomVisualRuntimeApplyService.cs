@@ -12,6 +12,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (room == null)
                 return false;
 
+            if (room.WallCleared)
+            {
+                if (grid != null && grid.SetWall(room.GridX, room.GridY, 0))
+                    return true;
+
+                message = "Failed to reset wall sprite at " + room.GridX + "," + room.GridY + ".";
+                return false;
+            }
+
             if (!string.IsNullOrEmpty(room.WallRuntimeSpriteKey)
                 && ApplyWallRuntimeSprite(grid, room.GridX, room.GridY, room.WallRuntimeSpriteKey))
             {
@@ -38,6 +47,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             message = null;
             if (room == null)
                 return false;
+
+            if (room.WireCleared)
+            {
+                if (grid != null && grid.SetWiring(room.GridX, room.GridY, null))
+                    return true;
+
+                message = "Failed to clear wiring sprite at " + room.GridX + "," + room.GridY + ".";
+                return false;
+            }
 
             if (!string.IsNullOrEmpty(room.WireRuntimeSpriteKey)
                 && ApplyWireRuntimeSprite(grid, wires, room.GridX, room.GridY, room.WireRuntimeSpriteKey))

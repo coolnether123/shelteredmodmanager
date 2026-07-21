@@ -3,6 +3,7 @@ using System.Reflection;
 using HarmonyLib;
 using ModAPI.Harmony;
 using ShelteredAPI.Core;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using UnityEngine;
 
 using ShelteredAPI.Hooks;
@@ -39,6 +40,20 @@ namespace ShelteredAPI.Harmony
                 LoadingTransitionRecoveryService.NotifyLoadingScreenRequested(levelToLoad);
                 LoadingTransitionRecoveryService.ReportTransitionException("LoadingScreen.ShowLoadingScreen", __exception);
                 return null;
+            }
+        }
+
+        [PatchPolicy(PatchDomain.SaveFlow, "ManagedLoadingScreenHideGuard",
+            TargetBehavior = "Keep a ShelteredAPI-owned loading screen alive until its expected scene is ready for the single managed teardown.",
+            FailureMode = "A late vanilla hide can flash after load or cancel a newly queued managed scene transition.",
+            RollbackStrategy = "Disable the SaveFlow patch domain or remove the managed loading-screen hide guard.",
+            StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+        [HarmonyPatch(typeof(LoadingScreen), "HideLoadingScreen")]
+        private static class LoadingScreen_HideLoadingScreen_Patch
+        {
+            private static bool Prefix()
+            {
+                return !ScenarioLoadingTransitionGuard.ShouldSuppressVanillaLoadingScreenHide();
             }
         }
 

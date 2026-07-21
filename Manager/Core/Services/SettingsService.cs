@@ -178,7 +178,7 @@ namespace Manager.Core.Services
             
             string autoCondense;
             if (raw.TryGetValue("AutoCondenseSaves", out autoCondense))
-                settings.AutoCondenseSaves = autoCondense;
+                settings.AutoCondenseSaves = NormalizeAutoCondensePreference(autoCondense);
 
             string saveBackupRetention;
             if (raw.TryGetValue("SaveBackupRetention", out saveBackupRetention))
@@ -200,13 +200,9 @@ namespace Manager.Core.Services
                     settings.EnableNexusIntegration = enabled;
             }
 
-            string enableExperimentalPublishTab;
-            if (raw.TryGetValue("EnableExperimentalPublishTab", out enableExperimentalPublishTab))
-            {
-                bool enabled;
-                if (bool.TryParse(enableExperimentalPublishTab, out enabled))
-                    settings.EnableExperimentalPublishTab = enabled;
-            }
+            // Public 2.0 builds do not expose Nexus API upload/publish.
+            // Keep the setting key self-healing for older configs that enabled the experimental tab.
+            settings.EnableExperimentalPublishTab = false;
 
             string lastSeenReleaseNoticeVersion;
             if (raw.TryGetValue("LastSeenReleaseNoticeVersion", out lastSeenReleaseNoticeVersion))
@@ -299,6 +295,26 @@ namespace Manager.Core.Services
         }
 
         /// <summary>
+        /// Reads only the save-condense preference currently persisted on disk.
+        /// The game can update this value while the manager is still running.
+        /// </summary>
+        public string LoadAutoCondensePreference()
+        {
+            string value;
+            return ReadIniFile().TryGetValue("AutoCondenseSaves", out value)
+                ? NormalizeAutoCondensePreference(value)
+                : "ask";
+        }
+
+        private static string NormalizeAutoCondensePreference(string value)
+        {
+            string normalized = (value ?? string.Empty).Trim().ToLowerInvariant();
+            if (normalized == "yes" || normalized == "true") return "yes";
+            if (normalized == "no" || normalized == "false") return "no";
+            return "ask";
+        }
+
+        /// <summary>
         /// Save settings to INI file
         /// </summary>
         public void Save(AppSettings settings)
@@ -322,12 +338,12 @@ namespace Manager.Core.Services
             data["SkipHarmonyDependencyCheck"] = settings.SkipHarmonyDependencyCheck.ToString();
             data["IncludeNexusPrereleaseFiles"] = settings.IncludeNexusPrereleaseFiles.ToString();
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
-            data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
+            data["AutoCondenseSaves"] = NormalizeAutoCondensePreference(settings.AutoCondenseSaves);
             data["SaveBackupRetention"] = AppSettings.FormatSaveBackupRetention(settings.SaveBackupRetention);
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
             data["InstalledShelteredApiVersion"] = settings.InstalledShelteredApiVersion ?? string.Empty;
             data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();
-            data["EnableExperimentalPublishTab"] = settings.EnableExperimentalPublishTab.ToString();
+            data["EnableExperimentalPublishTab"] = false.ToString();
             data["LastSeenReleaseNoticeVersion"] = settings.LastSeenReleaseNoticeVersion ?? string.Empty;
             data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
             string plaintextNexusApiKey = settings.NexusApiKey ?? string.Empty;

@@ -92,6 +92,7 @@ namespace ShelteredAPI.Scenarios.Lifecycle{
             }
 
             _stateManager.SetCustomScenarioState(CustomScenarioState.None(), "custom-scenario", "State cleared.");
+            ModRandomBridge.SetScenarioFixedSeedActive(false);
             if (hadState)
                 _events.RaiseCleared(previousInfo);
         }
@@ -104,7 +105,8 @@ namespace ShelteredAPI.Scenarios.Lifecycle{
                 VersionApplied = info != null ? info.Version : null,
                 IsActive = true,
                 IsConvertedToNormalSave = false,
-                DayCreated = GetCurrentDay()
+                DayCreated = GetCurrentDay(),
+                RunId = Guid.NewGuid().ToString("N")
             };
         }
 

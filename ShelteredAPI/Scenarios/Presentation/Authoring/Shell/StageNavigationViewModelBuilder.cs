@@ -25,24 +25,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
             ScenarioStageKind activeStageKind = ResolveActiveStageKind(state);
-            ScenarioStageDefinition[] topLevel = _stageRegistry.GetTopLevel();
-            for (int i = 0; i < topLevel.Length; i++)
-            {
-                ScenarioStageDefinition definition = topLevel[i];
-                if (definition == null)
-                    continue;
+            actions.Add(CreateAction(
+                ScenarioAuthoringActionIds.ActionWindowTogglePrefix + ScenarioAuthoringWindowIds.Scenario,
+                "Home",
+                "HOME",
+                true,
+                activeStageKind == ScenarioStageKind.None && HasWindowVisible(state, ScenarioAuthoringWindowIds.Scenario),
+                "Open the scenario home dashboard."));
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Bunker);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.People);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.InventoryStorage);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Events);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Quests);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Map);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Assets);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Test);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Publish);
 
-                AddTab(actions, definition, activeStageKind, false);
-                if (definition.Kind == ScenarioStageKind.Bunker)
-                {
-                    ScenarioStageDefinition[] children = _stageRegistry.GetChildren(ScenarioStageKind.Bunker);
-                    for (int childIndex = 0; childIndex < children.Length; childIndex++)
-                    {
-                        ScenarioStageDefinition child = children[childIndex];
-                        if (child != null)
-                            AddTab(actions, child, activeStageKind, true);
-                    }
-                }
+            return actions.ToArray();
+        }
+
+        public ScenarioAuthoringInspectorAction[] BuildWorldSubstageActions(ScenarioAuthoringState state)
+        {
+            ScenarioStageKind activeStageKind = ResolveActiveStageKind(state);
+            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            ScenarioStageDefinition[] children = _stageRegistry.GetChildren(ScenarioStageKind.Bunker);
+            for (int i = 0; i < children.Length; i++)
+            {
+                ScenarioStageDefinition child = children[i];
+                // Surface currently has no distinct selectable authoring target;
+                // exposing it as a workspace implies functionality it cannot provide.
+                if (child != null && child.Kind != ScenarioStageKind.BunkerSurface)
+                    AddTab(actions, child, activeStageKind, true);
             }
 
             return actions.ToArray();
@@ -52,10 +66,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             return new[]
             {
-                CreateAction(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "SAVE", true, true, "Validate and save the current scenario draft."),
-                CreateAction(ScenarioAuthoringActionIds.ActionShellOpenCalendar, "Schedule", "TIME", true, HasWindowVisible(state, ScenarioAuthoringWindowIds.Calendar), "Open the scenario schedule."),
-                CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings", "SET", true, false, "Open authoring settings.")
+                CreateAction(ScenarioAuthoringActionIds.ActionSave, "Save", "SAVE", true, true, "Validate and save the current scenario draft.")
             };
+        }
+
+        private void AddTopLevelTab(
+            List<ScenarioAuthoringInspectorAction> actions,
+            ScenarioStageKind activeStageKind,
+            ScenarioStageKind stageKind)
+        {
+            ScenarioStageDefinition definition = _stageRegistry.Find(stageKind);
+            if (definition != null)
+                AddTab(actions, definition, activeStageKind, false);
         }
 
         public ScenarioAuthoringInspectorAction[] BuildLayoutActions(ScenarioAuthoringState state)
@@ -71,15 +93,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public ScenarioAuthoringToolButtonViewModel[] BuildToolButtons(ScenarioAuthoringState state)
         {
-            bool hasSelection = state != null && state.SelectedTarget != null;
             return new[]
             {
-                CreateToolButton(state, ScenarioAuthoringTool.Select, ScenarioAuthoringActionIds.ActionToolSelect, "Select", "PICK", "Pick and inspect shelter objects."),
-                CreateToolButton(state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "OBJ", "Place or capture shelter objects."),
-                CreateToolButton(state, ScenarioAuthoringTool.Shelter, ScenarioAuthoringActionIds.ActionToolShelter, "Rooms", "ROOM", "Author rooms, ladders, lights, and structure."),
-                CreateToolButton(state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "Walls", "WALL", "Edit wall and wiring layers."),
-                CreateToolButton(state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "Art", "ART", hasSelection ? "Edit or place scenario art for the selection." : "Place snapped scene art."),
-                CreateToolButton(state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "Victory", "WIN", "Define win and loss conditions.")
+                CreateToolButton(state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "Build", "BLD", "Open the world-context asset browser for rooms, objects, walls, wiring, and scene art.")
             };
         }
 
@@ -87,6 +103,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioAuthoringWindowDefinition[] definitions = windowRegistry != null ? windowRegistry.GetDefinitions() : new ScenarioAuthoringWindowDefinition[0];
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            AddWindowMenuGroup(actions, "Tools");
+            AddWindowMenuDefinitions(actions, state, definitions, WindowMenuGroup.Tools);
+            AddWindowMenuGroup(actions, "Panels");
+            AddWindowMenuDefinitions(actions, state, definitions, WindowMenuGroup.Panels);
+            AddWindowMenuGroup(actions, "Help & Settings");
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, FormatWindowMenuLabel("Help", state != null && state.HelpWindowOpen && !state.HelpShortcutsView), "HELP", true, state != null && state.HelpWindowOpen && !state.HelpShortcutsView, "Open the workshop help pages."));
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenShortcuts, FormatWindowMenuLabel("Shortcuts", state != null && state.HelpWindowOpen && state.HelpShortcutsView), "?", true, state != null && state.HelpWindowOpen && state.HelpShortcutsView, "Open the keyboard shortcuts reference (F1)."));
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, FormatWindowMenuLabel("Settings", state != null && state.SettingsWindowOpen), "SET", true, state != null && state.SettingsWindowOpen, "Open authoring settings."));
+
+            return actions.ToArray();
+        }
+
+        private static void AddWindowMenuDefinitions(
+            List<ScenarioAuthoringInspectorAction> actions,
+            ScenarioAuthoringState state,
+            ScenarioAuthoringWindowDefinition[] definitions,
+            WindowMenuGroup group)
+        {
             for (int i = 0; i < definitions.Length; i++)
             {
                 ScenarioAuthoringWindowDefinition definition = definitions[i];
@@ -94,18 +128,54 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
                 if (!definition.MenuVisible)
                     continue;
+                if (ResolveWindowMenuGroup(definition) != group)
+                    continue;
 
                 bool emphasized = HasWindowVisible(state, definition.Id);
                 actions.Add(CreateAction(
                     ScenarioAuthoringActionIds.ActionWindowTogglePrefix + definition.Id,
-                    definition.Title,
-                    "PANEL",
+                    FormatWindowMenuLabel(definition.Title, emphasized),
+                    emphasized ? "OPEN" : "OFF",
                     true,
                     emphasized,
                     "Toggle the '" + definition.Title + "' panel."));
             }
+        }
 
-            return actions.ToArray();
+        private static void AddWindowMenuGroup(List<ScenarioAuthoringInspectorAction> actions, string label)
+        {
+            actions.Add(CreateAction("window.menu.group." + label.Replace(" ", "_").Replace("&", "and").ToLowerInvariant(), label, "GROUP", false, false, label));
+        }
+
+        private static WindowMenuGroup ResolveWindowMenuGroup(ScenarioAuthoringWindowDefinition definition)
+        {
+            if (definition == null)
+                return WindowMenuGroup.Panels;
+
+            if (string.Equals(definition.Id, ScenarioAuthoringWindowIds.Triggers, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Survivors, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Stockpile, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Quests, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Map, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.AssetBrowser, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Publish, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+            {
+                return WindowMenuGroup.Tools;
+            }
+
+            return WindowMenuGroup.Panels;
+        }
+
+        private static string FormatWindowMenuLabel(string title, bool open)
+        {
+            return (open ? "Open - " : "Closed - ") + title;
+        }
+
+        private enum WindowMenuGroup
+        {
+            Tools,
+            Panels
         }
 
         public string BuildStageLabel(ScenarioAuthoringState state)
@@ -225,7 +295,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioStageKind.BunkerSurface:
                     return "Surface";
                 case ScenarioStageKind.BunkerInside:
-                    return "Interior";
+                    return "Inside";
                 case ScenarioStageKind.InventoryStorage:
                     return "Supplies";
                 case ScenarioStageKind.People:
@@ -236,8 +306,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return "Story";
                 case ScenarioStageKind.Map:
                     return "Map";
+                case ScenarioStageKind.Assets:
+                    return "Assets";
                 case ScenarioStageKind.Test:
-                    return "Test";
+                    return "Test Console";
                 case ScenarioStageKind.Publish:
                     return "Publish";
                 default:
@@ -267,10 +339,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return "STORY";
                 case ScenarioStageKind.Map:
                     return "MAP";
+                case ScenarioStageKind.Assets:
+                    return "AST";
                 case ScenarioStageKind.Test:
                     return "TEST";
                 case ScenarioStageKind.Publish:
-                    return "PUB";
+                    return "EXPORT";
                 default:
                     return "WORK";
             }
@@ -298,10 +372,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return "Author story beats and quest entries.";
                 case ScenarioStageKind.Map:
                     return "Author map-facing scenario setup.";
+                case ScenarioStageKind.Assets:
+                    return "Browse all placeable and editable art assets in the workshop.";
                 case ScenarioStageKind.Test:
                     return "Apply the draft into the live shelter and test it.";
                 case ScenarioStageKind.Publish:
-                    return "Validate the scenario and prepare it for distribution.";
+                    return "Validate the scenario and create a local package for sharing.";
                 default:
                     return child ? "Switch world layer." : "Switch scenario workspace.";
             }

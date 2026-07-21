@@ -21,6 +21,8 @@ namespace ShelteredAPI.UI.Compatibility
         private const int BAR_HEIGHT = 180;
         private const int WINDOW_WIDTH = 550;
         private const int WINDOW_HEIGHT = 380;
+        private const int WINDOW_CUT = 12;
+        private const int TITLE_HEIGHT = 44;
 
         // --- Widgets ---
         private UITexture _svBox;
@@ -44,6 +46,7 @@ namespace ShelteredAPI.UI.Compatibility
         private UIInput _inputH, _inputS, _inputV; 
 
         private GameObject _recentGridRoot;
+        private readonly List<Texture2D> _chromeTextures = new List<Texture2D>();
 
         // --- Data ---
         private float _h, _s, _v, _a;
@@ -109,17 +112,8 @@ namespace ShelteredAPI.UI.Compatibility
             bCol.size = new Vector3(5000, 5000, 1);
             UIEventListener.Get(blocker).onClick += (g) => Close();
 
-            // 2. Window Background
-            // We want this at depth ~13000
-            var bgGO = UIUtil.CreatePanelBackground(gameObject, WINDOW_WIDTH, WINDOW_HEIGHT);
-            bgGO.transform.localPosition = Vector3.zero;
-            var bgTex = bgGO.GetComponent<UITexture>();
-            if (bgTex != null) 
-            {
-                bgTex.color = new Color(0.12f, 0.12f, 0.12f, 1f);
-                bgTex.depth = 13000; 
-                Log($"[Debug] Background created. Depth: {bgTex.depth}");
-            }
+            // 2. Window chrome
+            CreateParchmentWindowChrome();
 
             // 3. Title
             var titleLbl = UIUtil.CreateLabelQuick(gameObject, "COLOR PICKER", 16, new Vector3(0, (WINDOW_HEIGHT / 2) - 25, 0));
@@ -166,9 +160,125 @@ namespace ShelteredAPI.UI.Compatibility
             if (_svTexture) Destroy(_svTexture);
             if (_hueTexture) Destroy(_hueTexture);
             if (_alphaTexture) Destroy(_alphaTexture);
+            for (int i = 0; i < _chromeTextures.Count; i++)
+            {
+                if (_chromeTextures[i] != null)
+                    Destroy(_chromeTextures[i]);
+            }
+            _chromeTextures.Clear();
             
             Destroy(gameObject);
             _instance = null;
+        }
+
+        private void CreateParchmentWindowChrome()
+        {
+            CreateChromeLayer(
+                "WindowShadow",
+                WINDOW_WIDTH,
+                WINDOW_HEIGHT,
+                WINDOW_CUT,
+                new Color(0f, 0f, 0f, 0.42f),
+                new Vector3(4f, -4f, 0f),
+                12980);
+            UITexture face = CreateChromeLayer(
+                "WindowFace",
+                WINDOW_WIDTH,
+                WINDOW_HEIGHT,
+                WINDOW_CUT,
+                new Color(0.22f, 0.18f, 0.13f, 1f),
+                Vector3.zero,
+                13000);
+            BoxCollider faceCollider = face.gameObject.AddComponent<BoxCollider>();
+            faceCollider.size = new Vector3(WINDOW_WIDTH, WINDOW_HEIGHT, 1f);
+            faceCollider.center = Vector3.zero;
+            CreateChromeLayer(
+                "WindowHeader",
+                WINDOW_WIDTH - 24,
+                TITLE_HEIGHT,
+                8,
+                new Color(0.34f, 0.27f, 0.18f, 1f),
+                new Vector3(0f, (WINDOW_HEIGHT / 2f) - 25f, 0f),
+                13010);
+            CreateBorderTexture("BorderTop", WINDOW_WIDTH - (WINDOW_CUT * 2), 2, new Vector3(0f, WINDOW_HEIGHT / 2f - 1f, 0f), 13020, new Color(0.76f, 0.60f, 0.32f, 1f));
+            CreateBorderTexture("BorderBottom", WINDOW_WIDTH - (WINDOW_CUT * 2), 2, new Vector3(0f, -WINDOW_HEIGHT / 2f + 1f, 0f), 13020, new Color(0.34f, 0.27f, 0.18f, 1f));
+            CreateBorderTexture("BorderLeft", 2, WINDOW_HEIGHT - (WINDOW_CUT * 2), new Vector3(-WINDOW_WIDTH / 2f + 1f, 0f, 0f), 13020, new Color(0.76f, 0.60f, 0.32f, 1f));
+            CreateBorderTexture("BorderRight", 2, WINDOW_HEIGHT - (WINDOW_CUT * 2), new Vector3(WINDOW_WIDTH / 2f - 1f, 0f, 0f), 13020, new Color(0.34f, 0.27f, 0.18f, 1f));
+            CreateCloseButton(new Vector3((WINDOW_WIDTH / 2f) - 28f, (WINDOW_HEIGHT / 2f) - 25f, 0f));
+        }
+
+        private UITexture CreateChromeLayer(string name, int width, int height, int cut, Color color, Vector3 localPosition, int depth)
+        {
+            GameObject go = new GameObject(name);
+            go.transform.parent = transform;
+            go.transform.localPosition = localPosition;
+            go.transform.localScale = Vector3.one;
+            go.layer = gameObject.layer;
+
+            UITexture texture = go.AddComponent<UITexture>();
+            texture.mainTexture = CreateCornerCutTexture(width, height, cut, color);
+            texture.width = width;
+            texture.height = height;
+            texture.depth = depth;
+            var shader = Shader.Find("Unlit/Transparent Colored");
+            if (shader != null)
+                texture.shader = shader;
+            return texture;
+        }
+
+        private Texture2D CreateCornerCutTexture(int width, int height, int cut, Color color)
+        {
+            Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Point;
+            texture.wrapMode = TextureWrapMode.Clamp;
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    bool cornerCut =
+                        (x + y < cut)
+                        || ((width - 1 - x) + y < cut)
+                        || (x + (height - 1 - y) < cut)
+                        || ((width - 1 - x) + (height - 1 - y) < cut);
+                    texture.SetPixel(x, y, cornerCut ? new Color(0f, 0f, 0f, 0f) : color);
+                }
+            }
+            texture.Apply();
+            _chromeTextures.Add(texture);
+            return texture;
+        }
+
+        private void CreateBorderTexture(string name, int width, int height, Vector3 position, int depth, Color color)
+        {
+            UITexture texture = UIUtil.CreateFlatTexture(gameObject, width, height, color);
+            texture.gameObject.name = name;
+            texture.transform.localPosition = position;
+            texture.depth = depth;
+        }
+
+        private void CreateCloseButton(Vector3 localPosition)
+        {
+            GameObject button = new GameObject("CloseButton");
+            button.transform.parent = transform;
+            button.transform.localPosition = localPosition;
+            button.transform.localScale = Vector3.one;
+            button.layer = gameObject.layer;
+
+            UITexture background = UIUtil.CreateFlatTexture(button, 26, 24, new Color(0.18f, 0.13f, 0.09f, 1f));
+            background.depth = 13045;
+            CreateCloseGlyphLine(button, 18, 3, -45f);
+            CreateCloseGlyphLine(button, 18, 3, 45f);
+
+            BoxCollider collider = button.AddComponent<BoxCollider>();
+            collider.size = new Vector3(26f, 24f, 1f);
+            UIEventListener.Get(button).onClick += (g) => Close();
+        }
+
+        private void CreateCloseGlyphLine(GameObject parent, int width, int height, float angle)
+        {
+            UITexture line = UIUtil.CreateFlatTexture(parent, width, height, new Color(0.96f, 0.86f, 0.62f, 1f));
+            line.depth = 13055;
+            line.transform.localEulerAngles = new Vector3(0f, 0f, angle);
         }
 
         private void CommitColor()

@@ -5,6 +5,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Stages;
@@ -12,12 +13,18 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringSelectionService
     {
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
         private readonly ScenarioSelectionScopeService _scopeService;
         private readonly ScenarioAuthoringTargetAdapterRegistry _adapterRegistry = new ScenarioAuthoringTargetAdapterRegistry();
+        private const float MinHitTestTolerance = 0.04f;
+        private const int PrimaryDomainScore = 420;
+        private const int SecondaryDomainScore = 220;
+        private const int TertiaryDomainScore = 120;
+        private const int SuppressedDomainScore = 80;
 
         public ScenarioAuthoringSelectionService(
             ScenarioCharacterAppearanceService characterAppearanceService,
@@ -40,8 +47,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             ScenarioAuthoringTarget hovered = null;
             List<ScenarioAuthoringTarget> stack = null;
-            bool selectionMode = ScenarioAuthoringRuntimeGuards.ShouldResolveSelection()
-                && (ScenarioAuthoringInputActions.IsSelectionModifierHeld() || IsAddSelectionHeld());
+            bool selectionMode = ScenarioAuthoringRuntimeGuards.ShouldResolveSelection();
             bool changed = state.SelectionModeActive != selectionMode;
             state.SelectionModeActive = selectionMode;
             changed |= _scopeService.ClearSelectionIfOutOfScope(state);
@@ -56,18 +62,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             else
             {
-                if (TryResolveCandidateStack(state, out stack))
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                bool worldSelectionSuppressedByUi = UICamera.hoveredObject != null
+                    || (inputCapture != null && inputCapture.ShouldSuppressWorldInputNow());
+                if (worldSelectionSuppressedByUi)
                 {
-                    changed |= SynchronizeSelectionStack(state, stack);
-                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
-                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
-
-                    if (ScenarioAuthoringInputActions.IsStackCycleDown())
-                    {
-                        changed |= CycleSelectionStack(state, 1);
-                        if (state.SelectionStack != null && state.SelectionStack.Count > 0)
-                            hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
-                    }
+                    hovered = null;
+                }
+                else if (TryResolveCandidateStack(state, out stack))
+                {
+                    hovered = stack.Count > 0 ? stack[0] : null;
 
                     if (!AreSameTarget(state.HoveredTarget, hovered))
                     {
@@ -82,28 +86,36 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         state.HoveredTarget = null;
                         changed = true;
                     }
-
-                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
-                    {
-                        ClearSelectionStack(state);
-                        changed = true;
-                    }
                 }
 
-                if (ScenarioAuthoringInputActions.IsConfirmSelectionDown()
+                bool placementActive = ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
+                bool dragPanConsumedClick = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>().ShouldSuppressSelectionClickThisFrame();
+                bool vanillaInteractionClick = IsVanillaInteractionRightClickCandidate();
+                if (!placementActive
+                    && !dragPanConsumedClick
+                    && !vanillaInteractionClick
+                    && !worldSelectionSuppressedByUi
+                    && ScenarioAuthoringInputActions.IsConfirmSelectionDown()
                     && hovered != null
                     && _scopeService.CanSelectTargetForCurrentStage(state, hovered))
                 {
-                    if (state.SelectionStack != null
-                        && state.SelectionStack.Count > 1
-                        && AreSameTarget(state.SelectedTarget, hovered))
-                    {
-                        changed |= CycleSelectionStack(state, 1);
-                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
-                    }
-
+                    changed |= SynchronizeSelectionStack(state, stack);
                     changed |= ApplySelection(state, hovered);
                 }
+            }
+
+            if (IsVanillaInteractionRightClickCandidate())
+            {
+                if (TryOpenVanillaInteractionFromRightClick())
+                {
+                    ScenarioHoverVisualService.Instance.UpdateFromState(state);
+                    ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
+                    return true;
+                }
+
+                ScenarioHoverVisualService.Instance.UpdateFromState(state);
+                ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
+                return changed;
             }
 
             if (ScenarioAuthoringInputActions.IsClearSelectionDown())
@@ -120,6 +132,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     state.SelectedTarget = null;
                     state.MultiSelection.Clear();
+                    ClearSelectionStack(state);
                     state.StatusMessage = "Selection cleared.";
                     changed = true;
                 }
@@ -130,12 +143,88 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return changed;
         }
 
+        // Explicit selection seam for trusted integration tooling. It deliberately
+        // reuses the same target adapters and ApplySelection path as world clicks.
+        public bool TrySelectRuntimeObject(ScenarioAuthoringState state, GameObject gameObject, out ScenarioAuthoringTarget target, out string message)
+        {
+            target = null;
+            message = null;
+            if (state == null)
+            {
+                message = "Scenario authoring is not active.";
+                return false;
+            }
+            if (gameObject == null)
+            {
+                message = "The requested world object was not found.";
+                return false;
+            }
+
+            ScenarioAuthoringTargetContext context = new ScenarioAuthoringTargetContext
+            {
+                GameObject = gameObject,
+                WorldPoint = gameObject.transform.position
+            };
+            if (!_adapterRegistry.TryCreateTarget(context, out target) || target == null)
+            {
+                message = "The requested world object is not editable.";
+                return false;
+            }
+            if (IsGlobalBackdropTarget(state, target) || !_scopeService.CanSelectTargetForCurrentStage(state, target))
+            {
+                message = "The requested world object is outside the current authoring scope.";
+                target = null;
+                return false;
+            }
+
+            state.HoveredTarget = target.Copy();
+            ApplySelection(state, target);
+            ScenarioHoverVisualService.Instance.UpdateFromState(state);
+            ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
+            message = state.StatusMessage;
+            return true;
+        }
+
+        private static bool IsVanillaInteractionRightClickCandidate()
+        {
+            if (!UnityEngine.Input.GetMouseButtonDown(1)
+                && !UnityEngine.Input.GetMouseButtonUp(1)
+                && !UnityEngine.Input.GetMouseButton(1))
+                return false;
+
+            try
+            {
+                ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+                return service != null && service.CanStartWorldInteraction();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryOpenVanillaInteractionFromRightClick()
+        {
+            if (!UnityEngine.Input.GetMouseButtonUp(1))
+                return false;
+
+            try
+            {
+                ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+                return service != null && service.TryOpenWorldInteractionUnderPointer();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private bool TryResolveCandidateStack(ScenarioAuthoringState state, out List<ScenarioAuthoringTarget> targets)
         {
             targets = null;
             if (UICamera.hoveredObject != null)
                 return false;
-            if (ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>().PointerOverAuthoringUi)
+            if (ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>().ShouldSuppressWorldInputNow())
                 return false;
 
             Camera camera = Camera.main;
@@ -150,6 +239,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             Ray ray = camera.ScreenPointToRay(UnityEngine.Input.mousePosition);
             Vector3 worldPoint = ResolveMouseWorldPoint(camera);
+            float hitTolerance = ResolveHitTestTolerance(camera);
             RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
             List<SelectionCandidate> candidates = new List<SelectionCandidate>();
             if (hits != null && hits.Length > 0)
@@ -179,7 +269,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             try
             {
-                Collider2D[] hits2D = Physics2D.OverlapPointAll(new Vector2(worldPoint.x, worldPoint.y));
+                Collider2D[] hits2D = Physics2D.OverlapCircleAll(new Vector2(worldPoint.x, worldPoint.y), hitTolerance);
                 for (int i = 0; hits2D != null && i < hits2D.Length; i++)
                 {
                     Collider2D collider = hits2D[i];
@@ -204,7 +294,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 MMLog.WriteDebug("[ScenarioAuthoringSelection] 2D overlap check failed: " + ex.Message);
             }
 
-            AddSpriteRendererCandidates(state, candidates, camera, ray, worldPoint);
+            AddSpriteRendererCandidates(state, candidates, camera, ray, worldPoint, hitTolerance);
+            AddAuthoredStructuralCandidates(state, candidates, worldPoint);
 
             ScenarioAuthoringTargetContext gridContext = new ScenarioAuthoringTargetContext
             {
@@ -229,6 +320,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringTarget target;
             if (!_adapterRegistry.TryCreateTarget(context, out target) || target == null)
                 return;
+            if (IsGlobalBackdropTarget(state, target))
+                return;
             if (!_scopeService.CanSelectTargetForCurrentStage(state, target))
                 return;
 
@@ -237,7 +330,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Target = target,
                 SourceRank = sourceRank,
                 Distance = distance,
-                ToolScore = ScoreToolRelevance(state, target),
+                ToolScore = ScoreDomainRelevance(state, target),
                 StageScore = ScoreStageRelevance(state, target),
                 KindScore = ScoreKind(target.Kind),
                 SortingLayer = spriteRenderer != null ? SortingLayer.GetLayerValueFromID(spriteRenderer.sortingLayerID) : ResolveSortingLayer(target),
@@ -252,7 +345,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             List<SelectionCandidate> candidates,
             Camera camera,
             Ray ray,
-            Vector3 worldPoint)
+            Vector3 worldPoint,
+            float hitTolerance)
         {
             SpriteRenderer[] spriteRenderers = UnityEngine.Object.FindObjectsOfType<SpriteRenderer>();
             for (int i = 0; spriteRenderers != null && i < spriteRenderers.Length; i++)
@@ -263,7 +357,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     || !spriteRenderer.enabled
                     || spriteRenderer.gameObject == null
                     || !spriteRenderer.gameObject.activeInHierarchy
-                    || !spriteRenderer.bounds.Contains(worldPoint))
+                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint, hitTolerance))
                 {
                     continue;
                 }
@@ -277,6 +371,151 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 };
                 AddCandidate(state, candidates, context, 220, 0f, spriteRenderer);
             }
+        }
+
+        private void AddAuthoredStructuralCandidates(
+            ScenarioAuthoringState state,
+            List<SelectionCandidate> candidates,
+            Vector3 worldPoint)
+        {
+            int pointerGridX;
+            int pointerGridY;
+            if (!ScenarioGridSnapService.TryGetCell(worldPoint, out pointerGridX, out pointerGridY))
+                return;
+
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            BunkerEditsDefinition bunkerEdits = session != null && session.WorkingDefinition != null
+                ? session.WorkingDefinition.BunkerEdits
+                : null;
+            List<ObjectPlacement> placements = bunkerEdits != null ? bunkerEdits.ObjectPlacements : null;
+            for (int i = 0; placements != null && i < placements.Count; i++)
+            {
+                ObjectPlacement placement = placements[i];
+                int gridX;
+                int gridY;
+                if (!TryGetStructuralPlacementGrid(placement, out gridX, out gridY)
+                    || gridX != pointerGridX
+                    || gridY != pointerGridY)
+                {
+                    continue;
+                }
+
+                ScenarioAuthoringTarget target = BuildAuthoredStructuralTarget(placement, gridX, gridY);
+                if (target == null || !_scopeService.CanSelectTargetForCurrentStage(state, target))
+                    continue;
+
+                candidates.Add(new SelectionCandidate
+                {
+                    Target = target,
+                    SourceRank = 240,
+                    Distance = 0f,
+                    ToolScore = ScoreDomainRelevance(state, target),
+                    StageScore = ScoreStageRelevance(state, target),
+                    KindScore = ScoreKind(target.Kind),
+                    SortingLayer = ResolveSortingLayer(target),
+                    SortingOrder = ResolveSortingOrder(target),
+                    Z = target.WorldPosition.z,
+                    Area = ResolveArea(target)
+                });
+            }
+        }
+
+        private static bool TryGetStructuralPlacementGrid(ObjectPlacement placement, out int gridX, out int gridY)
+        {
+            gridX = -1;
+            gridY = -1;
+            ScenarioPlacementDefinitionKind kind;
+            return placement != null
+                && ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind)
+                && ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridX, out gridX)
+                && ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridY, out gridY);
+        }
+
+        private static ScenarioAuthoringTarget BuildAuthoredStructuralTarget(ObjectPlacement placement, int gridX, int gridY)
+        {
+            ScenarioPlacementDefinitionKind placementKind;
+            if (placement == null || !ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out placementKind))
+                return null;
+
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            ShelterRoomGrid.GridCell cell = grid != null ? grid.GetCell(gridX, gridY) : null;
+            GameObject cellObject = cell != null ? cell.prefab : null;
+            Vector3 cellCenter = ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY);
+            ScenarioAuthoringTargetKind targetKind = ResolveStructuralTargetKind(placementKind);
+            string label = FormatStructuralTargetLabel(placementKind, gridX, gridY);
+            string reference = placement.DefinitionReference ?? placementKind.ToString();
+
+            return new ScenarioAuthoringTarget
+            {
+                Id = "structure:" + reference + ":" + gridX + ":" + gridY,
+                Kind = targetKind,
+                DisplayName = label,
+                Description = "Authored " + label.ToLowerInvariant() + ".",
+                AdapterId = "ShelteredAPI.AuthoredStructure",
+                GameObjectName = cellObject != null ? cellObject.name : label,
+                TransformPath = cellObject != null ? BuildTransformPath(cellObject.transform) : ("ShelterGrid/" + gridX + "/" + gridY),
+                RuntimeObject = cellObject,
+                HighlightObject = cellObject,
+                WorldPosition = cellCenter,
+                GridX = gridX,
+                GridY = gridY,
+                SupportsInspect = true,
+                SupportsReplace = true
+            };
+        }
+
+        private static ScenarioAuthoringTargetKind ResolveStructuralTargetKind(ScenarioPlacementDefinitionKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioPlacementDefinitionKind.Room:
+                    return ScenarioAuthoringTargetKind.Room;
+                case ScenarioPlacementDefinitionKind.RoomLight:
+                    return ScenarioAuthoringTargetKind.Light;
+                case ScenarioPlacementDefinitionKind.Ladder:
+                    return ScenarioAuthoringTargetKind.Tile;
+                default:
+                    return ScenarioAuthoringTargetKind.Tile;
+            }
+        }
+
+        private static string FormatStructuralTargetLabel(ScenarioPlacementDefinitionKind kind, int gridX, int gridY)
+        {
+            string name;
+            switch (kind)
+            {
+                case ScenarioPlacementDefinitionKind.Room:
+                    name = "Room";
+                    break;
+                case ScenarioPlacementDefinitionKind.Ladder:
+                    name = "Ladder";
+                    break;
+                case ScenarioPlacementDefinitionKind.RoomLight:
+                    name = "Room Light";
+                    break;
+                default:
+                    name = "Structure";
+                    break;
+            }
+
+            return name + " " + gridX + "," + gridY;
+        }
+
+        private static string BuildTransformPath(Transform transform)
+        {
+            if (transform == null)
+                return string.Empty;
+
+            List<string> names = new List<string>();
+            Transform current = transform;
+            while (current != null)
+            {
+                names.Add(current.name);
+                current = current.parent;
+            }
+
+            names.Reverse();
+            return string.Join("/", names.ToArray());
         }
 
         private static List<ScenarioAuthoringTarget> BuildSortedTargets(ScenarioAuthoringState state, List<SelectionCandidate> candidates)
@@ -316,20 +555,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int rightScore = right.TotalScore;
             if (leftScore != rightScore)
                 return rightScore.CompareTo(leftScore);
+            if (left.SourceRank != right.SourceRank)
+                return right.SourceRank.CompareTo(left.SourceRank);
+            int distance = left.Distance.CompareTo(right.Distance);
+            if (distance != 0)
+                return distance;
             if (left.SortingLayer != right.SortingLayer)
                 return right.SortingLayer.CompareTo(left.SortingLayer);
             if (left.SortingOrder != right.SortingOrder)
                 return right.SortingOrder.CompareTo(left.SortingOrder);
-            int distance = left.Distance.CompareTo(right.Distance);
-            if (distance != 0)
-                return distance;
             int z = right.Z.CompareTo(left.Z);
             if (z != 0)
                 return z;
             return left.Area.CompareTo(right.Area);
         }
 
-        private static int ScoreToolRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
+        private static int ScoreDomainRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
         {
             if (state == null || target == null)
                 return 0;
@@ -337,12 +578,41 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             switch (state.ActiveTool)
             {
                 case ScenarioAuthoringTool.Objects:
-                    return target.Kind == ScenarioAuthoringTargetKind.PlaceableObject ? 80 : target.Kind == ScenarioAuthoringTargetKind.SceneSprite ? 30 : 0;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Character)
+                        return PrimaryDomainScore;
+                    if (target.Kind == ScenarioAuthoringTargetKind.PlaceableObject || target.Kind == ScenarioAuthoringTargetKind.Vehicle)
+                        return PrimaryDomainScore;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Light || IsNamedLike(target, "ladder"))
+                        return TertiaryDomainScore;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
+                        return SuppressedDomainScore;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wire)
+                        return 70;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wall)
+                        return 60;
+                    return 0;
                 case ScenarioAuthoringTool.Shelter:
-                    return target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile || target.Kind == ScenarioAuthoringTargetKind.Light ? 80 : 0;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Room
+                        || target.Kind == ScenarioAuthoringTargetKind.Tile
+                        || target.Kind == ScenarioAuthoringTargetKind.Light
+                        || IsNamedLike(target, "ladder"))
+                    {
+                        return PrimaryDomainScore;
+                    }
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire)
+                        return SecondaryDomainScore;
+                    return 0;
                 case ScenarioAuthoringTool.Wiring:
-                    return target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire || target.Kind == ScenarioAuthoringTargetKind.Light ? 80 : 0;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire)
+                        return PrimaryDomainScore;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Light)
+                        return SecondaryDomainScore;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
+                        return TertiaryDomainScore;
+                    return 0;
                 case ScenarioAuthoringTool.Assets:
+                    if (target.Kind == ScenarioAuthoringTargetKind.SceneSprite || target.Kind == ScenarioAuthoringTargetKind.Background)
+                        return PrimaryDomainScore;
                     return target.SupportsReplace ? 80 : 0;
                 case ScenarioAuthoringTool.Family:
                 case ScenarioAuthoringTool.People:
@@ -350,6 +620,29 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 default:
                     return 20;
             }
+        }
+
+        private static bool IsGlobalBackdropTarget(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
+        {
+            if (state == null || target == null || state.ActiveStage == ScenarioStageKind.BunkerBackground)
+                return false;
+
+            if (target.Kind == ScenarioAuthoringTargetKind.Background)
+                return true;
+
+            return target.Kind == ScenarioAuthoringTargetKind.SceneSprite
+                && IsNamedLike(target, "sun", "sky", "backdrop", "farback", "far back");
+        }
+
+        private static bool IsNamedLike(ScenarioAuthoringTarget target, params string[] parts)
+        {
+            if (target == null || parts == null)
+                return false;
+
+            return ContainsSelectionText(target.DisplayName, parts)
+                || ContainsSelectionText(target.GameObjectName, parts)
+                || ContainsSelectionText(target.TransformPath, parts)
+                || ContainsSelectionText(target.Description, parts);
         }
 
         private static int ScoreStageRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
@@ -423,6 +716,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return Mathf.Abs(bounds.size.x * bounds.size.y);
         }
 
+        private static bool ContainsPoint2D(Bounds bounds, Vector3 point, float tolerance)
+        {
+            float padding = Mathf.Max(0f, tolerance);
+            return point.x >= bounds.min.x - padding
+                && point.x <= bounds.max.x + padding
+                && point.y >= bounds.min.y - padding
+                && point.y <= bounds.max.y + padding;
+        }
+
         private static bool SynchronizeSelectionStack(ScenarioAuthoringState state, List<ScenarioAuthoringTarget> targets)
         {
             string signature = BuildStackSignature(targets);
@@ -463,6 +765,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             state.SelectionStack.Clear();
             state.ActiveSelectionStackIndex = 0;
             state.SelectionStackSignature = null;
+            state.SelectionStackExpanded = false;
         }
 
         private static bool CycleSelectionStack(ScenarioAuthoringState state, int delta)
@@ -480,6 +783,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             state.ActiveSelectionStackIndex = next;
             ScenarioAuthoringTarget active = state.SelectionStack[next];
+            if (state.SelectedTarget != null && active != null)
+            {
+                state.SelectedTarget = active.Copy();
+                state.MultiSelection.Clear();
+                state.MultiSelection.Add(active.Copy());
+            }
+
             state.StatusMessage = "Selection stack " + (next + 1) + "/" + count + ": " + (active != null ? active.DisplayName : "Unknown") + ".";
             return true;
         }
@@ -548,6 +858,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return camera.ScreenToWorldPoint(mouse);
         }
 
+        private static float ResolveHitTestTolerance(Camera camera)
+        {
+            if (camera == null || !camera.orthographic || camera.pixelHeight <= 0)
+                return MinHitTestTolerance;
+
+            float worldUnitsPerPixel = (camera.orthographicSize * 2f) / camera.pixelHeight;
+            return Mathf.Max(MinHitTestTolerance, worldUnitsPerPixel * 3f);
+        }
+
         private static bool TryResolveSpriteContext(Camera camera, Ray ray, Vector3 worldPoint, out ScenarioAuthoringTargetContext context)
         {
             context = null;
@@ -567,7 +886,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     || !spriteRenderer.enabled
                     || spriteRenderer.gameObject == null
                     || !spriteRenderer.gameObject.activeInHierarchy
-                    || !spriteRenderer.bounds.Contains(worldPoint))
+                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint, ResolveHitTestTolerance(camera)))
                 {
                     continue;
                 }
@@ -691,7 +1010,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             public int TotalScore
             {
-                get { return SourceRank + ToolScore + StageScore + KindScore; }
+                get { return ToolScore + StageScore + KindScore; }
             }
         }
 
@@ -764,7 +1083,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Transform transform = gameObject.transform;
                 ScenarioAuthoringTargetKind kind = Classify(gameObject);
                 string transformPath = BuildTransformPath(transform);
-                string displayName = !string.IsNullOrEmpty(gameObject.name) ? gameObject.name : kind.ToString();
+                string displayName = ScenarioWorldObjectDisplayNameResolver.Resolve(gameObject, kind);
                 string description = kind + " at " + transformPath;
 
                 target = new ScenarioAuthoringTarget
@@ -801,6 +1120,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Obj_Base objBase = gameObject.GetComponentInParent<Obj_Base>();
                 if (objBase != null)
                     return objBase.gameObject;
+
+                GameObject logicalRoot = ScenarioWorldObjectDisplayNameResolver.ResolveLogicalRoot(gameObject);
+                if (logicalRoot != null)
+                    return logicalRoot;
 
                 FamilyMember familyMember = gameObject.GetComponentInParent<FamilyMember>();
                 if (familyMember != null)

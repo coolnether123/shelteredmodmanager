@@ -20,6 +20,7 @@ namespace ShelteredAPI.Scenarios.Domain.Effects{
         public string Id { get; set; }
         public ScenarioEffectKind Kind { get; set; }
         public string TargetId { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
         public string ItemId { get; set; }
         public int Quantity { get; set; }
         public string WeatherState { get; set; }
@@ -31,6 +32,7 @@ namespace ShelteredAPI.Scenarios.Domain.Effects{
         public string FlagId { get; set; }
         public string FlagValue { get; set; }
         public string TriggerId { get; set; }
+        public string ConversationId { get; set; }
         public List<ScenarioProperty> Properties { get; private set; }
     }
 }

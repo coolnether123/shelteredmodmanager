@@ -13,8 +13,11 @@ namespace ShelteredAPI.Scenarios.Application.Bunker{
         void MarkDirty(ScenarioDirtySection section, ScenarioEditCategory category);
         void UpsertPlacement(ObjectPlacement placement);
         bool TryUpsertPlacement(ObjectPlacement placement);
+        bool TryFindSinglePlacement(Predicate<ObjectPlacement> predicate, out ObjectPlacement placement);
+        bool TryRemovePlacement(Predicate<ObjectPlacement> predicate);
         void UpsertRoomEdit(int gridX, int gridY, Action<RoomEdit> applyUpdate);
         bool TryUpsertRoomEdit(int gridX, int gridY, Action<RoomEdit> applyUpdate);
+        bool TryRemoveRoomEdit(int gridX, int gridY, Func<RoomEdit, bool> shouldRemove);
     }
 
     internal sealed class ScenarioDraftMutationService : IScenarioDraftMutationService
@@ -91,11 +94,7 @@ namespace ShelteredAPI.Scenarios.Application.Bunker{
                 return;
             }
 
-            if (!session.DirtyFlags.Contains(section))
-                session.DirtyFlags.Add(section);
-
-            session.CurrentEditCategory = category;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(section, category);
         }
 
         public void UpsertPlacement(ObjectPlacement placement)
@@ -131,6 +130,74 @@ namespace ShelteredAPI.Scenarios.Application.Bunker{
             }
         }
 
+        public bool TryFindSinglePlacement(Predicate<ObjectPlacement> predicate, out ObjectPlacement placement)
+        {
+            placement = null;
+            if (predicate == null)
+            {
+                LogMutationFailure("Object placement lookup was ignored because the predicate was null.");
+                return false;
+            }
+
+            string ignored;
+            if (!CanMutateActiveDraft(out ignored))
+            {
+                LogMutationFailure(ignored);
+                return false;
+            }
+
+            ScenarioEditorSession session = _sessionStore.Current;
+            BunkerEditsDefinition bunkerEdits = session != null && session.WorkingDefinition != null
+                ? session.WorkingDefinition.BunkerEdits
+                : null;
+            if (bunkerEdits == null || bunkerEdits.ObjectPlacements == null)
+                return false;
+
+            for (int i = 0; i < bunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement candidate = bunkerEdits.ObjectPlacements[i];
+                if (candidate == null || !predicate(candidate))
+                    continue;
+
+                if (placement != null)
+                {
+                    placement = null;
+                    return false;
+                }
+
+                placement = candidate;
+            }
+
+            return placement != null;
+        }
+
+        public bool TryRemovePlacement(Predicate<ObjectPlacement> predicate)
+        {
+            if (predicate == null)
+            {
+                LogMutationFailure("Object placement removal was ignored because the predicate was null.");
+                return false;
+            }
+
+            string ignored;
+            if (!CanMutateActiveDraft(out ignored))
+            {
+                LogMutationFailure(ignored);
+                return false;
+            }
+
+            ScenarioEditorSession session = _sessionStore.Current;
+            try
+            {
+                return ScenarioBunkerDraftService.RemovePlacement(session, predicate);
+            }
+            catch (Exception ex)
+            {
+                LogMutationFailure("Object placement removal failed: " + ex.Message);
+                return false;
+            }
+        }
+
         public void UpsertRoomEdit(int gridX, int gridY, Action<RoomEdit> applyUpdate)
         {
             TryUpsertRoomEdit(gridX, gridY, applyUpdate);
@@ -160,6 +227,27 @@ namespace ShelteredAPI.Scenarios.Application.Bunker{
             catch (Exception ex)
             {
                 LogMutationFailure("Room edit mutation failed at " + gridX + "," + gridY + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        public bool TryRemoveRoomEdit(int gridX, int gridY, Func<RoomEdit, bool> shouldRemove)
+        {
+            string ignored;
+            if (!CanMutateActiveDraft(out ignored))
+            {
+                LogMutationFailure(ignored);
+                return false;
+            }
+
+            ScenarioEditorSession session = _sessionStore.Current;
+            try
+            {
+                return ScenarioBunkerDraftService.RemoveRoomEdit(session, gridX, gridY, shouldRemove);
+            }
+            catch (Exception ex)
+            {
+                LogMutationFailure("Room edit removal failed at " + gridX + "," + gridY + ": " + ex.Message);
                 return false;
             }
         }

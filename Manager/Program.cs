@@ -5,19 +5,60 @@ using System.Reflection;
 using System.IO;
 using System.Threading;
 using System.Net;
+using Manager.Core.Services;
 
 namespace Manager
 {
     static class Program
     {
+        private const string InstanceMutexName = @"Local\ShelteredModManager.ManagerGUI";
+        private static Mutex _instanceMutex;
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            string nexusLink = null;
+            string updateHealthFile = null;
+            for (int i = 0; args != null && i < args.Length; i++)
+            {
+                if (string.Equals(args[i], "--nxm", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    nexusLink = args[++i];
+                    break;
+                }
+                if (string.Equals(args[i], "--update-health-file", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    updateHealthFile = args[++i];
+                    continue;
+                }
+                if (args[i] != null && args[i].StartsWith("nxm://", StringComparison.OrdinalIgnoreCase))
+                {
+                    nexusLink = args[i];
+                    break;
+                }
+            }
+
             try
             {
+                if (!string.IsNullOrEmpty(nexusLink))
+                    NexusProtocolHandlerService.RestorePreviousHandler();
+
+                bool createdNew;
+                _instanceMutex = new Mutex(true, InstanceMutexName, out createdNew);
+                if (!createdNew)
+                {
+                    if (!string.IsNullOrEmpty(nexusLink))
+                    {
+                        string relayError;
+                        if (!NexusProtocolHandlerService.EnqueueForRunningManager(nexusLink, out relayError))
+                            MessageBox.Show(relayError, "Sheltered Mod Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    return;
+                }
+
                 ConfigureNetworkSecurity();
                 AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
 
@@ -32,7 +73,16 @@ namespace Manager
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm());
+                var mainForm = new MainForm(nexusLink);
+                if (IsSafeUpdateHealthPath(updateHealthFile))
+                {
+                    mainForm.Shown += delegate
+                    {
+                        try { File.WriteAllText(updateHealthFile, "ready"); }
+                        catch { }
+                    };
+                }
+                Application.Run(mainForm);
             }
             catch (Exception ex)
             {
@@ -47,6 +97,31 @@ namespace Manager
                 }
                 catch { }
             }
+            finally
+            {
+                if (_instanceMutex != null)
+                {
+                    try { _instanceMutex.ReleaseMutex(); }
+                    catch { }
+                    _instanceMutex.Close();
+                    _instanceMutex = null;
+                }
+            }
+        }
+
+        private static bool IsSafeUpdateHealthPath(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !Path.IsPathRooted(path))
+                return false;
+            try
+            {
+                string fullPath = Path.GetFullPath(path);
+                string allowedRoot = Path.GetFullPath(Path.Combine(
+                    Path.GetTempPath(),
+                    "ShelteredModManager")) + Path.DirectorySeparatorChar;
+                return fullPath.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
         }
 
         private static void ConfigureNetworkSecurity()

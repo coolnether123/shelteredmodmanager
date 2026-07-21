@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -47,11 +47,19 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
     <Reference Include="UnityEngine">
       <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ShelteredManagedDir)UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Scenarios\Assets\Inventory\*.png" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Adapters\GameHelperExtensions.cs" />
@@ -76,6 +84,10 @@
     <Compile Include="Map\Internal\MapGenerationPolicyRegistry.cs" />
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
     <Compile Include="Content\AssetLoader.cs" />
+    <Compile Include="Content\Packs\ContentPackLoadResult.cs" />
+    <Compile Include="Content\Packs\ContentPackLoader.cs" />
+    <Compile Include="Content\Packs\ContentPackMapper.cs" />
+    <Compile Include="Content\Packs\ContentPackRuntimeBootstrap.cs" />
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
@@ -83,6 +95,42 @@
     <Compile Include="Content\ShelteredContent.cs" />
     <Compile Include="Content\ShelteredContentServices.cs" />
     <Compile Include="Content\ShelteredContentResolutionService.cs" />
+    <Compile Include="..\Shared\ContentPacks\ContentPackPathPolicy.cs">
+      <Link>Shared\ContentPacks\ContentPackPathPolicy.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSchema.cs">
+      <Link>Shared\ContentPacks\ContentPackSchema.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSerialization.cs">
+      <Link>Shared\ContentPacks\ContentPackSerialization.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidation.cs">
+      <Link>Shared\ContentPacks\ContentPackValidation.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidator.cs">
+      <Link>Shared\ContentPacks\ContentPackValidator.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelClipboard.cs">
+      <Link>Shared\PixelEditing\PixelClipboard.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelDocument.cs">
+      <Link>Shared\PixelEditing\PixelDocument.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditHistory.cs">
+      <Link>Shared\PixelEditing\PixelEditHistory.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorContracts.cs">
+      <Link>Shared\PixelEditing\PixelEditorContracts.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorSession.cs">
+      <Link>Shared\PixelEditing\PixelEditorSession.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelSelection.cs">
+      <Link>Shared\PixelEditing\PixelSelection.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\Rgba32.cs">
+      <Link>Shared\PixelEditing\Rgba32.cs</Link>
+    </Compile>
     <Compile Include="Core\ShelteredGameLifecycleSource.cs" />
     <Compile Include="Events\FactionEvents.cs" />
     <Compile Include="Events\GameEvents.cs" />
@@ -91,6 +139,7 @@
     <Compile Include="Events\ShelteredUiLifecycleEventSink.cs" />
     <Compile Include="Events\UIEvents.cs" />
     <Compile Include="GameState\ManagerStateHelper.cs" />
+    <Compile Include="Infrastructure\SeamGuard.cs" />
     <Compile Include="Interactions\InteractionRegistry.cs" />
     <Compile Include="Characters\CharacterEffectSystem.cs" />
     <Compile Include="Characters\ShelteredCharacters.cs" />
@@ -133,12 +182,14 @@
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
     <Compile Include="Debugging\ShelteredSupportBundle.cs" />
+    <Compile Include="Debugging\ShelteredFeedbackBootstrap.cs" />
     <Compile Include="Harmony\AutoLoadFlow.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\LoadingTransitionRecoveryPatches.cs" />
     <Compile Include="Harmony\ShelteredDeferredPatchTriggers.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
+    <Compile Include="Harmony\OverlayInputCapturePatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
     <Compile Include="Interactions\ObjectButtonInjector.cs" />
     <Compile Include="Persistence\ModPersistence.cs" />
@@ -172,6 +223,7 @@
     <Compile Include="Saves\SaveBackups\SaveBackupLineageStore.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupSidecarCapture.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupBlobCodec.cs" />
+    <Compile Include="Saves\SaveBackups\DurableFileWriter.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupModels.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupRepository.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupService.cs" />
@@ -213,9 +265,12 @@
     <Compile Include="Scenarios\Domain\Conditions\ScenarioConditionKind.cs" />
     <Compile Include="Scenarios\Domain\Conditions\ScenarioConditionRef.cs" />
     <Compile Include="Scenarios\Domain\Conditions\ScenarioGateDefinition.cs" />
+    <Compile Include="Scenarios\Domain\Conditions\ScenarioWinLossConditionSupport.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectDefinition.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectKind.cs" />
+    <Compile Include="Scenarios\Domain\Journal\JournalDefinition.cs" />
     <Compile Include="Scenarios\Domain\Map\ScenarioMapDefinitions.cs" />
+    <Compile Include="Scenarios\Domain\Map\ScenarioMapIconCatalog.cs" />
     <Compile Include="Scenarios\Domain\Objects\ScenarioObjectIdentity.cs" />
     <Compile Include="Scenarios\Domain\Objects\ScenarioObjectStartState.cs" />
     <Compile Include="Scenarios\Domain\Runtime\ScenarioExecutedActionRecord.cs" />
@@ -235,24 +290,48 @@
     <Compile Include="Scenarios\Domain\Validation\IScenarioValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\MapValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ObjectStartStateValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Story\ScenarioStoryGraphModel.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioReferenceIndex.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationAnalyzer.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioConversationValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioValidationPipeline.cs" />
+    <Compile Include="Scenarios\Domain\Validation\LaunchSetupValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioMetadataValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\SchedulingValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ValidationIssue.cs" />
     <Compile Include="Scenarios\Domain\Validation\ValidationSummary.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDefinitionIndex.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDefinition.cs" />
+    <Compile Include="Scenarios\Definitions\ScenarioAuthorTestChecklist.cs" />
+    <Compile Include="Scenarios\Definitions\ScenarioMetadataDefaults.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioBackendWorldMaterializer.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioActorXmlSerializer.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionMetadataCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioFrameworkVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioLibraryOrganizationVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioRuntimeOutcomeVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringActionCoverageVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioWorkspaceRoutingVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioAuthoringShortcutHelpVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioStarterTemplateVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioMapUxVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioPackageUxVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioAuthorTestChecklistVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioAssetInventoryVerification.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioLoader.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioPipelineSmokeTest.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioPlacementDefinitions.cs" />
     <Compile Include="Scenarios\Domain\Runtime\ScenarioRuntimeBinding.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioValidator.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\IScenarioSectionSerializer.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\AuthorTestChecklistScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\AssetReferenceScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\BunkerEditsScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\BunkerGridScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\FamilyScenarioSectionSerializer.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\LaunchSetupScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\GateConditionScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\InventoryScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\QuestMapScenarioSectionSerializer.cs" />
@@ -267,10 +346,26 @@
     <Compile Include="Scenarios\Application\Authoring\PlacementGhostSessionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\PlacementPaletteService.cs" />
     <Compile Include="Scenarios\Application\Authoring\RoomVisualPaletteService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioBuildDeletionAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioDraftMetadataEditService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPngImportService.cs" />
+    <Compile Include="Scenarios\Application\Assets\ScenarioAssetInventoryService.cs" />
+    <Compile Include="Scenarios\Application\Assets\ScenarioAssetInventoryMutationService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPublishExportService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthorTestChecklistService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioContentSummary.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackagePlan.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackageAuthoringPreferences.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackageInstaller.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackageModRootResolver.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioPackageImportService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\ScenarioAuthoringTutorialService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialContent.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialProgress.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialStep.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSetupState.cs" />
     <Compile Include="Scenarios\Application\Authoring\WallWiringEditService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioDraftMutationService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioBunkerGridCaptureService.cs" />
@@ -284,29 +379,53 @@
     <Compile Include="Scenarios\Application\Conditions\ScenarioConditionEvaluatorRegistry.cs" />
     <Compile Include="Scenarios\Application\Commands\IScenarioCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioAuthoringCommandHandlers.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioMetadataAuthoringActions.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioMapAuthoringCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioStorageAuthoringCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioTestConsoleCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandDispatcher.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioHelpCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioStoryFocusedEditorCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioPublishCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioWinLossCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioLaunchSetupCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />
+    <Compile Include="Scenarios\Application\Map\IScenarioMapAuthoringRuntime.cs" />
+    <Compile Include="Scenarios\Application\Map\ScenarioMapAuthoringFilters.cs" />
+    <Compile Include="Scenarios\Application\Map\ScenarioMapLocationDuplicateService.cs" />
+    <Compile Include="Scenarios\Application\Map\ScenarioMapRegionSelection.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeExecutionJournal.cs" />
+    <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeExecutionLog.cs" />
+    <Compile Include="Scenarios\Application\Runtime\ScenarioTestConsoleService.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeStateService.cs" />
     <Compile Include="Scenarios\Application\Scheduling\IScenarioScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioDefinitionScheduledActionProvider.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioConversationScheduledActionProvider.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioJournalScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioTriggerDefinitionCompiler.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioTriggerScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioLegacyScheduleActionProvider.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioSchedulePolicyEvaluator.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioScheduleRuntimeCoordinator.cs" />
-    <Compile Include="Scenarios\Application\Scheduling\ScenarioScheduleTimelineBuilder.cs" />
     <Compile Include="Scenarios\Application\Stages\IScenarioStageModule.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioStageContext.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioStageCoordinator.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioAuthoringWorkflowRules.cs" />
     <Compile Include="Scenarios\Application\Timeline\ScenarioTimelineBuilder.cs" />
+    <Compile Include="Scenarios\Application\Timeline\ScenarioTimelineCollisionAnalyzer.cs" />
+    <Compile Include="Scenarios\Application\Timeline\ScenarioPacingAnalysisService.cs" />
     <Compile Include="Scenarios\Application\Timeline\ScenarioTimelineNavigationService.cs" />
+    <Compile Include="Scenarios\Application\Timeline\ScenarioTimelinePresetService.cs" />
     <Compile Include="Scenarios\Application\Objects\ScenarioObjectIdentityAssignmentService.cs" />
     <Compile Include="Scenarios\Application\Validation\PublishValidationSummaryBuilder.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContext.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioActorAuthoringCapabilityRegistry.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioActorAuthoringFieldStore.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioCastMemberReferenceCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioDevActorAuthoringCapabilityProvider.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSectionHub.cs" />
     <Compile Include="Scenarios\Composition\ServiceCollectionExtensions.cs" />
     <Compile Include="Scenarios\Composition\ScenarioAuthoringModule.cs" />
@@ -335,29 +454,40 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\BunkerApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\FamilyApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\InventoryApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapProjectionApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapTerrainProjection.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapProjectionFieldCatalog.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapLootPreviewService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\RoomVisualRuntimeApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioApplyCoordinator.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFlagRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioObjectStartStateApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioStationUpgradePropertyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioQuestInstanceResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioSceneSpriteStartStateApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioScheduledGameplayRuntime.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioTriggerRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossConditionAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossOutcomeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioEndGamePresenter.cs" />
+    <Compile Include="Scenarios\Presentation\Runtime\ScenarioVictoryPanel.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledBunkerRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledInventoryRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledObjectRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledQuestRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledSurvivorRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledWeatherRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledWorldEventRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWorldEventRuntimeState.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\TriggerRuntimeAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\VanillaScenarioRuntimeGateway.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionScopeService.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioBrowserPanelAdapter.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioBrowserState.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioCatalogEntry.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioLibraryMetadata.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioLaunchCoordinator.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioLaunchSetupPolicy.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSaveLibrary.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionCatalogService.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionIds.cs" />
@@ -370,18 +500,42 @@
     <Compile Include="Scenarios\Presentation\Inspector\InspectorViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Inspector\ScenarioModCompatibilityViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetInventoryContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationUtilities.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioDayTimelineRibbonViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringInspectorItemFacade.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHierarchyAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHelpAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPlaytestFixActionResolver.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioTopIssueResolver.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapLocationEditorSectionBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioWorldEventFocusedEditorDocumentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryGraphBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryScriptViewBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryStageDisclosure.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHomeProgressFacts.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMetadataAuthoringContent.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioLaunchSetupAuthoringSectionBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPacingAuthoringSectionBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthorTestChecklistSectionBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioTestConsoleAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Timeline\ScenarioTimelineCreatorText.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioTimelineUxVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioStoryGraphUxVerification.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioQuestAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioScoringAuthoringSummary.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioWorkflowAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioScheduleFormatter.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringWindowContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringShellLayout.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringTourTargetRegistry.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ShellChromeViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\StageNavigationViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\StatusBarViewModelBuilder.cs" />
@@ -392,6 +546,14 @@
     <Compile Include="Scenarios\Presentation\UiKit\Theme\ScenarioUiPalette.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Theme\ScenarioUiMetrics.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Theme\ScenarioUiTheme.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioAuthoringShellAnimationService.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiAnimator.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiEasing.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiGuiScope.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiTween.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiTweenSet.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Textures\ScenarioUiAtlasSkin.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Textures\ScenarioUiParchment.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Textures\ScenarioUiTextureCache.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\ScenarioUiStyleSheet.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Layout\ScenarioUiLayoutEngine.cs" />
@@ -404,16 +566,44 @@
     <Compile Include="Scenarios\Shared\ScenarioFeatureToggles.cs" />
     <Compile Include="Scenarios\Lifecycle\ScenarioLifecycleService.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioAuthoringBootstrapPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioMapAuthoringPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioStorageAuthoringPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioVanillaInteractionPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioWorldEventPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioConversationChatterPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioJournalPatches.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutRouter.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutOverlayBuilder.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioGlobalSearchService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSurfaceResolver.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBaseModeReloadService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringEntryFlowService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Templates\ScenarioStarterTemplateBuilder.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Templates\ScenarioStarterTemplateCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Templates\ScenarioStarterTemplateDraftService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioOpeningCutsceneAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringValidationSnapshot.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPlacementFeelVisualService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBunkerDraftService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioWorldObjectDisplayNameResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioCharacterAppearanceService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioObjectPlacementRuntimeBinding.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioObjectStatePropertyService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCaptureService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioLiveShelterObjectCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioDraftSnapshotService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringInventoryProjectionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCommandService.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioDraftHistoryCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioAuthorTestChecklistCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringWorkspaceContracts.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringLocalActionIds.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioBaseModeAuthoringActions.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringContextMenuService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringDraftRepository.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCameraGuardService.cs" />
@@ -426,41 +616,86 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringPauseService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationService.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Workspace\*.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeDriver.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringEditorCameraService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioMapAuthoringRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioMapAuthoringMarkerFilter.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioStorageAuthoringRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioVanillaInteractionRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringVanillaPanelVisibilityService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeGuards.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioLoadingTransitionGuard.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioPlaytestRestartCutsceneGuard.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioPlaytestVanillaUiService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringScrollFocusService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringSelectionMenuService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSelectionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSession.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSettingsService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringShellImguiRenderModule.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringRendererActionManifest.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellActionImguiSupport.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellCommandDockImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellGlobalSearchImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellPopupMenuImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellStatusBarImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellVanillaInteractionAssistImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellAssetBrowserImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellPlacementHudImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellMapOverlayImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorldHudImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellMapUxImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellToolRailImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellStoryMapImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTimelineImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTimelineRibbonImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTooltipImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTopBarImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellShortcutsImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTutorialImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellVisualSurfaceGate.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellInventorySlotGridImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellMasterDetailImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellNewWindowsImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorkspaceTabsImguiRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioAuthoringStoragePaths.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringUiDebugService.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioCastPortraitResolver.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioGameplayScheduleAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesPresetCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesInventoryNormalizer.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesBalanceEstimator.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioSuppliesAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringActions.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioStoryFocusedEditorActions.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioInventoryItemCatalog.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioInventoryItemPreviewResolver.cs" />
     <Compile Include="Scenarios\Shared\ScenarioPropertyBag.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringActionCodec.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringMutationHelpers.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioEventAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioCharacterEditorAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioSurvivorAuthoringOperations.cs" />
+    <Compile Include="Scenarios\Domain\People\ScenarioSurvivorTraitConflictRules.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFamilyMemberFactory.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFutureSurvivorRecruitBindingService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioActorResolver.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioConversationRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledJournalRuntimeService.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioApplyResult.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioPlaytestOrchestrator.cs" />
+    <Compile Include="Scenarios\Application\Runtime\ScenarioPlayStartReadiness.cs" />
+    <Compile Include="Scenarios\Application\Runtime\ScenarioSeedPolicy.cs" />
     <Compile Include="Scenarios\Domain\Assets\ScenarioPlaceableAssetClassification.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeContracts.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeDefinitionOverrideProvider.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeOrchestrator.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioCharacterRuntimeNameRegistry.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioAuthoring.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarios.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioRuntime.cs" />
@@ -478,8 +713,11 @@
     <Compile Include="Scenarios\Application\Assets\ScenarioSpritePlacementPolicy.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteAssetResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteReferenceLibrary.cs" />
+    <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteAnimationMetadataService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Assets\ScenarioPixelEditorAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteRuntimeMutationService.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteRuntimeResolver.cs" />
+    <Compile Include="Scenarios\Infrastructure\Assets\ScenarioWeatherEffectSpriteCatalogService.cs" />
     <Compile Include="Scenarios\Application\Assets\ScenarioSpriteSwapAuthoringService.Actions.cs" />
     <Compile Include="Scenarios\Application\Assets\ScenarioSpriteSwapAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Assets\ScenarioSpriteSwapRuleEditor.cs" />
@@ -494,8 +732,12 @@
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteSwapRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteSwapService.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserActionService.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookDraftFacts.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserDataSource.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPrewarmService.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserModels.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookLibraryHarnessPayload.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioLibraryOrganization.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserPanel.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPlayStatsBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookScoreDisplayReader.cs" />
@@ -505,6 +747,9 @@
     <Compile Include="Scenarios\Diagnostics\ScenarioValidatorImpl.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioWorldReady.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ShelteredCustomScenarioPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioModeSelectionFastHandoffPatch.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioSelectionPanelPrewarmCache.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioRngPatches.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ShelteredScenarioRuntimeBindingManager.cs" />
     <Compile Include="Scenarios\Registration\ScenarioEventHub.cs" />
     <Compile Include="Scenarios\Registration\ScenarioRecord.cs" />
@@ -517,6 +762,7 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ShelteredScenarioDefBuilder.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioRegistration.cs" />
     <Compile Include="Input\ShelteredTouchpadInputRouter.cs" />
+    <Compile Include="Input\ShelteredOverlayInputCaptureService.cs" />
     <Compile Include="Input\ShelteredInput.cs" />
     <Compile Include="Input\ShelteredInputActions.cs" />
     <Compile Include="Input\ShelteredVanillaInputActions.cs" />

@@ -53,6 +53,13 @@
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ManagerUpdater\ManagerUpdater.csproj">
+      <Project>{A689AF53-9D0E-49E4-9C67-92B302CD4820}</Project>
+      <Name>ManagerUpdater</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
     <!-- Local Unity runtime reference is a developer-machine fallback.
          If your install differs, retarget this HintPath to an equivalent Sheltered managed assembly. -->
     <Reference Include="System.Core" />
@@ -92,6 +99,45 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <Compile Include="Shared\ModAboutReader.cs" />
+    <Compile Include="..\Shared\ManagerPackageContract.cs">
+      <Link>Shared\ManagerPackageContract.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackPathPolicy.cs">
+      <Link>Shared\ContentPacks\ContentPackPathPolicy.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSchema.cs">
+      <Link>Shared\ContentPacks\ContentPackSchema.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackSerialization.cs">
+      <Link>Shared\ContentPacks\ContentPackSerialization.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidation.cs">
+      <Link>Shared\ContentPacks\ContentPackValidation.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\ContentPacks\ContentPackValidator.cs">
+      <Link>Shared\ContentPacks\ContentPackValidator.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelClipboard.cs">
+      <Link>Shared\PixelEditing\PixelClipboard.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelDocument.cs">
+      <Link>Shared\PixelEditing\PixelDocument.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditHistory.cs">
+      <Link>Shared\PixelEditing\PixelEditHistory.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorContracts.cs">
+      <Link>Shared\PixelEditing\PixelEditorContracts.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelEditorSession.cs">
+      <Link>Shared\PixelEditing\PixelEditorSession.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\PixelSelection.cs">
+      <Link>Shared\PixelEditing\PixelSelection.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\PixelEditing\Rgba32.cs">
+      <Link>Shared\PixelEditing\Rgba32.cs</Link>
+    </Compile>
     <Compile Include="AssemblyVersionChecker.cs" />
     <Compile Include="Core\AppVersionInfo.cs" />
     <!-- New modular architecture -->
@@ -102,18 +148,21 @@
     <Compile Include="Core\Models\ModItem.cs" />
     <Compile Include="Core\Models\AppSettings.cs" />
     <Compile Include="Core\Models\ManagerBooleanOption.cs" />
+    <Compile Include="Core\Models\ContentWorkshopProject.cs" />
     <Compile Include="Core\Models\SaveSlotInfo.cs" />
     <Compile Include="Core\Models\ApiCompatibility.cs" />
     <Compile Include="Core\Models\NexusModReference.cs" />
     <Compile Include="Core\Models\NexusRemoteMod.cs" />
     <Compile Include="Core\Models\NexusRemoteModFile.cs" />
     <Compile Include="Core\Models\NexusAccountStatus.cs" />
+    <Compile Include="Core\Models\NexusNxmLink.cs" />
     <Compile Include="Core\Models\NexusUploadDraft.cs" />
     <!-- Core Services -->
     <Compile Include="Core\Security\NexusApiKeyProtector.cs" />
     <Compile Include="Core\Services\SettingsService.cs" />
     <Compile Include="Core\Services\ApiCompatibilityService.cs" />
     <Compile Include="Core\Services\ManagerBooleanOptionsService.cs" />
+    <Compile Include="Core\Services\ContentWorkshopProjectService.cs" />
     <Compile Include="Core\Services\ModDiscoveryService.cs" />
     <Compile Include="Core\Services\LoadOrderService.cs" />
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />
@@ -123,6 +172,7 @@
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
     <Compile Include="Core\Services\NexusRequestHeaders.cs" />
+    <Compile Include="Core\Services\NexusProtocolHandlerService.cs" />
     <Compile Include="Core\Services\NexusModsService.cs" />
     <Compile Include="Core\Services\NexusUploadDraftService.cs" />
     <Compile Include="Core\Services\NexusUploadOwnershipService.cs" />
@@ -130,6 +180,7 @@
     <Compile Include="Core\Services\ModPackageSafety.cs" />
     <Compile Include="Core\Services\ArchiveExtraction.cs" />
     <Compile Include="Core\Services\NexusInstallService.cs" />
+    <Compile Include="Core\Services\ManagerSelfUpdateService.cs" />
     <!-- Custom Controls -->
     <Compile Include="Controls\SearchBox.cs">
       <SubType>UserControl</SubType>
@@ -143,11 +194,17 @@
     <Compile Include="Controls\ActionButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\PixelEditorCanvas.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <!-- View Tabs -->
     <Compile Include="Views\GameSetupTab.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Views\ModManagerTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\ContentWorkshopTab.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Views\NexusModsTab.cs">

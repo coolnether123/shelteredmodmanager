@@ -16,6 +16,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private bool _ownsPause;
         private bool _ownsInjectedPauseDepth;
         private bool _pauseMenuExplicitlyOpened;
+        private bool _loggedTimeScaleRestore;
         private float _authoringPauseStartedAt;
         private string _lastOwnerReason;
 
@@ -79,9 +80,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             PauseManager pauseManager = ResolvePauseManager();
             if (pauseManager == null)
             {
+                if (_ownsInjectedPauseDepth && Time.timeScale == 0f)
+                {
+                    Time.timeScale = 1f;
+                    MMLog.WriteWarning("[ScenarioAuthoringPause] PauseManager unavailable during controlled release; restored owned Time.timeScale to "
+                        + Time.timeScale + ". Reason=" + (reason ?? "unspecified") + ".");
+                }
+                else
+                {
+                    MMLog.WriteWarning("[ScenarioAuthoringPause] PauseManager unavailable during controlled release; authoring did not own an injected pause depth, so Time.timeScale remains "
+                        + Time.timeScale + ". Reason=" + (reason ?? "unspecified") + ".");
+                }
+
                 _ownsPause = false;
                 _ownsInjectedPauseDepth = false;
                 _pauseMenuExplicitlyOpened = false;
+                _loggedTimeScaleRestore = false;
                 _authoringPauseStartedAt = 0f;
                 _lastOwnerReason = null;
                 return;
@@ -101,8 +115,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             _ownsPause = false;
             _ownsInjectedPauseDepth = false;
             _pauseMenuExplicitlyOpened = false;
+            _loggedTimeScaleRestore = false;
             _authoringPauseStartedAt = 0f;
             _lastOwnerReason = null;
+        }
+
+        public void ReleasePauseForRunningSimulation(string reason)
+        {
+            ReleasePause(reason);
+
+            // A shelter scene transition can engage authoring pause while Unity's
+            // loading flow already has Time.timeScale at zero. In that case the
+            // owned pause depth is released correctly, but PauseManager restores
+            // the captured zero scale and the new world's initialization never
+            // advances (notably ExpeditionMap in Stasis). These callers explicitly
+            // require a running simulation, so normalize only when no pause owner
+            // remains.
+            if (!PauseManager.isPaused && Time.timeScale <= 0f)
+            {
+                Time.timeScale = 1f;
+                MMLog.WriteInfo("[ScenarioAuthoringPause] Restored running simulation after controlled authoring release. Reason="
+                    + (reason ?? "unspecified") + ".");
+            }
         }
 
         public bool ShouldSuppressPauseMenu()
@@ -193,7 +227,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (Time.timeScale != 0f)
             {
                 Time.timeScale = 0f;
-                MMLog.WriteInfo("[ScenarioAuthoringPause] Restored frozen simulation while authoring remained active.");
+                if (!_loggedTimeScaleRestore)
+                {
+                    _loggedTimeScaleRestore = true;
+                    MMLog.WriteInfo("[ScenarioAuthoringPause] Restored frozen simulation while authoring remained active.");
+                }
+            }
+            else
+            {
+                _loggedTimeScaleRestore = false;
             }
 
             return true;

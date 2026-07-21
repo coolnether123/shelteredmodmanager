@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "outputRoot": "../../Decompiled/Benchmarks",
+  "iterations": 3,
+  "parallelPlatforms": false,
+  "failOnCaseFailure": true,
+  "coreModIds": [
+    "com.harmony.0harmony",
+    "coolnether123.shelteredagentinterface"
+  ],
+  "build": {
+    "enabled": true,
+    "executable": "powershell.exe",
+    "arguments": [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "tools/performance/Deploy-ShelteredBenchmarkBuild.ps1",
+      "-Platform",
+      "steam,epic",
+      "-Configuration",
+      "Release"
+    ],
+    "workingDirectory": "../.."
+  },
+  "sampling": {
+    "processIntervalMilliseconds": 100,
+    "startupTimeoutSeconds": 120,
+    "scenarioTimeoutSeconds": 120,
+    "fpsDurationSeconds": 15,
+    "fpsIntervalMilliseconds": 100,
+    "minimumFpsCoveragePercent": 70,
+    "vanillaIdleSeconds": 15
+  },
+  "fileIntegrity": {
+    "mutableModRelativePathPatterns": [
+      "Data/change-intelligence/*"
+    ]
+  },
+  "platforms": [
+    {
+      "name": "steam",
+      "enabled": true,
+      "installRoot": "A:\\SteamLibrary\\steamapps\\common\\Sheltered",
+      "executable": "Sheltered.exe",
+      "processName": "Sheltered",
+      "architecture": "x86",
+      "agentPort": 37421,
+      "launchArguments": [
+        "-screen-width",
+        "1600",
+        "-screen-height",
+        "900",
+        "-screen-fullscreen",
+        "0"
+      ],
+      "menuReadyRegex": "MenuScene",
+      "vanillaMenuReferenceImage": "../../Decompiled/Benchmarks/2026-07-15_SMM_Performance_Epic_Steam/screenshots/vanilla_steam_menu.png",
+      "vanillaMenuRmseThreshold": 15,
+      "vanillaWindowDelaySeconds": 16,
+      "hashGates": [
+        {
+          "name": "Manager",
+          "role": "manager",
+          "deployedPath": "SMM\\Manager.exe",
+          "sourcePath": "../../Dist/SMM/Manager.exe"
+        },
+        {
+          "name": "Managed Doorstop",
+          "role": "doorstop",
+          "deployedPath": "SMM\\bin\\Doorstop.dll",
+          "sourcePath": "../../Dist/SMM/bin/Doorstop.dll"
+        },
+        {
+          "name": "Harmony",
+          "role": "harmony",
+          "deployedPath": "SMM\\bin\\0Harmony.dll",
+          "sourcePath": "../../Dist/SMM/bin/0Harmony.dll"
+        },
+        {
+          "name": "Native Doorstop proxy",
+          "role": "native-doorstop",
+          "deployedPath": "winhttp.dll",
+          "sourcePath": "../../libs/x86/winhttp.dll"
+        },
+        {
+          "name": "ModAPI",
+          "role": "modapi",
+          "deployedPath": "SMM\\ModAPI.dll",
+          "sourcePath": "../../ModAPI/obj/Release/ModAPI.dll"
+        },
+        {
+          "name": "ShelteredAPI",
+          "role": "shelteredapi",
+          "deployedPath": "SMM\\bin\\ShelteredAPI.dll",
+          "sourcePath": "../../ShelteredAPI/obj/Release/ShelteredAPI.dll"
+        },
+        {
+          "name": "Sheltered Agent Interface",
+          "role": "harness",
+          "deployedPath": "mods\\Sheltered Agent Interface\\Assemblies\\Sheltered Agent Interface.dll",
+          "sourcePath": "A:\\Dev\\Projects\\ShelteredAgentInterface\\ShelteredAgentInterface\\obj\\Release\\Sheltered Agent Interface.dll"
+        }
+      ]
+    },
+    {
+      "name": "epic",
+      "enabled": true,
+      "installRoot": "D:\\Epic Games Games\\Sheltered",
+      "executable": "ShelteredWindows64_EOS.exe",
+      "processName": "ShelteredWindows64_EOS",
+      "architecture": "x64",
+      "agentPort": 37422,
+      "launchArguments": [
+        "-screen-width",
+        "1600",
+        "-screen-height",
+        "900",
+        "-screen-fullscreen",
+        "0"
+      ],
+      "menuReadyRegex": "MenuScene",
+      "vanillaMenuReferenceImage": "../../Decompiled/Benchmarks/2026-07-15_SMM_Performance_Epic_Steam/screenshots/vanilla_epic_after_foreground_30s.png",
+      "vanillaMenuRmseThreshold": 15,
+      "vanillaWindowDelaySeconds": 16,
+      "hashGates": [
+        {
+          "name": "Manager",
+          "role": "manager",
+          "deployedPath": "SMM\\Manager.exe",
+          "sourcePath": "../../Dist/SMM/Manager.exe"
+        },
+        {
+          "name": "Managed Doorstop",
+          "role": "doorstop",
+          "deployedPath": "SMM\\bin\\Doorstop.dll",
+          "sourcePath": "../../Dist/SMM/bin/Doorstop.dll"
+        },
+        {
+          "name": "Harmony",
+          "role": "harmony",
+          "deployedPath": "SMM\\bin\\0Harmony.dll",
+          "sourcePath": "../../Dist/SMM/bin/0Harmony.dll"
+        },
+        {
+          "name": "Native Doorstop proxy",
+          "role": "native-doorstop",
+          "deployedPath": "winhttp.dll",
+          "sourcePath": "../../libs/x64/winhttp.dll"
+        },
+        {
+          "name": "ModAPI",
+          "role": "modapi",
+          "deployedPath": "SMM\\ModAPI.dll",
+          "sourcePath": "../../ModAPI/obj/Release/ModAPI.dll"
+        },
+        {
+          "name": "ShelteredAPI",
+          "role": "shelteredapi",
+          "deployedPath": "SMM\\bin\\ShelteredAPI.dll",
+          "sourcePath": "../../ShelteredAPI/obj/Release/ShelteredAPI.dll"
+        },
+        {
+          "name": "Sheltered Agent Interface",
+          "role": "harness",
+          "deployedPath": "mods\\Sheltered Agent Interface\\Assemblies\\Sheltered Agent Interface.dll",
+          "sourcePath": "A:\\Dev\\Projects\\ShelteredAgentInterface\\ShelteredAgentInterface\\obj\\Release\\Sheltered Agent Interface.dll"
+        }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "name": "vanilla",
+      "enabled": true,
+      "mode": "vanilla",
+      "harness": false,
+      "scenarioSelectionTransition": false,
+      "scenarioTransition": false
+    },
+    {
+      "name": "smm-core",
+      "enabled": true,
+      "mode": "core",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "managerOptions": {
+        "ShelteredAPI.PatchCustomScenarioEditor": true
+      }
+    },
+    {
+      "name": "smm-native",
+      "enabled": true,
+      "mode": "explicit",
+      "harness": false,
+      "include": [
+        "com.harmony.0harmony"
+      ],
+      "includeDependencies": true,
+      "scenarioSelectionTransition": false,
+      "scenarioTransition": false,
+      "managerOptions": {
+        "ShelteredAPI.PatchCustomScenarioEditor": true
+      }
+    },
+    {
+      "name": "smm-custom-editor-off",
+      "enabled": true,
+      "mode": "core",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": false,
+      "managerOptions": {
+        "ShelteredAPI.PatchCustomScenarioEditor": false
+      }
+    },
+    {
+      "name": "enabled-mods",
+      "enabled": true,
+      "mode": "enabled",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "includeDependencies": true,
+      "include": [],
+      "exclude": [],
+      "managerOptions": {
+        "ShelteredAPI.PatchCustomScenarioEditor": true
+      }
+    },
+    {
+      "name": "all-mods",
+      "enabled": true,
+      "mode": "all",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "includeDependencies": true,
+      "exclude": [],
+      "managerOptions": {
+        "ShelteredAPI.PatchCustomScenarioEditor": true
+      }
+    },
+    {
+      "name": "explicit-cross-platform",
+      "enabled": false,
+      "mode": "explicit",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "includeDependencies": true,
+      "include": [
+        "Coolnether123.Cortex"
+      ],
+      "exclude": [],
+      "managerOptions": {
+        "ShelteredAPI.PatchCustomScenarioEditor": true
+      }
+    },
+    {
+      "name": "explicit-example",
+      "enabled": false,
+      "mode": "explicit",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "includeDependencies": true,
+      "include": [
+        "coolnether123.betteraiqueue"
+      ],
+      "exclude": [],
+      "managerOptions": {
+        "ShelteredAPI.PatchCustomScenarioEditor": true
+      }
+    }
+  ]
+}

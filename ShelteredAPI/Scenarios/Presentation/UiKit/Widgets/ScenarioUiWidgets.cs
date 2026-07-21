@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Layout;
@@ -74,11 +75,21 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
                 case ScenarioUiPillEmphasis.Danger:
                     box = styles.PillDanger;
                     break;
+                case ScenarioUiPillEmphasis.Success:
+                    box = styles.PillSuccess;
+                    break;
+                case ScenarioUiPillEmphasis.Warning:
+                    box = styles.PillWarning;
+                    break;
                 default:
                     box = styles.Pill;
                     break;
             }
-            GUI.Box(rect, label ?? string.Empty, box);
+
+            string fitted;
+            string tooltip;
+            ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(label ?? string.Empty, Math.Max(0f, rect.width - 10f), box, out fitted, out tooltip);
+            GUI.Box(rect, new GUIContent(fitted, tooltip), box);
         }
 
         /// <summary>
@@ -93,8 +104,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
             Rect[] cells = ScenarioUiLayoutEngine.Columns(rect, styles.Theme.Metrics.PaddingSm, 1f, 1.4f);
             if (cells.Length < 2)
                 return;
-            GUI.Label(cells[0], label ?? string.Empty, styles.MutedText);
-            GUI.Label(cells[1], value ?? string.Empty, styles.BodyText);
+
+            GUI.Label(cells[0], label ?? string.Empty, styles.PaperMutedText);
+            GUI.Label(cells[1], value ?? string.Empty, styles.PaperBodyText);
         }
 
         /// <summary>
@@ -105,13 +117,15 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
         {
             if (styles == null)
                 return;
-            GUIStyle centered = new GUIStyle(styles.MutedText);
-            centered.alignment = TextAnchor.MiddleCenter;
-            centered.wordWrap = true;
-            GUI.Label(rect, message ?? string.Empty, centered);
+            GUI.Label(rect, message ?? string.Empty, styles.EmptyStateText);
         }
 
         public static void DrawSpritePreviewFrame(Rect rect, Sprite sprite, ScenarioUiStyleSheet styles, bool emphasized)
+        {
+            DrawSpritePreviewFrame(rect, sprite, styles, emphasized, Color.white);
+        }
+
+        public static void DrawSpritePreviewFrame(Rect rect, Sprite sprite, ScenarioUiStyleSheet styles, bool emphasized, Color tint)
         {
             if (styles == null)
                 return;
@@ -132,7 +146,10 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
                 textureRect.height / texture.height);
 
             Rect fitted = FitRect(rect, textureRect.width, textureRect.height, styles.Theme.Metrics.PaddingXs);
+            Color previous = GUI.color;
+            GUI.color = new Color(previous.r * tint.r, previous.g * tint.g, previous.b * tint.b, previous.a * tint.a);
             GUI.DrawTextureWithTexCoords(fitted, texture, uv, true);
+            GUI.color = previous;
         }
 
         /// <summary>
@@ -173,6 +190,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
     {
         Default = 0,
         Active = 1,
-        Danger = 2
+        Danger = 2,
+        Success = 3,
+        Warning = 4
     }
 }

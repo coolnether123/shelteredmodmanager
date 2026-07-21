@@ -52,12 +52,12 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
                     return ScenarioStageKind.Quests;
                 case ScenarioAuthoringShellTab.Map:
                     return ScenarioStageKind.Map;
+                case ScenarioAuthoringShellTab.Art:
+                    return ScenarioStageKind.Assets;
                 case ScenarioAuthoringShellTab.Test:
                     return ScenarioStageKind.Test;
                 case ScenarioAuthoringShellTab.Publish:
                     return ScenarioStageKind.Publish;
-                case ScenarioAuthoringShellTab.Art:
-                    return ResolveArtStage(state);
                 default:
                     return ScenarioStageKind.None;
             }
@@ -81,6 +81,7 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
                 case ScenarioStageKind.Events:
                 case ScenarioStageKind.Quests:
                 case ScenarioStageKind.Map:
+                case ScenarioStageKind.Assets:
                 case ScenarioStageKind.Test:
                 case ScenarioStageKind.Publish:
                     return requestedKind;
@@ -178,8 +179,11 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
                     return state != null && IsBunkerSubstage(state.ActiveStage)
                         ? state.ActiveStage
                         : ScenarioStageKind.BunkerInside;
-                case ScenarioAuthoringTool.Shelter:
                 case ScenarioAuthoringTool.Select:
+                    return state != null && IsBunkerSubstage(state.ActiveStage)
+                        ? state.ActiveStage
+                        : ScenarioStageKind.BunkerSurface;
+                case ScenarioAuthoringTool.Shelter:
                     return ScenarioStageKind.BunkerSurface;
                 case ScenarioAuthoringTool.Family:
                 case ScenarioAuthoringTool.People:
@@ -242,19 +246,19 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
             {
                 case ScenarioStageKind.BunkerBackground:
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Build;
-                    state.ActiveTool = hasPreferredTool && preferredTool == ScenarioAuthoringTool.Assets
-                        ? ScenarioAuthoringTool.Assets
-                        : ScenarioAuthoringTool.Wiring;
+                    state.ActiveTool = hasPreferredTool
+                        ? (preferredTool == ScenarioAuthoringTool.Assets || preferredTool == ScenarioAuthoringTool.Select ? preferredTool : ScenarioAuthoringTool.Wiring)
+                        : ScenarioAuthoringTool.Select;
                     break;
                 case ScenarioStageKind.BunkerSurface:
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Build;
-                    state.ActiveTool = ResolveBunkerSurfaceTool(hasPreferredTool, preferredTool);
+                    state.ActiveTool = hasPreferredTool ? ResolveBunkerSurfaceTool(preferredTool) : ScenarioAuthoringTool.Select;
                     break;
                 case ScenarioStageKind.BunkerInside:
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Build;
-                    state.ActiveTool = hasPreferredTool && preferredTool == ScenarioAuthoringTool.Assets
-                        ? ScenarioAuthoringTool.Assets
-                        : ScenarioAuthoringTool.Objects;
+                    state.ActiveTool = hasPreferredTool
+                        ? (preferredTool == ScenarioAuthoringTool.Assets || preferredTool == ScenarioAuthoringTool.Select ? preferredTool : ScenarioAuthoringTool.Objects)
+                        : ScenarioAuthoringTool.Select;
                     break;
                 case ScenarioStageKind.InventoryStorage:
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Stockpile;
@@ -278,6 +282,10 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Map;
                     state.ActiveTool = ScenarioAuthoringTool.Select;
                     break;
+                case ScenarioStageKind.Assets:
+                    state.ActiveShellTab = ScenarioAuthoringShellTab.Art;
+                    state.ActiveTool = ScenarioAuthoringTool.Assets;
+                    break;
                 case ScenarioStageKind.Test:
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Test;
                     state.ActiveTool = ScenarioAuthoringTool.Select;
@@ -289,11 +297,8 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
             }
         }
 
-        private static ScenarioAuthoringTool ResolveBunkerSurfaceTool(bool hasPreferredTool, ScenarioAuthoringTool preferredTool)
+        private static ScenarioAuthoringTool ResolveBunkerSurfaceTool(ScenarioAuthoringTool preferredTool)
         {
-            if (!hasPreferredTool)
-                return ScenarioAuthoringTool.Shelter;
-
             if (preferredTool == ScenarioAuthoringTool.Select
                 || preferredTool == ScenarioAuthoringTool.Assets
                 || preferredTool == ScenarioAuthoringTool.Shelter)

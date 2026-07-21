@@ -29,8 +29,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return;
             }
 
-            BoundsHighlighter.Target = ResolveTransform(state.SelectedTarget);
-            BoundsHighlighter.HoverTarget = state.SelectionModeActive
+            bool assetEditorOpen = state.SpriteSwapPicker != null && state.SpriteSwapPicker.IsOpen;
+            BoundsHighlighter.Target = assetEditorOpen ? null : ResolveTransform(state.SelectedTarget);
+            BoundsHighlighter.HoverTarget = !assetEditorOpen && state.SelectionModeActive
                 ? ResolveTransform(state.HoveredTarget)
                 : null;
         }

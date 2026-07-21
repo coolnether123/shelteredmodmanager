@@ -57,6 +57,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private static readonly FieldInfo QuestDescriptionKeyField = typeof(QuestDefBase).GetField("m_descriptionKey", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo QuestSelectionField = typeof(QuestDefBase).GetField("m_selectionProperties", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo QuestCharacterSetupField = typeof(QuestDefBase).GetField("m_characterSetup", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo QuestCharacterPresetsField = typeof(CharacterMeshOptions).GetField("m_questCharacterPresets", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo ScenarioStagesField = typeof(ScenarioDef).GetField("m_stages", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo StageIdField = typeof(ScenarioStage).GetField("m_id", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo StageCharacterIdsField = typeof(ScenarioStage).GetField("m_characterIds", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -198,7 +199,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             IList characters = GetRequiredList(_definition, QuestCharacterSetupField, "QuestDefBase.m_characterSetup");
             QuestDefBase.QuestCharacter runtimeCharacter = new QuestDefBase.QuestCharacter();
             SetStringFieldRequired(runtimeCharacter, QuestCharacterIdField, character.CharacterId, "QuestCharacter.m_characterId");
-            SetStringFieldRequired(runtimeCharacter, QuestCharacterPresetIdField, character.PresetId, "QuestCharacter.m_presetId");
+            SetStringFieldRequired(runtimeCharacter, QuestCharacterPresetIdField, ResolveQuestCharacterPresetId(character.PresetId), "QuestCharacter.m_presetId");
             SetEnumField(runtimeCharacter, QuestCharacterWeaponField, typeof(ItemManager.ItemType), character.WeaponItemId, ItemManager.ItemType.Weapon_Fists);
             SetEnumField(runtimeCharacter, QuestCharacterEquippedItem1Field, typeof(ItemManager.ItemType), character.EquippedItem1Id, ItemManager.ItemType.Undefined);
             SetEnumField(runtimeCharacter, QuestCharacterEquippedItem2Field, typeof(ItemManager.ItemType), character.EquippedItem2Id, ItemManager.ItemType.Undefined);
@@ -212,6 +213,33 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             ReplaceItemList(runtimeCharacter, QuestCharacterCarriedItemsField, character.CarriedItems, "QuestCharacter.m_carriedItems");
             characters.Add(runtimeCharacter);
             return this;
+        }
+
+        private static string ResolveQuestCharacterPresetId(string requestedPresetId)
+        {
+            CharacterMeshOptions options = CharacterMeshOptions.instance;
+            IList presets = options != null && QuestCharacterPresetsField != null
+                ? QuestCharacterPresetsField.GetValue(options) as IList
+                : null;
+            if (presets == null || presets.Count == 0)
+                return requestedPresetId;
+
+            CharacterMeshOptions.QuestCharacterPreset fallback = null;
+            for (int i = 0; i < presets.Count; i++)
+            {
+                CharacterMeshOptions.QuestCharacterPreset preset = presets[i] as CharacterMeshOptions.QuestCharacterPreset;
+                if (preset == null || string.IsNullOrEmpty(preset.m_id))
+                    continue;
+                if (fallback == null)
+                    fallback = preset;
+                if (!string.IsNullOrEmpty(requestedPresetId)
+                    && string.Equals(preset.m_id, requestedPresetId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return preset.m_id;
+                }
+            }
+
+            return fallback != null ? fallback.m_id : requestedPresetId;
         }
 
         public ShelteredScenarioDefBuilder AddSimpleStage(string stageId)

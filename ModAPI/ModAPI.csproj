@@ -59,10 +59,12 @@
   <ItemGroup>
     <Compile Include="Actors\Abstractions\IActorSystem.cs" />
     <Compile Include="Actors\Abstractions\ActorAdapterBase.cs" />
+    <Compile Include="Actors\Authoring\ActorAuthoringCapabilities.cs" />
     <Compile Include="Actors\Models\ActorModels.cs" />
     <Compile Include="Actors\Models\ActorComponents.cs" />
     <Compile Include="Actors\Models\ActorRuntimeModels.cs" />
     <Compile Include="Core\IGameHelper.cs" />
+    <Compile Include="Core\IOverlayInputCaptureService.cs" />
     <Compile Include="Core\GameRuntimeApis.cs" />
     <Compile Include="Core\IContentResolutionService.cs" />
     <Compile Include="Core\IGameLifecycleSource.cs" />
@@ -97,6 +99,12 @@
     <Compile Include="UI\UIFlowGuard.cs" />
     <Compile Include="UI\TouchInputBridge.cs" />
     <Compile Include="UI\ScrollInputBridge.cs" />
+    <Compile Include="UI\ColorPicker\ModColor.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerTextField.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerPalette.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerPaletteStore.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerSession.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerImguiControl.cs" />
     <Compile Include="Spine\SettingsEnums.cs" />
     <Compile Include="Spine\SettingDefinition.cs" />
     <Compile Include="Spine\SettingDefinitionFactory.cs" />
@@ -149,6 +157,10 @@
     <Compile Include="Harmony\Transpilers\UnityPatterns.cs" />
     <Compile Include="Debugging\LiveDebugger.cs" />
     <Compile Include="Debugging\SmartWatcher.cs" />
+    <Compile Include="Debugging\IFeedbackContextProvider.cs" />
+    <Compile Include="Debugging\FeedbackOverlayConfig.cs" />
+    <Compile Include="Debugging\FeedbackStorage.cs" />
+    <Compile Include="Debugging\FeedbackOverlay.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
@@ -182,6 +194,7 @@
     <Compile Include="Core\PluginContextImpl.cs" />
     <Compile Include="Core\PrefixedLogger.cs" />
     <Compile Include="Core\ModRandom.cs" />
+    <Compile Include="Core\ModRandomBridge.cs" />
     <Compile Include="Core\ModRandomState.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />

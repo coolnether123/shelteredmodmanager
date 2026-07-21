@@ -33,6 +33,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ScenarioInspectorItemFactory.Property(label, value);
         }
 
+        public static ScenarioAuthoringInspectorItem Property(string label, string value, string detail)
+        {
+            return ScenarioInspectorItemFactory.Property(label, value, detail);
+        }
+
         public static ScenarioAuthoringInspectorItem ActionItem(ScenarioAuthoringInspectorAction action)
         {
             return ScenarioInspectorItemFactory.ActionItem(action);
@@ -45,7 +50,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static string FormatTarget(ScenarioAuthoringTarget target)
         {
-            return target != null ? target.DisplayName + " (" + target.Kind + ")" : "<none>";
+            return target != null ? target.DisplayName + " (" + target.Kind + ")" : "No target selected";
         }
 
         public static int CountDirtyFlags(ScenarioEditorSession editorSession)
@@ -129,7 +134,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int stacks = CountInventoryStacks(definition);
             int total = CountInventoryTotal(definition);
             return stacks == 0
-                ? "No starting stockpile has been captured or authored yet."
+                ? "Shelter storage has no authored starting items yet."
                 : stacks + " item stack(s), " + total + " total item(s).";
         }
 

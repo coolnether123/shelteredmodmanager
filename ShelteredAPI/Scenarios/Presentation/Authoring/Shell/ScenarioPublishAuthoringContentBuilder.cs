@@ -3,16 +3,26 @@ using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
+using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
+using ShelteredAPI.Scenarios.Shared;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioPublishAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
@@ -20,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioTimelineBuilder _timelineBuilder;
         private readonly ScenarioModDependencyDetector _modDependencyDetector;
         private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
+        private readonly ScenarioAuthorTestChecklistSectionBuilder _testChecklistSectionBuilder;
 
         public ScenarioPublishAuthoringContentBuilder(
             ScenarioTimelineBuilder timelineBuilder,
@@ -29,6 +40,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineBuilder = timelineBuilder;
             _modDependencyDetector = modDependencyDetector;
             _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
+            _testChecklistSectionBuilder = new ScenarioAuthorTestChecklistSectionBuilder(new ScenarioAuthorTestChecklistService());
         }
 
         public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Publish; } }
@@ -38,23 +50,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state = context != null ? context.State : null;
             ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioModCompatibilityReport compatibilityReport = _modDependencyDetector.BuildReport(definition);
+            ScenarioAuthoringValidationSnapshot validation = EvaluateValidation(state, definition);
             List<ScenarioAuthoringInspectorItem> dependencyItems = BuildDependencyItems(definition);
-            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
-            List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
-            List<ScenarioAuthoringInspectorItem> validationItems = BuildValidationItems(state, definition);
+            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(compatibilityReport);
+            List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder, true);
+            List<ScenarioAuthoringInspectorItem> validationItems = BuildValidationItems(validation, state != null ? state.ActiveScenarioFilePath : null);
+            bool showAdvanced = state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
+            List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(definition, validation, showAdvanced);
+            List<ScenarioAuthoringInspectorItem> packageItems = BuildPackagePreviewItems(state, validation);
+            List<ScenarioAuthoringInspectorItem> metadataItems = new List<ScenarioAuthoringInspectorItem>(ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false));
+            metadataItems.AddRange(ScenarioMetadataAuthoringContent.BuildStatusItems(state != null ? state.ActiveScenarioFilePath : null));
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
                 {
+                    Id = "publish_confidence",
+                    Title = "Confidence",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                    Items = BuildReadinessSummary(editorSession, definition, validation, compatibilityReport).ToArray()
+                },
+                ScenarioLaunchSetupAuthoringSectionBuilder.Build(definition),
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_metadata",
+                    Title = "Scenario Metadata",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    RendererKind = ScenarioAuthoringInspectorSectionRendererKind.MetadataForm,
+                    Items = metadataItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
                     Id = "publish_stage",
-                    Title = "Publish",
+                    Title = "Package Readiness",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]
                     {
                         Item.Property("Scenario", Item.Safe(definition != null ? definition.DisplayName : null)),
                         Item.Property("Dirty Sections", Item.CountDirtyFlags(editorSession).ToString()),
-                        Item.Property("Version", Item.Safe(definition != null ? definition.Version : null))
+                        Item.Property("Version", Item.Safe(definition != null ? definition.Version : null)),
+                        Item.Text("This window creates a local package for sharing. It does not upload anywhere.")
                     }
                 },
                 new ScenarioAuthoringInspectorSection
@@ -64,6 +104,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = validationItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_package_preview",
+                    Title = "Package Contents Preview",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackagePreview,
+                    Items = packageItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_export",
+                    Title = "Export Package",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackageActions,
+                    Items = exportItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
                 {
@@ -84,7 +142,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "publish_timeline",
-                    Title = "Schedule Timeline",
+                    Title = "Timeline",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = timelineItems.ToArray()
@@ -92,45 +150,119 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        internal static List<ScenarioAuthoringInspectorItem> BuildValidationItems(ScenarioAuthoringState state, ScenarioDefinition definition)
+        internal ScenarioAuthoringInspectorSection[] BuildStatusFlowSections(ScenarioAuthoringWindowContentContext context)
         {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            if (definition == null)
-            {
-                items.Add(Item.Property("Status", "No active scenario definition."));
-                return items;
-            }
+            ScenarioAuthoringState state = context != null ? context.State : null;
+            ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioAuthoringValidationSnapshot validation = EvaluateValidation(state, definition);
+            bool showAdvanced = state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
 
-            ScenarioValidationResult validation = null;
+            List<ScenarioAuthoringInspectorItem> metadataItems = new List<ScenarioAuthoringInspectorItem>(
+                ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false));
+            metadataItems.AddRange(ScenarioMetadataAuthoringContent.BuildStatusItems(
+                state != null ? state.ActiveScenarioFilePath : null));
+
+            ScenarioAuthoringInspectorSection blockers = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_validation",
+                "Resolve blockers",
+                BuildValidationItems(validation, state != null ? state.ActiveScenarioFilePath : null),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            blockers.StatusChips = BuildBlockerStatusChips(validation);
+
+            ScenarioAuthoringInspectorSection metadata = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_metadata",
+                "Review metadata",
+                metadataItems,
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            metadata.RendererKind = ScenarioAuthoringInspectorSectionRendererKind.MetadataForm;
+            metadata.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("publish.metadata.review", "Review before export", ScenarioAuthoringStatusTone.Informational, null)
+            };
+
+            ScenarioAuthoringInspectorSection contents = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_package_preview",
+                "Review contents / dependencies",
+                BuildPackagePreviewItems(state, validation),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            contents.RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackagePreview;
+            contents.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.contents.status",
+                    validation != null && !validation.IsBlocked ? "Package ready" : "Review package",
+                    validation != null && !validation.IsBlocked ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Warning,
+                    null)
+            };
+
+            ScenarioAuthoringInspectorSection export = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_export",
+                "Export",
+                BuildExportControlItems(definition, validation),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            export.RendererKind = ScenarioAuthoringInspectorSectionRendererKind.PackageActions;
+            export.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.export.status",
+                    validation != null && !validation.IsBlocked ? "Ready to export" : "Blocked",
+                    validation != null && !validation.IsBlocked ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Error,
+                    null)
+            };
+
+            ScenarioAuthoringInspectorSection result = ScenarioAuthoringStatusFlowSupport.Section(
+                "publish_result_status",
+                "Result / status",
+                BuildExportResultItems(showAdvanced),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            result.StatusChips = new[] { BuildLastExportStatusChip() };
+
+            return new[] { blockers, metadata, contents, export, result };
+        }
+
+        internal static ScenarioAuthoringValidationSnapshot EvaluateValidation(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            IScenarioDefinitionValidator validator = null;
             try
             {
-                IScenarioDefinitionValidator validator = ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>();
-                validation = validator != null ? validator.Validate(definition, state != null ? state.ActiveScenarioFilePath : null) : null;
+                validator = ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>();
             }
-            catch (Exception ex)
+            catch
+            {
+                validator = null;
+            }
+
+            return ScenarioAuthoringValidationSnapshot.Evaluate(
+                validator,
+                definition,
+                state != null ? state.ActiveScenarioFilePath : null);
+        }
+
+        internal static List<ScenarioAuthoringInspectorItem> BuildValidationItems(ScenarioAuthoringValidationSnapshot validation)
+        {
+            return BuildValidationItems(validation, null);
+        }
+
+        internal static List<ScenarioAuthoringInspectorItem> BuildValidationItems(ScenarioAuthoringValidationSnapshot validation, string scenarioFilePath)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (validation == null || !validation.ValidationAvailable)
             {
                 items.Add(Item.Property("Validation", "Unavailable"));
-                items.Add(Item.Text("Validation could not run: " + ex.Message));
+                items.Add(Item.Text(validation != null ? validation.UnavailableReason : "Validation could not run."));
                 return items;
             }
 
-            ScenarioValidationIssue[] issues = validation != null ? validation.Issues : new ScenarioValidationIssue[0];
-            int errors = 0;
-            int warnings = 0;
-            for (int i = 0; i < issues.Length; i++)
-            {
-                if (issues[i] == null)
-                    continue;
-                if (issues[i].Severity == ScenarioIssueSeverity.Error)
-                    errors++;
-                else
-                    warnings++;
-            }
-
-            items.Add(Item.Property("Status", validation != null && validation.IsValid ? "Ready to publish" : "Blocked"));
-            items.Add(Item.Property("Errors", errors.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Item.Property("Warnings", warnings.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if the draft has no blocking errors.", true, errors == 0, "SV")));
+            ScenarioValidationIssue[] issues = validation.Issues;
+            ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(scenarioFilePath);
+            int acceptedCount = preferences.CountAccepted(validation.Result);
+            items.Add(Item.Property("Status", validation.Result != null && validation.Result.IsValid ? "Ready to export" : "Blocked"));
+            items.Add(Item.Property("Errors", validation.ErrorCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Warnings", validation.WarningCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Accepted by author", acceptedCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save the current draft.", true, true, "SV")));
 
             if (issues.Length == 0)
             {
@@ -142,10 +274,388 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 ScenarioValidationIssue issue = issues[i];
                 if (issue != null)
-                    items.Add(Item.Property(issue.Severity.ToString(), issue.Message));
+                {
+                    string fingerprint = ScenarioPackageAuthoringPreferences.BuildFingerprint(issues, i);
+                    ScenarioAcceptedWarning accepted = issue.Severity == ScenarioIssueSeverity.Warning ? preferences.Find(fingerprint) : null;
+                    items.Add(Item.Property(accepted != null ? "Accepted warning" : issue.Severity.ToString(), issue.Message,
+                        accepted != null ? "Author note: " + accepted.Note : null));
+                    if (issue.Severity == ScenarioIssueSeverity.Warning)
+                    {
+                        if (accepted != null)
+                        {
+                            items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.UnacceptWarningPrefix + fingerprint, "Review Again", "Remove this warning acceptance.", true, false, "WA")));
+                        }
+                        else
+                        {
+                            ScenarioAuthoringInspectorItem note = Item.Property("Acceptance note", string.Empty, "A short note explaining why this specific warning is acceptable.");
+                            note.Editable = true;
+                            note.Action = Item.Action(ScenarioPublishActionIds.AcceptWarningPrefix + fingerprint + ".", "Accept Warning", "Commit a short acceptance note.", true, false, "WA");
+                            items.Add(note);
+                        }
+                    }
+                    if (accepted != null)
+                        continue;
+                    items.Add(Item.ActionItem(BuildIssueNavigationAction(issue)));
+                    string issueTopic = ResolveIssueTopic(issue.Message);
+                    if (!string.IsNullOrEmpty(issueTopic))
+                        items.Add(Item.ActionItem(BuildIssueTopicAction(issueTopic)));
+                }
             }
 
             return items;
+        }
+
+        internal List<ScenarioAuthoringInspectorItem> BuildExportItems(ScenarioDefinition definition, ScenarioAuthoringValidationSnapshot validation, bool showAdvanced)
+        {
+            List<ScenarioAuthoringInspectorItem> items = BuildExportControlItems(definition, validation);
+            items.AddRange(BuildExportResultItems(showAdvanced));
+            return items;
+        }
+
+        private List<ScenarioAuthoringInspectorItem> BuildExportControlItems(
+            ScenarioDefinition definition,
+            ScenarioAuthoringValidationSnapshot validation)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(_testChecklistSectionBuilder.BuildExportSummary(definition));
+            int errors = validation != null ? validation.ErrorCount : 1;
+            bool canExport = errors == 0;
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionPublishExport,
+                "Export Scenario Package",
+                canExport
+                    ? "Write a staged scenario package and validate the exported artifact."
+                    : "Fix validation errors before exporting.",
+                canExport,
+                canExport,
+                "EX",
+                canExport ? "Creates ScenarioAuthoringExports/<scenario-id>/scenario.xml. Copy the exported folder into any mod's Scenarios directory to install or share it." : errors.ToString(CultureInfo.InvariantCulture) + " validation error(s) block export.")));
+            if (!canExport)
+            {
+                items.Add(Item.ActionItem(Item.Action(
+                    ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicPublish,
+                    "How to Fix Export Blockers",
+                    "Open publish validation guidance and follow each issue link.",
+                    true,
+                    false,
+                    "HP")));
+            }
+
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildExportResultItems(bool showAdvanced)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioPublishExportResult last = GetLastExportResult();
+            if (last == null)
+            {
+                items.Add(Item.Property("Last Export", "<none>"));
+                items.Add(Item.Text("Export staging is outside playable catalog scans. After export, install by copying the exported scenario folder into a mod's Scenarios directory."));
+                return items;
+            }
+
+            items.Add(Item.Property("Last Export", last.Success ? "Validated" : last.Blocked ? "Blocked" : "Failed"));
+            items.Add(Item.Property("When", last.FormatTimestamp()));
+            if (showAdvanced && !string.IsNullOrEmpty(last.ArtifactPath))
+                items.Add(Item.Property("Artifact", last.ArtifactPath));
+            if (!string.IsNullOrEmpty(last.ArtifactRootPath))
+            {
+                if (showAdvanced)
+                {
+                    items.Add(Item.Property("Share Folder", last.ArtifactRootPath));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.OpenLastExportFolder, "Open Export Folder", "Open the last export folder in Windows Explorer.", true, false, "OP", last.ArtifactRootPath)));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.CopyLastExportPath, "Copy Path", "Copy the last export folder path to the clipboard.", true, false, "CP", last.ArtifactRootPath)));
+                }
+                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.InstallLastExport, "Install this export locally", "Copy this validated package into ShelteredAPI/Scenarios and refresh the scenario catalog.", last.Success, false, "IN")));
+                ScenarioPackageInstallResult install = GetLastInstallResult();
+                if (install != null && install.ConfirmationRequired)
+                    items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.ConfirmInstallOverwrite, "Confirm same-ID replacement", install.Message, true, true, "!!")));
+            }
+            if (!string.IsNullOrEmpty(last.Message))
+                items.Add(Item.Text(last.Message));
+            items.Add(Item.Text("Install: 1. Open the export folder. 2. Copy the scenario folder. 3. Paste it into the Scenarios folder of the target mod. 4. Restart or reload the scenario catalog before testing it from the scenario book."));
+            return items;
+        }
+
+        private static ScenarioAuthoringStatusChipViewModel[] BuildBlockerStatusChips(
+            ScenarioAuthoringValidationSnapshot validation)
+        {
+            if (validation == null || !validation.ValidationAvailable)
+            {
+                return new[]
+                {
+                    ScenarioAuthoringStatusFlowSupport.Chip("publish.blockers.unavailable", "Validation unavailable", ScenarioAuthoringStatusTone.Error, null)
+                };
+            }
+
+            List<ScenarioAuthoringStatusChipViewModel> chips = new List<ScenarioAuthoringStatusChipViewModel>();
+            ScenarioValidationIssue[] issues = validation.Issues;
+            for (int i = 0; issues != null && i < issues.Length && chips.Count < 5; i++)
+            {
+                ScenarioValidationIssue issue = issues[i];
+                if (issue == null || issue.Severity != ScenarioIssueSeverity.Error)
+                    continue;
+                ScenarioAuthoringInspectorAction action = BuildIssueNavigationAction(issue);
+                chips.Add(ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.blocker." + i.ToString(CultureInfo.InvariantCulture),
+                    "Fix " + ResolveIssueWorkspaceLabel(issue.Message),
+                    ScenarioAuthoringStatusTone.Error,
+                    action));
+            }
+
+            if (chips.Count == 0)
+            {
+                chips.Add(ScenarioAuthoringStatusFlowSupport.Chip(
+                    "publish.blockers.ready",
+                    validation.WarningCount > 0 ? "Warnings need review" : "No blockers",
+                    validation.WarningCount > 0 ? ScenarioAuthoringStatusTone.Warning : ScenarioAuthoringStatusTone.Ready,
+                    null));
+            }
+            return chips.ToArray();
+        }
+
+        private static string ResolveIssueWorkspaceLabel(string message)
+        {
+            ScenarioStageKind stage = ResolveIssueStage(message);
+            string label = ScenarioAuthoringWorkflowLabels.GetStageLabel(stage, false);
+            return ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                label,
+                null,
+                stage.ToString(),
+                "scenario setup").Text;
+        }
+
+        private static ScenarioAuthoringStatusChipViewModel BuildLastExportStatusChip()
+        {
+            ScenarioPublishExportResult last = GetLastExportResult();
+            if (last == null)
+                return ScenarioAuthoringStatusFlowSupport.Chip("publish.result.none", "Not exported yet", ScenarioAuthoringStatusTone.Neutral, null);
+            if (last.Success)
+                return ScenarioAuthoringStatusFlowSupport.Chip("publish.result.ready", "Export validated", ScenarioAuthoringStatusTone.Ready, null);
+            return ScenarioAuthoringStatusFlowSupport.Chip(
+                "publish.result.failed",
+                last.Blocked ? "Export blocked" : "Export failed",
+                last.Blocked ? ScenarioAuthoringStatusTone.Warning : ScenarioAuthoringStatusTone.Error,
+                null);
+        }
+
+
+        internal static List<ScenarioAuthoringInspectorItem> BuildPackagePreviewItems(ScenarioAuthoringState state, ScenarioAuthoringValidationSnapshot validation)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(state != null ? state.ActiveScenarioFilePath : null);
+            ScenarioPackagePlan plan = null;
+            try
+            {
+                ScenarioPublishExportService service = ScenarioCompositionRoot.Resolve<ScenarioPublishExportService>();
+                plan = service != null ? service.PreviewActiveDraft(state) : null;
+            }
+            catch (Exception ex)
+            {
+                items.Add(Item.Text("Preview unavailable: " + ex.Message));
+            }
+            if (plan == null)
+            {
+                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.ToggleReadme, "README.txt: " + (preferences.IncludeReadme ? "Included" : "Excluded"), "Toggle the human-readable install guide in the package.", true, false, "RD")));
+                return items;
+            }
+            items.Add(Item.Property("FILE COUNT", plan.Entries.Count.ToString(CultureInfo.InvariantCulture)));
+            for (int i = 0; i < plan.Entries.Count; i++) items.Add(Item.Property("FILE", plan.Entries[i].RelativePath, FormatBytes(plan.Entries[i].Size)));
+            items.Add(Item.Property("TOTAL", FormatBytes(plan.TotalSize)));
+            if (plan.DeclaredMods.Count == 0) items.Add(Item.Property("DEPENDENCY", "No external mod dependencies declared"));
+            else
+            {
+                for (int i = 0; i < plan.DeclaredMods.Count; i++)
+                {
+                    string dependencyId = plan.DeclaredMods[i];
+                    string dependencyName = ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                        null,
+                        null,
+                        dependencyId,
+                        null).Text;
+                    items.Add(Item.Property("DEPENDENCY", dependencyName));
+                }
+            }
+            if (plan.Problems.Count == 0) items.Add(Item.Property("PREFLIGHT", "Ready", "Package contents are accounted for."));
+            else for (int i = 0; i < plan.Problems.Count; i++) items.Add(Item.Property("PROBLEM", plan.Problems[i]));
+            int accepted = validation != null ? preferences.CountAccepted(validation.Result) : 0;
+            items.Add(Item.Property("ACCEPTED", accepted.ToString(CultureInfo.InvariantCulture) + " author-accepted warning" + (accepted == 1 ? string.Empty : "s")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.ToggleReadme, "README.txt: " + (preferences.IncludeReadme ? "Included" : "Excluded"), "Toggle the human-readable install guide in the package.", true, false, "RD")));
+            return items;
+        }
+
+        private static string FormatBytes(long value)
+        {
+            if (value < 1024L) return value.ToString(CultureInfo.InvariantCulture) + " B";
+            if (value < 1024L * 1024L) return (value / 1024d).ToString("0.0", CultureInfo.InvariantCulture) + " KB";
+            return (value / (1024d * 1024d)).ToString("0.0", CultureInfo.InvariantCulture) + " MB";
+        }
+
+        internal static ScenarioAuthoringInspectorAction BuildIssueNavigationAction(ScenarioValidationIssue issue)
+        {
+            string message = issue != null ? issue.Message : null;
+            if (!string.IsNullOrEmpty(message) && message.IndexOf("Scenario metadata", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return Item.Action(
+                    ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish,
+                    "Go To Metadata",
+                    "Open the package metadata form for this sharing detail.",
+                    true,
+                    true,
+                    "GO",
+                    issue.Severity.ToString());
+            }
+            ScenarioStageKind stage = ResolveIssueStage(issue != null ? issue.Message : null);
+            return Item.Action(
+                ScenarioAuthoringActionIds.ActionStageSelectPrefix + stage,
+                "Go To " + ScenarioAuthoringWorkflowLabels.GetStageLabel(stage, false),
+                "Open the editor area most likely to own this validation issue.",
+                true,
+                issue != null,
+                "GO",
+                issue != null ? issue.Severity.ToString() : "Issue");
+        }
+
+        private static ScenarioAuthoringInspectorAction BuildIssueTopicAction(string issueTopic)
+        {
+            if (string.IsNullOrEmpty(issueTopic))
+                return null;
+
+            return Item.Action(
+                ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + issueTopic,
+                "How to Fix This",
+                "Open the relevant help topic and apply the concrete fix.",
+                true,
+                false,
+                "HP");
+        }
+
+        private static ScenarioStageKind ResolveIssueStage(string message)
+        {
+            string text = message != null ? message.ToLowerInvariant() : string.Empty;
+            if (text.IndexOf("map") >= 0 || text.IndexOf("location") >= 0 || text.IndexOf("route") >= 0 || text.IndexOf("terrain") >= 0)
+                return ScenarioStageKind.Map;
+            if (text.IndexOf("quest") >= 0 || text.IndexOf("dialogue") >= 0)
+                return ScenarioStageKind.Quests;
+            if (text.IndexOf("inventory") >= 0 || text.IndexOf("item") >= 0)
+                return ScenarioStageKind.InventoryStorage;
+            if (text.IndexOf("family") >= 0 || text.IndexOf("survivor") >= 0 || text.IndexOf("character") >= 0)
+                return ScenarioStageKind.People;
+            if (text.IndexOf("sprite") >= 0 || text.IndexOf("asset") >= 0 || text.IndexOf("png") >= 0)
+                return ScenarioStageKind.BunkerInside;
+            if (text.IndexOf("victory") >= 0 || text.IndexOf("win") >= 0 || text.IndexOf("loss") >= 0 || text.IndexOf("end state") >= 0)
+                return ScenarioStageKind.Test;
+            if (text.IndexOf("trigger") >= 0 || text.IndexOf("schedule") >= 0 || text.IndexOf("gate") >= 0 || text.IndexOf("condition") >= 0 || text.IndexOf("action") >= 0)
+                return ScenarioStageKind.Events;
+            if (text.IndexOf("bunker") >= 0 || text.IndexOf("room") >= 0 || text.IndexOf("object") >= 0 || text.IndexOf("foundation") >= 0)
+                return ScenarioStageKind.BunkerInside;
+            return ScenarioStageKind.Publish;
+        }
+
+        private static string ResolveIssueTopic(string issueMessage)
+        {
+            string text = issueMessage != null ? issueMessage.ToLowerInvariant() : string.Empty;
+            if (text.IndexOf("survivor") >= 0 || text.IndexOf("starting") >= 0 || text.IndexOf("family") >= 0 || text.IndexOf("cast") >= 0)
+                return TutorialContent.TopicCast;
+            if (text.IndexOf("supply") >= 0 || text.IndexOf("inventory") >= 0 || text.IndexOf("item") >= 0 || text.IndexOf("water") >= 0 || text.IndexOf("food") >= 0 || text.IndexOf("medicine") >= 0)
+                return TutorialContent.TopicSupplies;
+            if (text.IndexOf("map") >= 0 || text.IndexOf("location") >= 0 || text.IndexOf("route") >= 0 || text.IndexOf("encounter") >= 0 || text.IndexOf("terrain") >= 0)
+                return TutorialContent.TopicMap;
+            if (text.IndexOf("quest") >= 0 || text.IndexOf("story") >= 0 || text.IndexOf("dialogue") >= 0)
+                return TutorialContent.TopicStory;
+            if (text.IndexOf("mod") >= 0 || text.IndexOf("dependency") >= 0 || text.IndexOf("required mod") >= 0 || text.IndexOf("missing") >= 0 || text.IndexOf("unsupported") >= 0)
+                return TutorialContent.TopicModGating;
+            if (text.IndexOf("win") >= 0 || text.IndexOf("loss") >= 0 || text.IndexOf("end state") >= 0)
+                return TutorialContent.TopicPublish;
+            if (text.IndexOf("trigger") >= 0 || text.IndexOf("schedule") >= 0 || text.IndexOf("condition") >= 0 || text.IndexOf("action") >= 0 || text.IndexOf("weather") >= 0 || text.IndexOf("gate") >= 0)
+                return TutorialContent.TopicTimelineConditions;
+            if (text.IndexOf("sprite") >= 0 || text.IndexOf("asset") >= 0 || text.IndexOf("png") >= 0)
+                return TutorialContent.TopicArtPixelEditor;
+
+            return null;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildReadinessSummary(
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition,
+            ScenarioAuthoringValidationSnapshot validation,
+            ScenarioModCompatibilityReport compatibilityReport)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Item.Property("Errors", validation != null ? validation.ErrorCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Property("Warnings", validation != null ? validation.WarningCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Property("Dirty Sections", Item.CountDirtyFlags(editorSession).ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Unsupported Features", CountUnsupportedWarnings(validation).ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Missing Required Mods", compatibilityReport != null && compatibilityReport.MissingRequiredMods != null ? compatibilityReport.MissingRequiredMods.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            ShelteredScenarioDefBuilderCompatibility compatibility = ShelteredScenarioDefBuilder.CheckCompatibility();
+            items.Add(Item.Property("Reflection Compatibility", compatibility != null && compatibility.IsUsable ? "Ready" : "Risk"));
+            if (compatibility != null && !compatibility.IsUsable)
+                items.Add(Item.Text("Reflection compatibility risk: " + compatibility.DescribeFailures()));
+            if (definition != null && definition.WinLossConditions != null && definition.WinLossConditions.WinConditions.Count + definition.WinLossConditions.LossConditions.Count > 0)
+                items.Add(Item.Property("End State", definition.WinLossConditions.WinConditions.Count.ToString(CultureInfo.InvariantCulture) + " win / " + definition.WinLossConditions.LossConditions.Count.ToString(CultureInfo.InvariantCulture) + " loss"));
+            else
+                items.Add(Item.Property("End State", "No victory condition - scenario runs forever"));
+            if (compatibilityReport != null
+                && (
+                    (compatibilityReport.MissingRequiredMods != null && compatibilityReport.MissingRequiredMods.Count > 0)
+                    || (compatibilityReport.VersionMismatches != null && compatibilityReport.VersionMismatches.Count > 0)
+                    || (compatibilityReport.UnknownReferences != null && compatibilityReport.UnknownReferences.Count > 0)))
+            {
+                items.Add(Item.ActionItem(Item.Action(
+                    ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicModGating,
+                    "Mod Gating Guidance",
+                    "Open why these dependencies are blocked and what to install or update.",
+                    true,
+                    false,
+                    "MOD")));
+            }
+            return items;
+        }
+
+        private static int CountUnsupportedWarnings(ScenarioAuthoringValidationSnapshot validation)
+        {
+            int count = 0;
+            ScenarioValidationIssue[] issues = validation != null ? validation.Issues : null;
+            for (int i = 0; issues != null && i < issues.Length; i++)
+            {
+                string message = issues[i] != null ? issues[i].Message : null;
+                if (message == null)
+                    continue;
+                string text = message.ToLowerInvariant();
+                if (text.IndexOf("not applied at runtime yet") >= 0
+                    || text.IndexOf("unsupported") >= 0
+                    || text.IndexOf("pre-alpha") >= 0)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static ScenarioPublishExportResult GetLastExportResult()
+        {
+            try
+            {
+                ScenarioPublishExportService service = ScenarioCompositionRoot.Resolve<ScenarioPublishExportService>();
+                return service != null ? service.LastResult : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static ScenarioPackageInstallResult GetLastInstallResult()
+        {
+            try
+            {
+                ScenarioPublishExportService service = ScenarioCompositionRoot.Resolve<ScenarioPublishExportService>();
+                return service != null ? service.LastInstallResult : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         internal static List<ScenarioAuthoringInspectorItem> BuildDependencyItems(ScenarioDefinition definition)
@@ -163,18 +673,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        internal static List<ScenarioAuthoringInspectorItem> BuildTimelineItems(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, ScenarioTimelineBuilder timelineBuilder)
+        internal static List<ScenarioAuthoringInspectorItem> BuildTimelineItems(
+            ScenarioDefinition definition,
+            ScenarioRuntimeState runtimeState,
+            ScenarioTimelineBuilder timelineBuilder,
+            bool includeStoryRoutes)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             List<ScenarioTimelineEntry> entries = timelineBuilder != null ? timelineBuilder.BuildEntries(definition, runtimeState) : new List<ScenarioTimelineEntry>();
             for (int i = 0; entries != null && i < entries.Count && i < 12; i++)
             {
                 ScenarioTimelineEntry entry = entries[i];
+                if (!includeStoryRoutes && entry != null && string.Equals(entry.Source, "flow", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 if (entry != null)
                     items.Add(Item.Property("Day " + entry.When.Day + " " + Item.Safe(entry.Title), ScenarioScheduleFormatter.Format(entry.When) + " / " + entry.Kind + " / " + entry.Status));
             }
             if (items.Count == 0)
-                items.Add(Item.Text("No scheduled timeline entries are authored yet."));
+                items.Add(Item.Text(includeStoryRoutes
+                    ? "No scheduled timeline entries are authored yet."
+                    : "No pending or blocked exact-clock actions remain. Story dialogue and branches are tracked by the vanilla encounter flow."));
             return items;
         }
 
@@ -197,6 +715,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioTimelineBuilder _timelineBuilder;
         private readonly ScenarioModDependencyDetector _modDependencyDetector;
         private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
+        private readonly ScenarioAuthorTestChecklistSectionBuilder _testChecklistSectionBuilder;
 
         public ScenarioRuntimeTestAuthoringContentBuilder(
             ScenarioTimelineBuilder timelineBuilder,
@@ -206,18 +725,60 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineBuilder = timelineBuilder;
             _modDependencyDetector = modDependencyDetector;
             _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
+            _testChecklistSectionBuilder = new ScenarioAuthorTestChecklistSectionBuilder(new ScenarioAuthorTestChecklistService());
         }
 
         public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Scenario; } }
 
         public ScenarioAuthoringInspectorSection[] Build(ScenarioAuthoringWindowContentContext context)
         {
+            ScenarioAuthoringState authoringState = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioAuthoringValidationSnapshot validation = ScenarioPublishAuthoringContentBuilder.EvaluateValidation(authoringState, definition);
+            List<ScenarioAuthoringInspectorItem> controlItems = BuildPlaytestControlItems(editorSession, definition, validation);
+            List<ScenarioAuthoringInspectorItem> runSettingItems = BuildRunSettingItems(definition);
+            List<ScenarioAuthoringInspectorItem> preflightItems = ScenarioPublishAuthoringContentBuilder.BuildValidationItems(validation);
+            ScenarioPacingAuthoringSectionBuilder.AddPreflightGuidance(preflightItems, definition, _timelineBuilder);
+            List<ScenarioAuthoringInspectorItem> resultItems = BuildPlaytestResultItems(editorSession);
             List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
-            List<ScenarioAuthoringInspectorItem> pendingItems = ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(definition, ScenarioPublishAuthoringContentBuilder.GetRuntimeState(), _timelineBuilder);
+            List<ScenarioAuthoringInspectorItem> pendingItems = ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(definition, ScenarioPublishAuthoringContentBuilder.GetRuntimeState(), _timelineBuilder, false);
             List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
-            return new[]
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>
             {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_controls",
+                    Title = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "TESTING - Stop & return" : "Playtest Control",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                    Items = controlItems.ToArray()
+                },
+                _testChecklistSectionBuilder.BuildTestSection(definition),
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_run_settings",
+                    Title = "Run Settings",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = runSettingItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_preflight",
+                    Title = "Pre-flight Validation",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = preflightItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_results",
+                    Title = "Results / Summary",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = resultItems.ToArray()
+                },
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "runtime_journal",
@@ -243,6 +804,220 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Items = compatibilityItems.ToArray()
                 }
             };
+            if (editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting)
+                sections.AddRange(ScenarioTestConsoleAuthoringContentBuilder.Build(context));
+            return sections.ToArray();
+        }
+
+        internal ScenarioAuthoringInspectorSection[] BuildStatusFlowSections(ScenarioAuthoringWindowContentContext context)
+        {
+            ScenarioAuthoringState authoringState = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
+            ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioAuthoringValidationSnapshot validation = ScenarioPublishAuthoringContentBuilder.EvaluateValidation(authoringState, definition);
+            bool active = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
+            bool showAdvanced = authoringState != null
+                && authoringState.Settings != null
+                && authoringState.Settings.GetBool("debug.show_advanced_details", false);
+
+            List<ScenarioAuthoringInspectorItem> readinessItems = ScenarioPublishAuthoringContentBuilder.BuildValidationItems(validation);
+            ScenarioPacingAuthoringSectionBuilder.AddPreflightGuidance(readinessItems, definition, _timelineBuilder);
+            ScenarioAuthoringInspectorSection checklist = _testChecklistSectionBuilder.BuildTestSection(definition);
+            if (checklist != null && checklist.Items != null)
+                readinessItems.AddRange(checklist.Items);
+            readinessItems.AddRange(_modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition)));
+
+            ScenarioAuthoringInspectorSection readiness = ScenarioAuthoringStatusFlowSupport.Section(
+                "test_preflight",
+                "Readiness",
+                readinessItems,
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            readiness.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip(
+                    "test.readiness.status",
+                    validation != null && !validation.IsBlocked ? "Ready to test" : "Fix blockers",
+                    validation != null && !validation.IsBlocked ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Error,
+                    null)
+            };
+
+            ScenarioAuthoringInspectorSection runSetup = ScenarioAuthoringStatusFlowSupport.Section(
+                "test_run_settings",
+                "Run setup",
+                BuildRunSettingItems(definition),
+                ScenarioAuthoringInspectorSectionLayout.PropertyList);
+            runSetup.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.run_setup.status", definition != null && definition.SeedOverride.HasValue ? "Fixed seed" : "Random seed", ScenarioAuthoringStatusTone.Informational, null)
+            };
+
+            ScenarioAuthoringInspectorSection controls = ScenarioAuthoringStatusFlowSupport.Section(
+                "test_controls",
+                "Start-stop controls",
+                BuildPlaytestControlItems(editorSession, definition, validation),
+                ScenarioAuthoringInspectorSectionLayout.Summary);
+            controls.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.controls.status", active ? "Playtest running" : "Playtest stopped", active ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Neutral, null)
+            };
+
+            ScenarioAuthoringInspectorSection[] consoleSections = ScenarioTestConsoleAuthoringContentBuilder.Build(context);
+            ScenarioAuthoringInspectorSection liveStatus = FindSection(consoleSections, "test_console_status");
+            liveStatus.Title = "Live status";
+            liveStatus.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.live.status", active ? "Live" : "Waiting to start", active ? ScenarioAuthoringStatusTone.Ready : ScenarioAuthoringStatusTone.Neutral, null)
+            };
+
+            ScenarioAuthoringInspectorSection log = FindSection(consoleSections, "test_console_log");
+            log.Title = "Results / log";
+            List<ScenarioAuthoringInspectorItem> resultAndLogItems = BuildPlaytestResultItems(editorSession);
+            if (log.Items != null)
+                resultAndLogItems.AddRange(log.Items);
+            log.Items = resultAndLogItems.ToArray();
+            log.StatusChips = new[]
+            {
+                ScenarioAuthoringStatusFlowSupport.Chip("test.results.status", active ? "Run in progress" : "Latest run", active ? ScenarioAuthoringStatusTone.Informational : ScenarioAuthoringStatusTone.Neutral, null)
+            };
+
+            ScenarioAuthoringInspectorSection advanced = FindSection(consoleSections, "test_console_advanced");
+            if (showAdvanced)
+            {
+                List<ScenarioAuthoringInspectorItem> advancedItems = new List<ScenarioAuthoringInspectorItem>(
+                    advanced.Items ?? new ScenarioAuthoringInspectorItem[0]);
+                advancedItems.AddRange(BuildRuntimeJournalItems());
+                advancedItems.AddRange(ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(
+                    definition,
+                    ScenarioPublishAuthoringContentBuilder.GetRuntimeState(),
+                    _timelineBuilder,
+                    false));
+                advanced.Items = advancedItems.ToArray();
+            }
+            advanced.IsAdvanced = true;
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>
+            {
+                readiness,
+                runSetup,
+                controls,
+                liveStatus
+            };
+            if (active)
+            {
+                sections.Add(FindSection(consoleSections, "test_console_upcoming"));
+                sections.Add(FindSection(consoleSections, "test_console_controls"));
+            }
+            sections.Add(log);
+            sections.Add(advanced);
+            return sections.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorSection FindSection(
+            ScenarioAuthoringInspectorSection[] sections,
+            string id)
+        {
+            for (int i = 0; sections != null && i < sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = sections[i];
+                if (section != null && string.Equals(section.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return section;
+            }
+            return ScenarioAuthoringStatusFlowSupport.Section(id, string.Empty, new List<ScenarioAuthoringInspectorItem>(), ScenarioAuthoringInspectorSectionLayout.PropertyList);
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildPlaytestControlItems(
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition,
+            ScenarioAuthoringValidationSnapshot validation)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool isPlaytesting = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
+            string playStartReason;
+            bool canStartFromCast = new ScenarioPlayStartReadiness().CanStartPlay(definition, out playStartReason);
+            bool canStart = canStartFromCast && validation != null && validation.ValidationAvailable && validation.ErrorCount == 0;
+            items.Add(Item.Property("State", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"));
+            items.Add(Item.Property("Pre-flight", canStart ? "Ready" : isPlaytesting ? "Already running" : "Blocked"));
+            items.Add(Item.Property("Errors", validation != null ? validation.ErrorCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Property("Warnings", validation != null ? validation.WarningCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Text(isPlaytesting
+                ? "The editor is in live test mode. Use Stop & return here or the slim End Test control in the status bar to restore frozen authoring."
+                : canStartFromCast ? "Start Playtest applies the current draft to the live shelter. Blocking validation errors stop the transition." : playStartReason));
+            ScenarioAuthoringInspectorAction action = Item.Action(
+                ScenarioAuthoringActionIds.ActionPlaytest,
+                isPlaytesting ? "Stop & Return" : "Start Playtest",
+                isPlaytesting ? "Stop playtest and return to frozen authoring." : "Apply the validated draft into the live world.",
+                isPlaytesting || canStart,
+                isPlaytesting || canStart,
+                isPlaytesting ? "ST" : "GO",
+                isPlaytesting ? "Authoring pause is restored immediately." : canStart ? "Pre-flight validation has no blocking errors." : canStartFromCast ? "Fix blocking validation errors first." : playStartReason);
+            if (!action.Enabled)
+            {
+                action.DisabledReason = canStartFromCast ? "Blocking validation errors must be fixed before playtest." : playStartReason;
+                ScenarioAuthoringInspectorAction fixAction = ScenarioPlaytestFixActionResolver.BuildFixAction(playStartReason);
+                if (fixAction != null)
+                    items.Add(Item.ActionItem(fixAction));
+            }
+            items.Add(Item.ActionItem(action));
+            if (isPlaytesting)
+            {
+                items.Add(Item.ActionItem(Item.Action(
+                    ScenarioAuthoringActionIds.ActionPlaytestRestart,
+                    "Restart",
+                    "Save the draft and reload the authored world. This is a full restart, not an in-place tick rewind.",
+                    true,
+                    false,
+                    "RS",
+                    "Reloads through the safe authoring launch path.")));
+            }
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save the current draft.", true, true, "SV")));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildRunSettingItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool fixedSeed = definition != null && definition.SeedOverride.HasValue;
+            string seedValue = fixedSeed ? definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture) : "Random";
+
+            items.Add(Item.Property("Seed Policy", fixedSeed ? "Fixed" : "Random"));
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedRandom,
+                "Random",
+                "Use the current save's ModAPI.ModRandom seed. This is the schema default when no fixed seed is saved.",
+                definition != null,
+                !fixedSeed,
+                "RD")));
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedFixed,
+                "Fixed",
+                "Persist a signed 32-bit seed and reset ModAPI.ModRandom when the scenario applies.",
+                definition != null,
+                fixedSeed,
+                "FX")));
+
+            ScenarioAuthoringInspectorItem seedItem = Item.Property("Fixed Seed", seedValue);
+            seedItem.Editable = fixedSeed;
+            seedItem.HoverHint = fixedSeed
+                ? "Enter a signed 32-bit integer seed."
+                : "Switch to Fixed before editing the seed value.";
+            seedItem.Action = Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedValuePrefix,
+                "Set Seed",
+                seedItem.HoverHint,
+                fixedSeed,
+                false,
+                "SD");
+            items.Add(seedItem);
+
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedReroll,
+                fixedSeed ? "Reroll Fixed Seed" : "Set Random Fixed Seed",
+                "Generate a new fixed seed using ModAPI.ModRandom.",
+                definition != null,
+                false,
+                "RR")));
+            items.Add(Item.Text("Fixed seeds reset ModAPI.ModRandom when playtest or runtime apply starts. Vanilla UnityEngine.Random and System.Random consumers are not controlled."));
+            return items;
         }
 
         private static List<ScenarioAuthoringInspectorItem> BuildRuntimeJournalItems()
@@ -252,6 +1027,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             items.Add(Item.Property("Scenario", Item.Safe(state != null ? state.ScenarioId : null)));
             items.Add(Item.Property("Binding", Item.Safe(state != null ? state.RuntimeBindingId : null)));
+            items.Add(Item.Property("Outcome", Item.Safe(state != null ? state.ScenarioOutcome : null)));
+            if (state != null && !string.IsNullOrEmpty(state.ScenarioOutcomeConditionId))
+                items.Add(Item.Property("Outcome Condition", state.ScenarioOutcomeConditionId));
             items.Add(Item.Property("Last Processed", state != null ? "day " + state.LastProcessedDay + " " + state.LastProcessedHour.ToString("D2") + ":" + state.LastProcessedMinute.ToString("D2") : "None"));
             int count = state != null && state.ExecutedActions != null ? state.ExecutedActions.Count : 0;
             items.Add(Item.Property("Executed Actions", count.ToString()));
@@ -263,14 +1041,84 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             return items;
         }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildPlaytestResultItems(ScenarioEditorSession editorSession)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioRuntimeState state = ScenarioPublishAuthoringContentBuilder.GetRuntimeState();
+            if (editorSession == null)
+            {
+                items.Add(Item.Text("No active editor session."));
+                return items;
+            }
+
+            if (state == null || string.IsNullOrEmpty(state.ScenarioId))
+            {
+                items.Add(Item.Text("No runtime journal has been recorded for this draft yet."));
+                return items;
+            }
+
+            items.Add(Item.Property("Latest Test State", editorSession.PlaytestState.ToString()));
+            items.Add(Item.Property("Day Reached", "day " + state.LastProcessedDay.ToString(CultureInfo.InvariantCulture) + " " + state.LastProcessedHour.ToString("D2") + ":" + state.LastProcessedMinute.ToString("D2")));
+            items.Add(Item.Property(
+                "Outcome",
+                ScenarioAuthoringDisplayNameResolver.ShellRebuild.Resolve(
+                    null,
+                    null,
+                    state.ScenarioOutcome,
+                    "Unresolved").Text));
+            items.Add(Item.Property("World Changes", Count(state.ExecutedActions).ToString(CultureInfo.InvariantCulture) + " actions / " + Count(state.FiredTriggers).ToString(CultureInfo.InvariantCulture) + " triggers / " + Count(state.Flags).ToString(CultureInfo.InvariantCulture) + " flags / " + Count(state.UnlockedBunker).ToString(CultureInfo.InvariantCulture) + " unlocks / " + Count(state.ObjectStates).ToString(CultureInfo.InvariantCulture) + " object states"));
+            int failed = CountRecords(state, ScenarioExecutedActionStatus.Failed);
+            int blocked = CountRecords(state, ScenarioExecutedActionStatus.Blocked);
+            items.Add(Item.Property("Runtime Errors", failed.ToString(CultureInfo.InvariantCulture) + " failed / " + blocked.ToString(CultureInfo.InvariantCulture) + " blocked"));
+            AddRuntimeRecordItems(items, state, ScenarioExecutedActionStatus.Failed, "Failed");
+            AddRuntimeRecordItems(items, state, ScenarioExecutedActionStatus.Blocked, "Blocked");
+            return items;
+        }
+
+        private static void AddRuntimeRecordItems(
+            List<ScenarioAuthoringInspectorItem> items,
+            ScenarioRuntimeState state,
+            ScenarioExecutedActionStatus status,
+            string label)
+        {
+            int added = 0;
+            for (int i = 0; state != null && state.ExecutedActions != null && i < state.ExecutedActions.Count && added < 4; i++)
+            {
+                ScenarioExecutedActionRecord record = state.ExecutedActions[i];
+                if (record == null || record.Status != status)
+                    continue;
+                items.Add(Item.Property(label + " " + Item.Safe(record.ActionKey), string.IsNullOrEmpty(record.Message) ? record.ActionType : record.Message));
+                added++;
+            }
+        }
+
+        private static int Count<T>(IList<T> values)
+        {
+            return values != null ? values.Count : 0;
+        }
+
+        private static int CountRecords(ScenarioRuntimeState state, ScenarioExecutedActionStatus status)
+        {
+            int count = 0;
+            for (int i = 0; state != null && state.ExecutedActions != null && i < state.ExecutedActions.Count; i++)
+            {
+                if (state.ExecutedActions[i] != null && state.ExecutedActions[i].Status == status)
+                    count++;
+            }
+
+            return count;
+        }
     }
 
-    internal sealed class ScenarioCalendarAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
+    internal sealed class ScenarioTimelineAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
     {
+        private const string TimelineDayMetadataPrefix = "timeline-day|";
+        private const string TimelineChipMetadataPrefix = "timeline-chip|";
         private readonly ScenarioTimelineBuilder _timelineBuilder;
         private readonly ScenarioTimelineViewModelBuilder _timelineViewModelBuilder;
 
-        public ScenarioCalendarAuthoringContentBuilder(
+        public ScenarioTimelineAuthoringContentBuilder(
             ScenarioTimelineBuilder timelineBuilder,
             ScenarioTimelineViewModelBuilder timelineViewModelBuilder)
         {
@@ -278,73 +1126,514 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineViewModelBuilder = timelineViewModelBuilder;
         }
 
-        public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Calendar; } }
+        public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Triggers; } }
 
         public ScenarioAuthoringInspectorSection[] Build(ScenarioAuthoringWindowContentContext context)
         {
             ScenarioAuthoringState state = context != null ? context.State : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
             ScenarioRuntimeState runtimeState = ScenarioPublishAuthoringContentBuilder.GetRuntimeState();
-            ScenarioTimelineViewModel model = _timelineViewModelBuilder.Build(_timelineBuilder.BuildDays(definition, runtimeState));
+            List<ScenarioTimelineEntry> entries = _timelineBuilder != null
+                ? _timelineBuilder.BuildEntries(definition, runtimeState)
+                : new List<ScenarioTimelineEntry>();
+            entries.Sort(CompareTimelineEntries);
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-
-            List<ScenarioAuthoringInspectorItem> dayItems = new List<ScenarioAuthoringInspectorItem>();
-            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
-            {
-                ScenarioTimelineDayViewModel day = model.Days[i];
-                dayItems.Add(Item.ActionItem(Item.Action(
-                    ScenarioAuthoringActionIds.ActionTimelineDayPrefix + day.Day.ToString(CultureInfo.InvariantCulture),
-                    "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
-                    day.Count.ToString(CultureInfo.InvariantCulture) + " scheduled item(s).",
-                    true,
-                    false,
-                    day.Badge,
-                    day.Categories)));
-            }
-            if (dayItems.Count == 0)
-                dayItems.Add(Item.Text("No scheduled scenario events are currently authored."));
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {
-                Id = "calendar_days",
-                Title = "Calendar",
+                Id = "timeline_workshop_track",
+                Title = "Scenario Calendar",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = dayItems.ToArray()
+                Items = BuildTimelineTrackItems(state, definition, entries).ToArray()
             });
 
-            string selected = state != null ? state.TimelineSelectionId : null;
-            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
+            sections.Add(ScenarioPacingAuthoringSectionBuilder.BuildTimelineSection(definition, _timelineBuilder));
+
+            sections.Add(new ScenarioAuthoringInspectorSection
             {
-                ScenarioTimelineDayViewModel day = model.Days[i];
-                if (selected != null && !string.Equals(selected, day.Day.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                List<ScenarioAuthoringInspectorItem> entries = new List<ScenarioAuthoringInspectorItem>();
-                for (int e = 0; day.Entries != null && e < day.Entries.Length; e++)
-                {
-                    ScenarioTimelineEntryViewModel entry = day.Entries[e];
-                    entries.Add(Item.ActionItem(Item.Action(
-                        entry.ActionId,
-                        entry.Time + " " + entry.Title,
-                        entry.Type + " / " + entry.OwnerStage + " / " + entry.Status,
-                        true,
-                        entry.Status == "Blocked" || entry.Status == "Failed",
-                        StatusBadge(entry.Status),
-                        string.IsNullOrEmpty(entry.Warning) ? entry.OwnerStage : entry.Warning)));
-                }
-
-                sections.Add(new ScenarioAuthoringInspectorSection
-                {
-                    Id = "calendar_day_" + day.Day.ToString(CultureInfo.InvariantCulture),
-                    Title = "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = entries.ToArray()
-                });
-            }
+                Id = "timeline_logic",
+                Title = "Logic",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = BuildTimelineLogicItems(definition).ToArray()
+            });
 
             return sections.ToArray();
+        }
+
+        private List<ScenarioAuthoringInspectorItem> BuildTimelineTrackItems(ScenarioAuthoringState state, ScenarioDefinition definition, List<ScenarioTimelineEntry> entries)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            AddTimelinePresetActions(items, definition);
+
+            int lastDay = ResolveLastDay(entries);
+            int visibleDayCount = Math.Max(7, lastDay + 2);
+            string currentWeather = GetCurrentWeatherSummary();
+            for (int day = 1; day <= visibleDayCount; day++)
+            {
+                int count = CountEntriesForDay(entries, day);
+                string baseline = day == 1 ? currentWeather : string.Empty;
+                items.Add(Item.ActionItem(TimelineDayAction(day, count, baseline)));
+            }
+
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioTimelineEntry entry = entries[i];
+                if (entry != null)
+                    items.Add(Item.ActionItem(TimelineChipAction(state, definition, entry)));
+            }
+
+            return items;
+        }
+
+        private static void AddTimelinePresetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition)
+        {
+            AddPreset(items, definition, "deliver_supplies", "Deliver supplies", "Add water and canned food at a scheduled time.", "IV");
+            AddPreset(items, definition, "change_weather", "Change weather", "Schedule a rain change using the runtime weather effect.", "WE");
+            AddPreset(items, definition, "visitor_arrives", "Visitor arrives", "Schedule a runtime-supported visitor event.", "SV");
+            AddPreset(items, definition, "journal_message", "Journal message", "Write a scheduled note into the in-game journal.", "JR");
+            AddPreset(items, definition, "start_quest", "Start quest", "Schedule the first authored quest. Add a quest first when this is unavailable.", "QT");
+            AddPreset(items, definition, "set_flag", "Set flag", "Set a milestone flag for later conditions.", "FL");
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Custom change", "Create an empty scheduled change when none of the common plans fit.", true, false, "A+", "Advanced")));
+        }
+
+        private static void AddPreset(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, string presetId, string label, string hint, string icon)
+        {
+            bool enabled = ScenarioTimelinePresetService.CanCreate(definition, presetId);
+            ScenarioAuthoringInspectorAction action = Item.Action(ScenarioAuthoringActionIds.ActionTimelinePresetPrefix + presetId, label, hint, enabled, true, icon, "Preset");
+            if (!enabled)
+                action.DisabledReason = "This preset needs an authored quest first.";
+            items.Add(Item.ActionItem(action));
+        }
+
+        private static ScenarioAuthoringInspectorAction TimelineDayAction(int day, int count, string baseline)
+        {
+            ScenarioAuthoringInspectorAction action = Item.Action(
+                ScenarioAuthoringActionIds.ActionTimelineDayPrefix + day.ToString(CultureInfo.InvariantCulture),
+                "Day " + day.ToString(CultureInfo.InvariantCulture),
+                count.ToString(CultureInfo.InvariantCulture) + " scheduled item(s).",
+                true,
+                count > 0,
+                "D" + day.ToString(CultureInfo.InvariantCulture),
+                baseline,
+                count > 0 ? count.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            action.DisabledReason = TimelineDayMetadataPrefix
+                + day.ToString(CultureInfo.InvariantCulture)
+                + "|"
+                + EscapeMetadata(baseline)
+                + "|"
+                + count.ToString(CultureInfo.InvariantCulture);
+            return action;
+        }
+
+        private static ScenarioAuthoringInspectorAction TimelineChipAction(ScenarioAuthoringState state, ScenarioDefinition definition, ScenarioTimelineEntry entry)
+        {
+            int day = entry != null && entry.When != null ? Math.Max(1, entry.When.Day) : 1;
+            string time = FormatTimelineTime(entry != null ? entry.When : null);
+            string domain = ResolveTimelineDomain(entry);
+            string label = ScenarioTimelineCreatorText.TimelineSummary(definition, entry);
+            string status = entry != null ? entry.Status.ToString() : "Pending";
+            string hint = label + ". Select it to open its workspace document.";
+            if (entry != null && !string.IsNullOrEmpty(entry.Warning))
+                hint = hint + " " + entry.Warning;
+
+            bool emphasized = state != null
+                && entry != null
+                && string.Equals(state.TimelineSelectedEntryId, entry.Id, StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(status, "Blocked", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
+                emphasized = true;
+
+            ScenarioAuthoringInspectorAction action = Item.Action(
+                ScenarioAuthoringActionIds.ActionTimelineEntryPrefix + (entry != null ? entry.Id : string.Empty),
+                label,
+                hint,
+                true,
+                emphasized,
+                ResolveTimelineIconText(domain),
+                ResolveTimelineChipDetail(definition, entry),
+                StatusBadge(status));
+            action.DisabledReason = TimelineChipMetadataPrefix
+                + day.ToString(CultureInfo.InvariantCulture)
+                + "|"
+                + EscapeMetadata(domain)
+                + "|"
+                + EscapeMetadata(time)
+                + "|"
+                + EscapeMetadata(status);
+            return action;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildTimelineLogicItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            List<ScenarioAuthoringInspectorItem> graphItems = ScenarioEventGraphInspectorBuilder.BuildItems(definition);
+            string nodes = FindPropertyValue(graphItems, "Nodes", "0");
+            string edges = FindPropertyValue(graphItems, "Edges", "0");
+            int manualTriggers = CountManualTriggers(definition);
+            int timedTriggers = CountTimedTriggers(definition);
+            int gates = definition != null && definition.Gates != null ? definition.Gates.Count : 0;
+            int flagEffects = CountFlagEffects(definition);
+
+            items.Add(Item.Property("Event Graph", nodes + " nodes / " + edges + " links", "Dependency status for triggers, gates, scheduled effects, quests, and outcomes."));
+            items.Add(Item.Property("Manual Triggers", manualTriggers.ToString(CultureInfo.InvariantCulture), timedTriggers.ToString(CultureInfo.InvariantCulture) + " timed trigger(s) appear on the day track."));
+            items.Add(Item.Property("Conditions / Flags", gates.ToString(CultureInfo.InvariantCulture) + " conditions / " + flagEffects.ToString(CultureInfo.InvariantCulture) + " flag effect(s)", "Untimed gates stay here instead of cluttering the day ruler."));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTriggerAddManual, "Add Manual Trigger", "Create a trigger fired by code or another scheduled effect.", true, false, "T+")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionGateAdd, "Add Condition", "Create a reusable condition for scheduled changes.", true, false, "C+")));
+            return items;
+        }
+
+        private static string FindPropertyValue(List<ScenarioAuthoringInspectorItem> items, string label, string fallback)
+        {
+            for (int i = 0; items != null && i < items.Count; i++)
+            {
+                ScenarioAuthoringInspectorItem item = items[i];
+                if (item != null
+                    && item.Kind == ScenarioAuthoringInspectorItemKind.Property
+                    && string.Equals(item.Label, label, StringComparison.OrdinalIgnoreCase))
+                    return item.Value;
+            }
+
+            return fallback;
+        }
+
+        private static int CountManualTriggers(ScenarioDefinition definition)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+                if (ScenarioTriggerDefinitionCompiler.IsManual(definition.TriggersAndEvents.Triggers[i]))
+                    count++;
+
+            return count;
+        }
+
+        private static int CountTimedTriggers(ScenarioDefinition definition)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+                if (!ScenarioTriggerDefinitionCompiler.IsManual(definition.TriggersAndEvents.Triggers[i]))
+                    count++;
+
+            return count;
+        }
+
+        private static int CountFlagEffects(ScenarioDefinition definition)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                for (int e = 0; action != null && action.Effects != null && e < action.Effects.Count; e++)
+                {
+                    ScenarioEffectDefinition effect = action.Effects[e];
+                    if (effect != null && effect.Kind == ScenarioEffectKind.SetScenarioFlag)
+                        count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static int ResolveLastDay(List<ScenarioTimelineEntry> entries)
+        {
+            int lastDay = 1;
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioTimelineEntry entry = entries[i];
+                if (entry != null && entry.When != null)
+                    lastDay = Math.Max(lastDay, entry.When.Day);
+            }
+
+            return lastDay;
+        }
+
+        private static int CountEntriesForDay(List<ScenarioTimelineEntry> entries, int day)
+        {
+            int count = 0;
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioTimelineEntry entry = entries[i];
+                if (entry != null && entry.When != null && entry.When.Day == day)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static int CompareTimelineEntries(ScenarioTimelineEntry left, ScenarioTimelineEntry right)
+        {
+            if (left == null && right == null)
+                return 0;
+            if (left == null)
+                return 1;
+            if (right == null)
+                return -1;
+
+            int byDay = (left.When != null ? left.When.Day : 1).CompareTo(right.When != null ? right.When.Day : 1);
+            if (byDay != 0)
+                return byDay;
+            int byHour = (left.When != null ? left.When.Hour : 0).CompareTo(right.When != null ? right.When.Hour : 0);
+            if (byHour != 0)
+                return byHour;
+            return (left.When != null ? left.When.Minute : 0).CompareTo(right.When != null ? right.When.Minute : 0);
+        }
+
+        private static string BuildTimelineChipLabel(ScenarioDefinition definition, ScenarioTimelineEntry entry)
+        {
+            if (entry == null)
+                return "Missing entry";
+
+            if (string.Equals(entry.SourceKind, "weather_event", StringComparison.OrdinalIgnoreCase))
+            {
+                WeatherEventDefinition weather = GetWeather(definition, entry.SourceIndex);
+                return weather != null ? FormatWeatherState(weather.WeatherState) : SafeLabel(entry.Title);
+            }
+
+            if (string.Equals(entry.SourceKind, "inventory_change", StringComparison.OrdinalIgnoreCase))
+            {
+                TimedInventoryChangeDefinition change = GetInventoryChange(definition, entry.SourceIndex);
+                if (change != null)
+                    return change.Kind + " " + SafeLabel(change.ItemId) + " x" + Math.Max(0, change.Quantity).ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (string.Equals(entry.SourceKind, "future_survivor", StringComparison.OrdinalIgnoreCase))
+            {
+                FutureSurvivorDefinition survivor = GetFutureSurvivor(definition, entry.SourceIndex);
+                if (survivor != null && survivor.Survivor != null)
+                {
+                    ScenarioActorRef actorRef = survivor.ActorRef != null ? survivor.ActorRef : survivor.Survivor.ActorRef;
+                    return SafeLabel(ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, actorRef, false, true, survivor.Survivor.Name));
+                }
+            }
+
+            if (string.Equals(entry.SourceKind, "scheduled_action", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioScheduledActionDefinition action = GetScheduledAction(definition, entry.SourceIndex);
+                string label = BuildScheduledActionLabel(definition, action);
+                if (!string.IsNullOrEmpty(label))
+                    return label;
+            }
+
+            return SafeLabel(entry.Title);
+        }
+
+        private static string ResolveTimelineChipDetail(ScenarioDefinition definition, ScenarioTimelineEntry entry)
+        {
+            if (entry == null)
+                return null;
+
+            if (string.Equals(entry.SourceKind, "weather_event", StringComparison.OrdinalIgnoreCase))
+            {
+                WeatherEventDefinition weather = GetWeather(definition, entry.SourceIndex);
+                if (weather != null && weather.DurationHours > 0)
+                    return "Restores after " + weather.DurationHours.ToString(CultureInfo.InvariantCulture) + " hour(s)";
+            }
+
+            if (string.Equals(entry.SourceKind, "scheduled_action", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioScheduledActionDefinition action = GetScheduledAction(definition, entry.SourceIndex);
+                if (action != null && !string.IsNullOrEmpty(action.GateId))
+                    return "Condition " + action.GateId;
+            }
+
+            return entry.OwnerStage;
+        }
+
+        private static string BuildScheduledActionLabel(ScenarioDefinition definition, ScenarioScheduledActionDefinition action)
+        {
+            for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
+            {
+                ScenarioEffectDefinition effect = action.Effects[i];
+                if (effect == null)
+                    continue;
+
+                switch (effect.Kind)
+                {
+                    case ScenarioEffectKind.AddInventory:
+                    case ScenarioEffectKind.RemoveInventory:
+                        return (effect.Kind == ScenarioEffectKind.RemoveInventory ? "Remove " : "Add ")
+                            + SafeLabel(effect.ItemId)
+                            + " x"
+                            + Math.Max(0, effect.Quantity).ToString(CultureInfo.InvariantCulture);
+                    case ScenarioEffectKind.SetWeather:
+                    case ScenarioEffectKind.RestoreWeather:
+                        return FormatWeatherState(effect.WeatherState);
+                    case ScenarioEffectKind.SpawnFutureSurvivor:
+                        return SafeLabel(effect.ActorRef != null
+                            ? ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, effect.ActorRef, false, true, effect.SurvivorId ?? effect.TargetId)
+                            : ResolveFutureSurvivorName(definition, effect.SurvivorId ?? effect.TargetId));
+                    case ScenarioEffectKind.StartQuest:
+                        return "Start " + SafeLabel(effect.QuestId);
+                    case ScenarioEffectKind.FireTrigger:
+                        return "Fire " + SafeLabel(effect.TriggerId);
+                    case ScenarioEffectKind.SetScenarioFlag:
+                        return "Flag " + SafeLabel(effect.FlagId);
+                    case ScenarioEffectKind.WorldEvent:
+                        return BuildWorldEventLabel(effect);
+                    case ScenarioEffectKind.UnlockBunkerExpansion:
+                        return "Unlock " + SafeLabel(effect.BunkerExpansionId);
+                    case ScenarioEffectKind.ActivateObject:
+                    case ScenarioEffectKind.DeactivateObject:
+                        return effect.Kind + " " + SafeLabel(effect.ObjectId);
+                }
+            }
+
+            return action != null ? SafeLabel(action.ActionType ?? action.Id) : null;
+        }
+
+        private static string ResolveTimelineDomain(ScenarioTimelineEntry entry)
+        {
+            if (entry == null)
+                return "other";
+
+            switch (entry.Kind)
+            {
+                case ScenarioTimelineEntryKind.Weather:
+                    return "weather";
+                case ScenarioTimelineEntryKind.Inventory:
+                    return "inventory";
+                case ScenarioTimelineEntryKind.Survivor:
+                    return "arrival";
+                case ScenarioTimelineEntryKind.Story:
+                case ScenarioTimelineEntryKind.Quest:
+                    return "story";
+                case ScenarioTimelineEntryKind.WorldEvent:
+                    return "world_event";
+                case ScenarioTimelineEntryKind.Journal:
+                    return "journal";
+                case ScenarioTimelineEntryKind.CustomModded:
+                    return string.Equals(entry.Type, "Trigger", StringComparison.OrdinalIgnoreCase) ? "trigger" : "change";
+                default:
+                    return "change";
+            }
+        }
+
+        private static string ResolveTimelineIconText(string domain)
+        {
+            if (string.Equals(domain, "weather", StringComparison.OrdinalIgnoreCase))
+                return "WE";
+            if (string.Equals(domain, "inventory", StringComparison.OrdinalIgnoreCase))
+                return "IV";
+            if (string.Equals(domain, "arrival", StringComparison.OrdinalIgnoreCase))
+                return "SV";
+            if (string.Equals(domain, "trigger", StringComparison.OrdinalIgnoreCase))
+                return "TR";
+            if (string.Equals(domain, "story", StringComparison.OrdinalIgnoreCase))
+                return "ST";
+            if (string.Equals(domain, "world_event", StringComparison.OrdinalIgnoreCase))
+                return "WEV";
+            if (string.Equals(domain, "journal", StringComparison.OrdinalIgnoreCase))
+                return "JR";
+            return "EV";
+        }
+
+        private static string BuildWorldEventLabel(ScenarioEffectDefinition effect)
+        {
+            string eventType = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "eventType", "WorldEvent");
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                return SafeLabel(ScenarioPropertyBag.GetString(effect.Properties, "npcType", "Passerby"));
+            if (string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase))
+                return "Raid";
+            if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+                return "Broadcast";
+            return SafeLabel(eventType);
+        }
+
+        private static string FormatTimelineTime(ScenarioScheduleTime time)
+        {
+            if (time == null)
+                return "--:--";
+            return time.Hour.ToString("D2", CultureInfo.InvariantCulture) + ":" + time.Minute.ToString("D2", CultureInfo.InvariantCulture);
+        }
+
+        private static string GetCurrentWeatherSummary()
+        {
+            WeatherManager manager = WeatherManager.Instance;
+            if (manager == null)
+                return "Weather unavailable / day 1";
+            return manager.currentState + " / day " + manager.currentDay.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static WeatherEventDefinition GetWeather(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.TriggersAndEvents != null
+                && definition.TriggersAndEvents.WeatherEvents != null
+                && index >= 0
+                && index < definition.TriggersAndEvents.WeatherEvents.Count
+                    ? definition.TriggersAndEvents.WeatherEvents[index]
+                    : null;
+        }
+
+        private static TimedInventoryChangeDefinition GetInventoryChange(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.StartingInventory != null
+                && definition.StartingInventory.ScheduledChanges != null
+                && index >= 0
+                && index < definition.StartingInventory.ScheduledChanges.Count
+                    ? definition.StartingInventory.ScheduledChanges[index]
+                    : null;
+        }
+
+        private static FutureSurvivorDefinition GetFutureSurvivor(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.FamilySetup != null
+                && definition.FamilySetup.FutureSurvivors != null
+                && index >= 0
+                && index < definition.FamilySetup.FutureSurvivors.Count
+                    ? definition.FamilySetup.FutureSurvivors[index]
+                    : null;
+        }
+
+        private static ScenarioScheduledActionDefinition GetScheduledAction(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.ScheduledActions != null
+                && index >= 0
+                && index < definition.ScheduledActions.Count
+                    ? definition.ScheduledActions[index]
+                    : null;
+        }
+
+        private static string ResolveFutureSurvivorName(ScenarioDefinition definition, string id)
+        {
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
+                if (survivor != null && string.Equals(survivor.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return survivor.Survivor != null ? survivor.Survivor.Name : survivor.Id;
+            }
+
+            return id;
+        }
+
+        private static string FormatWeatherState(string state)
+        {
+            if (string.Equals(state, "None", StringComparison.OrdinalIgnoreCase))
+                return "Clear Weather";
+            if (string.Equals(state, "BlackRain", StringComparison.OrdinalIgnoreCase))
+                return "Black Rain";
+            if (string.Equals(state, "LightSand", StringComparison.OrdinalIgnoreCase))
+                return "Light Sandstorm";
+            if (string.Equals(state, "MediumSand", StringComparison.OrdinalIgnoreCase))
+                return "Sandstorm";
+            if (string.Equals(state, "HeavySand", StringComparison.OrdinalIgnoreCase))
+                return "Heavy Sandstorm";
+            return SafeLabel(state);
+        }
+
+        private static string SafeLabel(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "<missing>" : value;
+        }
+
+        private static string EscapeMetadata(string value)
+        {
+            return (value ?? string.Empty).Replace("|", "/");
         }
 
         private static string StatusBadge(string status)

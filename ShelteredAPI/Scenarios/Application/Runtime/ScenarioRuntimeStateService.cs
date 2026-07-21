@@ -45,7 +45,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             return state;
         }
 
-        private static string BuildRuntimeBindingId(ScenarioRuntimeBinding binding, string scenarioId, string version)
+        internal static string BuildRuntimeBindingId(ScenarioRuntimeBinding binding, string scenarioId, string version)
         {
             if (binding == null)
                 return (scenarioId ?? string.Empty) + "@" + (version ?? string.Empty);
@@ -55,7 +55,11 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 + "#"
                 + binding.DayCreated.ToString()
                 + "#"
-                + (binding.LastEditorSaveTick.HasValue ? ("playtest:" + binding.LastEditorSaveTick.Value.ToString()) : "normal");
+                + (!string.IsNullOrEmpty(binding.RunId)
+                    ? ("run:" + binding.RunId)
+                    : binding.LastEditorSaveTick.HasValue
+                        ? ("playtest:" + binding.LastEditorSaveTick.Value.ToString())
+                        : "legacy-normal");
         }
     }
 

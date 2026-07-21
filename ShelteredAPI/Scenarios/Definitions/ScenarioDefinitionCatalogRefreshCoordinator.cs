@@ -25,8 +25,10 @@ namespace ShelteredAPI.Scenarios.Definitions
 
         public void RefreshDefinitionCatalog()
         {
+            int previousRevision = _inner.CatalogRevision;
             _inner.RefreshDefinitionCatalog();
-            RetryActiveScenarioApply();
+            if (_inner.CatalogRevision != previousRevision)
+                RetryActiveScenarioApply();
         }
 
         public ScenarioInfo[] ListDefinitions()

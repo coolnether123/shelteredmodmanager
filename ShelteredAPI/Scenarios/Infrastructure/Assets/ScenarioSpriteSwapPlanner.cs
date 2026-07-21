@@ -24,6 +24,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             public ScenarioSpriteTargetComponentKind TargetComponent;
             public int Day;
             public Sprite Sprite;
+            public int? AnimationFrameIndex;
+            public string AnimationFrameRuntimeSpriteKey;
         }
 
         public List<PlannedSwap> BuildPlan(ScenarioDefinition definition, string scenarioFilePath, int currentDay)
@@ -65,8 +67,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     TargetPath = rule.TargetPath,
                     TargetComponent = rule.TargetComponent,
                     Day = effectiveDay,
-                    Sprite = sprite
+                    Sprite = sprite,
+                    AnimationFrameIndex = rule.AnimationFrameIndex,
+                    AnimationFrameRuntimeSpriteKey = rule.AnimationFrameRuntimeSpriteKey
                 };
+
+                if (!string.IsNullOrEmpty(planned.AnimationFrameRuntimeSpriteKey))
+                {
+                    plan.Add(planned);
+                    continue;
+                }
 
                 PlannedSwap existing;
                 if (!byTarget.TryGetValue(planned.TargetPath, out existing)
@@ -92,6 +102,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             int path = string.Compare(left.TargetPath, right.TargetPath, StringComparison.OrdinalIgnoreCase);
             if (path != 0) return path;
+            int leftFrame = left.AnimationFrameIndex.HasValue ? left.AnimationFrameIndex.Value : -1;
+            int rightFrame = right.AnimationFrameIndex.HasValue ? right.AnimationFrameIndex.Value : -1;
+            int frame = leftFrame.CompareTo(rightFrame);
+            if (frame != 0) return frame;
             return left.Day.CompareTo(right.Day);
         }
     }

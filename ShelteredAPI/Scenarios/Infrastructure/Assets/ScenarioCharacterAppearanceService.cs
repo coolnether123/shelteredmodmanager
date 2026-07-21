@@ -54,6 +54,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private static readonly FieldInfo BaseCharacterLegTextureField = typeof(BaseCharacter).GetField("m_legTexture", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterAvatarSpriteField = typeof(BaseCharacter).GetField("m_avatarSprite", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterMeshIdField = typeof(BaseCharacter).GetField("m_characterMeshId", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo BaseCharacterMaleField = typeof(BaseCharacter).GetField("m_male", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo BaseCharacterChildField = typeof(BaseCharacter).GetField("m_child", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterHairColorField = typeof(BaseCharacter).GetField("m_hairColor", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterSkinColorField = typeof(BaseCharacter).GetField("m_skinColor", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterShirtColorField = typeof(BaseCharacter).GetField("m_shirtColor", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -67,6 +69,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private static readonly string[] FallbackSkinColors = new[] { "#F2C49B", "#D79B72", "#A96E4B", "#70452F", "#3A2419" };
         private static readonly string[] FallbackShirtColors = new[] { "#5F7EA6", "#7D8B55", "#9A4B4B", "#6B5D8F", "#C1A34F", "#535353" };
         private static readonly string[] FallbackPantsColors = new[] { "#2D3B4F", "#4F4A42", "#5E5A35", "#3A3A3A", "#6C513A" };
+
+        private static readonly Color DefaultHairColor = new Color(0.23f, 0.13f, 0.08f, 1f);
+        private static readonly Color DefaultSkinColor = new Color(0.84f, 0.61f, 0.45f, 1f);
+        private static readonly Color DefaultShirtColor = new Color(0.37f, 0.45f, 0.58f, 1f);
+        private static readonly Color DefaultPantsColor = new Color(0.25f, 0.25f, 0.25f, 1f);
 
         private readonly IScenarioSpriteAssetResolver _assetResolver;
 
@@ -250,6 +257,53 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return true;
         }
 
+        public bool AlignLiveMesh(FamilyMemberConfig config, FamilyMember member, out string message)
+        {
+            message = null;
+            if (config == null || member == null)
+            {
+                message = "Character mesh alignment target was unavailable.";
+                return false;
+            }
+
+            string meshId = ResolveConfiguredMeshId(config, member);
+            CharacterMeshOptions.CharacterMeshType meshType = ResolveMeshType(meshId);
+            if (meshType == null || (UnityEngine.Object)meshType.m_meshAsset == (UnityEngine.Object)null)
+            {
+                message = "Character mesh definition '" + meshId + "' could not be resolved.";
+                return false;
+            }
+
+            SanitizeAppearanceTextures(config.Appearance);
+
+            if (BaseCharacterMaleField != null)
+                BaseCharacterMaleField.SetValue(member, meshType.m_male);
+            if (BaseCharacterChildField != null)
+                BaseCharacterChildField.SetValue(member, !meshType.m_adult);
+            if (BaseCharacterMeshIdField != null)
+                BaseCharacterMeshIdField.SetValue(member, meshId);
+
+            CharacterMesh current = BaseCharacterMeshField != null ? BaseCharacterMeshField.GetValue(member) as CharacterMesh : null;
+            if (current != null && string.Equals(current.meshId, meshId, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            CharacterMesh replacement = InstantiateCharacterMesh(member.transform, meshType);
+            if (replacement == null)
+            {
+                message = "Character mesh '" + meshId + "' could not be instantiated.";
+                return false;
+            }
+
+            CharacterMesh old = current;
+            member.SetCharacterMesh(replacement);
+            member.UpdateSpritesAndAnimators();
+            ApplyReplacementDefaults(member, replacement, meshType, config.Appearance);
+            if ((UnityEngine.Object)old != (UnityEngine.Object)null && (UnityEngine.Object)old.gameObject != (UnityEngine.Object)null)
+                UnityEngine.Object.Destroy(old.gameObject);
+
+            return true;
+        }
+
         public string GetCurrentTextureId(ResolvedCharacterTarget target, ScenarioCharacterTexturePart part)
         {
             return GetCurrentTextureId(target != null ? target.Character : null, part);
@@ -395,11 +449,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         public string RandomTextureId(string meshId, ScenarioCharacterTexturePart part)
         {
             CharacterMeshOptions.CharacterMeshType meshType = ResolveMeshType(meshId);
-            if (meshType == null)
+            List<CharacterMeshOptions.CharacterTexture> textures = GetTextureList(meshType, part);
+            if (textures == null || textures.Count == 0)
                 return "default";
 
-            string id = meshType.GetRandomTexture(ToMeshTexturePart(part));
-            return string.IsNullOrEmpty(id) ? "default" : id;
+            int start = UnityEngine.Random.Range(0, textures.Count);
+            for (int offset = 0; offset < textures.Count; offset++)
+            {
+                CharacterMeshOptions.CharacterTexture texture = textures[(start + offset) % textures.Count];
+                if (IsCustomizationTexture(texture))
+                    return texture.m_id;
+            }
+
+            return "default";
         }
 
         public string CycleColorHex(ScenarioCharacterColorPart part, string currentHex, int delta)
@@ -431,15 +493,26 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
         public string RandomColorHex(ScenarioCharacterColorPart part)
         {
-            NpcVisitManager manager = NpcVisitManager.Instance;
-            if ((UnityEngine.Object)manager != (UnityEngine.Object)null)
-                return ToColorHex(manager.GetRandomNpcColor(ToMeshColorPart(part)));
+            List<Color> colors = GetVanillaColorList(part);
+            if (colors != null && colors.Count > 0)
+                return ToColorHex(colors[UnityEngine.Random.Range(0, colors.Count)]);
 
             string[] fallback = GetFallbackColors(part);
             if (fallback == null || fallback.Length == 0)
                 return "#FFFFFF";
 
             return fallback[UnityEngine.Random.Range(0, fallback.Length)];
+        }
+
+        public void SanitizeAppearanceTextures(FamilyMemberAppearanceConfig appearance)
+        {
+            if (appearance == null)
+                return;
+
+            CharacterMeshOptions.CharacterMeshType meshType = ResolveMeshType(appearance.MeshId);
+            SanitizeAppearanceTexture(appearance, meshType, ScenarioCharacterTexturePart.Head);
+            SanitizeAppearanceTexture(appearance, meshType, ScenarioCharacterTexturePart.Torso);
+            SanitizeAppearanceTexture(appearance, meshType, ScenarioCharacterTexturePart.Legs);
         }
 
         public static string ToColorHex(Color color)
@@ -449,6 +522,33 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 + ToByte(color.g).ToString("X2")
                 + ToByte(color.b).ToString("X2")
                 + ToByte(color.a).ToString("X2");
+        }
+
+        public static void ResolveConfiguredColors(
+            FamilyMemberAppearanceConfig appearance,
+            out Color hair,
+            out Color skin,
+            out Color shirt,
+            out Color pants)
+        {
+            hair = DefaultHairColor;
+            skin = DefaultSkinColor;
+            shirt = DefaultShirtColor;
+            pants = DefaultPantsColor;
+            if (appearance == null)
+                return;
+
+            ApplyConfiguredColorValue(appearance.HairColorHex, ref hair);
+            ApplyConfiguredColorValue(appearance.SkinColorHex, ref skin);
+            ApplyConfiguredColorValue(appearance.ShirtColorHex, ref shirt);
+            ApplyConfiguredColorValue(appearance.PantsColorHex, ref pants);
+        }
+
+        private static void ApplyConfiguredColorValue(string colorHex, ref Color target)
+        {
+            Color parsed;
+            if (TryParseColorHex(colorHex, out parsed))
+                target = parsed;
         }
 
         public static bool TryParseColorHex(string value, out Color color)
@@ -500,6 +600,166 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             }
 
             ApplyTextureId(target, part, configuredId, null, out message);
+        }
+
+        private static CharacterMesh InstantiateCharacterMesh(Transform parent, CharacterMeshOptions.CharacterMeshType meshType)
+        {
+            if (parent == null || meshType == null || (UnityEngine.Object)meshType.m_meshAsset == (UnityEngine.Object)null)
+                return null;
+
+            GameObject meshObject = UnityEngine.Object.Instantiate(meshType.m_meshAsset) as GameObject;
+            if ((UnityEngine.Object)meshObject == (UnityEngine.Object)null)
+                return null;
+
+            meshObject.name = "mesh";
+            meshObject.transform.parent = parent;
+            meshObject.transform.localPosition = meshType.m_meshOffset;
+            meshObject.transform.localScale = Vector3.one;
+            meshObject.transform.rotation = Quaternion.Euler(new Vector3(0f, 180f, 0f));
+            meshObject.AddComponent<CharacterAnimEvents>();
+
+            CharacterMesh mesh = meshObject.AddComponent<CharacterMesh>();
+            if ((UnityEngine.Object)mesh == (UnityEngine.Object)null)
+            {
+                UnityEngine.Object.Destroy(meshObject);
+                return null;
+            }
+
+            mesh.SetMeshType(meshType, "CharacterMesh");
+            DayNightTransition tint = meshObject.AddComponent<DayNightTransition>();
+            if ((UnityEngine.Object)tint != (UnityEngine.Object)null)
+            {
+                tint.TransitionColor1 = new Color(0.3529412f, 0.392156869f, 0.7058824f);
+                tint.checkForChild = false;
+                tint.checkRecursive = false;
+                tint.alphaTransition = false;
+                tint.particleTransition = false;
+            }
+
+            Animator animator = meshObject.GetComponent<Animator>();
+            if ((UnityEngine.Object)animator != (UnityEngine.Object)null)
+            {
+                animator.runtimeAnimatorController = meshType.m_anims;
+                animator.updateMode = AnimatorUpdateMode.UnscaledTime;
+            }
+
+            return mesh;
+        }
+
+        private void ApplyReplacementDefaults(
+            FamilyMember member,
+            CharacterMesh mesh,
+            CharacterMeshOptions.CharacterMeshType meshType,
+            FamilyMemberAppearanceConfig appearance)
+        {
+            if (member == null || mesh == null)
+                return;
+
+            mesh.SetColor(CharacterMesh.ColorCustomization.HairColor, member.hairColor);
+            mesh.SetColor(CharacterMesh.ColorCustomization.SkinColor, member.skinColor);
+            mesh.SetColor(CharacterMesh.ColorCustomization.ShirtColor, member.shirtColor);
+            mesh.SetColor(CharacterMesh.ColorCustomization.PantsColor, member.pantsColor);
+
+            ResolvedCharacterTarget target = new ResolvedCharacterTarget
+            {
+                FamilyMember = member,
+                Character = member,
+                Mesh = mesh,
+                MeshType = meshType,
+                FamilyIndex = FindFamilyIndex(member),
+                DisplayName = member.firstName
+            };
+
+            string ignored;
+            ApplyTextureId(target, ScenarioCharacterTexturePart.Head, GetAppearanceTextureId(appearance, ScenarioCharacterTexturePart.Head) ?? "default", null, out ignored);
+            ApplyTextureId(target, ScenarioCharacterTexturePart.Torso, GetAppearanceTextureId(appearance, ScenarioCharacterTexturePart.Torso) ?? "default", null, out ignored);
+            ApplyTextureId(target, ScenarioCharacterTexturePart.Legs, GetAppearanceTextureId(appearance, ScenarioCharacterTexturePart.Legs) ?? "default", null, out ignored);
+        }
+
+        private static string ResolveConfiguredMeshId(FamilyMemberConfig config, FamilyMember member)
+        {
+            if (config != null && config.Appearance != null && !string.IsNullOrEmpty(config.Appearance.MeshId))
+                return config.Appearance.MeshId;
+
+            ScenarioGender gender = config != null ? config.Gender : ScenarioGender.Any;
+            if (gender == ScenarioGender.Any && member != null)
+                gender = member.isMale ? ScenarioGender.Male : ScenarioGender.Female;
+
+            bool adult = member == null || member.isAdult;
+            if (config != null && config.Appearance != null && config.Appearance.IsAdult.HasValue)
+                adult = config.Appearance.IsAdult.Value;
+            else if (config != null && config.ExactAge.HasValue)
+                adult = config.ExactAge.Value >= 18;
+
+            if (gender == ScenarioGender.Female)
+                return adult ? "woman" : "girl";
+            return adult ? "man" : "boy";
+        }
+
+        private static void SanitizeAppearanceTexture(
+            FamilyMemberAppearanceConfig appearance,
+            CharacterMeshOptions.CharacterMeshType meshType,
+            ScenarioCharacterTexturePart part)
+        {
+            string textureId = GetAppearanceTextureId(appearance, part);
+            if (string.IsNullOrEmpty(textureId) || FindTextureEntry(meshType, part, textureId) != null)
+                return;
+
+            string texturePath = GetAppearanceTexturePath(appearance, part);
+            if (!string.IsNullOrEmpty(texturePath) && !string.IsNullOrEmpty(texturePath.Trim()))
+                return;
+
+            UpsertAppearanceTexture(appearance, part, "default", null);
+        }
+
+        private static string GetAppearanceTextureId(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part)
+        {
+            if (appearance == null)
+                return null;
+
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head: return appearance.HeadTextureId;
+                case ScenarioCharacterTexturePart.Torso: return appearance.TorsoTextureId;
+                case ScenarioCharacterTexturePart.Legs: return appearance.LegTextureId;
+                default: return null;
+            }
+        }
+
+        private static string GetAppearanceTexturePath(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part)
+        {
+            if (appearance == null)
+                return null;
+
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head: return appearance.HeadTexturePath;
+                case ScenarioCharacterTexturePart.Torso: return appearance.TorsoTexturePath;
+                case ScenarioCharacterTexturePart.Legs: return appearance.LegTexturePath;
+                default: return null;
+            }
+        }
+
+        private static void UpsertAppearanceTexture(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part, string textureId, string texturePath)
+        {
+            if (appearance == null)
+                return;
+
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head:
+                    appearance.HeadTextureId = textureId;
+                    appearance.HeadTexturePath = texturePath;
+                    break;
+                case ScenarioCharacterTexturePart.Torso:
+                    appearance.TorsoTextureId = textureId;
+                    appearance.TorsoTexturePath = texturePath;
+                    break;
+                case ScenarioCharacterTexturePart.Legs:
+                    appearance.LegTextureId = textureId;
+                    appearance.LegTexturePath = texturePath;
+                    break;
+            }
         }
 
         private void ApplyConfiguredColors(ResolvedCharacterTarget target, FamilyMemberAppearanceConfig appearance)
@@ -598,6 +858,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return false;
             }
 
+            CharacterMesh.TextureType meshPart = ToMeshTexturePart(part);
+            target.Mesh.SetTexture(meshPart, textureId);
+            if (!string.Equals(GetMeshTextureId(target.Mesh, part), textureId, StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Character mesh rejected texture '" + textureId + "'.";
+                return false;
+            }
+
             switch (part)
             {
                 case ScenarioCharacterTexturePart.Head:
@@ -605,23 +873,38 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                         BaseCharacterMeshIdField.SetValue(target.Character, target.Mesh.meshId);
                     if (BaseCharacterHeadTextureField != null)
                         BaseCharacterHeadTextureField.SetValue(target.Character, textureId);
-                    target.Mesh.SetTexture(CharacterMesh.TextureType.Head, textureId);
                     SetAvatarSprite(target, textureId, avatarSprite);
                     break;
                 case ScenarioCharacterTexturePart.Torso:
                     if (BaseCharacterTorsoTextureField != null)
                         BaseCharacterTorsoTextureField.SetValue(target.Character, textureId);
-                    target.Mesh.SetTexture(CharacterMesh.TextureType.Torso, textureId);
                     break;
                 case ScenarioCharacterTexturePart.Legs:
                     if (BaseCharacterLegTextureField != null)
                         BaseCharacterLegTextureField.SetValue(target.Character, textureId);
-                    target.Mesh.SetTexture(CharacterMesh.TextureType.Legs, textureId);
                     break;
             }
 
             target.Mesh.RefreshTextures();
             return true;
+        }
+
+        private static string GetMeshTextureId(CharacterMesh mesh, ScenarioCharacterTexturePart part)
+        {
+            if (mesh == null)
+                return null;
+
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head:
+                    return mesh.headTexture;
+                case ScenarioCharacterTexturePart.Torso:
+                    return mesh.torsoTexture;
+                case ScenarioCharacterTexturePart.Legs:
+                    return mesh.legTexture;
+                default:
+                    return null;
+            }
         }
 
         private void SetAvatarSprite(ResolvedCharacterTarget target, string textureId, Sprite fallback)

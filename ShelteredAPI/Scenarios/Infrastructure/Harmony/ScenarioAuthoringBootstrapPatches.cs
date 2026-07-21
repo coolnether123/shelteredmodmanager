@@ -14,10 +14,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
         ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = true,
+        ManagerToggleDefault = false,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringBootstrapPatches
     {
         private static bool _loggedCameraSuspension;
@@ -36,7 +36,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             try
             {
                 if (!ScenarioAuthoringRuntimeGuards.ShouldSuspendCameraUpdateForAuthoring())
+                {
+                    _loggedCameraSuspension = false;
                     return true;
+                }
 
                 if (!_loggedCameraSuspension)
                 {

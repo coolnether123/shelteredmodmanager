@@ -25,9 +25,20 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             ScenarioValidationResult result = _neutralValidator.Validate(definition, scenarioFilePath);
             if (result == null)
                 result = new ScenarioValidationResult();
+            ValidateSeed(definition, result);
             ValidateLoadableAssets(definition, scenarioFilePath, result);
             ValidateBunkerAuthoringPlacements(definition, result);
             return result;
+        }
+
+        private static void ValidateSeed(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null || result == null || !definition.SeedOverride.HasValue)
+                return;
+
+            long seed = definition.SeedOverride.Value;
+            if (seed < int.MinValue || seed > int.MaxValue)
+                result.AddError("Fixed scenario seed must fit in a signed 32-bit integer.");
         }
 
         private static void ValidateLoadableAssets(ScenarioDefinition definition, string scenarioFilePath, ScenarioValidationResult result)

@@ -23,10 +23,10 @@ namespace ShelteredAPI.Scenarios.Application.Objects{
         public ScenarioObjectIdentityAssignmentSummary AssignMissingIds(ScenarioEditorSession session)
         {
             ScenarioObjectIdentityAssignmentSummary summary = AssignMissingIds(session != null ? session.WorkingDefinition : null);
-            if (summary.AssignedCount > 0 && session != null && !session.DirtyFlags.Contains(ScenarioDirtySection.Bunker))
-                session.DirtyFlags.Add(ScenarioDirtySection.Bunker);
-            if (summary.AssignedAssetCount > 0 && session != null && !session.DirtyFlags.Contains(ScenarioDirtySection.Assets))
-                session.DirtyFlags.Add(ScenarioDirtySection.Assets);
+            if ((summary.AssignedBunkerCount > 0 || summary.AssignedBunkerRuntimeBindingCount > 0) && session != null)
+                session.MarkDraftChanged(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
+            if ((summary.AssignedAssetCount > 0 || summary.AssignedAssetRuntimeBindingCount > 0) && session != null)
+                session.MarkDraftChanged(ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
             return summary;
         }
 
@@ -43,12 +43,14 @@ namespace ShelteredAPI.Scenarios.Application.Objects{
                 {
                     placement.ScenarioObjectId = id;
                     summary.AssignedCount++;
+                    summary.AssignedBunkerCount++;
                     summary.Messages.Add("Assigned object id " + id + ".");
                 }
                 if (string.IsNullOrEmpty(placement.RuntimeBindingKey))
                 {
                     placement.RuntimeBindingKey = "binding:" + placement.ScenarioObjectId;
                     summary.AssignedRuntimeBindingCount++;
+                    summary.AssignedBunkerRuntimeBindingCount++;
                 }
             }
         }
@@ -75,6 +77,7 @@ namespace ShelteredAPI.Scenarios.Application.Objects{
                 {
                     placement.RuntimeBindingKey = "binding:" + placement.ScenarioObjectId;
                     summary.AssignedRuntimeBindingCount++;
+                    summary.AssignedAssetRuntimeBindingCount++;
                 }
             }
         }
@@ -124,7 +127,10 @@ namespace ShelteredAPI.Scenarios.Application.Objects{
         }
 
         public int AssignedCount { get; set; }
+        public int AssignedBunkerCount { get; set; }
         public int AssignedRuntimeBindingCount { get; set; }
+        public int AssignedBunkerRuntimeBindingCount { get; set; }
+        public int AssignedAssetRuntimeBindingCount { get; set; }
         public int AssignedAssetCount { get; set; }
         public List<string> Messages { get; private set; }
     }

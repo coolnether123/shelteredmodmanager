@@ -6,22 +6,32 @@ using UnityEngine;
 
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCaptureService
     {
         private readonly IScenarioDraftMutationService _draftMutationService;
+        private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
 
         public static ScenarioAuthoringCaptureService Instance
         {
             get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCaptureService>(); }
         }
 
-        internal ScenarioAuthoringCaptureService(IScenarioDraftMutationService draftMutationService)
+        internal ScenarioAuthoringCaptureService(
+            IScenarioDraftMutationService draftMutationService,
+            ScenarioActorResolver actorResolver,
+            ScenarioObjectIdentityAssignmentService identityAssignmentService)
         {
             _draftMutationService = draftMutationService;
+            _actorResolver = actorResolver;
+            _identityAssignmentService = identityAssignmentService;
         }
 
         public bool CaptureCurrentFamily(ScenarioEditorSession session, out string message)
@@ -47,6 +57,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
+            RecordUndo(session, "Capture survivors from world");
             FamilySetupDefinition familySetup = session.WorkingDefinition.FamilySetup ?? new FamilySetupDefinition();
             familySetup.OverrideVanillaFamily = true;
             familySetup.Members.Clear();
@@ -59,12 +70,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     continue;
 
                 FamilyMemberConfig config = new FamilyMemberConfig();
-                config.Name = member.firstName;
-                config.Gender = member.isMale ? ScenarioGender.Male : ScenarioGender.Female;
-
-                CaptureStats(member, config);
-                CaptureTraits(member, config);
-                ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
+                CaptureLiveFamilyMember(member, config);
+                if (_actorResolver != null)
+                    config.ActorRef = _actorResolver.CreateLiveFamilyMemberRef(member);
 
                 familySetup.Members.Add(config);
                 captured++;
@@ -72,12 +80,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             session.WorkingDefinition.FamilySetup = familySetup;
             MarkCaptured(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
-            message = "Captured current family snapshot: " + captured + " member(s).";
+            message = "Captured " + captured + " survivors from the world.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
 
-        public bool CaptureCurrentInventory(ScenarioEditorSession session, out string message)
+        public bool CaptureCurrentFamilyIfEmpty(ScenarioEditorSession session, out string message)
         {
             message = null;
             if (session == null || session.WorkingDefinition == null)
@@ -86,42 +94,54 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
-            InventoryManager inventoryManager = InventoryManager.Instance;
-            if (inventoryManager == null)
+            FamilySetupDefinition existing = session.WorkingDefinition.FamilySetup;
+            if (existing != null && existing.Members != null && existing.Members.Count > 0)
             {
-                message = "InventoryManager is not ready; inventory capture skipped.";
+                message = "Starting cast already has authored survivors; auto-populate skipped.";
+                return true;
+            }
+
+            return CaptureCurrentFamily(session, out message);
+        }
+
+        public bool BuildFamilyCapturePreview(ScenarioEditorSession session, out ScenarioCapturePreview preview, out string message)
+        {
+            preview = null;
+            message = null;
+            if (session == null || session.WorkingDefinition == null)
+            {
+                message = "No active authoring session is available.";
                 return false;
             }
 
-            List<ItemStack> liveStacks = inventoryManager.GetItems();
-            StartingInventoryDefinition inventory = session.WorkingDefinition.StartingInventory ?? new StartingInventoryDefinition();
-            inventory.OverrideRandomStart = true;
-            inventory.Items.Clear();
-
-            int totalItems = 0;
-            List<ItemEntry> capturedItems = new List<ItemEntry>();
-            for (int i = 0; liveStacks != null && i < liveStacks.Count; i++)
+            FamilyManager familyManager = FamilyManager.Instance;
+            List<FamilyMember> liveMembers = familyManager != null ? familyManager.GetAllFamilyMembers() : null;
+            if (liveMembers == null || liveMembers.Count == 0)
             {
-                ItemStack stack = liveStacks[i];
-                if (stack == null || stack.m_type == ItemManager.ItemType.Undefined || stack.m_count <= 0)
-                    continue;
-
-                capturedItems.Add(new ItemEntry
-                {
-                    ItemId = stack.m_type.ToString(),
-                    Quantity = stack.m_count
-                });
-                totalItems += stack.m_count;
+                message = familyManager == null
+                    ? "FamilyManager is not ready; family capture preview is unavailable."
+                    : "No live family members were available to capture.";
+                return false;
             }
 
-            capturedItems.Sort(CompareItemEntries);
-            for (int i = 0; i < capturedItems.Count; i++)
-                inventory.Items.Add(capturedItems[i]);
+            List<FamilyMemberConfig> captured = new List<FamilyMemberConfig>();
+            for (int i = 0; i < liveMembers.Count; i++)
+            {
+                FamilyMember member = liveMembers[i];
+                if (member == null)
+                    continue;
 
-            session.WorkingDefinition.StartingInventory = inventory;
-            MarkCaptured(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
-            message = "Captured current inventory snapshot: " + capturedItems.Count + " stack(s), " + totalItems + " total item(s).";
-            MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
+                FamilyMemberConfig config = new FamilyMemberConfig();
+                CaptureLiveFamilyMember(member, config);
+                if (_actorResolver != null)
+                    config.ActorRef = _actorResolver.CreateLiveFamilyMemberRef(member);
+                captured.Add(config);
+            }
+
+            FamilySetupDefinition family = session.WorkingDefinition.FamilySetup;
+            List<FamilyMemberConfig> current = family != null ? family.Members : null;
+            preview = ScenarioCapturePreview.Create("family", "Starting Survivors", captured.Count, 0);
+            AddFamilyDiffLines(preview, current, captured);
             return true;
         }
 
@@ -158,7 +178,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             bunkerEdits.ObjectPlacements.Clear();
 
-            List<Obj_Base> liveObjects = objectManager.GetAllObjects();
+            List<Obj_Base> liveObjects = ScenarioLiveShelterObjectCatalog.Discover();
             List<ObjectPlacement> captured = new List<ObjectPlacement>(preserved);
             for (int i = 0; liveObjects != null && i < liveObjects.Count; i++)
             {
@@ -174,11 +194,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 bunkerEdits.ObjectPlacements.Add(captured[i]);
 
             session.WorkingDefinition.BunkerEdits = bunkerEdits;
+            AssignMissingObjectIdentities(session);
             _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
             int liveCapturedCount = Math.Max(0, captured.Count - preserved.Count);
             message = captured.Count > 0
-                ? "Captured " + liveCapturedCount + " live spawned shelter object placement(s)."
-                : "No eligible spawned shelter objects were found; captured placement list cleared.";
+                ? "Captured " + liveCapturedCount + " live shelter object placement(s)."
+                : "No eligible shelter objects were found; captured placement list cleared.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
@@ -221,6 +242,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             bunkerEdits.ObjectPlacements.Sort(ComparePlacements);
+            AssignMissingObjectIdentities(session);
             _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
@@ -229,30 +251,44 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool RemoveSelectedObjectPlacement(ScenarioEditorSession session, ScenarioAuthoringTarget target, out string message)
         {
             message = null;
-            if (session == null || session.WorkingDefinition == null || session.WorkingDefinition.BunkerEdits == null)
+            if (session == null || session.WorkingDefinition == null)
             {
                 message = "No captured shelter object placements are available.";
                 return false;
             }
 
-            Obj_Base obj;
-            string blockingReason;
-            if (!TryResolveCapturableObject(target, out obj, out blockingReason))
+            BunkerEditsDefinition bunkerEdits;
+            if (!_draftMutationService.TryEnsureBunkerEdits(out bunkerEdits) || bunkerEdits == null || bunkerEdits.ObjectPlacements == null)
             {
-                message = blockingReason;
+                message = "No active scenario draft is available for selected-object placement removal.";
                 return false;
             }
 
-            int index = ScenarioBunkerDraftService.FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj);
+            string displayName;
+            int beforeCount = bunkerEdits.ObjectPlacements.Count;
+            int index = FindPlacementIndexForTarget(bunkerEdits.ObjectPlacements, target, out displayName);
             if (index < 0)
             {
                 message = "The selected object does not have a captured scenario placement.";
                 return false;
             }
 
-            session.WorkingDefinition.BunkerEdits.ObjectPlacements.RemoveAt(index);
-            _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
-            message = "Removed captured placement for '" + SafeObjectName(obj) + "'.";
+            ObjectPlacement matchedPlacement = bunkerEdits.ObjectPlacements[index];
+            string placementName = FormatPlacementName(matchedPlacement, displayName);
+            bool removed = _draftMutationService.TryRemovePlacement(delegate(ObjectPlacement placement)
+            {
+                return ReferenceEquals(placement, matchedPlacement) || PlacementMatchesTarget(placement, target);
+            });
+
+            int afterCount = bunkerEdits.ObjectPlacements.Count;
+            if (!removed || afterCount >= beforeCount)
+            {
+                message = "No matching draft placement was removed for '" + Safe(placementName) + "'.";
+                MMLog.WriteWarning("[ScenarioAuthoringCapture] " + message + " before=" + beforeCount + " after=" + afterCount + ".");
+                return false;
+            }
+
+            message = "Removed placement '" + Safe(placementName) + "' from the scenario draft.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
@@ -268,12 +304,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null || session.WorkingDefinition == null || session.WorkingDefinition.BunkerEdits == null)
                 return false;
 
-            Obj_Base obj;
             string ignored;
-            if (!TryResolveCapturableObject(target, out obj, out ignored))
-                return false;
-
-            return ScenarioBunkerDraftService.FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj) >= 0;
+            return FindPlacementIndexForTarget(session.WorkingDefinition.BunkerEdits.ObjectPlacements, target, out ignored) >= 0;
         }
 
         private static void CaptureStats(FamilyMember member, FamilyMemberConfig config)
@@ -310,6 +342,183 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 config.Traits.Add("Weakness:" + weaknesses[i]);
         }
 
+        private static void CaptureLiveFamilyMember(FamilyMember member, FamilyMemberConfig config)
+        {
+            if (member == null || config == null)
+                return;
+
+            config.Name = member.firstName;
+            config.Gender = member.isMale ? ScenarioGender.Male : ScenarioGender.Female;
+            CaptureStats(member, config);
+            CaptureTraits(member, config);
+            ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
+        }
+
+        private static void AddFamilyDiffLines(ScenarioCapturePreview preview, List<FamilyMemberConfig> current, List<FamilyMemberConfig> captured)
+        {
+            bool[] matchedCurrent = new bool[current != null ? current.Count : 0];
+            for (int i = 0; captured != null && i < captured.Count; i++)
+            {
+                FamilyMemberConfig next = captured[i];
+                int existing = FindFamilyByActorRef(current, next != null ? next.ActorRef : null, matchedCurrent);
+                if (existing < 0)
+                    existing = FindFamilyByName(current, next != null ? next.Name : null, matchedCurrent);
+                if (existing < 0)
+                {
+                    preview.AddAdd("Add " + Safe(next != null ? next.Name : null) + " (" + FormatFamilyPreview(next) + ")");
+                    continue;
+                }
+
+                matchedCurrent[existing] = true;
+                FamilyMemberConfig previous = current[existing];
+                if (!string.Equals(FormatFamilyPreview(previous), FormatFamilyPreview(next), StringComparison.Ordinal))
+                    preview.AddChange("Change " + Safe(next != null ? next.Name : null) + " from " + FormatFamilyPreview(previous) + " to " + FormatFamilyPreview(next));
+            }
+
+            for (int i = 0; current != null && i < current.Count; i++)
+            {
+                if (!matchedCurrent[i])
+                    preview.AddRemoval("Remove authored survivor " + Safe(current[i] != null ? current[i].Name : null));
+            }
+        }
+
+        private static int FindFamilyByName(List<FamilyMemberConfig> members, string name, bool[] excluded)
+        {
+            for (int i = 0; members != null && i < members.Count; i++)
+            {
+                if (excluded != null && i < excluded.Length && excluded[i])
+                    continue;
+                FamilyMemberConfig member = members[i];
+                if (member != null && string.Equals(member.Name ?? string.Empty, name ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+            return -1;
+        }
+
+        private static int FindFamilyByActorRef(List<FamilyMemberConfig> members, ScenarioActorRef actorRef, bool[] excluded)
+        {
+            if (actorRef == null)
+                return -1;
+
+            for (int i = 0; members != null && i < members.Count; i++)
+            {
+                if (excluded != null && i < excluded.Length && excluded[i])
+                    continue;
+                FamilyMemberConfig member = members[i];
+                if (member != null && SameActorRef(member.ActorRef, actorRef))
+                    return i;
+            }
+            return -1;
+        }
+
+        private static bool SameActorRef(ScenarioActorRef left, ScenarioActorRef right)
+        {
+            if (left == null || right == null)
+                return false;
+            if (!string.IsNullOrEmpty(left.BindingType)
+                && !string.IsNullOrEmpty(left.BindingKey)
+                && string.Equals(left.BindingType, right.BindingType, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.BindingKey, right.BindingKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(left.Kind, right.Kind, StringComparison.OrdinalIgnoreCase)
+                && left.LocalId == right.LocalId
+                && string.Equals(left.Domain ?? string.Empty, right.Domain ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FormatFamilyPreview(FamilyMemberConfig member)
+        {
+            if (member == null)
+                return "empty";
+
+            string body = member.Gender.ToString();
+            int strength = FindStat(member, "Strength");
+            int dexterity = FindStat(member, "Dexterity");
+            int intelligence = FindStat(member, "Intelligence");
+            return body + ", Str " + strength.ToString() + ", Dex " + dexterity.ToString() + ", Int " + intelligence.ToString()
+                + ", " + FindTrait(member, "Strength:") + "/" + FindTrait(member, "Weakness:");
+        }
+
+        private static int FindStat(FamilyMemberConfig member, string statId)
+        {
+            for (int i = 0; member != null && member.Stats != null && i < member.Stats.Count; i++)
+            {
+                StatOverride stat = member.Stats[i];
+                if (stat != null && string.Equals(stat.StatId, statId, StringComparison.OrdinalIgnoreCase))
+                    return stat.Value;
+            }
+            return 0;
+        }
+
+        private static string FindTrait(FamilyMemberConfig member, string prefix)
+        {
+            for (int i = 0; member != null && member.Traits != null && i < member.Traits.Count; i++)
+            {
+                string trait = member.Traits[i];
+                if (!string.IsNullOrEmpty(trait) && trait.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return trait.Substring(prefix.Length);
+            }
+            return "none";
+        }
+
+        private static void RecordUndo(ScenarioEditorSession session, string description)
+        {
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null && session != null)
+                history.RecordVisualChange(session.WorkingDefinition, description);
+        }
+
+        private static string Safe(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "<none>" : value;
+        }
+
+        internal sealed class ScenarioCapturePreview
+        {
+            private readonly List<string> _lines = new List<string>();
+
+            public string Kind { get; private set; }
+            public string Title { get; private set; }
+            public int SourceCount { get; private set; }
+            public int TotalQuantity { get; private set; }
+            public int Additions { get; private set; }
+            public int Changes { get; private set; }
+            public int Removals { get; private set; }
+            public IList<string> Lines { get { return _lines; } }
+            public bool HasChanges { get { return Additions > 0 || Changes > 0 || Removals > 0; } }
+
+            public static ScenarioCapturePreview Create(string kind, string title, int sourceCount, int totalQuantity)
+            {
+                return new ScenarioCapturePreview
+                {
+                    Kind = kind,
+                    Title = title,
+                    SourceCount = sourceCount,
+                    TotalQuantity = totalQuantity
+                };
+            }
+
+            public void AddAdd(string line)
+            {
+                Additions++;
+                _lines.Add(line);
+            }
+
+            public void AddChange(string line)
+            {
+                Changes++;
+                _lines.Add(line);
+            }
+
+            public void AddRemoval(string line)
+            {
+                Removals++;
+                _lines.Add(line);
+            }
+        }
+
         private static bool TryResolveCapturableObject(ScenarioAuthoringTarget target, out Obj_Base obj, out string reason)
         {
             obj = null;
@@ -330,13 +539,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             obj = gameObject != null ? gameObject.GetComponent<Obj_Base>() : null;
             if (obj == null)
             {
-                reason = "The selected target is not a spawned shelter object.";
-                return false;
-            }
-
-            if (obj.initialObject)
-            {
-                reason = "The selected object belongs to the bunker's initial layout. This first-pass editor only captures spawned shelter objects.";
+                reason = "The selected target is not a shelter object.";
                 return false;
             }
 
@@ -349,9 +552,113 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return true;
         }
 
+        private static int FindPlacementIndexForTarget(List<ObjectPlacement> placements, ScenarioAuthoringTarget target, out string displayName)
+        {
+            displayName = target != null ? target.DisplayName : null;
+            if (placements == null || target == null)
+                return -1;
+
+            Obj_Base obj = ResolveShelterObject(target);
+            if (obj != null)
+            {
+                displayName = SafeObjectName(obj);
+                int objIndex = ScenarioBunkerDraftService.FindPlacementIndex(placements, obj);
+                if (objIndex >= 0)
+                    return objIndex;
+            }
+
+            string reference = FirstNonEmpty(target.ScenarioReferenceId, target.Id);
+            if (string.IsNullOrEmpty(reference))
+                return -1;
+
+            for (int i = 0; i < placements.Count; i++)
+            {
+                ObjectPlacement placement = placements[i];
+                if (placement == null)
+                    continue;
+
+                if (PlacementMatchesReference(placement, reference))
+                {
+                    displayName = FormatPlacementName(placement, displayName);
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static bool PlacementMatchesTarget(ObjectPlacement placement, ScenarioAuthoringTarget target)
+        {
+            if (placement == null || target == null)
+                return false;
+
+            Obj_Base obj = ResolveShelterObject(target);
+            if (obj != null)
+                return ScenarioBunkerDraftService.MatchesPlacement(placement, obj);
+
+            string reference = FirstNonEmpty(target.ScenarioReferenceId, target.Id);
+            return PlacementMatchesReference(placement, reference);
+        }
+
+        private static bool PlacementMatchesReference(ObjectPlacement placement, string reference)
+        {
+            if (placement == null || string.IsNullOrEmpty(reference))
+                return false;
+
+            return StringEquals(placement.ScenarioObjectId, reference)
+                || StringEquals(placement.RuntimeBindingKey, reference)
+                || StringEquals(ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity), reference);
+        }
+
+        private static string FormatPlacementName(ObjectPlacement placement, string fallback)
+        {
+            if (placement == null)
+                return fallback;
+
+            return FirstNonEmpty(
+                fallback,
+                ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyCapturedName),
+                placement.ScenarioObjectId,
+                placement.DefinitionReference,
+                placement.PrefabReference);
+        }
+
+        private static Obj_Base ResolveShelterObject(ScenarioAuthoringTarget target)
+        {
+            if (target == null)
+                return null;
+
+            GameObject gameObject = target.RuntimeObject as GameObject;
+            if (gameObject == null)
+            {
+                Component component = target.RuntimeObject as Component;
+                gameObject = component != null ? component.gameObject : null;
+            }
+
+            return gameObject != null ? gameObject.GetComponent<Obj_Base>() : null;
+        }
+
+        private static bool StringEquals(string left, string right)
+        {
+            return !string.IsNullOrEmpty(left)
+                && !string.IsNullOrEmpty(right)
+                && string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            for (int i = 0; values != null && i < values.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(values[i]))
+                    return values[i];
+            }
+
+            return null;
+        }
+
         private static bool ShouldCaptureObject(Obj_Base obj)
         {
-            if (obj == null || obj.initialObject || obj.gameObject == null || !obj.gameObject.activeInHierarchy)
+            if (obj == null || obj.gameObject == null)
                 return false;
 
             ObjectManager.ObjectType objectType = obj.GetObjectType();
@@ -367,6 +674,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
 
             return true;
+        }
+
+        private void AssignMissingObjectIdentities(ScenarioEditorSession session)
+        {
+            if (_identityAssignmentService != null)
+                _identityAssignmentService.AssignMissingIds(session);
         }
 
         private static bool ContainsAny(string value, params string[] parts)
@@ -391,11 +704,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(dirtySection))
-                session.DirtyFlags.Add(dirtySection);
-
-            session.CurrentEditCategory = category;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(dirtySection, category);
         }
 
         private static int ComparePlacements(ObjectPlacement left, ObjectPlacement right)
@@ -425,17 +734,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             float leftX = left.Position != null ? left.Position.X : 0f;
             float rightX = right.Position != null ? right.Position.X : 0f;
             return leftX.CompareTo(rightX);
-        }
-
-        private static int CompareItemEntries(ItemEntry left, ItemEntry right)
-        {
-            if (ReferenceEquals(left, right))
-                return 0;
-            if (left == null)
-                return 1;
-            if (right == null)
-                return -1;
-            return string.Compare(left.ItemId ?? string.Empty, right.ItemId ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string SafeObjectName(Obj_Base obj)

@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioSelectionCatalogService : IScenarioSelectionCatalogService
     {
@@ -138,6 +139,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             string description,
             int order)
         {
+            SaveEntry[] saves = _saveLibrary.ListSaves(storageScenarioId);
             return new ScenarioCatalogEntry
             {
                 ScenarioId = scenarioId,
@@ -150,7 +152,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 Description = description,
                 Version = "1.0",
                 Order = order,
-                SaveCount = _saveLibrary.CountSaves(storageScenarioId),
+                SaveCount = saves != null ? saves.Length : 0,
+                LastPlayedUtc = ScenarioLibraryMetadata.ReadLastPlayedUtc(saves),
                 CanStart = true,
                 DependencyState = ScenarioDependencyVerificationState.Match
             };
@@ -164,10 +167,22 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 CustomScenarioInfo scenario = scenarios[i];
                 if (scenario == null || string.IsNullOrEmpty(scenario.Id))
                     continue;
+                if (IsAuthoringDraftScenario(scenario))
+                    continue;
 
                 SlotManifest manifest = _dependencies.CreateDependencyManifest(scenario);
                 ScenarioDependencyVerificationState dependencyState = _dependencies.VerifyDependencies(scenario);
                 ScenarioBaseGameMode baseGameMode = ResolveBaseGameMode(scenario);
+                string author = null;
+                ScenarioDefinition loadedDefinition;
+                string loadedScenarioPath;
+                ScenarioValidationResult ignoredValidation;
+                if (_definitions.TryLoadDefinition(scenario.Id, out loadedDefinition, out loadedScenarioPath, out ignoredValidation)
+                    && loadedDefinition != null)
+                {
+                    author = loadedDefinition.Author;
+                }
+                SaveEntry[] saves = _saveLibrary.ListSaves(scenario.Id);
                 entries.Add(new ScenarioCatalogEntry
                 {
                     ScenarioId = scenario.Id,
@@ -179,14 +194,44 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                     DisplayName = scenario.DisplayName,
                     Description = scenario.Description,
                     Version = scenario.Version,
+                    Author = author,
                     OwnerModId = scenario.OwnerModId,
                     Order = scenario.Order,
-                    SaveCount = _saveLibrary.CountSaves(scenario.Id),
+                    SaveCount = saves != null ? saves.Length : 0,
+                    InstalledUtc = ScenarioLibraryMetadata.ReadInstalledUtc(loadedScenarioPath),
+                    CreatedUtc = ScenarioLibraryMetadata.ReadScenarioCreatedUtc(loadedScenarioPath),
+                    LastPlayedUtc = ScenarioLibraryMetadata.ReadLastPlayedUtc(saves),
                     CanStart = dependencyState == ScenarioDependencyVerificationState.Match,
                     DependencyState = dependencyState,
                     DependencyManifest = manifest,
                     CustomScenario = scenario
                 });
+            }
+        }
+
+        private static bool IsAuthoringDraftScenario(CustomScenarioInfo scenario)
+        {
+            if (scenario == null)
+                return false;
+
+            if (string.Equals(scenario.OwnerModId, ScenarioAuthoringDraftRepository.DraftOwnerId, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // A published package can intentionally retain the authored draft's
+            // scenario id. Its loaded mod owner is the authoritative source, so
+            // do not hide that package merely because the local draft remains.
+            if (!string.IsNullOrEmpty(scenario.OwnerModId))
+                return false;
+
+            try
+            {
+                ScenarioInfo ignored;
+                return ScenarioAuthoringDraftRepository.Instance.TryGet(scenario.Id, out ignored);
+            }
+            catch
+            {
+                return !string.IsNullOrEmpty(scenario.Id)
+                    && scenario.Id.StartsWith(ScenarioAuthoringDraftRepository.DraftOwnerId + ".", StringComparison.OrdinalIgnoreCase);
             }
         }
 
@@ -277,6 +322,19 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
             try
             {
+                ScenarioDefinitionMetadata metadata;
+                if (ScenarioDefinitionMetadataCache.TryLoad(_definitionSerializer, draft.FilePath, draft.OwnerModId, out metadata)
+                    && metadata != null)
+                {
+                    ScenarioDefinition definition = new ScenarioDefinition();
+                    definition.Id = draft.Id;
+                    definition.DisplayName = draft.DisplayName;
+                    definition.Description = metadata.Description;
+                    definition.Version = draft.Version;
+                    definition.BaseGameMode = metadata.BaseGameMode;
+                    return definition;
+                }
+
                 return _definitionSerializer.Load(draft.FilePath);
             }
             catch

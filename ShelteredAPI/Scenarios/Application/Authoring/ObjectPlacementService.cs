@@ -26,5 +26,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             return _draftMutationService.TryUpsertPlacement(placement);
         }
+
+        public bool TryFindSinglePlacement(System.Predicate<ObjectPlacement> predicate, out ObjectPlacement placement)
+        {
+            placement = null;
+            return _draftMutationService.TryFindSinglePlacement(predicate, out placement);
+        }
+
+        public bool RemovePlacement(System.Predicate<ObjectPlacement> predicate)
+        {
+            return _draftMutationService.TryRemovePlacement(predicate);
+        }
     }
 }

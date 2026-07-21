@@ -50,6 +50,32 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             get { return _redo.Count; }
         }
 
+        public bool TryPeekUndo(out string description, out ScenarioEditCategory editCategory)
+        {
+            description = null;
+            editCategory = ScenarioEditCategory.Bunker;
+            if (_undo.Count == 0)
+                return false;
+
+            DefinitionSnapshot snapshot = _undo.Peek();
+            description = snapshot.Description;
+            editCategory = snapshot.EditCategory;
+            return true;
+        }
+
+        public bool TryPeekRedo(out string description, out ScenarioEditCategory editCategory)
+        {
+            description = null;
+            editCategory = ScenarioEditCategory.Bunker;
+            if (_redo.Count == 0)
+                return false;
+
+            DefinitionSnapshot snapshot = _redo.Peek();
+            description = snapshot.Description;
+            editCategory = snapshot.EditCategory;
+            return true;
+        }
+
         // Call when the active authoring draft changes so stale snapshots don't leak
         // across sessions.
         public void BindSession(string draftId)
@@ -72,13 +98,29 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         // Capture before mutating. A new user action invalidates the redo stack.
         public void RecordVisualChange(ScenarioDefinition definition, string description)
         {
+            RecordAuthoringChange(definition, description, ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
+        }
+
+        public void RecordBunkerChange(ScenarioDefinition definition, string description)
+        {
+            RecordAuthoringChange(definition, description, ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
+        }
+
+        public void RecordAuthoringChange(
+            ScenarioDefinition definition,
+            string description,
+            ScenarioDirtySection dirtySection,
+            ScenarioEditCategory editCategory)
+        {
             if (definition == null)
                 return;
 
             DefinitionSnapshot snapshot = new DefinitionSnapshot
             {
                 Description = description,
-                Definition = ScenarioDefinitionCloner.Clone(definition)
+                Definition = ScenarioDefinitionCloner.Clone(definition),
+                DirtySection = dirtySection,
+                EditCategory = editCategory
             };
             PushUndo(snapshot);
             _redo.Clear();
@@ -86,8 +128,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public bool Undo(ScenarioDefinition definition, out string description)
         {
+            ScenarioDirtySection dirtySection;
+            ScenarioEditCategory editCategory;
+            return Undo(definition, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Undo(
+            ScenarioDefinition definition,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
+            return Undo(definition, null, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Undo(
+            ScenarioDefinition definition,
+            ScenarioEditCategory[] allowedCategories,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
             description = null;
+            dirtySection = ScenarioDirtySection.None;
+            editCategory = ScenarioEditCategory.Bunker;
             if (definition == null || _undo.Count == 0)
+                return false;
+
+            if (!IsCategoryAllowed(_undo.Peek().EditCategory, allowedCategories))
                 return false;
 
             DefinitionSnapshot redoPoint = new DefinitionSnapshot
@@ -98,8 +166,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             DefinitionSnapshot snapshot = _undo.Pop();
             RestoreDefinition(definition, snapshot.Definition);
+            redoPoint.Description = snapshot.Description;
+            redoPoint.DirtySection = snapshot.DirtySection;
+            redoPoint.EditCategory = snapshot.EditCategory;
             _redo.Push(redoPoint);
             description = snapshot.Description;
+            dirtySection = snapshot.DirtySection;
+            editCategory = snapshot.EditCategory;
             MMLog.WriteInfo("[ScenarioAuthoringHistory] Undo: " + (description ?? "<unnamed>")
                 + " | undoDepth=" + _undo.Count + " redoDepth=" + _redo.Count);
             return true;
@@ -107,8 +180,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public bool Redo(ScenarioDefinition definition, out string description)
         {
+            ScenarioDirtySection dirtySection;
+            ScenarioEditCategory editCategory;
+            return Redo(definition, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Redo(
+            ScenarioDefinition definition,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
+            return Redo(definition, null, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Redo(
+            ScenarioDefinition definition,
+            ScenarioEditCategory[] allowedCategories,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
             description = null;
+            dirtySection = ScenarioDirtySection.None;
+            editCategory = ScenarioEditCategory.Bunker;
             if (definition == null || _redo.Count == 0)
+                return false;
+
+            if (!IsCategoryAllowed(_redo.Peek().EditCategory, allowedCategories))
                 return false;
 
             DefinitionSnapshot undoPoint = new DefinitionSnapshot
@@ -119,11 +218,30 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             DefinitionSnapshot snapshot = _redo.Pop();
             RestoreDefinition(definition, snapshot.Definition);
+            undoPoint.Description = snapshot.Description;
+            undoPoint.DirtySection = snapshot.DirtySection;
+            undoPoint.EditCategory = snapshot.EditCategory;
             PushUndo(undoPoint);
             description = snapshot.Description;
+            dirtySection = snapshot.DirtySection;
+            editCategory = snapshot.EditCategory;
             MMLog.WriteInfo("[ScenarioAuthoringHistory] Redo: " + (description ?? "<unnamed>")
                 + " | undoDepth=" + _undo.Count + " redoDepth=" + _redo.Count);
             return true;
+        }
+
+        private static bool IsCategoryAllowed(ScenarioEditCategory editCategory, ScenarioEditCategory[] allowedCategories)
+        {
+            if (allowedCategories == null || allowedCategories.Length == 0)
+                return true;
+
+            for (int i = 0; i < allowedCategories.Length; i++)
+            {
+                if (allowedCategories[i] == editCategory)
+                    return true;
+            }
+
+            return false;
         }
 
         private void PushUndo(DefinitionSnapshot snapshot)
@@ -150,30 +268,75 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             destination.Id = restored.Id;
             destination.DisplayName = restored.DisplayName;
             destination.Description = restored.Description;
+            destination.Goal = restored.Goal;
             destination.Author = restored.Author;
             destination.Version = restored.Version;
+            destination.Credits = restored.Credits;
+            destination.Tags.Clear();
+            if (restored.Tags != null)
+            {
+                for (int i = 0; i < restored.Tags.Count; i++)
+                    destination.Tags.Add(restored.Tags[i]);
+            }
             destination.BaseGameMode = restored.BaseGameMode;
+            destination.BaseFamilyChoice = restored.BaseFamilyChoice;
             destination.SeedOverride = restored.SeedOverride;
+            destination.SelectionRules = restored.SelectionRules;
+            destination.ScenarioCharacters.Clear();
+            if (restored.ScenarioCharacters != null)
+            {
+                for (int i = 0; i < restored.ScenarioCharacters.Count; i++)
+                    destination.ScenarioCharacters.Add(restored.ScenarioCharacters[i]);
+            }
+            destination.ScenarioFlow = restored.ScenarioFlow;
             destination.Dependencies.Clear();
             if (restored.Dependencies != null)
             {
                 for (int i = 0; i < restored.Dependencies.Count; i++)
                     destination.Dependencies.Add(restored.Dependencies[i]);
             }
+            destination.ModDependencies.Clear();
+            if (restored.ModDependencies != null)
+            {
+                for (int i = 0; i < restored.ModDependencies.Count; i++)
+                    destination.ModDependencies.Add(restored.ModDependencies[i]);
+            }
             destination.FamilySetup = restored.FamilySetup;
+            destination.LaunchSetup = restored.LaunchSetup;
             destination.StartingInventory = restored.StartingInventory;
             destination.BunkerEdits = restored.BunkerEdits;
+            destination.BunkerGrid = restored.BunkerGrid;
+            destination.BackendWorlds = restored.BackendWorlds;
             destination.TriggersAndEvents = restored.TriggersAndEvents;
             destination.Quests = restored.Quests;
             destination.Map = restored.Map;
             destination.WinLossConditions = restored.WinLossConditions;
+            destination.Scoring = restored.Scoring;
             destination.AssetReferences = restored.AssetReferences;
+            destination.Gates.Clear();
+            if (restored.Gates != null)
+            {
+                for (int i = 0; i < restored.Gates.Count; i++)
+                    destination.Gates.Add(restored.Gates[i]);
+            }
+            destination.ScheduledActions.Clear();
+            if (restored.ScheduledActions != null)
+            {
+                for (int i = 0; i < restored.ScheduledActions.Count; i++)
+                    destination.ScheduledActions.Add(restored.ScheduledActions[i]);
+            }
+            destination.Journal = restored.Journal;
+            destination.Conversations = restored.Conversations;
+            destination.VanillaSuppression = restored.VanillaSuppression;
+            destination.AuthorTestChecklist = restored.AuthorTestChecklist;
         }
 
         private sealed class DefinitionSnapshot
         {
             public string Description;
             public ScenarioDefinition Definition;
+            public ScenarioDirtySection DirtySection;
+            public ScenarioEditCategory EditCategory;
         }
     }
 }

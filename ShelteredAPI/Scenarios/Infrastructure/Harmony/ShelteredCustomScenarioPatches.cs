@@ -11,10 +11,13 @@ using ModAPI.Scenarios;
 using ModAPI.UI;
 using UnityEngine;
 
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Registration;
 using ShelteredAPI.Scenarios.Shared;
@@ -292,10 +295,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
         ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = true,
+        ManagerToggleDefault = false,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringGlobalUiIsolationPatches
     {
         [HarmonyPatch(typeof(UI_InputListener), "UpdateManager")]
@@ -316,10 +319,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
         ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = true,
+        ManagerToggleDefault = false,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringPauseOwnershipPatches
     {
         [HarmonyPatch(typeof(PauseManager), "Pause")]
@@ -349,8 +352,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
         [HarmonyPatch(typeof(UIPanelManager), "PushPanel", new[] { typeof(BasePanel) })]
         [HarmonyPrefix]
-        private static bool PushPanelPrefix(BasePanel panel)
+        private static bool PushPanelPrefix(UIPanelManager __instance, BasePanel panel)
         {
+            if (IsDuplicateTutorialPopupPush(__instance, panel))
+            {
+                MMLog.WriteInfo("[ScenarioSetupFlow] Suppressed duplicate tutorial popup push while setup flow was advancing.");
+                return false;
+            }
+
             if (!ScenarioAuthoringPauseService.Instance.ShouldSuppressPauseMenu())
                 return true;
 
@@ -359,6 +368,172 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
             MMLog.WriteInfo("[ScenarioAuthoringPause] Suppressed UIPanelManager.PushPanel for the vanilla pause menu while authoring.");
             return false;
+        }
+
+        private static bool IsDuplicateTutorialPopupPush(UIPanelManager panelManager, BasePanel panel)
+        {
+            if (panelManager == null || panel == null)
+                return false;
+            if (!(panel is TutorialPopupPanel))
+                return false;
+
+            try { return panelManager.IsPanelOnStack(panel); }
+            catch { return false; }
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioCharacterRuntimeNames",
+        TargetBehavior = "Authored scenario-character display names are applied before vanilla creates scenario visitors.",
+        FailureMode = "Scenario dialogue uses a randomized vanilla visitor name instead of the authored character name.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario-character name patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
+    [HarmonyPatch(typeof(NpcVisitManager), "AddNewScenario")]
+    internal static class ScenarioCharacterRuntimeNamePatches
+    {
+        [HarmonyPrefix]
+        private static void AddNewScenarioPrefix(
+            List<QuestManager.QuestCharacterInfo> charInfo,
+            int scenarioId)
+        {
+            try
+            {
+                int applied = ScenarioCharacterRuntimeNameRegistry.ApplyToPendingStage(scenarioId, charInfo);
+                if (applied >= 0)
+                {
+                    MMLog.WriteInfo(
+                        "[ScenarioCharacterRuntimeNames] Applied " + applied
+                        + " authored visitor preset name(s) for scenario instance " + scenarioId + ".");
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioCharacterRuntimeNames] Could not apply authored visitor names: " + ex.Message);
+            }
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ShelteredCustomScenarioGuidedSetup",
+        TargetBehavior = "Guided custom scenarios pre-set and lock author-fixed vanilla difficulty controls.",
+        FailureMode = "Guided launches fall back to interactive vanilla difficulty controls.",
+        RollbackStrategy = "Disable the Scenarios patch domain or choose Full Setup for the scenario.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    internal static class ShelteredCustomScenarioGuidedSetupPatches
+    {
+        [HarmonyPatch(typeof(DifficultyCustomisation), "OnShowPage")]
+        [HarmonyPostfix]
+        private static void OnShowPagePostfix(DifficultyCustomisation __instance)
+        {
+            ScenarioDefinition definition;
+            if (__instance == null || !ScenarioLaunchSetupPolicy.TryGetPendingGuidedDefinition(out definition))
+                return;
+
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Rain, "m_currentRain", "UpdateRainLabel", "RainText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Resources, "m_currentResources", "UpdateResourcesLabel", "ResourcesText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Breach, "m_currentBreach", "UpdateBreachLabel", "BreachText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Faction, "m_currentFaction", "UpdateFactionLabel", "FactionText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.Mood, "m_currentMood", "UpdateMoodLabel", "MoodText");
+            ApplyFixed(__instance, definition, ScenarioDifficultyCategoryIds.MapSize, "m_currentMapSize", "UpdateMapSizeLabel", "MapSizeText");
+            ApplyFixedFog(__instance, definition);
+        }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextPresetPrefix() { return !HasAnyFixedCategory(); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousPresetPrefix() { return !HasAnyFixedCategory(); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextRainDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextRainPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Rain); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevRainDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousRainPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Rain); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextResourceDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextResourcesPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Resources); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevResourceDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousResourcesPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Resources); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextBreachDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextBreachPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Breach); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevBreachDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousBreachPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Breach); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextFactionDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextFactionPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Faction); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevFactionDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousFactionPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Faction); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextMoodDifficulty")]
+        [HarmonyPrefix]
+        private static bool NextMoodPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Mood); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevMoodDifficulty")]
+        [HarmonyPrefix]
+        private static bool PreviousMoodPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Mood); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextMapSize")]
+        [HarmonyPrefix]
+        private static bool NextMapSizePrefix() { return CanChange(ScenarioDifficultyCategoryIds.MapSize); }
+        [HarmonyPatch(typeof(DifficultyCustomisation), "PrevMapSize")]
+        [HarmonyPrefix]
+        private static bool PreviousMapSizePrefix() { return CanChange(ScenarioDifficultyCategoryIds.MapSize); }
+
+        [HarmonyPatch(typeof(DifficultyCustomisation), "NextFogDifficulty")]
+        [HarmonyPrefix]
+        private static bool FogPrefix() { return CanChange(ScenarioDifficultyCategoryIds.Fog); }
+
+        private static bool CanChange(string categoryId)
+        {
+            ScenarioDefinition definition;
+            return !ScenarioLaunchSetupPolicy.TryGetPendingGuidedDefinition(out definition)
+                || ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, categoryId);
+        }
+
+        private static bool HasAnyFixedCategory()
+        {
+            ScenarioDefinition definition;
+            if (!ScenarioLaunchSetupPolicy.TryGetPendingGuidedDefinition(out definition))
+                return false;
+            string[] ids = { ScenarioDifficultyCategoryIds.Rain, ScenarioDifficultyCategoryIds.Resources,
+                ScenarioDifficultyCategoryIds.Breach, ScenarioDifficultyCategoryIds.Faction,
+                ScenarioDifficultyCategoryIds.Mood, ScenarioDifficultyCategoryIds.MapSize, ScenarioDifficultyCategoryIds.Fog };
+            for (int i = 0; i < ids.Length; i++)
+                if (!ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, ids[i])) return true;
+            return false;
+        }
+
+        private static void ApplyFixed(DifficultyCustomisation page, ScenarioDefinition definition, string id, string field, string updateMethod, string labelField)
+        {
+            if (ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, id))
+                return;
+            Traverse traverse = Traverse.Create(page);
+            traverse.Field(field).SetValue(ScenarioLaunchSetupPolicy.GetValue(definition, id, 1));
+            traverse.Method(updateMethod).GetValue();
+            AppendAuthoredNote(traverse.Field(labelField).GetValue<UILabel>());
+        }
+
+        private static void ApplyFixedFog(DifficultyCustomisation page, ScenarioDefinition definition)
+        {
+            if (ScenarioLaunchSetupPolicy.IsPlayerSelectable(definition, ScenarioDifficultyCategoryIds.Fog))
+                return;
+            Traverse traverse = Traverse.Create(page);
+            traverse.Field("m_currentFog").SetValue(ScenarioLaunchSetupPolicy.GetValue(definition, ScenarioDifficultyCategoryIds.Fog, 0) != 0);
+            traverse.Method("UpdateFogLabel").GetValue();
+            AppendAuthoredNote(traverse.Field("FogText").GetValue<UILabel>());
+        }
+
+        private static void AppendAuthoredNote(UILabel label)
+        {
+            const string note = " [808080](authored)[-]";
+            if (label != null && !string.IsNullOrEmpty(label.text) && label.text.IndexOf("(authored)", StringComparison.Ordinal) < 0)
+                label.text += note;
         }
     }
 
@@ -369,10 +544,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
         ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = true,
+        ManagerToggleDefault = false,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.BootCritical)]
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringSimulationFreezePatches
     {
         [HarmonyPatch(typeof(UIPanelManager), nameof(UIPanelManager.timePaused), MethodType.Getter)]
@@ -387,7 +562,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         [HarmonyPrefix]
         private static bool GameTimeUpdatePrefix()
         {
-            return !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation();
+            return !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation()
+                && !ScenarioAuthoringRuntimeGuards.IsOpeningCutscenePreviewActive();
         }
     }
 
@@ -410,6 +586,78 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             {
                 MMLog.WriteWarning("[ShelteredScenarioDefinitionApply] UpdateManager hook failed: " + ex.Message);
             }
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioFutureSurvivorRecruitBinding",
+        TargetBehavior = "Scenario-scheduled ask-to-join future survivors bind to their authored actor after vanilla recruitment.",
+        FailureMode = "Accepted ask-to-join future survivors join the family without scenario actor identity or conditions resolving.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the future-survivor recruit binding patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
+    internal static class ScenarioFutureSurvivorRecruitBindingPatches
+    {
+        private static ScenarioFutureSurvivorRecruitBindingService BindingService
+        {
+            get { return ScenarioCompositionRoot.ResolveRuntime<ScenarioFutureSurvivorRecruitBindingService>(); }
+        }
+
+        [HarmonyPatch(typeof(NpcVisitManager), "CreateNpcVisitor")]
+        [HarmonyPostfix]
+        private static void CreateNpcVisitorPostfix(
+            NpcVisitor.NpcType type,
+            FamilySpawner.CharacterAttributes attribsOverride,
+            NpcVisitor __result)
+        {
+            if (type != NpcVisitor.NpcType.Joiner || __result == null || attribsOverride == null)
+                return;
+
+            string message;
+            SeamGuard.Run(
+                "scenario.future-survivor.ask-to-join.visitor-created",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { BindingService.OnVisitorCreated(__result, attribsOverride); },
+                "Ask-to-join survivor binding unavailable - scenario still playable.",
+                null,
+                out message);
+        }
+
+        [HarmonyPatch(typeof(FamilyManager), "AdoptNpc")]
+        [HarmonyPostfix]
+        private static void AdoptNpcPostfix(NpcVisitor npc, bool __result)
+        {
+            if (!__result || npc == null)
+                return;
+
+            string message;
+            SeamGuard.Run(
+                "scenario.future-survivor.ask-to-join.adopt",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate
+                {
+                    FamilyMember member = npc.GetComponent<FamilyMember>();
+                    if (member != null)
+                        BindingService.OnNpcAdopted(npc, member);
+                },
+                "Ask-to-join survivor binding unavailable - scenario still playable.",
+                null,
+                out message);
+        }
+
+        [HarmonyPatch(typeof(NpcVisitManager), "OnNpcFinished")]
+        [HarmonyPostfix]
+        private static void OnNpcFinishedPostfix(NpcVisitor npc)
+        {
+            if (npc == null)
+                return;
+
+            string message;
+            SeamGuard.Run(
+                "scenario.future-survivor.ask-to-join.visitor-finished",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { BindingService.OnVisitorFinished(npc); },
+                "Ask-to-join survivor binding unavailable - scenario still playable.",
+                null,
+                out message);
         }
     }
 
@@ -454,6 +702,35 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             if (!allowed)
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SaveSlotButton.OnClick during guarded UI click.");
             return allowed;
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioDynamicFamilyUiReadiness",
+        TargetBehavior = "Dynamically spawned scenario survivors wait for their vanilla UI_Character binding before warning UI updates run.",
+        FailureMode = "A newly spawned survivor can throw UI_CharacterInfo.Update NullReferenceException during its first frame.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the dynamic family UI readiness patch host.",
+        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
+        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
+        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
+        ManagerToggleDefault = false,
+        ManagerToggleRequiresRestart = true,
+        ManagerToggleSortOrder = 100,
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
+    internal static class ScenarioDynamicFamilyUiReadinessPatches
+    {
+        [HarmonyPatch(typeof(UI_CharacterInfo), "Update")]
+        [HarmonyPrefix]
+        private static bool UpdatePrefix(UI_CharacterInfo __instance)
+        {
+            if (__instance == null || __instance.transform == null)
+                return true;
+
+            Transform parent = __instance.transform.parent;
+            UI_Character character = parent != null ? parent.GetComponent<UI_Character>() : null;
+            if (character == null && parent != null && parent.parent != null)
+                character = parent.parent.GetComponent<UI_Character>();
+
+            return character != null && character.familyMember != null;
         }
     }
 }

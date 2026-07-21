@@ -3,6 +3,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Persistence;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -60,7 +61,8 @@ namespace ShelteredAPI.Scenarios.Application.Compatibility{
 
         public bool IsLoaded(string modId)
         {
-            return !string.IsNullOrEmpty(modId) && ModRegistry.GetMod(modId) != null;
+            return !string.IsNullOrEmpty(modId)
+                && (ModRegistry.GetMod(modId) != null || ScenarioActorAuthoringFieldStore.IsProviderModLoaded(modId));
         }
 
         public string GetLoadedVersion(string modId)
@@ -117,7 +119,10 @@ namespace ShelteredAPI.Scenarios.Application.Compatibility{
             for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
                 AddMember(index, definition.FamilySetup.Members[i]);
             for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
                 AddMember(index, definition.FamilySetup.FutureSurvivors[i] != null ? definition.FamilySetup.FutureSurvivors[i].Survivor : null);
+                AddActorComponents(index, definition.FamilySetup.FutureSurvivors[i] != null ? definition.FamilySetup.FutureSurvivors[i].ActorComponents : null);
+            }
         }
 
         private void AddScheduledEffects(ScenarioDefinition definition, ScenarioModReferenceIndex index)
@@ -136,6 +141,17 @@ namespace ShelteredAPI.Scenarios.Application.Compatibility{
                 AddContent(index, member.Traits[i], ScenarioModReferenceReason.SurvivorTraitOrStat);
             for (int i = 0; member != null && member.Stats != null && i < member.Stats.Count; i++)
                 AddContent(index, member.Stats[i] != null ? member.Stats[i].StatId : null, ScenarioModReferenceReason.SurvivorTraitOrStat);
+            AddActorComponents(index, member != null ? member.ActorComponents : null);
+        }
+
+        private void AddActorComponents(ScenarioModReferenceIndex index, System.Collections.Generic.IList<ScenarioActorComponentDefinition> components)
+        {
+            for (int i = 0; components != null && i < components.Count; i++)
+            {
+                ScenarioActorComponentDefinition component = components[i];
+                if (component != null && !string.IsNullOrEmpty(component.OwnerModId))
+                    index.Add(component.OwnerModId, GetLoadedVersion(component.OwnerModId), ScenarioModDependencyKind.Required, ScenarioModReferenceReason.ActorAuthoringComponent, component.ComponentId, false);
+            }
         }
 
         private void AddContent(ScenarioModReferenceIndex index, string contentId, ScenarioModReferenceReason reason)

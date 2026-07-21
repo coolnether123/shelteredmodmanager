@@ -11,28 +11,62 @@ namespace Manager.Views
     public delegate void DarkModeChangedHandler(bool isDark);
     public delegate void ResetWindowRequestedHandler();
 
+    // Section taxonomy: where each kind of setting belongs.
+    //
+    // The tab is one vertical scroll of labelled sections. Each section is
+    // built in a Build<Section>Controls() helper, positioned in a matching
+    // Layout<Section>Section() helper (SettingsTab.Layout.cs) and coloured in
+    // ApplyTheme() (SettingsTab.Theme.cs). When you add a setting, drop it in
+    // the section it belongs to and follow that section's existing pattern.
+    //
+    //   1. Appearance      Purely visual preferences for the manager UI itself
+    //                      (e.g. dark mode). No behavior, nothing destructive.
+    //   2. Saves           How the manager touches the player's save files
+    //                      (auto-organize slots, backup retention).
+    //   3. Nexus           Nexus Mods integration: enable switch, API key,
+    //                      account status, prerelease opt-in, and advanced
+    //                      endpoint overrides. Everything here is gated by the
+    //                      "Enable Nexus features" checkbox.
+    //   4. Runtime Features Dynamic toggles registered by mods at runtime and
+    //                      read back from ModAPI. This tab does not define them.
+    //   5. Developer       Advanced diagnostic/safety-bypass switches, hidden
+    //                      behind Developer Mode. A setting belongs here ONLY if
+    //                      a normal player never needs it AND a wrong value is
+    //                      harmless (logging verbosity, skipping safety checks).
+    //   6. Actions         Reset buttons. Always rendered last.
+    //
+    // Rule of thumb: if a setting drives a user-facing feature, it lives in
+    // that feature's section, not in Developer. Developer is for diagnostics
+    // and deliberate safety overrides only.
     public partial class SettingsTab : UserControl
     {
+        // Scroll host + inner content surface that every section is placed on.
         private Panel _scrollPanel;
         private Panel _contentPanel;
+
+        // 1. Appearance
         private Label _themeLabel;
         private CheckBox _darkModeCheckBox;
+
+        // 2. Saves
+        private Label _savesLabel;
         private Label _autoCondenseLabel;
         private ComboBox _autoCondenseCombo;
-        private Label _saveBackupsLabel;
         private Label _saveBackupRetentionLabel;
         private ComboBox _saveBackupRetentionCombo;
         private Label _saveBackupRetentionCountLabel;
         private NumericUpDown _saveBackupRetentionCountNumeric;
+
+        // 3. Nexus
         private Label _nexusLabel;
         private CheckBox _enableNexusCheckBox;
-        private CheckBox _enableExperimentalPublishCheckBox;
         private Label _nexusApiKeyLabel;
         private TextBox _nexusApiKeyTextBox;
         private Button _nexusApiHelpButton;
         private Button _nexusApiRevealButton;
         private Label _nexusAccountSummaryLabel;
         private Label _nexusDownloadSummaryLabel;
+        private CheckBox _includeNexusPrereleaseCheckBox;
         private LinkLabel _nexusAdvancedToggleLink;
         private Panel _nexusAdvancedPanel;
         private Label _nexusDomainLabel;
@@ -40,10 +74,14 @@ namespace Manager.Views
         private Label _managerNexusModIdLabel;
         private TextBox _managerNexusModIdTextBox;
         private Panel _separator;
+
+        // 4. Runtime Features
         private Label _runtimeFeaturesLabel;
         private Button _runtimeFeaturesRefreshButton;
         private Panel _runtimeFeaturesPanel;
         private Label _runtimeFeaturesEmptyLabel;
+
+        // 5. Developer
         private CheckBox _devModeCheckBox;
         private GroupBox _devSettingsGroup;
         private CheckBox _verboseLoggingCheckBox;
@@ -51,9 +89,12 @@ namespace Manager.Views
         private ComboBox _debugLogScopeCombo;
         private CheckBox _skipHarmonyCheckBox;
         private CheckBox _ignoreOrderCheckBox;
-        private CheckBox _includeNexusPrereleaseCheckBox;
+
+        // 6. Actions
         private Button _resetButton;
         private Button _resetWindowButton;
+
+        // Shared infrastructure
         private Timer _saveDebounceTimer;
         private AppSettings _settings;
         private NexusAccountStatus _nexusAccountStatus;
@@ -66,7 +107,7 @@ namespace Manager.Views
         private readonly ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
         private readonly List<CheckBox> _runtimeFeatureCheckBoxes = new List<CheckBox>();
         private IList<ManagerBooleanOptionRecord> _runtimeOptions = new List<ManagerBooleanOptionRecord>();
-        private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/users/myaccount?tab=api";
+        private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/settings/api-keys";
 
         public event SettingsChangedHandler SettingsChanged;
         public event DarkModeChangedHandler DarkModeChanged;
@@ -110,6 +151,36 @@ namespace Manager.Views
             _scrollPanel.SuspendLayout();
             _contentPanel.SuspendLayout();
 
+            // Tooltip host is created first: section builders attach hints as they
+            // create controls, keeping each hint next to the control it describes.
+            _helpToolTip = new ToolTip();
+            _helpToolTip.AutoPopDelay = 12000;
+            _helpToolTip.InitialDelay = 350;
+            _helpToolTip.ReshowDelay = 200;
+            _helpToolTip.ShowAlways = true;
+
+            // Build each section top-to-bottom in the same order it renders.
+            BuildAppearanceControls();
+            BuildSavesControls();
+            BuildNexusControls();
+            BuildRuntimeFeaturesControls();
+            BuildDeveloperControls();
+            BuildActionControls();
+
+            AddSectionControlsToContentPanel();
+
+            _scrollPanel.Controls.Add(_contentPanel);
+            Controls.Add(_scrollPanel);
+            _contentPanel.ResumeLayout(false);
+            _scrollPanel.ResumeLayout(false);
+            ResumeLayout(false);
+            UpdateDynamicLayout();
+        }
+
+        // 1. Appearance
+        // Manager-UI look only. Add purely cosmetic toggles here.
+        private void BuildAppearanceControls()
+        {
             _themeLabel = new Label();
             _themeLabel.Text = "Appearance";
             _themeLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
@@ -119,6 +190,17 @@ namespace Manager.Views
             _darkModeCheckBox.Text = "Dark Mode";
             _darkModeCheckBox.Font = new Font("Segoe UI", 10f);
             _darkModeCheckBox.AutoSize = true;
+        }
+
+        // 2. Saves
+        // Anything that changes how the manager treats the player's save
+        // files: slot organization and pre-overwrite backup retention.
+        private void BuildSavesControls()
+        {
+            _savesLabel = new Label();
+            _savesLabel.Text = "Saves";
+            _savesLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _savesLabel.AutoSize = true;
 
             _autoCondenseLabel = new Label();
             _autoCondenseLabel.Text = "Auto-Organize Save Slots:";
@@ -131,11 +213,6 @@ namespace Manager.Views
             _autoCondenseCombo.Items.AddRange(new object[] { "Ask each time", "Always organize", "Never organize" });
             _autoCondenseCombo.SelectedIndex = 0;
 
-            _saveBackupsLabel = new Label();
-            _saveBackupsLabel.Text = "Save Backups";
-            _saveBackupsLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _saveBackupsLabel.AutoSize = true;
-
             _saveBackupRetentionLabel = new Label();
             _saveBackupRetentionLabel.Text = "Backup Retention:";
             _saveBackupRetentionLabel.Font = new Font("Segoe UI", 10f);
@@ -146,6 +223,7 @@ namespace Manager.Views
             _saveBackupRetentionCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             _saveBackupRetentionCombo.Items.AddRange(new object[] { "Keep limited snapshots", "No automatic backups", "Keep all snapshots" });
             _saveBackupRetentionCombo.SelectedIndex = 0;
+            _helpToolTip.SetToolTip(_saveBackupRetentionCombo, "Controls automatic pre-overwrite save snapshots stored under Mods/ModAPI/Backups/Saves.");
 
             _saveBackupRetentionCountLabel = new Label();
             _saveBackupRetentionCountLabel.Text = "Snapshots per save:";
@@ -156,9 +234,17 @@ namespace Manager.Views
             _saveBackupRetentionCountNumeric.Font = new Font("Segoe UI", 10f);
             _saveBackupRetentionCountNumeric.Minimum = 1;
             _saveBackupRetentionCountNumeric.Maximum = 999;
-            _saveBackupRetentionCountNumeric.Value = 3;
+            _saveBackupRetentionCountNumeric.Value = AppSettings.DefaultSaveBackupRetention;
             _saveBackupRetentionCountNumeric.Width = 80;
+            _helpToolTip.SetToolTip(_saveBackupRetentionCountNumeric, "Number of unpinned snapshots to keep for each save timeline.");
+        }
 
+        // 3. Nexus
+        // Nexus Mods integration. The enable checkbox gates every other
+        // control in this section (see SetNexusInputsEnabled). Rarely-touched
+        // endpoint overrides live behind the "Advanced" collapsible panel.
+        private void BuildNexusControls()
+        {
             _nexusLabel = new Label();
             _nexusLabel.Text = "Nexus";
             _nexusLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
@@ -169,11 +255,6 @@ namespace Manager.Views
             _enableNexusCheckBox.Font = new Font("Segoe UI", 10f);
             _enableNexusCheckBox.AutoSize = true;
 
-            _enableExperimentalPublishCheckBox = new CheckBox();
-            _enableExperimentalPublishCheckBox.Text = "Enable Experimental Publish tab";
-            _enableExperimentalPublishCheckBox.Font = new Font("Segoe UI", 10f);
-            _enableExperimentalPublishCheckBox.AutoSize = true;
-
             _nexusApiKeyLabel = new Label();
             _nexusApiKeyLabel.Text = "Personal API Key:";
             _nexusApiKeyLabel.Font = new Font("Segoe UI", 10f);
@@ -182,6 +263,7 @@ namespace Manager.Views
             _nexusApiKeyTextBox = new TextBox();
             _nexusApiKeyTextBox.Font = new Font("Segoe UI", 10f);
             _nexusApiKeyTextBox.Width = 230;
+            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads and account validation; browsing and update checks do not require it.");
 
             _nexusApiHelpButton = new Button();
             _nexusApiHelpButton.Text = "Get API Key";
@@ -189,6 +271,7 @@ namespace Manager.Views
             _nexusApiHelpButton.Size = new Size(95, 27);
             _nexusApiHelpButton.FlatStyle = FlatStyle.Flat;
             _nexusApiHelpButton.Cursor = Cursors.Hand;
+            _helpToolTip.SetToolTip(_nexusApiHelpButton, "Open the Nexus account page where personal API keys are managed.");
 
             _nexusApiRevealButton = new Button();
             _nexusApiRevealButton.Text = "Reveal Key";
@@ -196,6 +279,7 @@ namespace Manager.Views
             _nexusApiRevealButton.Size = new Size(95, 27);
             _nexusApiRevealButton.FlatStyle = FlatStyle.Flat;
             _nexusApiRevealButton.Cursor = Cursors.Hand;
+            _helpToolTip.SetToolTip(_nexusApiRevealButton, "Reveal or hide the stored Nexus API key for manual editing.");
 
             _nexusAccountSummaryLabel = new Label();
             _nexusAccountSummaryLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
@@ -209,11 +293,21 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Size = new Size(680, 38);
             _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and may still require Nexus download authorization.";
 
+            // Update-channel opt-in: lives with Nexus (not Developer) because it
+            // changes which Nexus files surface as available updates.
+            _includeNexusPrereleaseCheckBox = new CheckBox();
+            _includeNexusPrereleaseCheckBox.Text = "Include Nexus beta/prerelease files in update checks";
+            _includeNexusPrereleaseCheckBox.Font = new Font("Segoe UI", 10f);
+            _includeNexusPrereleaseCheckBox.AutoSize = true;
+            _helpToolTip.SetToolTip(_includeNexusPrereleaseCheckBox, "Also inspect Nexus file versions so beta/prerelease uploads can appear as updates.");
+
             _nexusAdvancedToggleLink = new LinkLabel();
             _nexusAdvancedToggleLink.Text = "Show Advanced Nexus Options";
             _nexusAdvancedToggleLink.Font = new Font("Segoe UI", 9f);
             _nexusAdvancedToggleLink.AutoSize = true;
+            _helpToolTip.SetToolTip(_nexusAdvancedToggleLink, "Show internal Nexus settings that most players should never need to edit.");
 
+            // Advanced panel: endpoint overrides most users never touch.
             _nexusAdvancedPanel = new Panel();
             _nexusAdvancedPanel.BorderStyle = BorderStyle.FixedSingle;
             _nexusAdvancedPanel.Size = new Size(420, 76);
@@ -246,23 +340,17 @@ namespace Manager.Views
             _nexusAdvancedPanel.Controls.Add(_managerNexusModIdLabel);
             _nexusAdvancedPanel.Controls.Add(_managerNexusModIdTextBox);
 
-            _helpToolTip = new ToolTip();
-            _helpToolTip.AutoPopDelay = 12000;
-            _helpToolTip.InitialDelay = 350;
-            _helpToolTip.ReshowDelay = 200;
-            _helpToolTip.ShowAlways = true;
-            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads and account validation; browsing and update checks do not require it.");
-            _helpToolTip.SetToolTip(_nexusApiHelpButton, "Open the Nexus account page where personal API keys are managed.");
-            _helpToolTip.SetToolTip(_nexusApiRevealButton, "Reveal or hide the stored Nexus API key for manual editing.");
-            _helpToolTip.SetToolTip(_enableExperimentalPublishCheckBox, "Shows the experimental Publish tab for preparing Nexus upload drafts and packages.");
-            _helpToolTip.SetToolTip(_nexusAdvancedToggleLink, "Show internal Nexus settings that most players should never need to edit.");
-            _helpToolTip.SetToolTip(_saveBackupRetentionCombo, "Controls automatic pre-overwrite save snapshots stored under Mods/ModAPI/Backups/Saves.");
-            _helpToolTip.SetToolTip(_saveBackupRetentionCountNumeric, "Number of unpinned snapshots to keep for each save timeline.");
-
+            // Divider closing out the Nexus section.
             _separator = new Panel();
             _separator.Height = 1;
             _separator.Width = 700;
+        }
 
+        // 4. Runtime Features
+        // Mod-registered toggles loaded from ModAPI at runtime. The checkboxes
+        // themselves are created dynamically in RebuildRuntimeFeatureControls.
+        private void BuildRuntimeFeaturesControls()
+        {
             _runtimeFeaturesLabel = new Label();
             _runtimeFeaturesLabel.Text = "Runtime Features";
             _runtimeFeaturesLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
@@ -286,7 +374,14 @@ namespace Manager.Views
             _runtimeFeaturesEmptyLabel.Size = new Size(660, 36);
             _runtimeFeaturesEmptyLabel.Location = new Point(12, 12);
             _runtimeFeaturesPanel.Controls.Add(_runtimeFeaturesEmptyLabel);
+        }
 
+        // 5. Developer
+        // Diagnostics and safety-check bypasses, hidden until Dev Mode is on.
+        // Only put a setting here if a normal player never needs it and a wrong
+        // value cannot corrupt saves or mods (logging, dependency/order skips).
+        private void BuildDeveloperControls()
+        {
             _devModeCheckBox = new CheckBox();
             _devModeCheckBox.Text = "Developer Mode (Advanced)";
             _devModeCheckBox.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
@@ -295,7 +390,7 @@ namespace Manager.Views
             _devSettingsGroup = new GroupBox();
             _devSettingsGroup.Text = "Developer Options";
             _devSettingsGroup.Font = new Font("Segoe UI", 10f);
-            _devSettingsGroup.Size = new Size(500, 195);
+            _devSettingsGroup.Size = new Size(500, 160);
             _devSettingsGroup.Visible = false;
 
             _verboseLoggingCheckBox = new CheckBox();
@@ -332,20 +427,17 @@ namespace Manager.Views
             _ignoreOrderCheckBox.AutoSize = true;
             _ignoreOrderCheckBox.Location = new Point(15, 118);
 
-            _includeNexusPrereleaseCheckBox = new CheckBox();
-            _includeNexusPrereleaseCheckBox.Text = "Include Nexus beta/prerelease files";
-            _includeNexusPrereleaseCheckBox.Font = new Font("Segoe UI", 10f);
-            _includeNexusPrereleaseCheckBox.AutoSize = true;
-            _includeNexusPrereleaseCheckBox.Location = new Point(15, 148);
-            _helpToolTip.SetToolTip(_includeNexusPrereleaseCheckBox, "Also inspect Nexus file versions so beta/prerelease uploads can appear as updates.");
-
             _devSettingsGroup.Controls.Add(_verboseLoggingCheckBox);
             _devSettingsGroup.Controls.Add(_debugLogScopeLabel);
             _devSettingsGroup.Controls.Add(_debugLogScopeCombo);
             _devSettingsGroup.Controls.Add(_skipHarmonyCheckBox);
             _devSettingsGroup.Controls.Add(_ignoreOrderCheckBox);
-            _devSettingsGroup.Controls.Add(_includeNexusPrereleaseCheckBox);
+        }
 
+        // 6. Actions
+        // Destructive/reset buttons. Always rendered last.
+        private void BuildActionControls()
+        {
             _resetButton = new Button();
             _resetButton.Text = "Reset to Defaults";
             _resetButton.Font = new Font("Segoe UI", 10f);
@@ -357,42 +449,52 @@ namespace Manager.Views
             _resetWindowButton.Font = new Font("Segoe UI", 10f);
             _resetWindowButton.Size = new Size(190, 35);
             _resetWindowButton.FlatStyle = FlatStyle.Flat;
+        }
 
+        // Registers every section's controls on the scroll surface, in render
+        // order. Section-internal children (dev group, advanced panel, runtime
+        // panel) are already parented inside their own containers above.
+        private void AddSectionControlsToContentPanel()
+        {
+            // 1. Appearance
             _contentPanel.Controls.Add(_themeLabel);
             _contentPanel.Controls.Add(_darkModeCheckBox);
+
+            // 2. Saves
+            _contentPanel.Controls.Add(_savesLabel);
             _contentPanel.Controls.Add(_autoCondenseLabel);
             _contentPanel.Controls.Add(_autoCondenseCombo);
-            _contentPanel.Controls.Add(_saveBackupsLabel);
             _contentPanel.Controls.Add(_saveBackupRetentionLabel);
             _contentPanel.Controls.Add(_saveBackupRetentionCombo);
             _contentPanel.Controls.Add(_saveBackupRetentionCountLabel);
             _contentPanel.Controls.Add(_saveBackupRetentionCountNumeric);
+
+            // 3. Nexus
             _contentPanel.Controls.Add(_nexusLabel);
             _contentPanel.Controls.Add(_enableNexusCheckBox);
-            _contentPanel.Controls.Add(_enableExperimentalPublishCheckBox);
             _contentPanel.Controls.Add(_nexusApiKeyLabel);
             _contentPanel.Controls.Add(_nexusApiKeyTextBox);
             _contentPanel.Controls.Add(_nexusApiHelpButton);
             _contentPanel.Controls.Add(_nexusApiRevealButton);
             _contentPanel.Controls.Add(_nexusAccountSummaryLabel);
             _contentPanel.Controls.Add(_nexusDownloadSummaryLabel);
+            _contentPanel.Controls.Add(_includeNexusPrereleaseCheckBox);
             _contentPanel.Controls.Add(_nexusAdvancedToggleLink);
             _contentPanel.Controls.Add(_nexusAdvancedPanel);
             _contentPanel.Controls.Add(_separator);
+
+            // 4. Runtime Features
             _contentPanel.Controls.Add(_runtimeFeaturesLabel);
             _contentPanel.Controls.Add(_runtimeFeaturesRefreshButton);
             _contentPanel.Controls.Add(_runtimeFeaturesPanel);
+
+            // 5. Developer
             _contentPanel.Controls.Add(_devModeCheckBox);
             _contentPanel.Controls.Add(_devSettingsGroup);
+
+            // 6. Actions
             _contentPanel.Controls.Add(_resetButton);
             _contentPanel.Controls.Add(_resetWindowButton);
-
-            _scrollPanel.Controls.Add(_contentPanel);
-            Controls.Add(_scrollPanel);
-            _contentPanel.ResumeLayout(false);
-            _scrollPanel.ResumeLayout(false);
-            ResumeLayout(false);
-            UpdateDynamicLayout();
         }
 
         private void SetupSaveDebounce()
@@ -415,7 +517,6 @@ namespace Manager.Views
             _saveBackupRetentionCombo.SelectedIndexChanged += SaveBackupRetentionCombo_SelectedIndexChanged;
             _saveBackupRetentionCountNumeric.ValueChanged += SaveBackupRetentionCountNumeric_ValueChanged;
             _enableNexusCheckBox.CheckedChanged += EnableNexusCheckBox_CheckedChanged;
-            _enableExperimentalPublishCheckBox.CheckedChanged += EnableExperimentalPublishCheckBox_CheckedChanged;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
             _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
             _nexusApiKeyTextBox.KeyDown += NexusApiKeyTextBox_KeyDown;
@@ -439,6 +540,11 @@ namespace Manager.Views
             _saveDebounceTimer.Start();
         }
 
+        private bool ShouldIgnoreSettingsEvent()
+        {
+            return _suppressEvents || _settings == null;
+        }
+
         private void SaveDebounceTimer_Tick(object sender, EventArgs e)
         {
             _saveDebounceTimer.Stop();
@@ -455,9 +561,9 @@ namespace Manager.Views
             _nexusApiRevealButton.Enabled = enabled && !string.IsNullOrEmpty(_settings != null ? _settings.NexusApiKey : string.Empty);
             _nexusAccountSummaryLabel.Enabled = enabled;
             _nexusDownloadSummaryLabel.Enabled = enabled;
+            _includeNexusPrereleaseCheckBox.Enabled = enabled;
             _nexusAdvancedToggleLink.Enabled = enabled;
             _nexusAdvancedPanel.Enabled = enabled;
-            _enableExperimentalPublishCheckBox.Enabled = enabled;
             _nexusDomainLabel.Enabled = enabled;
             _nexusDomainTextBox.Enabled = enabled;
             _managerNexusModIdLabel.Enabled = enabled;
@@ -559,7 +665,6 @@ namespace Manager.Views
 
                 ApplySaveBackupRetentionToUi(_settings.SaveBackupRetention);
                 _enableNexusCheckBox.Checked = _settings.EnableNexusIntegration;
-                _enableExperimentalPublishCheckBox.Checked = _settings.EnableExperimentalPublishTab;
                 _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? "sheltered";
                 _managerNexusModIdTextBox.Text = _settings.ManagerNexusModId > 0 ? _settings.ManagerNexusModId.ToString() : string.Empty;
                 _nexusApiKeyRevealed = false;
@@ -595,7 +700,6 @@ namespace Manager.Views
             _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
 
             _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
-            _settings.EnableExperimentalPublishTab = _enableExperimentalPublishCheckBox.Checked;
             _settings.NexusGameDomain = (_nexusDomainTextBox.Text ?? string.Empty).Trim().ToLowerInvariant();
             if (IsNexusApiKeyEditable())
                 _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
@@ -757,12 +861,11 @@ namespace Manager.Views
 
         private void DarkModeCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_suppressEvents)
+            if (ShouldIgnoreSettingsEvent())
                 return;
 
             _isDarkMode = _darkModeCheckBox.Checked;
-            if (_settings != null)
-                _settings.DarkMode = _isDarkMode;
+            _settings.DarkMode = _isDarkMode;
             if (DarkModeChanged != null)
                 DarkModeChanged(_isDarkMode);
             TriggerSave();
@@ -770,57 +873,64 @@ namespace Manager.Views
 
         private void DevModeCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_settings != null)
-                _settings.DevMode = _devModeCheckBox.Checked;
+            if (ShouldIgnoreSettingsEvent())
+                return;
+
+            _settings.DevMode = _devModeCheckBox.Checked;
             UpdateDynamicLayout();
             TriggerSave();
         }
 
         private void VerboseLoggingCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_settings != null)
-            {
-                _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
-                _settings.DebugLogScope = ReadDebugLogScopeFromUi();
-            }
+            if (ShouldIgnoreSettingsEvent())
+                return;
+
+            _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
+            _settings.DebugLogScope = ReadDebugLogScopeFromUi();
             UpdateDebugLogScopeInputs();
             TriggerSave();
         }
 
         private void DebugLogScopeCombo_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (_suppressEvents)
+            if (ShouldIgnoreSettingsEvent())
                 return;
 
-            if (_settings != null)
-                _settings.DebugLogScope = ReadDebugLogScopeFromUi();
+            _settings.DebugLogScope = ReadDebugLogScopeFromUi();
             TriggerSave();
         }
 
         private void SkipHarmonyCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_settings != null)
-                _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
+            if (ShouldIgnoreSettingsEvent())
+                return;
+
+            _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
             TriggerSave();
         }
 
         private void IgnoreOrderCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_settings != null)
-                _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
+            if (ShouldIgnoreSettingsEvent())
+                return;
+
+            _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
             TriggerSave();
         }
 
         private void IncludeNexusPrereleaseCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_settings != null)
-                _settings.IncludeNexusPrereleaseFiles = _includeNexusPrereleaseCheckBox.Checked;
+            if (ShouldIgnoreSettingsEvent())
+                return;
+
+            _settings.IncludeNexusPrereleaseFiles = _includeNexusPrereleaseCheckBox.Checked;
             TriggerSave();
         }
 
         private void AutoCondenseCombo_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (_suppressEvents || _settings == null)
+            if (ShouldIgnoreSettingsEvent())
                 return;
 
             string choice = "ask";
@@ -833,7 +943,7 @@ namespace Manager.Views
         private void SaveBackupRetentionCombo_SelectedIndexChanged(object sender, EventArgs e)
         {
             UpdateSaveBackupRetentionInputs();
-            if (_suppressEvents || _settings == null)
+            if (ShouldIgnoreSettingsEvent())
                 return;
 
             _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
@@ -842,7 +952,7 @@ namespace Manager.Views
 
         private void SaveBackupRetentionCountNumeric_ValueChanged(object sender, EventArgs e)
         {
-            if (_suppressEvents || _settings == null)
+            if (ShouldIgnoreSettingsEvent())
                 return;
 
             _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
@@ -851,22 +961,17 @@ namespace Manager.Views
 
         private void EnableNexusCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_settings != null)
-                _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
-            SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
-            TriggerSave();
-        }
+            if (ShouldIgnoreSettingsEvent())
+                return;
 
-        private void EnableExperimentalPublishCheckBox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (_settings != null)
-                _settings.EnableExperimentalPublishTab = _enableExperimentalPublishCheckBox.Checked;
+            _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
+            SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
             TriggerSave();
         }
 
         private void NexusDomainTextBox_TextChanged(object sender, EventArgs e)
         {
-            if (_suppressEvents || _settings == null)
+            if (ShouldIgnoreSettingsEvent())
                 return;
             _settings.NexusGameDomain = (_nexusDomainTextBox.Text ?? string.Empty).Trim().ToLowerInvariant();
             TriggerSave();
@@ -874,7 +979,7 @@ namespace Manager.Views
 
         private void NexusApiKeyTextBox_TextChanged(object sender, EventArgs e)
         {
-            if (_suppressEvents || _settings == null || !IsNexusApiKeyEditable())
+            if (ShouldIgnoreSettingsEvent() || !IsNexusApiKeyEditable())
                 return;
             _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
             _nexusApiRevealButton.Enabled = !string.IsNullOrEmpty(_settings.NexusApiKey);
@@ -887,7 +992,7 @@ namespace Manager.Views
                 return;
             e.Handled = true;
             e.SuppressKeyPress = true;
-            if (_suppressEvents || _settings == null || !IsNexusApiKeyEditable())
+            if (ShouldIgnoreSettingsEvent() || !IsNexusApiKeyEditable())
                 return;
 
             _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
@@ -918,7 +1023,7 @@ namespace Manager.Views
 
         private void ManagerNexusModIdTextBox_TextChanged(object sender, EventArgs e)
         {
-            if (_suppressEvents || _settings == null)
+            if (ShouldIgnoreSettingsEvent())
                 return;
 
             string raw = (_managerNexusModIdTextBox.Text ?? string.Empty).Trim();

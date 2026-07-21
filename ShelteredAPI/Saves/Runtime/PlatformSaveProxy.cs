@@ -79,6 +79,8 @@ namespace ShelteredAPI.Saves.Runtime
 
         public static void SetNextSave(SaveManager.SaveType type, string scenarioId, string saveId)
         {
+            // Safety: match SetNextLoad so pending new-game saves are routed before the loading scene starts.
+            try { SaveManager_Injection_Patch.Inject(SaveManager.instance); } catch { }
             SaveRuntimeState.SetPendingSave(type, scenarioId, saveId);
         }
 
@@ -95,6 +97,16 @@ namespace ShelteredAPI.Saves.Runtime
         public static bool ClearNextLoad(SaveManager.SaveType type)
         {
             return SaveRuntimeState.ClearPendingLoad(type);
+        }
+
+        public static bool ClearNextSaveIfMatches(SaveManager.SaveType type, Target expectedTarget)
+        {
+            return SaveRuntimeState.ClearPendingSaveIfMatches(type, expectedTarget);
+        }
+
+        public static bool ClearNextLoadIfMatches(SaveManager.SaveType type, Target expectedTarget)
+        {
+            return SaveRuntimeState.ClearPendingLoadIfMatches(type, expectedTarget);
         }
 
         public static void ResetStatus()

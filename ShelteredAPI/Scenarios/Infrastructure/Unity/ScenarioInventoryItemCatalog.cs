@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using ShelteredAPI.Content;
 using UnityEngine;
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
@@ -11,21 +12,32 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         public ItemManager.ItemType ItemType { get; set; }
         public ItemManager.ItemCategory Category { get; set; }
         public Sprite PreviewSprite { get; set; }
+        public bool PreviewCreatedByCustomScenarioEditor { get; set; }
     }
 
     internal static class ScenarioInventoryItemCatalog
     {
-        private static readonly Dictionary<string, Sprite> SpriteCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+        private static List<ScenarioInventoryItemCatalogEntry> CachedEntries;
+        private static int CachedRuntimeSignature = int.MinValue;
 
         public static List<ScenarioInventoryItemCatalogEntry> Build()
         {
-            List<ItemManager.ItemType> types = BuildDefinedTypes();
+            int runtimeSignature = ComputeRuntimeSignature();
+            if (CachedEntries != null && CachedRuntimeSignature == runtimeSignature)
+                return CachedEntries;
+
+            List<ItemManager.ItemType> types = BuildCatalogTypes();
             List<ScenarioInventoryItemCatalogEntry> entries = new List<ScenarioInventoryItemCatalogEntry>();
+            List<string> missingPreviews = new List<string>();
             for (int i = 0; i < types.Count; i++)
             {
                 ScenarioInventoryItemCatalogEntry entry = CreateEntry(types[i]);
                 if (entry != null)
+                {
                     entries.Add(entry);
+                    if (entry.PreviewSprite == null)
+                        missingPreviews.Add(entry.ItemId);
+                }
             }
 
             entries.Sort(delegate(ScenarioInventoryItemCatalogEntry left, ScenarioInventoryItemCatalogEntry right)
@@ -35,7 +47,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                     right != null ? right.DisplayName : null,
                     StringComparison.OrdinalIgnoreCase);
             });
-            return entries;
+            CachedRuntimeSignature = runtimeSignature;
+            CachedEntries = entries;
+            MMLog.WriteInfo("[ScenarioInventoryItemCatalog] Catalog ready. entries=" + entries.Count
+                + " missingPreviews=" + missingPreviews.Count
+                + (missingPreviews.Count > 0 ? " ids=" + string.Join(",", missingPreviews.ToArray()) : string.Empty));
+            return CachedEntries;
         }
 
         public static ScenarioInventoryItemCatalogEntry Resolve(string itemId)
@@ -93,7 +110,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return type.ToString();
         }
 
-        private static List<ItemManager.ItemType> BuildDefinedTypes()
+        private static List<ItemManager.ItemType> BuildCatalogTypes()
         {
             Dictionary<ItemManager.ItemType, bool> seen = new Dictionary<ItemManager.ItemType, bool>();
             List<ItemManager.ItemType> types = new List<ItemManager.ItemType>();
@@ -106,12 +123,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             foreach (ItemManager.ItemType type in ContentInjector.RegisteredTypes)
                 AddType(types, seen, type);
 
-            if (types.Count == 0)
-            {
-                Array values = Enum.GetValues(typeof(ItemManager.ItemType));
-                for (int i = 0; i < values.Length; i++)
-                    AddType(types, seen, (ItemManager.ItemType)values.GetValue(i));
-            }
+            // ItemManager only exposes prefabs that were registered in ItemDefs.
+            // The enum also contains unique, scenario-only, and unfinished records
+            // that remain valid in saves (for example Weapon_M16). Always merge the
+            // enum instead of using it only when the runtime manager is empty.
+            Array values = Enum.GetValues(typeof(ItemManager.ItemType));
+            for (int i = 0; i < values.Length; i++)
+                AddType(types, seen, (ItemManager.ItemType)values.GetValue(i));
 
             return types;
         }
@@ -119,10 +137,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private static void AddType(List<ItemManager.ItemType> types, Dictionary<ItemManager.ItemType, bool> seen, ItemManager.ItemType type)
         {
             if (type == ItemManager.ItemType.Undefined || seen.ContainsKey(type))
-                return;
-
-            ScenarioInventoryItemCatalogEntry entry = CreateEntry(type);
-            if (entry == null)
                 return;
 
             seen[type] = true;
@@ -136,18 +150,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             ItemDefinition definition = ItemManager.Instance != null ? ItemManager.Instance.GetItemDefinition(type) : null;
             ItemManager.ItemCategory category = definition != null ? definition.Category : ItemManager.ItemCategory.Normal;
-            if (category == ItemManager.ItemCategory.Undefined || category == ItemManager.ItemCategory.Object)
-                return null;
+            if (category == ItemManager.ItemCategory.Undefined)
+                category = ItemManager.ItemCategory.Normal;
 
             string itemId = GetStableItemId(type);
+            bool previewCreatedByCustomScenarioEditor;
+            Sprite previewSprite = ScenarioInventoryItemPreviewResolver.Resolve(
+                type,
+                definition,
+                out previewCreatedByCustomScenarioEditor);
             return new ScenarioInventoryItemCatalogEntry
             {
                 ItemId = itemId,
                 DisplayName = ResolveDisplayName(definition, itemId, type),
-                Detail = itemId + " | " + category,
+                Detail = itemId
+                    + " | " + category
+                    + (definition == null ? " | Enum-only game record" : string.Empty)
+                    + (previewCreatedByCustomScenarioEditor ? " | Sprite made by Custom Scenario Editor" : string.Empty),
                 ItemType = type,
                 Category = category,
-                PreviewSprite = ResolvePreviewSprite(type, definition)
+                PreviewSprite = previewSprite,
+                PreviewCreatedByCustomScenarioEditor = previewCreatedByCustomScenarioEditor
             };
         }
 
@@ -183,43 +206,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return SplitIdentifier(fallback);
         }
 
-        private static Sprite ResolvePreviewSprite(ItemManager.ItemType type, ItemDefinition definition)
+        private static int ComputeRuntimeSignature()
         {
-            Sprite customIcon;
-            if (ContentInjector.TryGetResolvedItemIcon(type, out customIcon))
-                return customIcon;
-
-            UISprite uiSprite = definition != null ? definition.GetComponent<UISprite>() : null;
-            if (uiSprite == null || uiSprite.atlas == null || string.IsNullOrEmpty(uiSprite.spriteName))
-                return null;
-
-            UISpriteData spriteData = uiSprite.atlas.GetSprite(uiSprite.spriteName);
-            Texture2D texture = uiSprite.atlas.texture as Texture2D;
-            if (spriteData == null || texture == null || spriteData.width <= 0 || spriteData.height <= 0)
-                return null;
-
-            string cacheKey = texture.GetInstanceID().ToString() + ":" + spriteData.name + ":" + spriteData.x + ":" + spriteData.y + ":" + spriteData.width + ":" + spriteData.height;
-            Sprite cached;
-            if (SpriteCache.TryGetValue(cacheKey, out cached) && cached != null)
-                return cached;
-
-            float y = texture.height - spriteData.y - spriteData.height;
-            if (y < 0f || y + spriteData.height > texture.height)
-                y = spriteData.y;
-            if (spriteData.x < 0 || spriteData.x + spriteData.width > texture.width || y < 0f || y + spriteData.height > texture.height)
-                return null;
-
-            try
+            unchecked
             {
-                Rect rect = new Rect(spriteData.x, y, spriteData.width, spriteData.height);
-                Sprite sprite = Sprite.Create(texture, rect, new Vector2(0.5f, 0.5f), 100f);
-                sprite.name = "ScenarioInventory_" + spriteData.name;
-                SpriteCache[cacheKey] = sprite;
-                return sprite;
-            }
-            catch
-            {
-                return null;
+                int hash = 17;
+                ItemManager manager = ItemManager.Instance;
+                hash = (hash * 31) + (manager != null ? manager.GetInstanceID() : 0);
+                hash = (hash * 31) + (ObjectManager.Instance != null ? ObjectManager.Instance.GetInstanceID() : 0);
+
+                List<ItemManager.ItemType> defined = manager != null ? manager.GetAllDefinedItems() : null;
+                hash = (hash * 31) + (defined != null ? defined.Count : 0);
+                for (int i = 0; defined != null && i < defined.Count; i++)
+                    hash ^= ((int)defined[i] * 397);
+
+                int registeredCount = 0;
+                foreach (ItemManager.ItemType type in ContentInjector.RegisteredTypes)
+                {
+                    registeredCount++;
+                    hash ^= ((int)type * 7919);
+                }
+
+                return (hash * 31) + registeredCount;
             }
         }
 

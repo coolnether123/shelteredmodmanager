@@ -41,6 +41,155 @@ namespace ModAPI.Harmony
         {
             return new FluentCallReplacementSelection(transpiler, sourceMethod);
         }
+
+        /// <summary>
+        /// Redirects <b>every</b> call to <paramref name="source"/> to <paramref name="replacement"/>,
+        /// pushing <paramref name="appendedLiteral"/> as an extra <b>trailing</b> argument immediately
+        /// before each call. This is the batch, manifest-driven redirect helper: it replaces the
+        /// hand-rolled "scan indices → insert a tag constant → replace-at index+1 → walk backwards"
+        /// loop, and it also handles generic call sites (when <paramref name="source"/> is a generic
+        /// method definition, each site's type arguments are applied to <paramref name="replacement"/>).
+        /// </summary>
+        /// <remarks>
+        /// The replacement must be a static method whose parameters are the original call's stack inputs
+        /// (including the instance for an instance call) followed by one parameter accepting the literal's
+        /// type. Every matched site is signature-validated <b>before</b> any IL is mutated; a mismatch
+        /// returns <see cref="FluentReplacementResult.UnsafeMatch"/> and leaves the stream untouched.
+        /// Supported literal kinds: string, bool, integral types, char, float, double, long.
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Redirect Random.Range(int,int) to Bridge.Range(int,int,string) tagging each site "map":
+        /// t.RedirectCallsAppendingLiteral(RangeII, BridgeRangeIIWithDomain, "map");
+        /// // Redirect the generic ExtensionMethods.Shuffle&lt;T&gt; to Bridge.Shuffle&lt;T&gt;(list, string):
+        /// t.RedirectCallsAppendingLiteral(ShuffleDef, BridgeShuffleDef, "map");
+        /// </code>
+        /// </example>
+        public static FluentReplacementResult RedirectCallsAppendingLiteral(
+            this FluentTranspiler transpiler,
+            MethodInfo source,
+            MethodInfo replacement,
+            object appendedLiteral,
+            string editLabel = null)
+        {
+            const string caller = "RedirectCallsAppendingLiteral";
+            if (transpiler == null)
+            {
+                return FluentReplacementResult.NoMatch;
+            }
+
+            if (source == null || replacement == null)
+            {
+                transpiler.AddWarning($"{caller} received a null {(source == null ? "source" : "replacement")} method.");
+                return FluentReplacementResult.Failed;
+            }
+
+            CodeInstruction literalLoadTemplate;
+            Type literalType;
+            if (!FluentRecipeUtility.TryCreateLiteralLoad(appendedLiteral, out literalLoadTemplate, out literalType))
+            {
+                transpiler.AddWarning(
+                    $"{caller} cannot push the appended argument for {FluentTranspilerFormatting.FormatMethod(replacement)}: " +
+                    (appendedLiteral == null
+                        ? "the literal was null."
+                        : "unsupported literal type " + appendedLiteral.GetType().FullName + ".") +
+                    " Fix: pass a string, bool, integral, char, float, double or long constant.");
+                return FluentReplacementResult.Failed;
+            }
+
+            bool sourceIsGeneric = source.IsGenericMethodDefinition;
+
+            var instructions = transpiler.Instructions().ToList();
+            var callIndices = new List<int>();
+            for (int i = 0; i < instructions.Count; i++)
+            {
+                CodeInstruction instruction = instructions[i];
+                if (instruction == null ||
+                    (instruction.opcode != OpCodes.Call && instruction.opcode != OpCodes.Callvirt))
+                {
+                    continue;
+                }
+
+                MethodInfo call = instruction.operand as MethodInfo;
+                if (call == null)
+                {
+                    continue;
+                }
+
+                bool matches = sourceIsGeneric
+                    ? (call.IsGenericMethod && call.GetGenericMethodDefinition() == source)
+                    : (call == source);
+                if (matches)
+                {
+                    callIndices.Add(i);
+                }
+            }
+
+            if (callIndices.Count == 0)
+            {
+                transpiler.AddSoftFailure(TranspilerDiagnosticCategory.Match,
+                    $"{caller} found no calls to {FluentTranspilerFormatting.FormatMethod(source)}.");
+                return FluentReplacementResult.NoMatch;
+            }
+
+            // Resolve + validate every call site up front so a single bad site aborts before any mutation.
+            var concreteReplacements = new Dictionary<int, MethodInfo>();
+            foreach (int callIndex in callIndices)
+            {
+                MethodInfo concreteSource = instructions[callIndex].operand as MethodInfo;
+                MethodInfo concreteReplacement;
+                if (sourceIsGeneric)
+                {
+                    Type[] typeArgs = concreteSource.GetGenericArguments();
+                    if (!replacement.IsGenericMethodDefinition ||
+                        replacement.GetGenericArguments().Length != typeArgs.Length)
+                    {
+                        transpiler.AddWarning(
+                            $"{caller} replacement {FluentTranspilerFormatting.FormatMethod(replacement)} must be a generic method " +
+                            $"definition with {typeArgs.Length} type parameter(s) to redirect generic {FluentTranspilerFormatting.FormatMethod(source)}.");
+                        return FluentReplacementResult.UnsafeMatch;
+                    }
+
+                    try
+                    {
+                        concreteReplacement = replacement.MakeGenericMethod(typeArgs);
+                    }
+                    catch (Exception ex)
+                    {
+                        transpiler.AddWarning(
+                            $"{caller} could not instantiate {FluentTranspilerFormatting.FormatMethod(replacement)} for the call-site type arguments: {ex.Message}.");
+                        return FluentReplacementResult.UnsafeMatch;
+                    }
+                }
+                else
+                {
+                    concreteReplacement = replacement;
+                }
+
+                if (!FluentTranspilerRecipeValidation.ValidateReplacementCallSignatureWithAppended(
+                        transpiler, concreteSource, concreteReplacement, literalType, caller))
+                {
+                    return FluentReplacementResult.UnsafeMatch;
+                }
+
+                concreteReplacements[callIndex] = concreteReplacement;
+            }
+
+            // Apply back-to-front so each insertion leaves the remaining absolute indices stable.
+            for (int i = callIndices.Count - 1; i >= 0; i--)
+            {
+                int callIndex = callIndices[i];
+                transpiler.MoveTo(callIndex).InsertBefore(new CodeInstruction(literalLoadTemplate));
+                transpiler.ReplaceAtWithCall(callIndex + 1, concreteReplacements[callIndex]);
+            }
+
+            if (!string.IsNullOrEmpty(editLabel))
+            {
+                transpiler.AddNote($"{editLabel}: redirected {callIndices.Count} call(s) to {FluentTranspilerFormatting.FormatMethod(source)} with an appended {literalType.Name}.");
+            }
+
+            return FluentReplacementResult.PatternReplaced;
+        }
     }
 
     public sealed class FluentCallSelection
@@ -434,7 +583,7 @@ namespace ModAPI.Harmony
 
             if (_sourceMethod == null)
             {
-                _transpiler.AddWarning("ReplaceCalls received a null source method.");
+                _transpiler.AddWarning("ReplaceCalls received a null source method. Fix: the MethodInfo you passed to ReplaceCalls(...) resolved to null — check the AccessTools.Method/PropertyGetter lookup (name, declaring type, and overload parameter types) that produced it.");
                 AddPatchDiagnostic(
                     "source method call to replace.",
                     "source method was null.",

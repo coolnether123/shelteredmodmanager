@@ -97,6 +97,34 @@ namespace ShelteredAPI.Saves.Paging{
         }
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionDeleteIntentCapture",
+        TargetBehavior = "Capture the concrete save-slot row used to open a right-click delete confirmation",
+        FailureMode = "Delete confirmation consistency checks may be unable to detect stale selected-slot state.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the delete intent capture patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(SaveSlotButton), "OnClick")]
+    internal static class SaveSlotButton_OnClick_DeleteIntent_Patch
+    {
+        static void Prefix(SaveSlotButton __instance)
+        {
+            SlotSelectionPatchCoordinator.SaveSlotButtonOnClickPrefix(__instance);
+        }
+    }
+
+    [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionDeletePromptIntentBinding",
+        TargetBehavior = "Bind a concrete save-slot delete intent when the delete confirmation prompt opens",
+        FailureMode = "Delete confirmation consistency checks may miss prompt-time selected-slot changes.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the delete prompt intent binding patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(SlotSelectionPanel), "PromptDeleteCurrentSlot")]
+    internal static class SlotSelectionPanel_PromptDeleteCurrentSlot_DeleteIntent_Patch
+    {
+        static void Prefix(SlotSelectionPanel __instance)
+        {
+            SlotSelectionPatchCoordinator.PromptDeleteCurrentSlotPrefix(__instance);
+        }
+    }
+
     [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionSnapshotBackRouting",
         TargetBehavior = "Back button exits backup snapshot archives before leaving the save selection screen",
         FailureMode = "Back button can leave the save screen instead of returning from a snapshot archive to the save list.",

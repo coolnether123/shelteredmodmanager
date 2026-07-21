@@ -9,4 +9,10 @@ namespace ShelteredAPI.Scenarios.Application.Effects{
         bool CanHandle(ScenarioEffectKind kind);
         bool Handle(ScenarioDefinition definition, ScenarioEffectDefinition effect, ScenarioRuntimeState state, out string message);
     }
+
+
+    internal interface IScenarioRetryableEffectHandler : IScenarioEffectHandler
+    {
+        bool Handle(ScenarioDefinition definition, ScenarioEffectDefinition effect, ScenarioRuntimeState state, out string message, out bool retryable);
+    }
 }

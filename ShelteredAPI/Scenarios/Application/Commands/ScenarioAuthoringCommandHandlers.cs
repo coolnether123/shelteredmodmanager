@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
@@ -10,28 +11,526 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Supplies;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
+using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Application.Commands{
+    internal sealed class RendererInteractionCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;
+        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacement;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
+
+        public RendererInteractionCommandHandler(
+            ScenarioBuildPlacementAuthoringService buildPlacement,
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacement,
+            ScenarioAuthoringLayoutService layoutService)
+        {
+            _buildPlacement = buildPlacement;
+            _sceneSpritePlacement = sceneSpritePlacement;
+            _layoutService = layoutService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (state == null || string.IsNullOrEmpty(actionId))
+                return false;
+
+            // Phase 9 LIVE-1 captured workspace actions without the renderer namespace.
+            // Accept that already-emitted compatibility shape at the same command seam,
+            // while retaining shell.renderer.workspace.* as the canonical contract ID.
+            if (actionId.StartsWith("workspace.", StringComparison.Ordinal))
+                actionId = "shell.renderer." + actionId;
+            if (!actionId.StartsWith("shell.renderer.", StringComparison.Ordinal))
+                return false;
+
+            handled = true;
+            string token;
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererMapFilterTogglePrefix, StringComparison.Ordinal))
+            {
+                ScenarioMapAuthoringFilter filter;
+                token = actionId.Substring(ScenarioAuthoringActionIds.ActionRendererMapFilterTogglePrefix.Length);
+                try
+                {
+                    filter = (ScenarioMapAuthoringFilter)Enum.Parse(typeof(ScenarioMapAuthoringFilter), token, true);
+                }
+                catch
+                {
+                    return Invalid("Unknown map filter.", out message);
+                }
+                ScenarioMapAuthoringFilterState.Toggle(filter);
+                message = "Map filter toggled: " + filter + ".";
+                return true;
+            }
+            string workspaceId;
+            string subtabId;
+            string workspaceValue;
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceSubtabSelectPrefix, StringComparison.Ordinal))
+            {
+                if (!TryWorkspacePayload(actionId, ScenarioAuthoringActionIds.ActionRendererWorkspaceSubtabSelectPrefix, out workspaceId, out subtabId, out workspaceValue))
+                    return Invalid("Workspace subtab action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSubtab(workspaceId, subtabId);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix, StringComparison.Ordinal))
+            {
+                bool breadcrumbSelection = actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix, StringComparison.Ordinal);
+                string prefix = actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix, StringComparison.Ordinal)
+                    ? ScenarioAuthoringActionIds.ActionRendererWorkspaceEntitySelectPrefix
+                    : (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix, StringComparison.Ordinal)
+                        ? ScenarioAuthoringActionIds.ActionRendererWorkspaceWarningOpenPrefix
+                        : ScenarioAuthoringActionIds.ActionRendererWorkspaceBreadcrumbSelectPrefix);
+                if (!TryWorkspacePayload(actionId, prefix, out workspaceId, out subtabId, out workspaceValue)
+                    || (!breadcrumbSelection && string.IsNullOrEmpty(workspaceValue)))
+                    return Invalid("Workspace selection action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSubtab(workspaceId, subtabId);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSelection(workspaceId, subtabId, workspaceValue);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceNarrowPane(workspaceId, subtabId, true);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceGroupTogglePrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceRowTogglePrefix, StringComparison.Ordinal))
+            {
+                string prefix = actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceGroupTogglePrefix, StringComparison.Ordinal)
+                    ? ScenarioAuthoringActionIds.ActionRendererWorkspaceGroupTogglePrefix
+                    : ScenarioAuthoringActionIds.ActionRendererWorkspaceRowTogglePrefix;
+                if (!TryWorkspacePayload(actionId, prefix, out workspaceId, out subtabId, out workspaceValue)
+                    || string.IsNullOrEmpty(workspaceValue))
+                    return Invalid("Workspace expansion action was malformed.", out message);
+                bool expanded = ScenarioAuthoringRendererInteractionState.Instance.GetWorkspaceExpanded(workspaceId, subtabId, workspaceValue, false);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceExpanded(workspaceId, subtabId, workspaceValue, !expanded);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceSearchSetPrefix, StringComparison.Ordinal))
+            {
+                if (!TryWorkspacePayload(actionId, ScenarioAuthoringActionIds.ActionRendererWorkspaceSearchSetPrefix, out workspaceId, out subtabId, out workspaceValue))
+                    return Invalid("Workspace search action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceSearch(workspaceId, subtabId, workspaceValue);
+                message = null;
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererWorkspaceBackPrefix, StringComparison.Ordinal))
+            {
+                if (!TryWorkspacePayload(actionId, ScenarioAuthoringActionIds.ActionRendererWorkspaceBackPrefix, out workspaceId, out subtabId, out workspaceValue))
+                    return Invalid("Workspace Back action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetWorkspaceNarrowPane(workspaceId, subtabId, false);
+                message = null;
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererPixelGroupTogglePrefix, out token)
+                || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererHomeGroupTogglePrefix, out token)
+                || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererTimelineGroupTogglePrefix, out token)
+                || TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererWorkshopGroupTogglePrefix, out token))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.ToggleDisclosure(token);
+                message = "Disclosure toggled: " + token + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererAssetFavoriteTogglePrefix, out token))
+            {
+                ScenarioAssetBrowserUx.ToggleFavorite(state, token);
+                message = "Asset favorite toggled.";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererAssetCategorySelectPrefix, out token))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserCategory = token;
+                message = "Asset category selected: " + token + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererAssetInventoryFilterPrefix, out token))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.AssetInventoryFilter = token;
+                message = "Asset inventory filter selected: " + token + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererCandidateSearchPrefix, out token))
+            {
+                string key;
+                string value;
+                if (!TrySplitControlValue(token, out key, out value)) return Invalid("Candidate search action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetCandidateSearch(key, value);
+                message = "Candidate search updated: " + key + ".";
+                return true;
+            }
+            if (TryToken(actionId, ScenarioAuthoringActionIds.ActionRendererCandidateFilterPrefix, out token))
+            {
+                string key;
+                string value;
+                if (!TrySplitControlValue(token, out key, out value)) return Invalid("Candidate filter action was malformed.", out message);
+                ScenarioAuthoringRendererInteractionState.Instance.SetCandidateFilter(key, value);
+                message = "Candidate filter updated: " + key + ".";
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererAssetSearchPrefix, StringComparison.Ordinal))
+            {
+                try
+                {
+                    token = Encoding.UTF8.GetString(Convert.FromBase64String(actionId.Substring(ScenarioAuthoringActionIds.ActionRendererAssetSearchPrefix.Length)));
+                }
+                catch
+                {
+                    return Invalid("Asset search value must be base64 UTF-8.", out message);
+                }
+                ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch = token;
+                message = "Asset search updated.";
+                return true;
+            }
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionRendererGlobalSearchQueryPrefix, StringComparison.Ordinal))
+            {
+                try
+                {
+                    token = Encoding.UTF8.GetString(Convert.FromBase64String(actionId.Substring(ScenarioAuthoringActionIds.ActionRendererGlobalSearchQueryPrefix.Length)));
+                }
+                catch
+                {
+                    return Invalid("Global search query must be base64 UTF-8.", out message);
+                }
+                ScenarioAuthoringRendererInteractionState.Instance.GlobalSearchQuery = token;
+                message = "Global search query updated.";
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererAssetSearchClear, StringComparison.Ordinal))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.AssetBrowserSearch = string.Empty;
+                message = "Asset search cleared.";
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererTopBarMoreToggle, StringComparison.Ordinal))
+            {
+                ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen = !ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen;
+                message = ScenarioAuthoringRendererInteractionState.Instance.TopBarMoreOpen ? "Stage overflow opened." : "Stage overflow closed.";
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererPlacementBack, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererPlacementDone, StringComparison.Ordinal))
+            {
+                bool changed = CancelPlacement(state, out message);
+                if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionRendererPlacementDone, StringComparison.Ordinal))
+                    changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.BuildTools, false);
+                if (string.IsNullOrEmpty(message)) message = changed ? "Placement closed." : "No placement was active.";
+                return changed;
+            }
+
+            handled = false;
+            return false;
+        }
+
+        private bool CancelPlacement(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            bool handled;
+            bool changed = false;
+            string nextMessage;
+            if (_buildPlacement != null && _buildPlacement.TryHandleAction(state, ScenarioAuthoringActionIds.ActionBuildPlacementCancel, out handled, out nextMessage))
+            {
+                changed = true;
+                message = nextMessage;
+            }
+            if (_sceneSpritePlacement != null && _sceneSpritePlacement.TryHandleAction(state, ScenarioAuthoringActionIds.ActionSceneSpritePlacementCancel, out handled, out nextMessage))
+            {
+                changed = true;
+                message = nextMessage;
+            }
+            return changed;
+        }
+
+        private static bool TryToken(string actionId, string prefix, out string token)
+        {
+            return ScenarioAuthoringRendererActionManifest.TryDecodeTokenAction(actionId, prefix, out token);
+        }
+
+        private static bool TrySplitControlValue(string token, out string key, out string value)
+        {
+            key = null;
+            value = null;
+            int separator = token != null ? token.IndexOf('\n') : -1;
+            if (separator <= 0) return false;
+            key = token.Substring(0, separator);
+            value = token.Substring(separator + 1);
+            return true;
+        }
+
+        private static bool TryWorkspacePayload(
+            string actionId,
+            string prefix,
+            out string workspaceId,
+            out string subtabId,
+            out string value)
+        {
+            workspaceId = null;
+            subtabId = null;
+            value = null;
+            string payload;
+            if (!TryToken(actionId, prefix, out payload))
+                return false;
+
+            int firstSeparator = payload.IndexOf('\n');
+            int secondSeparator = firstSeparator >= 0 ? payload.IndexOf('\n', firstSeparator + 1) : -1;
+            if (firstSeparator <= 0 || secondSeparator <= firstSeparator + 1)
+                return false;
+
+            workspaceId = payload.Substring(0, firstSeparator);
+            subtabId = payload.Substring(firstSeparator + 1, secondSeparator - firstSeparator - 1);
+            value = payload.Substring(secondSeparator + 1);
+            return !string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(subtabId);
+        }
+
+        private static bool Invalid(string reason, out string message)
+        {
+            message = reason;
+            return false;
+        }
+    }
+
+    internal sealed class AssetBrowserCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;
+        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacement;
+        private readonly ScenarioSpriteSwapAuthoringService _spriteSwap;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioAssetInventoryMutationService _assetInventoryMutations;
+
+        public AssetBrowserCommandHandler(
+            ScenarioBuildPlacementAuthoringService buildPlacement,
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacement,
+            ScenarioSpriteSwapAuthoringService spriteSwap,
+            ScenarioAuthoringLayoutService layoutService,
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
+            IScenarioEditorService editorService,
+            ScenarioAssetInventoryMutationService assetInventoryMutations)
+        {
+            _buildPlacement = buildPlacement;
+            _sceneSpritePlacement = sceneSpritePlacement;
+            _spriteSwap = spriteSwap;
+            _layoutService = layoutService;
+            _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
+            _editorService = editorService;
+            _assetInventoryMutations = assetInventoryMutations;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith("asset_browser.", StringComparison.Ordinal))
+                return false;
+
+            handled = true;
+            if (actionId.StartsWith(ScenarioAssetInventoryActionIds.Prefix, StringComparison.Ordinal))
+                return HandleInventoryAction(state, actionId, out message);
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, StringComparison.Ordinal))
+                return SelectAsset(state, actionId, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserPlaceSelected, StringComparison.Ordinal))
+                return PlaceSelectedAsset(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserEditSelected, StringComparison.Ordinal))
+                return EditSelectedAsset(state, out message);
+
+            handled = false;
+            return false;
+        }
+
+        private bool HandleInventoryAction(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            if (_assetInventoryMutations == null)
+            {
+                message = "Asset inventory actions are unavailable.";
+                return false;
+            }
+
+            string token;
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.RelinkPrefix, out token))
+                return _assetInventoryMutations.RelinkMissing(_editorService != null ? _editorService.CurrentSession : null, state.ActiveScenarioFilePath, token, out message);
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.RemovePrefix, out token))
+                return _assetInventoryMutations.RemoveOrphan(_editorService != null ? _editorService.CurrentSession : null, state.ActiveScenarioFilePath, token, out message);
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.KeepPrefix, out token))
+                return _assetInventoryMutations.KeepOrphan(token, out message);
+            if (actionId.StartsWith(ScenarioAssetInventoryActionIds.CreditPrefix, StringComparison.Ordinal))
+                return SetAssetCredit(actionId, out message);
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.NavigatePrefix, out token))
+            {
+                if (_layoutService != null) _layoutService.SelectTool(state, ScenarioAuthoringTool.Assets);
+                message = token.StartsWith("placement:", StringComparison.Ordinal)
+                    ? "Opened the scene-art workspace for placement '" + token.Substring("placement:".Length) + "'. Select it in the hierarchy to edit it in-world."
+                    : "Opened the closest editor workspace for this asset reference.";
+                return true;
+            }
+
+            message = "Asset inventory action could not be decoded.";
+            return false;
+        }
+
+        private bool SetAssetCredit(string actionId, out string message)
+        {
+            string payload = actionId.Substring(ScenarioAssetInventoryActionIds.CreditPrefix.Length);
+            int separator = payload.IndexOf('.');
+            if (separator < 0)
+            {
+                message = "Asset credit update could not be decoded.";
+                return false;
+            }
+            string path = ScenarioAuthoringActionCodec.DecodeToken(payload.Substring(0, separator));
+            string credit = ScenarioAuthoringActionCodec.DecodeToken(payload.Substring(separator + 1));
+            return _assetInventoryMutations.SetCredit(_editorService != null ? _editorService.CurrentSession : null, path, credit, out message);
+        }
+
+        private static bool SelectAsset(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            string sourceActionId;
+            if (!ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, out sourceActionId))
+            {
+                message = "Asset browser selection could not be decoded.";
+                return false;
+            }
+
+            state.AssetBrowserSelectedActionId = sourceActionId;
+            message = "Asset selected in browser.";
+            return true;
+        }
+
+        private bool PlaceSelectedAsset(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            string sourceActionId = state != null ? state.AssetBrowserSelectedActionId : null;
+            if (string.IsNullOrEmpty(sourceActionId))
+            {
+                message = "Select an asset before placing it in the world.";
+                return false;
+            }
+
+            bool handled;
+            if (sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionSceneSpritePlacementApplyPrefix, StringComparison.Ordinal))
+            {
+                if (_layoutService != null)
+                    _layoutService.SelectTool(state, ScenarioAuthoringTool.Assets);
+                bool changed = _sceneSpritePlacement != null && _sceneSpritePlacement.TryHandleAction(state, sourceActionId, out handled, out message);
+                if (changed && _buildPlacement != null)
+                    _buildPlacement.Reset();
+                return changed;
+            }
+
+            if (sourceActionId.StartsWith("build.", StringComparison.Ordinal))
+            {
+                if (_layoutService != null)
+                    _layoutService.SelectTool(state, ResolveBuildTool(sourceActionId));
+                bool changed = _buildPlacement != null && _buildPlacement.TryHandleAction(state, sourceActionId, out handled, out message);
+                if (changed && _sceneSpritePlacement != null)
+                    _sceneSpritePlacement.Reset();
+                return changed;
+            }
+
+            message = "The selected asset is not placeable.";
+            return false;
+        }
+
+        private bool EditSelectedAsset(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            string sourceActionId = state != null ? state.AssetBrowserSelectedActionId : null;
+            if (string.IsNullOrEmpty(sourceActionId))
+            {
+                message = "Select an editable art asset before opening the pixel editor.";
+                return false;
+            }
+
+            if (!sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix, StringComparison.Ordinal))
+            {
+                message = "The selected asset does not expose an editable sprite target.";
+                return false;
+            }
+
+            string targetId = sourceActionId.Substring(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix.Length);
+            ScenarioAuthoringTarget target;
+            if (_weatherEffectSpriteCatalog == null || !_weatherEffectSpriteCatalog.TryFindTarget(targetId, out target) || target == null)
+            {
+                message = "Editable art target is not loaded: " + targetId + ".";
+                return false;
+            }
+
+            state.SelectedTarget = target.Copy();
+            state.HoveredTarget = target.Copy();
+            state.MultiSelection.Clear();
+            state.MultiSelection.Add(target.Copy());
+
+            bool handled;
+            bool changed = _spriteSwap != null
+                && _spriteSwap.TryHandleAction(state, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, out handled, out message);
+            if (changed && _layoutService != null)
+            {
+                _layoutService.BeginPixelEditorFocus(state);
+                changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, true);
+            }
+            return changed;
+        }
+
+        private static ScenarioAuthoringTool ResolveBuildTool(string sourceActionId)
+        {
+            if (string.Equals(sourceActionId, ScenarioAuthoringActionIds.ActionBuildStructureRoom, StringComparison.Ordinal)
+                || string.Equals(sourceActionId, ScenarioAuthoringActionIds.ActionBuildStructureLadder, StringComparison.Ordinal)
+                || string.Equals(sourceActionId, ScenarioAuthoringActionIds.ActionBuildStructureLight, StringComparison.Ordinal))
+            {
+                return ScenarioAuthoringTool.Shelter;
+            }
+
+            if (!string.IsNullOrEmpty(sourceActionId)
+                && (sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix, StringComparison.Ordinal)
+                    || sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix, StringComparison.Ordinal)))
+            {
+                return ScenarioAuthoringTool.Wiring;
+            }
+
+            return ScenarioAuthoringTool.Objects;
+        }
+    }
+
     internal sealed class SpriteCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioSpriteSwapAuthoringService _service;
         private readonly ScenarioSelectionScopeService _scopeService;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;
 
-        public SpriteCommandHandler(ScenarioSpriteSwapAuthoringService service, ScenarioSelectionScopeService scopeService)
+        public SpriteCommandHandler(
+            ScenarioSpriteSwapAuthoringService service,
+            ScenarioSelectionScopeService scopeService,
+            ScenarioAuthoringLayoutService layoutService,
+            ScenarioBuildPlacementAuthoringService buildPlacement)
         {
             _service = service;
             _scopeService = scopeService;
+            _layoutService = layoutService;
+            _buildPlacement = buildPlacement;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -54,7 +553,30 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
-            return _service.TryHandleAction(state, actionId, out handled, out message);
+            bool changed = _service.TryHandleAction(state, actionId, out handled, out message);
+            if (changed
+                && handled
+                && string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, StringComparison.Ordinal)
+                && _buildPlacement != null)
+            {
+                _buildPlacement.Reset();
+            }
+
+            if (changed
+                && handled
+                && string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, StringComparison.Ordinal)
+                && _layoutService != null)
+            {
+                _layoutService.BeginPixelEditorFocus(state);
+                changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, true);
+            }
+
+            if (handled && IsPixelEditorTerminalAction(actionId) && _service.GetCustomEditorModel(state) == null && _layoutService != null)
+            {
+                changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, false);
+                _layoutService.EndPixelEditorFocus(state);
+            }
+            return changed;
         }
 
         private static bool RequiresScopedTarget(string actionId)
@@ -65,6 +587,15 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
 
             return actionId.StartsWith("sprite_swap.", StringComparison.Ordinal);
+        }
+
+        private static bool IsPixelEditorTerminalAction(string actionId)
+        {
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapClear, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapRevert, StringComparison.Ordinal);
         }
     }
 
@@ -195,7 +726,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionShellTabMap:
                     return SetStage(state, ScenarioStageKind.Map, out message, "Map workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellTabTest:
-                    return SetStage(state, ScenarioStageKind.Test, out message, "Test workspace active.");
+                    return SetStage(state, ScenarioStageKind.Test, out message, "Test Console workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellTabPublish:
                     return SetStage(state, ScenarioStageKind.Publish, out message, "Publish workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellToggle:
@@ -213,6 +744,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                         message = "Authoring inspector already open.";
                     }
                     return true;
+                case ScenarioAuthoringActionIds.ActionVanillaInteractionReturnEditor:
+                    ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+                    if (vanillaInteraction != null)
+                        vanillaInteraction.CloseVanillaAndReturnToEditor(state);
+                    else
+                        state.ShellVisible = true;
+                    message = state.StatusMessage;
+                    return true;
                 case ScenarioAuthoringActionIds.ActionShellHideAll:
                 case ScenarioAuthoringActionIds.ActionShellMinimalMode:
                     _layoutService.HideAll(state);
@@ -226,20 +765,52 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     _layoutService.FocusSelection(state);
                     message = "Focused the shell on the current selection.";
                     return true;
+                case ScenarioAuthoringActionIds.ActionShellToggleWindowMenu:
+                    state.WindowMenuOpen = !state.WindowMenuOpen;
+                    message = state.WindowMenuOpen ? "Windows menu opened." : "Windows menu closed.";
+                    return true;
                 case ScenarioAuthoringActionIds.ActionShellOpenSettings:
                     if (!_layoutService.SetSettingsWindowOpen(state, true))
                         return false;
                     message = "Editor settings opened.";
                     return true;
-                case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
-                    if (!_layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Calendar, true))
+                case ScenarioAuthoringActionIds.ActionShellOpenHelp:
+                    if (state.HelpWindowOpen && !state.HelpShortcutsView)
                         return false;
-                    message = "Schedule opened.";
+                    state.HelpWindowOpen = true;
+                    state.HelpShortcutsView = false;
+                    message = "Workshop help opened.";
+                    return true;
+                case ScenarioAuthoringActionIds.ActionShellOpenShortcuts:
+                    if (state.HelpWindowOpen && state.HelpShortcutsView)
+                        return false;
+                    state.HelpWindowOpen = true;
+                    state.HelpShortcutsView = true;
+                    message = "Keyboard shortcuts opened.";
+                    return true;
+                case ScenarioAuthoringActionIds.ActionShellHelpShowPages:
+                    if (!state.HelpWindowOpen || !state.HelpShortcutsView)
+                        return false;
+                    state.HelpShortcutsView = false;
+                    message = "Workshop help pages shown.";
+                    return true;
+                case ScenarioAuthoringActionIds.ActionShellOpenTimeline:
+                case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
+                    if (!_layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Triggers, true))
+                        return false;
+                    message = "Timeline opened.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellCloseSettings:
                     if (!_layoutService.SetSettingsWindowOpen(state, false))
                         return false;
                     message = "Editor settings closed.";
+                    return true;
+                case ScenarioAuthoringActionIds.ActionShellCloseHelp:
+                    if (!state.HelpWindowOpen)
+                        return false;
+                    state.HelpWindowOpen = false;
+                    state.HelpShortcutsView = false;
+                    message = "Workshop help closed.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellSettingsReset:
                     state.Settings = _settingsService.ResetToDefaults();
@@ -259,6 +830,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowRestorePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorTabPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorPinTogglePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingTogglePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingIncreasePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingDecreasePrefix, StringComparison.Ordinal)
@@ -285,10 +857,12 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
                 ScenarioStageKind previousStage = state.ActiveStage;
                 ScenarioAuthoringTool previousTool = state.ActiveTool;
+                bool closedFocusedEditor = CloseFocusedEditorForPageSwitch(state, stageKind);
                 bool changed = _layoutService.SelectStage(state, stageKind);
-                if (changed)
-                    state.StatusMessage = BuildStageStatus(state, previousStage, previousTool);
-                return changed;
+                if (changed || closedFocusedEditor)
+                    state.StatusMessage = BuildStageStatus(state, previousStage, previousTool)
+                        + (closedFocusedEditor ? " Focused editor closed." : string.Empty);
+                return changed || closedFocusedEditor;
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal))
@@ -312,6 +886,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorTabPrefix, StringComparison.Ordinal))
                 return SetInspectorTab(state, actionId.Substring(ScenarioAuthoringActionIds.ActionInspectorTabPrefix.Length));
 
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorPinTogglePrefix, StringComparison.Ordinal))
+                return ToggleInspectorPin(state, actionId.Substring(ScenarioAuthoringActionIds.ActionInspectorPinTogglePrefix.Length));
+
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingTogglePrefix, StringComparison.Ordinal))
                 return ToggleSetting(state, actionId.Substring(ScenarioAuthoringActionIds.ActionSettingTogglePrefix.Length));
 
@@ -327,13 +904,44 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return false;
         }
 
+        private bool ToggleInspectorPin(ScenarioAuthoringState state, string token)
+        {
+            if (state == null || state.Settings == null || string.IsNullOrEmpty(token))
+                return false;
+
+            string settingId = "inspector.pin." + token;
+            bool current = state.Settings.GetBool(settingId, true);
+            state.Settings.Set(settingId, current ? "false" : "true");
+            _settingsService.Save(state.Settings);
+            state.StatusMessage = "Inspector fact " + (current ? "unpinned." : "pinned.");
+            return true;
+        }
+
         private bool SetStage(ScenarioAuthoringState state, ScenarioStageKind stageKind, out string message, string statusMessage)
         {
             message = null;
+            bool closedFocusedEditor = CloseFocusedEditorForPageSwitch(state, stageKind);
             bool changed = _layoutService.SelectStage(state, stageKind);
-            if (changed)
-                message = statusMessage;
-            return changed;
+            if (changed || closedFocusedEditor)
+                message = statusMessage + (closedFocusedEditor ? " Focused editor closed." : string.Empty);
+            return changed || closedFocusedEditor;
+        }
+
+        private static bool CloseFocusedEditorForPageSwitch(ScenarioAuthoringState state, ScenarioStageKind requestedStage)
+        {
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind))
+                return false;
+            if (ScenarioAuthoringWorkflowRules.ResolveStageKind(state) == requestedStage)
+                return false;
+
+            state.TimelineSelectedEntryId = state.FocusedEditorKind + ":" + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture);
+
+            state.FocusedEditorKind = null;
+            state.FocusedEditorIndex = -1;
+            state.FocusedEditorIsNew = false;
+            state.SurvivorColorPickerChannel = null;
+            state.SurvivorColorPickerRequestId = 0;
+            return true;
         }
 
         private static string BuildStageStatus(
@@ -514,6 +1122,72 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         }
     }
 
+    internal sealed class TutorialCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioAuthoringTutorialService _tutorialService;
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
+
+        public TutorialCommandHandler(
+            ScenarioAuthoringTutorialService tutorialService,
+            IScenarioEditorService editorService,
+            ScenarioAuthoringLayoutService layoutService)
+        {
+            _tutorialService = tutorialService;
+            _editorService = editorService;
+            _layoutService = layoutService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (_tutorialService == null || state == null || string.IsNullOrEmpty(actionId))
+                return false;
+
+            if (!actionId.StartsWith("tutorial.", StringComparison.Ordinal))
+                return false;
+
+            handled = true;
+            if (state.HelpWindowOpen
+                && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialOpenTarget, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialNext, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialBack, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkipPrompt, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkipCancel, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkip, StringComparison.Ordinal)))
+            {
+                message = "Close help before continuing the tutorial.";
+                return true;
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialOpenTarget, StringComparison.Ordinal))
+                return OpenTargetOrAdvance(state, out message);
+
+            return _tutorialService.HandleAction(state, actionId, out message);
+        }
+
+        private bool OpenTargetOrAdvance(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            TutorialStep step = _tutorialService.GetActiveStep(state);
+            if (step == null)
+                return false;
+
+            ScenarioEditorSession editorSession = _editorService != null ? _editorService.CurrentSession : null;
+            if (_tutorialService.IsStepSatisfied(state, editorSession, step))
+                return _tutorialService.HandleAction(state, ScenarioAuthoringActionIds.ActionTutorialNext, out message);
+
+            if (string.Equals(step.TargetActionId, "playtest", StringComparison.Ordinal))
+            {
+                message = "Use Playtest to continue.";
+                return true;
+            }
+
+            return _tutorialService.OpenStepTarget(state, step, _layoutService, out message);
+        }
+    }
+
     internal sealed class TimelineCommandHandler : IScenarioCommandHandler
     {
         private readonly IScenarioEditorService _editorService;
@@ -540,8 +1214,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionTimelineDayPrefix, StringComparison.Ordinal))
             {
                 handled = true;
-                state.TimelineSelectionId = actionId.Substring(ScenarioAuthoringActionIds.ActionTimelineDayPrefix.Length);
-                message = "Calendar day " + state.TimelineSelectionId + " selected.";
+                state.TimelineSelectedDayId = actionId.Substring(ScenarioAuthoringActionIds.ActionTimelineDayPrefix.Length);
+                state.TimelineSelectionId = state.TimelineSelectedDayId;
+                message = "Timeline day " + state.TimelineSelectedDayId + " selected.";
                 return true;
             }
 
@@ -610,9 +1285,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             switch (actionId)
             {
                 case ScenarioAuthoringActionIds.ActionCaptureFamily:
-                    return Capture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentFamily(session, out text); }, out message);
-                case ScenarioAuthoringActionIds.ActionCaptureInventory:
-                    return Capture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentInventory(session, out text); }, out message);
+                    return OpenCapturePreview(state, ScenarioAuthoringLocalActionIds.FocusedKindCaptureFamily, out message);
+                case ScenarioAuthoringLocalActionIds.ActionCaptureFamilyConfirm:
+                    return ConfirmCapture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentFamily(session, out text); }, out message);
                 case ScenarioAuthoringActionIds.ActionCaptureShelterObjects:
                     if (_scopeService.ResolveActiveScope(state) != ScenarioTargetScope.BunkerInside)
                     {
@@ -630,14 +1305,55 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement:
                     {
                         if (!_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
-                            return true;
+                        {
+                            string status = message;
+                            return FailWithoutChange(state, status, out message);
+                        }
                         bool removed = _captureService.RemoveSelectedObjectPlacement(_editorService.CurrentSession, state.SelectedTarget, out message);
-                        return removed || !string.IsNullOrEmpty(message);
+                        if (!removed)
+                        {
+                            string status = message;
+                            return FailWithoutChange(state, status, out message);
+                        }
+                        return true;
                     }
                 default:
                     handled = false;
                     return false;
             }
+        }
+
+        private static bool FailWithoutChange(ScenarioAuthoringState state, string statusMessage, out string message)
+        {
+            if (state != null && !string.IsNullOrEmpty(statusMessage))
+                state.StatusMessage = statusMessage;
+            message = null;
+            return false;
+        }
+
+        private bool OpenCapturePreview(ScenarioAuthoringState state, string kind, out string message)
+        {
+            message = "Review the world capture preview, then confirm or cancel.";
+            if (state != null)
+            {
+                state.FocusedEditorKind = kind;
+                state.FocusedEditorIndex = 0;
+                state.FocusedEditorIsNew = false;
+                state.StatusMessage = message;
+            }
+            return true;
+        }
+
+        private bool ConfirmCapture(ScenarioAuthoringState state, CaptureAction action, out string message)
+        {
+            bool captured = Capture(state, action, out message);
+            if (state != null)
+            {
+                state.FocusedEditorKind = null;
+                state.FocusedEditorIndex = -1;
+                state.FocusedEditorIsNew = false;
+            }
+            return captured;
         }
 
         private bool Capture(ScenarioAuthoringState state, CaptureAction action, out string message)
@@ -649,6 +1365,205 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         }
 
         private delegate bool CaptureAction(ScenarioEditorSession session, out string message);
+    }
+
+    internal sealed class StationUpgradeCommandHandler : IScenarioCommandHandler
+    {
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioSelectionScopeService _scopeService;
+        private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
+
+        public StationUpgradeCommandHandler(
+            IScenarioEditorService editorService,
+            ScenarioSelectionScopeService scopeService,
+            ScenarioObjectIdentityAssignmentService identityAssignmentService)
+        {
+            _editorService = editorService;
+            _scopeService = scopeService;
+            _identityAssignmentService = identityAssignmentService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = IsStationAction(actionId);
+            message = null;
+            if (!handled)
+                return false;
+
+            if (!_scopeService.CanSelectTargetForCurrentStage(state, state != null ? state.SelectedTarget : null, out message))
+                return true;
+
+            Obj_Base obj = ResolveSelectedObject(state);
+            if (obj == null || !ScenarioStationUpgradePropertyService.IsStationObject(obj))
+            {
+                message = "Select a station object before editing station upgrades.";
+                return true;
+            }
+
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            if (session == null)
+            {
+                message = "No active authoring session is available.";
+                return true;
+            }
+
+            ObjectPlacement placement = EnsurePlacement(session, obj);
+            if (placement == null)
+            {
+                message = "Could not create or locate a station placement record.";
+                return true;
+            }
+
+            bool changed = false;
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationLevelPrefix, StringComparison.Ordinal))
+            {
+                int delta;
+                if (!int.TryParse(actionId.Substring(ScenarioAuthoringActionIds.ActionStationLevelPrefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out delta))
+                {
+                    message = "Station level command is invalid.";
+                    return true;
+                }
+
+                changed = ScenarioStationUpgradePropertyService.TrySetObjectLevel(obj, placement, delta, out message);
+            }
+            else if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationUpgradePrefix, StringComparison.Ordinal))
+            {
+                string payload = actionId.Substring(ScenarioAuthoringActionIds.ActionStationUpgradePrefix.Length);
+                string name;
+                int delta;
+                if (!TrySplitNameDelta(payload, out name, out delta))
+                {
+                    message = "Station upgrade command is invalid.";
+                    return true;
+                }
+
+                changed = ScenarioStationUpgradePropertyService.TrySetUpgradeLevel(obj, placement, name, delta, out message);
+            }
+            else if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatClearPrefix, StringComparison.Ordinal))
+            {
+                string statName = actionId.Substring(ScenarioAuthoringActionIds.ActionStationStatClearPrefix.Length);
+                changed = ScenarioStationUpgradePropertyService.TryClearStat(obj, placement, statName, out message);
+            }
+            else if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatPrefix, StringComparison.Ordinal))
+            {
+                string payload = actionId.Substring(ScenarioAuthoringActionIds.ActionStationStatPrefix.Length);
+                string name;
+                float delta;
+                if (!TrySplitNameDelta(payload, out name, out delta))
+                {
+                    message = "Station stat command is invalid.";
+                    return true;
+                }
+
+                changed = ScenarioStationUpgradePropertyService.TrySetStat(obj, placement, name, delta, out message);
+            }
+
+            if (changed)
+                ScenarioBunkerDraftService.MarkBunkerDirty(session);
+            return true;
+        }
+
+        private static bool IsStationAction(string actionId)
+        {
+            return !string.IsNullOrEmpty(actionId)
+                && (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationLevelPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationUpgradePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatClearPrefix, StringComparison.Ordinal));
+        }
+
+        private ObjectPlacement EnsurePlacement(ScenarioEditorSession session, Obj_Base obj)
+        {
+            BunkerEditsDefinition edits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
+            int index = ScenarioBunkerDraftService.FindPlacementIndex(edits.ObjectPlacements, obj);
+            if (index >= 0)
+                return edits.ObjectPlacements[index];
+
+            ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(obj);
+            edits.ObjectPlacements.Add(placement);
+            if (_identityAssignmentService != null)
+                _identityAssignmentService.AssignMissingIds(session);
+            return placement;
+        }
+
+        private static Obj_Base ResolveSelectedObject(ScenarioAuthoringState state)
+        {
+            if (state == null || state.SelectedTarget == null)
+                return null;
+
+            GameObject gameObject = state.SelectedTarget.RuntimeObject as GameObject;
+            if (gameObject == null)
+            {
+                Component component = state.SelectedTarget.RuntimeObject as Component;
+                gameObject = component != null ? component.gameObject : null;
+            }
+
+            return gameObject != null ? gameObject.GetComponent<Obj_Base>() : null;
+        }
+
+        private static bool TrySplitNameDelta(string payload, out string name, out int delta)
+        {
+            delta = 0;
+            float parsed;
+            if (!TrySplitNameDelta(payload, out name, out parsed))
+                return false;
+
+            delta = (int)parsed;
+            return true;
+        }
+
+        private static bool TrySplitNameDelta(string payload, out string name, out float delta)
+        {
+            name = null;
+            delta = 0f;
+            if (string.IsNullOrEmpty(payload))
+                return false;
+
+            int separator = payload.IndexOf('.');
+            if (separator <= 0 || separator >= payload.Length - 1)
+                return false;
+
+            name = payload.Substring(0, separator);
+            return float.TryParse(payload.Substring(separator + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out delta);
+        }
+    }
+
+    internal sealed class StoryAuthoringCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioStoryAuthoringService _service;
+        private readonly IScenarioEditorService _editorService;
+
+        public StoryAuthoringCommandHandler(
+            ScenarioStoryAuthoringService service,
+            IScenarioEditorService editorService)
+        {
+            _service = service;
+            _editorService = editorService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (_service == null || string.IsNullOrEmpty(actionId) || !_service.CanHandle(actionId))
+                return false;
+
+            handled = true;
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            bool changed = _service.TryHandleAction(session, actionId, out message);
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (changed && string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryCharacterAdd, StringComparison.Ordinal)
+                && definition != null && definition.ScenarioCharacters != null && definition.ScenarioCharacters.Count > 0)
+            {
+                ScenarioStoryFocusedEditorActions.SelectCharacterDocument(definition, definition.ScenarioCharacters.Count - 1);
+            }
+            else if (changed && string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryConversationAdd, StringComparison.Ordinal)
+                && definition != null && definition.Conversations != null && definition.Conversations.Conversations.Count > 0)
+            {
+                ScenarioStoryFocusedEditorActions.SelectConversationDocument(definition, definition.Conversations.Conversations.Count - 1);
+            }
+            return changed;
+        }
     }
 
     internal sealed class GameplayScheduleCommandHandler : IScenarioCommandHandler
@@ -671,7 +1586,279 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!handled || _service == null)
                 return false;
 
-            return _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionInventoryStartingAddAndPick, StringComparison.Ordinal))
+                return AddInventoryEntryAndOpenPicker(state, ScenarioAuthoringActionIds.ActionInventoryStartingAdd, ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker, true, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionInventoryScheduleAddAndPick, StringComparison.Ordinal))
+                return AddInventoryEntryAndOpenPicker(state, ScenarioAuthoringActionIds.ActionInventoryScheduleAdd, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, false, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionInventoryScheduleRemoveAndPick, StringComparison.Ordinal))
+                return AddInventoryEntryAndOpenPicker(state, ScenarioAuthoringActionIds.ActionInventoryScheduleRemove, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, false, out message);
+
+            int pickerIndex;
+            if (TryOpenIndexedFocusedEditor(
+                state,
+                actionId,
+                ScenarioAuthoringLocalActionIds.ActionInventoryStartingPickerOpenPrefix,
+                ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker,
+                out pickerIndex))
+            {
+                message = "Opened searchable starting item picker.";
+                return true;
+            }
+
+            if (TryOpenIndexedFocusedEditor(
+                state,
+                actionId,
+                ScenarioAuthoringLocalActionIds.ActionInventorySchedulePickerOpenPrefix,
+                ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker,
+                out pickerIndex))
+            {
+                message = "Opened searchable timed item picker.";
+                return true;
+            }
+
+            if (ScenarioAuthoringActionParser.TryIndex(
+                actionId,
+                ScenarioAuthoringLocalActionIds.ActionSuppliesPresetPreviewPrefix,
+                ScenarioSuppliesPresetCatalog.Count,
+                out pickerIndex))
+            {
+                ScenarioSuppliesWorkspaceActions.SelectPresetDocument(pickerIndex);
+                if (state != null && string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindSuppliesPreset, StringComparison.OrdinalIgnoreCase))
+                {
+                    state.FocusedEditorKind = null;
+                    state.FocusedEditorIndex = -1;
+                    state.FocusedEditorIsNew = false;
+                }
+                message = "Opened the starter loadout in Supplies.";
+                return true;
+            }
+
+            ScenarioEditorSession currentSession = _editorService.CurrentSession;
+            ScenarioDefinition currentDefinition = currentSession != null ? currentSession.WorkingDefinition : null;
+            QuestDefinition selectedQuest = ResolveSelectedQuest(currentDefinition);
+            FutureSurvivorDefinition selectedFutureSurvivor = ResolveSelectedFutureSurvivor(currentDefinition);
+            int duplicateSourceIndex = -1;
+            int questCount = currentDefinition != null && currentDefinition.Quests != null && currentDefinition.Quests.Quests != null
+                ? currentDefinition.Quests.Quests.Count
+                : 0;
+            ScenarioAuthoringActionParser.TryIndex(
+                actionId,
+                ScenarioAuthoringActionIds.ActionQuestDuplicatePrefix,
+                questCount,
+                out duplicateSourceIndex);
+
+            bool changed = _service.TryHandleAction(currentSession, actionId, out message);
+            if (changed)
+            {
+                FocusGameplayEditor(state, currentSession, actionId);
+                CloseInventoryPickerAfterSelection(state, actionId);
+                ReconcileQuestSelection(currentDefinition, actionId, selectedQuest, duplicateSourceIndex);
+                ReconcileFutureSurvivorSelection(currentDefinition, actionId, selectedFutureSurvivor);
+            }
+            return changed;
+        }
+
+        private bool AddInventoryEntryAndOpenPicker(ScenarioAuthoringState state, string addActionId, string pickerKind, bool starting, out string message)
+        {
+            bool changed = _service.TryHandleAction(_editorService.CurrentSession, addActionId, out message);
+            if (!changed)
+                return false;
+
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            StartingInventoryDefinition inventory = session != null && session.WorkingDefinition != null ? session.WorkingDefinition.StartingInventory : null;
+            int index = -1;
+            if (inventory != null)
+                index = starting ? inventory.Items.Count - 1 : inventory.ScheduledChanges.Count - 1;
+            if (state != null)
+                SetFocusedEditor(state, pickerKind, index, true);
+            return true;
+        }
+
+        private static bool TryOpenIndexedFocusedEditor(ScenarioAuthoringState state, string actionId, string prefix, string kind, out int index)
+        {
+            index = -1;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            if (!int.TryParse(actionId.Substring(prefix.Length), out index) || index < 0)
+                return false;
+
+            state.FocusedEditorKind = kind;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = false;
+            return true;
+        }
+
+        private static void CloseInventoryPickerAfterSelection(ScenarioAuthoringState state, string actionId)
+        {
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind) || string.IsNullOrEmpty(actionId))
+                return;
+
+            bool pickerOpen = string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, StringComparison.OrdinalIgnoreCase);
+            if (!pickerOpen)
+                return;
+
+            if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, StringComparison.Ordinal)
+                && !actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix, StringComparison.Ordinal))
+                return;
+
+            state.FocusedEditorKind = null;
+            state.FocusedEditorIndex = -1;
+            state.FocusedEditorIsNew = false;
+        }
+
+        private static void FocusGameplayEditor(ScenarioAuthoringState state, ScenarioEditorSession session, string actionId)
+        {
+            if (state == null || session == null || session.WorkingDefinition == null)
+                return;
+
+            ScenarioDefinition definition = session.WorkingDefinition;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, StringComparison.Ordinal)
+                && definition.TriggersAndEvents != null)
+                SetFocusedEditor(state, "weather", definition.TriggersAndEvents.WeatherEvents.Count - 1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal)
+                && definition.FamilySetup != null)
+            {
+                if (state != null)
+                {
+                    state.FocusedEditorKind = null;
+                    state.FocusedEditorIndex = -1;
+                    state.FocusedEditorIsNew = false;
+                }
+                ScenarioCastWorkspaceActions.SelectFutureDocument(definition, definition.FamilySetup.FutureSurvivors.Count - 1);
+            }
+        }
+
+        private static FutureSurvivorDefinition ResolveSelectedFutureSurvivor(ScenarioDefinition definition)
+        {
+            string selected = ScenarioAuthoringRendererInteractionState.Instance.GetWorkspaceSelection(
+                ScenarioCastWorkspaceActions.WorkspaceId,
+                ScenarioCastWorkspaceActions.SubtabId);
+            int index;
+            return ScenarioCastWorkspaceActions.TryResolveFutureEntity(definition, selected, out index)
+                && definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null
+                && index >= 0 && index < definition.FamilySetup.FutureSurvivors.Count
+                    ? definition.FamilySetup.FutureSurvivors[index]
+                    : null;
+        }
+
+        private static void ReconcileFutureSurvivorSelection(
+            ScenarioDefinition definition,
+            string actionId,
+            FutureSurvivorDefinition previouslySelected)
+        {
+            if (string.IsNullOrEmpty(actionId) || definition == null || definition.FamilySetup == null || definition.FamilySetup.FutureSurvivors == null)
+                return;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal))
+                return;
+            if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix, StringComparison.Ordinal)
+                || previouslySelected == null)
+                return;
+            for (int i = 0; i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                if (object.ReferenceEquals(definition.FamilySetup.FutureSurvivors[i], previouslySelected))
+                {
+                    ScenarioCastWorkspaceActions.SelectFutureDocument(definition, i);
+                    return;
+                }
+            }
+            ScenarioCastWorkspaceActions.SelectOverview();
+        }
+
+        private static QuestDefinition ResolveSelectedQuest(ScenarioDefinition definition)
+        {
+            ScenarioAuthoringRendererInteractionState rendererState = ScenarioAuthoringRendererInteractionState.Instance;
+            string selected = rendererState.GetWorkspaceSelection(
+                ScenarioStoryFocusedEditorActions.WorkspaceId,
+                ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId);
+            int selectedIndex;
+            return ScenarioStoryFocusedEditorActions.TryResolveQuestEntity(definition, selected, out selectedIndex)
+                && definition != null && definition.Quests != null && definition.Quests.Quests != null
+                    ? definition.Quests.Quests[selectedIndex]
+                    : null;
+        }
+
+        private static void ReconcileQuestSelection(
+            ScenarioDefinition definition,
+            string actionId,
+            QuestDefinition previouslySelected,
+            int duplicateSourceIndex)
+        {
+            if (!IsQuestMutation(actionId) || definition == null || definition.Quests == null || definition.Quests.Quests == null)
+                return;
+
+            List<QuestDefinition> quests = definition.Quests.Quests;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionQuestScheduleAdd, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix, StringComparison.Ordinal))
+            {
+                if (quests.Count > 0)
+                    ScenarioStoryFocusedEditorActions.SelectQuestDocument(definition, quests.Count - 1);
+                return;
+            }
+
+            if (duplicateSourceIndex >= 0 && duplicateSourceIndex + 1 < quests.Count)
+            {
+                ScenarioStoryFocusedEditorActions.SelectQuestDocument(definition, duplicateSourceIndex + 1);
+                return;
+            }
+
+            if (previouslySelected != null)
+            {
+                for (int i = 0; i < quests.Count; i++)
+                {
+                    if (!object.ReferenceEquals(quests[i], previouslySelected))
+                        continue;
+                    ScenarioStoryFocusedEditorActions.SelectQuestDocument(definition, i);
+                    return;
+                }
+
+                ScenarioAuthoringRendererInteractionState rendererState = ScenarioAuthoringRendererInteractionState.Instance;
+                rendererState.SetWorkspaceSubtab(
+                    ScenarioStoryFocusedEditorActions.WorkspaceId,
+                    ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId);
+                rendererState.SetWorkspaceSelection(
+                    ScenarioStoryFocusedEditorActions.WorkspaceId,
+                    ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId,
+                    null);
+                rendererState.SetWorkspaceNarrowPane(
+                    ScenarioStoryFocusedEditorActions.WorkspaceId,
+                    ScenarioStoryFocusedEditorActions.QuestPopupsSubtabId,
+                    true);
+            }
+        }
+
+        private static bool IsQuestMutation(string actionId)
+        {
+            return !string.IsNullOrEmpty(actionId)
+                && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionQuestCaptureActive, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionQuestScheduleAdd, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestScheduleMinutePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestStartModePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestTriggerCyclePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestCompletionCyclePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestTitleSyncPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestDescriptionSyncPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestDuplicatePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestMovePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionQuestSpawnNowPrefix, StringComparison.Ordinal));
+        }
+
+        private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
+        {
+            if (index < 0)
+                return;
+            state.FocusedEditorKind = kind;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = isNew;
+            state.TimelineSelectedEntryId = kind + ":" + index.ToString(CultureInfo.InvariantCulture);
         }
     }
 
@@ -695,7 +1882,114 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!handled)
                 return false;
 
-            return _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            int focusedIndex;
+            if (TryOpenIndexedFocusedEditor(state, actionId, ScenarioAuthoringLocalActionIds.ActionWorldEventEditorOpenPrefix, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, out focusedIndex))
+            {
+                message = "Opened world event editor.";
+                return true;
+            }
+            if (TryOpenWorldEventItemPicker(state, actionId, out message))
+                return true;
+
+            bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            if (changed)
+            {
+                CloseWorldEventItemPickerAfterSelection(state, actionId);
+                FocusEventEditor(state, _editorService.CurrentSession, actionId);
+            }
+            return changed;
+        }
+
+        private static void FocusEventEditor(ScenarioAuthoringState state, ScenarioEditorSession session, string actionId)
+        {
+            if (state == null || session == null || session.WorkingDefinition == null)
+                return;
+
+            ScenarioDefinition definition = session.WorkingDefinition;
+            if (definition.TriggersAndEvents != null
+                && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTriggerAddManual, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTriggerAddScheduled, StringComparison.Ordinal)))
+                SetFocusedEditor(state, "trigger", definition.TriggersAndEvents.Triggers.Count - 1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionGateAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, "gate", definition.Gates != null ? definition.Gates.Count - 1 : -1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionScheduledActionAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, "scheduled_action", definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWorldEventAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
+            else if (actionId.StartsWith(ScenarioTimelinePresetService.ActionPrefix, StringComparison.Ordinal))
+                SetFocusedEditor(state, "scheduled_action", definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionJournalEntryAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, "journal_entry", definition.Journal != null && definition.Journal.Entries != null ? definition.Journal.Entries.Count - 1 : -1, true);
+        }
+
+        private static bool TryOpenIndexedFocusedEditor(ScenarioAuthoringState state, string actionId, string prefix, string kind, out int index)
+        {
+            index = -1;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+            if (!int.TryParse(actionId.Substring(prefix.Length), out index) || index < 0)
+                return false;
+            SetFocusedEditor(state, kind, index, false);
+            return true;
+        }
+
+        private static bool TryOpenWorldEventItemPicker(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionWorldEventItemPickerOpenPrefix, StringComparison.Ordinal))
+                return false;
+
+            string[] parts = actionId.Substring(ScenarioAuthoringLocalActionIds.ActionWorldEventItemPickerOpenPrefix.Length).Split('.');
+            int actionIndex;
+            int itemIndex;
+            if (parts.Length != 3 || !int.TryParse(parts[0], out actionIndex) || !int.TryParse(parts[2], out itemIndex))
+            {
+                message = "World event item picker target is invalid.";
+                return true;
+            }
+
+            string listKey = parts[1];
+            if (!string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+            {
+                message = "World event item picker list is invalid.";
+                return true;
+            }
+
+            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix + listKey + ":" + itemIndex.ToString(CultureInfo.InvariantCulture);
+            state.FocusedEditorIndex = actionIndex;
+            state.FocusedEditorIsNew = false;
+            state.TimelineSelectedEntryId = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent + ":" + actionIndex.ToString(CultureInfo.InvariantCulture);
+            message = "Opened world event item picker.";
+            return true;
+        }
+
+        private static void CloseWorldEventItemPickerAfterSelection(ScenarioAuthoringState state, string actionId)
+        {
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind) || string.IsNullOrEmpty(actionId))
+                return;
+            if (!state.FocusedEditorKind.StartsWith(ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix, StringComparison.Ordinal))
+                return;
+            if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionWorldEventTradeItemPrefix, StringComparison.Ordinal)
+                && !actionId.StartsWith(ScenarioAuthoringActionIds.ActionWorldEventWeaponItemPrefix, StringComparison.Ordinal)
+                && !actionId.StartsWith(ScenarioAuthoringActionIds.ActionWorldEventArmorItemPrefix, StringComparison.Ordinal))
+                return;
+
+            int actionIndex = state.FocusedEditorIndex;
+            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent;
+            state.FocusedEditorIndex = actionIndex;
+            state.FocusedEditorIsNew = false;
+        }
+
+        private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
+        {
+            if (index < 0)
+                return;
+            state.FocusedEditorKind = kind;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = isNew;
+            state.TimelineSelectedEntryId = kind + ":" + index.ToString(CultureInfo.InvariantCulture);
         }
     }
 
@@ -716,6 +2010,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         {
             handled = actionId != null
                 && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSurvivorOpenColorPickerPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix, StringComparison.Ordinal));
             message = null;
@@ -731,22 +2029,28 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         private readonly IScenarioEditorService _editorService;
         private readonly ScenarioBuildPlacementAuthoringService _buildPlacementService;
         private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementService;
+        private readonly ScenarioAuthoringBaseModeReloadService _baseModeReloadService;
+        private readonly ScenarioOpeningCutsceneAuthoringService _openingCutsceneService;
 
         public EditorLifecycleCommandHandler(
             IScenarioEditorService editorService,
             ScenarioBuildPlacementAuthoringService buildPlacementService,
-            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementService)
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementService,
+            ScenarioAuthoringBaseModeReloadService baseModeReloadService)
         {
             _editorService = editorService;
             _buildPlacementService = buildPlacementService;
             _sceneSpritePlacementService = sceneSpritePlacementService;
+            _baseModeReloadService = baseModeReloadService;
+            _openingCutsceneService = new ScenarioOpeningCutsceneAuthoringService();
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
         {
             handled = actionId != null
                 && (actionId.StartsWith("editor.", StringComparison.Ordinal)
-                    || actionId.StartsWith("scenario.mode.", StringComparison.Ordinal));
+                    || actionId.StartsWith("scenario.mode.", StringComparison.Ordinal)
+                    || actionId.StartsWith("scenario.focused_editor.", StringComparison.Ordinal));
             message = null;
             if (!handled)
                 return false;
@@ -755,8 +2059,20 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             {
                 case ScenarioAuthoringActionIds.ActionSave:
                     return SaveDraft(state, out message);
+                case ScenarioAuthoringActionIds.ActionDraftCopyPath:
+                    return CopyDraftPath(state, out message);
                 case ScenarioAuthoringActionIds.ActionPlaytest:
                     return TogglePlaytest(state, out message);
+                case ScenarioAuthoringActionIds.ActionPlaytestRestart:
+                    return RestartPlaytest(state, out message);
+                case ScenarioBaseModeAuthoringActions.ActionWatchOpeningCutscene:
+                    return _openingCutsceneService.TryWatchOpeningCutscene(_editorService.CurrentSession, state, out message);
+                case ScenarioAuthoringActionIds.ActionScenarioSeedRandom:
+                    return SetScenarioSeedRandom(out message);
+                case ScenarioAuthoringActionIds.ActionScenarioSeedFixed:
+                    return SetScenarioSeedFixed(out message);
+                case ScenarioAuthoringActionIds.ActionScenarioSeedReroll:
+                    return RerollScenarioSeed(out message);
                 case ScenarioAuthoringActionIds.ActionOpenPauseMenu:
                     return OpenPauseMenu(out message);
                 case ScenarioAuthoringActionIds.ActionConvertToNormal:
@@ -764,12 +2080,398 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     message = "Scenario binding converted to a normal save.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionScenarioModePrevious:
-                    return CycleBaseMode(-1, out message);
+                    return OpenBaseModeDialog(state, -1, out message);
                 case ScenarioAuthoringActionIds.ActionScenarioModeNext:
-                    return CycleBaseMode(1, out message);
+                    return OpenBaseModeDialog(state, 1, out message);
+                case ScenarioAuthoringActionIds.ActionFocusedEditorSave:
+                    return CloseFocusedEditor(state, false, out message);
+                case ScenarioAuthoringActionIds.ActionFocusedEditorCancel:
+                    return CloseFocusedEditor(state, true, out message);
                 default:
+                    bool metadataHandled;
+                    if (ScenarioMetadataAuthoringActions.TryHandle(actionId, _editorService != null ? _editorService.CurrentSession : null, out metadataHandled, out message))
+                        return true;
+
+                    if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionDraftTitlePrefix, StringComparison.Ordinal))
+                        return CommitDraftTitle(actionId, out message);
+
+                    if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionScenarioSeedValuePrefix, StringComparison.Ordinal))
+                        return CommitScenarioSeed(actionId, out message);
+
+                    ScenarioBaseGameMode reloadBaseMode;
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchReloadKeepCastPrefix,
+                        out reloadBaseMode))
+                    {
+                        return SaveAndReloadBaseMode(state, reloadBaseMode, ScenarioBaseFamilyChoices.KeepCurrentCast, out message);
+                    }
+
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchReloadDefaultFamilyPrefix,
+                        out reloadBaseMode))
+                    {
+                        return SaveAndReloadBaseMode(state, reloadBaseMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, out message);
+                    }
+
+                    ScenarioBaseGameMode switchOnlyBaseMode;
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchOnlyKeepCastPrefix,
+                        out switchOnlyBaseMode))
+                    {
+                        return SwitchBaseModeOnly(state, switchOnlyBaseMode, ScenarioBaseFamilyChoices.KeepCurrentCast, out message);
+                    }
+
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchOnlyDefaultFamilyPrefix,
+                        out switchOnlyBaseMode))
+                    {
+                        return SwitchBaseModeOnly(state, switchOnlyBaseMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, out message);
+                    }
+
+                    if (string.Equals(actionId, ScenarioBaseModeAuthoringActions.ActionSwitchCancel, StringComparison.Ordinal))
+                        return CloseBaseModeDialog(state, "Base switch canceled.", out message);
+
                     handled = false;
                     return false;
+            }
+        }
+
+        private static bool CopyDraftPath(ScenarioAuthoringState state, out string message)
+        {
+            string path = state != null ? state.ActiveScenarioFilePath : null;
+            if (string.IsNullOrEmpty(path))
+            {
+                message = "No draft path is active.";
+                return true;
+            }
+
+            GUIUtility.systemCopyBuffer = path;
+            message = "Draft path copied.";
+            return true;
+        }
+
+        private bool CommitDraftTitle(string actionId, out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            string title = ScenarioAuthoringActionCodec.DecodeToken(actionId.Substring(ScenarioAuthoringActionIds.ActionDraftTitlePrefix.Length));
+            title = title != null ? title.Trim() : string.Empty;
+            if (string.IsNullOrEmpty(title))
+            {
+                message = "Scenario title is required.";
+                return true;
+            }
+
+            if (string.Equals(definition.DisplayName, title, StringComparison.Ordinal))
+            {
+                message = "Scenario title is unchanged.";
+                return true;
+            }
+
+            definition.DisplayName = title;
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario title updated.";
+            return true;
+        }
+
+        private bool CloseFocusedEditor(ScenarioAuthoringState state, bool cancel, out string message)
+        {
+            message = null;
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind))
+            {
+                message = "No focused editor is open.";
+                return true;
+            }
+
+            string kind = state.FocusedEditorKind;
+            int index = state.FocusedEditorIndex;
+            if (kind.StartsWith(ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix, StringComparison.Ordinal))
+            {
+                state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent;
+                state.FocusedEditorIndex = index;
+                state.FocusedEditorIsNew = false;
+                state.TimelineSelectedEntryId = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent + ":" + index.ToString(CultureInfo.InvariantCulture);
+                message = "Returned to world event editor.";
+                return true;
+            }
+
+            bool discard = cancel && state.FocusedEditorIsNew;
+            if (discard)
+                DiscardFocusedEntry(kind, index);
+            state.TimelineSelectedEntryId = discard ? null : kind + ":" + index.ToString(CultureInfo.InvariantCulture);
+            state.FocusedEditorKind = null;
+            state.FocusedEditorIndex = -1;
+            state.FocusedEditorIsNew = false;
+            state.SurvivorColorPickerChannel = null;
+            state.SurvivorColorPickerRequestId = 0;
+            message = discard
+                ? "New editor entry discarded."
+                : (cancel ? "Editor closed without additional changes." : "Editor changes kept.");
+            return true;
+        }
+
+        private bool RestartPlaytest(ScenarioAuthoringState state, out string message)
+        {
+            if (_baseModeReloadService == null)
+            {
+                message = "Playtest restart service is unavailable.";
+                return true;
+            }
+
+            return _baseModeReloadService.SaveAndReloadCurrentWorld(_editorService.CurrentSession, out message);
+        }
+
+        private bool SetScenarioSeedRandom(out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            if (!definition.SeedOverride.HasValue)
+            {
+                message = "Scenario seed is already Random.";
+                return true;
+            }
+
+            definition.SeedOverride = null;
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario seed set to Random.";
+            return true;
+        }
+
+        private bool SetScenarioSeedFixed(out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            if (!definition.SeedOverride.HasValue)
+            {
+                definition.SeedOverride = GenerateScenarioSeed();
+                session.MarkDraftChanged(ScenarioDirtySection.Meta);
+                message = "Scenario seed set to fixed value " + definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture) + ".";
+                return true;
+            }
+
+            message = "Scenario seed is already Fixed.";
+            return true;
+        }
+
+        private bool RerollScenarioSeed(out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            definition.SeedOverride = GenerateScenarioSeed();
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario fixed seed rerolled to " + definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture) + ".";
+            return true;
+        }
+
+        private bool CommitScenarioSeed(string actionId, out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            string value = ScenarioAuthoringActionCodec.DecodeToken(actionId.Substring(ScenarioAuthoringActionIds.ActionScenarioSeedValuePrefix.Length));
+            int seed;
+            if (!int.TryParse(value != null ? value.Trim() : string.Empty, NumberStyles.Integer, CultureInfo.InvariantCulture, out seed))
+            {
+                message = "Fixed scenario seed must be a signed 32-bit integer.";
+                return true;
+            }
+
+            definition.SeedOverride = seed;
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario fixed seed updated to " + seed.ToString(CultureInfo.InvariantCulture) + ".";
+            return true;
+        }
+
+        private static int GenerateScenarioSeed()
+        {
+            int seed = ModRandom.Range(1, int.MaxValue);
+            return seed == 0 ? 1 : seed;
+        }
+
+        private bool OpenBaseModeDialog(ScenarioAuthoringState state, int direction, out string message)
+        {
+            message = null;
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            ScenarioAuthoringSession loadingSession = ScenarioAuthoringBootstrapService.Instance.CurrentOrPendingSessionForEntryFlow();
+            if (state == null || (definition == null && loadingSession == null))
+            {
+                message = "No active scenario definition is available.";
+                return true;
+            }
+
+            ScenarioBaseGameMode currentMode = definition != null
+                ? definition.BaseGameMode
+                : loadingSession.BaseMode;
+            string draftId = definition != null ? definition.Id : loadingSession.DraftId;
+            if (_baseModeReloadService != null)
+                currentMode = _baseModeReloadService.ResolveModeSelectionBase(draftId, currentMode);
+
+            ScenarioBaseGameMode nextMode = ResolveAdjacentBaseMode(currentMode, direction);
+            if (nextMode == currentMode)
+            {
+                message = "Base mode is already " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(nextMode) + ".";
+                return true;
+            }
+
+            state.FocusedEditorKind = ScenarioBaseModeAuthoringActions.FocusedEditorKind;
+            state.FocusedEditorIndex = (int)nextMode;
+            state.FocusedEditorIsNew = false;
+            state.TimelineSelectedEntryId = null;
+            message = "Choose how to switch base to " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(nextMode) + ".";
+            return true;
+        }
+
+        private bool SaveAndReloadBaseMode(
+            ScenarioAuthoringState state,
+            ScenarioBaseGameMode baseMode,
+            string familyChoice,
+            out string message)
+        {
+            CloseBaseModeDialogState(state);
+            if (_baseModeReloadService == null)
+            {
+                message = "Base reload service is unavailable.";
+                return true;
+            }
+
+            return _baseModeReloadService.SaveAndReload(_editorService.CurrentSession, baseMode, familyChoice, out message);
+        }
+
+        private bool SwitchBaseModeOnly(
+            ScenarioAuthoringState state,
+            ScenarioBaseGameMode baseMode,
+            string familyChoice,
+            out string message)
+        {
+            CloseBaseModeDialogState(state);
+            if (_baseModeReloadService == null)
+            {
+                message = "Base reload service is unavailable.";
+                return true;
+            }
+
+            return _baseModeReloadService.SaveBaseModeOnly(_editorService.CurrentSession, baseMode, familyChoice, out message);
+        }
+
+        private static bool CloseBaseModeDialog(ScenarioAuthoringState state, string closeMessage, out string message)
+        {
+            CloseBaseModeDialogState(state);
+            message = closeMessage;
+            return true;
+        }
+
+        private static void CloseBaseModeDialogState(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return;
+
+            if (string.Equals(state.FocusedEditorKind, ScenarioBaseModeAuthoringActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+            {
+                state.FocusedEditorKind = null;
+                state.FocusedEditorIndex = -1;
+                state.FocusedEditorIsNew = false;
+                state.TimelineSelectedEntryId = null;
+            }
+        }
+
+        private void DiscardFocusedEntry(string kind, int index)
+        {
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null || index < 0)
+                return;
+
+            if (string.Equals(kind, "weather", StringComparison.OrdinalIgnoreCase)
+                && definition.TriggersAndEvents != null
+                && index < definition.TriggersAndEvents.WeatherEvents.Count)
+            {
+                definition.TriggersAndEvents.WeatherEvents.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if (string.Equals(kind, "trigger", StringComparison.OrdinalIgnoreCase)
+                && definition.TriggersAndEvents != null
+                && index < definition.TriggersAndEvents.Triggers.Count)
+            {
+                definition.TriggersAndEvents.Triggers.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if (string.Equals(kind, "gate", StringComparison.OrdinalIgnoreCase)
+                && definition.Gates != null
+                && index < definition.Gates.Count)
+            {
+                string id = definition.Gates[index] != null ? definition.Gates[index].Id : null;
+                definition.Gates.RemoveAt(index);
+                ClearGateReferences(definition, id);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if ((string.Equals(kind, "scheduled_action", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(kind, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, StringComparison.OrdinalIgnoreCase))
+                && definition.ScheduledActions != null
+                && index < definition.ScheduledActions.Count)
+            {
+                definition.ScheduledActions.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if (string.Equals(kind, "journal_entry", StringComparison.OrdinalIgnoreCase)
+                && definition.Journal != null
+                && definition.Journal.Entries != null
+                && index < definition.Journal.Entries.Count)
+            {
+                definition.Journal.Entries.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+        }
+
+        private static void ClearGateReferences(ScenarioDefinition definition, string gateId)
+        {
+            if (definition == null || string.IsNullOrEmpty(gateId))
+                return;
+
+            for (int i = 0; definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                if (action != null && string.Equals(action.GateId, gateId, StringComparison.OrdinalIgnoreCase))
+                    action.GateId = null;
+            }
+            for (int i = 0; definition.Journal != null && definition.Journal.Entries != null && i < definition.Journal.Entries.Count; i++)
+            {
+                JournalEntryDefinition entry = definition.Journal.Entries[i];
+                if (entry != null && string.Equals(entry.GateId, gateId, StringComparison.OrdinalIgnoreCase))
+                    entry.GateId = null;
             }
         }
 
@@ -780,47 +2482,22 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return true;
         }
 
-        private bool CycleBaseMode(int direction, out string message)
+        private static ScenarioBaseGameMode ResolveAdjacentBaseMode(ScenarioBaseGameMode mode, int direction)
         {
-            message = null;
-            ScenarioEditorSession session = _editorService.CurrentSession;
-            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
-            if (definition == null)
-            {
-                message = "No active scenario definition is available.";
-                return true;
-            }
-
             int count = Enum.GetValues(typeof(ScenarioBaseGameMode)).Length;
-            int next = ((int)definition.BaseGameMode + direction) % count;
+            int next = ((int)mode + direction) % count;
             if (next < 0)
                 next += count;
 
-            definition.BaseGameMode = (ScenarioBaseGameMode)next;
-            EnsureSelectionRulesForBaseMode(definition);
-            MarkDirty(session, ScenarioDirtySection.Meta);
-            message = "Base mode set to " + definition.BaseGameMode + ".";
-            return true;
-        }
-
-        private static void EnsureSelectionRulesForBaseMode(ScenarioDefinition definition)
-        {
-            if (definition == null)
-                return;
-            if (definition.SelectionRules == null)
-                definition.SelectionRules = new ScenarioSelectionRulesDefinition();
-            if (definition.SelectionRules.Availability == null)
-                definition.SelectionRules.Availability = new ScenarioModeAvailabilityDefinition();
-
-            definition.SelectionRules.Availability.UseOnly(definition.BaseGameMode);
+            return (ScenarioBaseGameMode)next;
         }
 
         private static void MarkDirty(ScenarioEditorSession session, ScenarioDirtySection section)
         {
-            if (session == null || session.DirtyFlags == null || session.DirtyFlags.Contains(section))
+            if (session == null)
                 return;
 
-            session.DirtyFlags.Add(section);
+            session.MarkDraftChanged(section);
         }
 
         private bool SaveDraft(ScenarioAuthoringState state, out string message)
@@ -828,13 +2505,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             try
             {
                 ScenarioValidationResult validation = _editorService.CommitChanges(null);
-                if (validation != null && validation.IsValid)
-                {
-                    message = "Scenario draft saved.";
-                    return true;
-                }
-
-                message = "Scenario draft save failed validation: " + FormatValidationSummary(validation);
+                ScenarioEditorSession session = _editorService.CurrentSession;
+                string savedMessage = session != null && session.HasUnappliedDraftChanges
+                    ? "Scenario draft saved. Running playtest predates recent edits; stop and restart playtest to verify the saved draft."
+                    : "Scenario draft saved.";
+                message = validation != null && !validation.IsValid
+                    ? savedMessage + " Validation has errors: " + FormatValidationSummary(validation)
+                    : savedMessage;
                 return true;
             }
             catch (Exception ex)
@@ -914,6 +2591,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
     internal sealed class SelectionCommandHandler : IScenarioCommandHandler
     {
+        private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
+
+        public SelectionCommandHandler(ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+        {
+            _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
+        }
+
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
         {
             message = null;
@@ -932,6 +2616,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
                 state.SelectedTarget = null;
                 state.MultiSelection.Clear();
+                if (state.SelectionStack != null)
+                    state.SelectionStack.Clear();
+                state.SelectionStackSignature = null;
+                state.ActiveSelectionStackIndex = 0;
+                state.SelectionStackExpanded = false;
                 message = "Selection cleared.";
                 return true;
             }
@@ -940,6 +2629,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             {
                 handled = true;
                 return CycleSelectionStack(state, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded, StringComparison.Ordinal))
+            {
+                handled = true;
+                state.SelectionStackExpanded = !state.SelectionStackExpanded;
+                message = state.SelectionStackExpanded ? "Selection stack expanded." : "Selection stack collapsed.";
+                return true;
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix, StringComparison.Ordinal))
@@ -954,6 +2651,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 }
 
                 return SelectStackIndex(state, index, out message);
+            }
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix, StringComparison.Ordinal))
+            {
+                handled = true;
+                string targetId = actionId.Substring(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix.Length);
+                return SelectWeatherEffectTarget(state, targetId, out message);
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionHierarchySelectPrefix, StringComparison.Ordinal))
@@ -1047,6 +2751,30 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return null;
         }
 
+        private bool SelectWeatherEffectTarget(ScenarioAuthoringState state, string targetId, out string message)
+        {
+            message = null;
+            if (_weatherEffectSpriteCatalog == null || string.IsNullOrEmpty(targetId))
+            {
+                message = "Weather/effect sprite target is unavailable.";
+                return true;
+            }
+
+            ScenarioAuthoringTarget target;
+            if (!_weatherEffectSpriteCatalog.TryFindTarget(targetId, out target) || target == null)
+            {
+                message = "Weather/effect sprite target is not loaded: " + targetId + ".";
+                return true;
+            }
+
+            state.SelectedTarget = target.Copy();
+            state.HoveredTarget = target.Copy();
+            state.MultiSelection.Clear();
+            state.MultiSelection.Add(target.Copy());
+            message = "Selected " + target.DisplayName + " from Weather & Effects.";
+            return true;
+        }
+
         private static ScenarioAuthoringTarget BuildTargetFromScene(string targetId)
         {
             int separator = targetId != null ? targetId.LastIndexOf(':') : -1;
@@ -1134,7 +2862,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             switch (actionId)
             {
                 case ScenarioAuthoringActionIds.ActionToolSelect:
-                    return SetTool(state, ScenarioAuthoringTool.Select, out message);
+                    return FocusSelection(state, out message);
                 case ScenarioAuthoringActionIds.ActionToolFamily:
                     return SetTool(state, ScenarioAuthoringTool.Family, out message);
                 case ScenarioAuthoringActionIds.ActionToolInventory:
@@ -1175,7 +2903,45 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
 
             message = BuildToolStatus(state, tool, transition.StageChanged);
+            string placementMessage;
+            ScenarioBuildPlacementAuthoringService buildPlacement = ScenarioCompositionRoot.Resolve<ScenarioBuildPlacementAuthoringService>();
+            if (buildPlacement != null && buildPlacement.HasActivePlacement && buildPlacement.CancelForToolSwitch(out placementMessage))
+            {
+                message = !string.IsNullOrEmpty(placementMessage)
+                    ? message + " " + placementMessage
+                    : message;
+            }
             return true;
+        }
+
+        private bool FocusSelection(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (state == null)
+                return false;
+
+            bool changed = false;
+            string placementMessage;
+            ScenarioBuildPlacementAuthoringService buildPlacement = ScenarioCompositionRoot.Resolve<ScenarioBuildPlacementAuthoringService>();
+            if (buildPlacement != null && buildPlacement.HasActivePlacement && buildPlacement.CancelForToolSwitch(out placementMessage))
+            {
+                message = placementMessage;
+                changed = true;
+            }
+
+            if (state.ActiveTool == ScenarioAuthoringTool.Select)
+                return changed;
+
+            ScenarioAuthoringWorkflowTransition transition = _layoutService.SelectTool(state, ScenarioAuthoringTool.Select);
+            if (transition.Changed)
+            {
+                message = string.IsNullOrEmpty(message)
+                    ? "Selection focused."
+                    : message + " Selection focused.";
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static string BuildToolStatus(ScenarioAuthoringState state, ScenarioAuthoringTool requestedTool, bool stageChanged)

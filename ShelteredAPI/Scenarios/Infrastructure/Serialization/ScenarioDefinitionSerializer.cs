@@ -12,6 +12,7 @@ using ShelteredAPI.Scenarios.Domain.Bunker;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Objects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -25,6 +26,56 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
         public const string DefaultFileName = "scenario.xml";
 
         public ScenarioDefinition Load(string filePath)
+        {
+            return LoadUncached(filePath);
+        }
+
+        public bool TryLoadWithRecovery(string filePath, out ScenarioDefinition definition, out string recoveryMessage, out bool recovered)
+        {
+            definition = null;
+            recoveryMessage = null;
+            recovered = false;
+
+            if (string.IsNullOrEmpty(filePath))
+            {
+                recoveryMessage = "Scenario file path is required.";
+                return false;
+            }
+
+            try
+            {
+                definition = LoadUncached(filePath);
+                return true;
+            }
+            catch (Exception primaryError)
+            {
+                string backupPath = filePath + ".bak";
+                if (!File.Exists(backupPath))
+                {
+                    recoveryMessage = "Scenario XML could not be loaded and no recovery copy exists: " + primaryError.Message;
+                    return false;
+                }
+
+                try
+                {
+                    ScenarioDefinition backupDefinition = LoadUncached(backupPath);
+                    string corruptPath;
+                    RestoreBackupOverUnreadablePrimary(filePath, backupPath, out corruptPath);
+                    definition = backupDefinition;
+                    recovered = true;
+                    recoveryMessage = "Recovered the scenario draft from the last good backup. The unreadable XML was kept at " + corruptPath + ".";
+                    return true;
+                }
+                catch (Exception recoveryError)
+                {
+                    recoveryMessage = "Scenario XML and its recovery copy could not be loaded. Primary error: "
+                        + primaryError.Message + " Recovery error: " + recoveryError.Message;
+                    return false;
+                }
+            }
+        }
+
+        internal ScenarioDefinition LoadUncached(string filePath)
         {
             if (string.IsNullOrEmpty(filePath))
                 throw new ArgumentException("Scenario file path is required.", "filePath");
@@ -129,7 +180,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
         public ScenarioInfo LoadInfo(string filePath, string ownerModId)
         {
-            ScenarioDefinition definition = Load(filePath);
+            ScenarioDefinitionMetadata metadata;
+            if (ScenarioDefinitionMetadataCache.TryLoad(this, filePath, ownerModId, out metadata) && metadata != null)
+                return metadata.Info;
+
+            ScenarioDefinition definition = LoadUncached(filePath);
             return new ScenarioInfo(
                 definition.Id,
                 definition.DisplayName,
@@ -154,6 +209,73 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
             string name = Path.GetFileName(filePath);
             return Path.Combine(directory, name + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        }
+
+        private void RestoreBackupOverUnreadablePrimary(string filePath, string backupPath, out string corruptPath)
+        {
+            corruptPath = BuildCorruptPath(filePath);
+            string tempPath = BuildTempPath(filePath);
+            try
+            {
+                File.Copy(backupPath, tempPath, true);
+                LoadUncached(tempPath);
+                if (File.Exists(filePath))
+                {
+                    try
+                    {
+                        File.Replace(tempPath, filePath, corruptPath, false);
+                        tempPath = null;
+                        return;
+                    }
+                    catch (PlatformNotSupportedException)
+                    {
+                    }
+                    catch (NotSupportedException)
+                    {
+                    }
+                }
+
+                RestoreBackupWithCopyFallback(tempPath, filePath, backupPath, corruptPath);
+                tempPath = null;
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(tempPath))
+                    TryDeleteFile(tempPath);
+            }
+        }
+
+        private static void RestoreBackupWithCopyFallback(string tempPath, string filePath, string backupPath, string corruptPath)
+        {
+            if (File.Exists(filePath))
+                File.Copy(filePath, corruptPath, true);
+
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+                File.Move(tempPath, filePath);
+            }
+            catch
+            {
+                if (File.Exists(backupPath))
+                    File.Copy(backupPath, filePath, true);
+                throw;
+            }
+        }
+
+        private static string BuildCorruptPath(string filePath)
+        {
+            string directory = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(directory))
+                directory = Directory.GetCurrentDirectory();
+
+            string name = Path.GetFileName(filePath);
+            string stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            string path = Path.Combine(directory, name + ".corrupt_" + stamp);
+            while (File.Exists(path))
+                path = Path.Combine(directory, name + ".corrupt_" + stamp + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
+            return path;
         }
 
         private static void ReplaceValidatedTempFile(string tempPath, string filePath)
@@ -231,6 +353,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             XmlElement root = document.DocumentElement;
             ScenarioDefinition definition = new ScenarioDefinition();
             IScenarioSectionSerializer<FamilySetupDefinition> familySerializer = new FamilyScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioLaunchSetupDefinition> launchSetupSerializer = new LaunchSetupScenarioSectionSerializer();
             IScenarioSectionSerializer<StartingInventoryDefinition> inventorySerializer = new InventoryScenarioSectionSerializer();
             IScenarioSectionSerializer<BunkerEditsDefinition> bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
             IScenarioSectionSerializer<TriggersAndEventsDefinition> triggerSerializer = new TriggerEventScenarioSectionSerializer();
@@ -240,13 +363,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioAuthorTestChecklist> checklistSerializer = new AuthorTestChecklistScenarioSectionSerializer();
 
             XmlElement meta = Child(root, "Meta");
             definition.Id = ReadText(meta, "Id");
-            definition.DisplayName = ReadText(meta, "DisplayName");
+            definition.DisplayName = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "DisplayName"), ScenarioMetadataDefaults.DefaultTitle);
             definition.Description = ReadText(meta, "Description");
-            definition.Author = ReadText(meta, "Author");
-            definition.Version = ReadText(meta, "Version");
+            definition.Goal = ReadText(meta, "Goal");
+            definition.Author = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "Author"), ScenarioMetadataDefaults.DefaultAuthor);
+            definition.Version = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "Version"), ScenarioMetadataDefaults.DefaultVersion);
+            definition.Credits = ReadText(meta, "Credits");
+            ReadStringList(Child(meta, "Tags"), "Tag", definition.Tags);
 
             XmlElement dependencies = Child(root, "Dependencies");
             if (dependencies != null)
@@ -256,6 +383,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
 
             definition.BaseGameMode = ReadEnum(root, "BaseMode", ScenarioBaseGameMode.Survival);
+            definition.BaseFamilyChoice = ReadText(root, "BaseFamilyChoice");
             definition.SeedOverride = ReadNullableLong(root, "SeedOverride");
             XmlElement selectionRules = Child(root, "SelectionRules");
             definition.SelectionRules = selectionRules != null
@@ -263,7 +391,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 : ScenarioSelectionRulesDefinition.ForBaseMode(definition.BaseGameMode);
             ReadScenarioCharacters(Child(root, "ScenarioCharacters"), definition.ScenarioCharacters);
             definition.ScenarioFlow = ReadScenarioFlow(Child(root, "ScenarioFlow"));
+            definition.Conversations = ReadConversations(Child(root, "Conversations"));
+            definition.VanillaSuppression = ReadVanillaSuppression(Child(root, "VanillaSuppression"));
             definition.FamilySetup = familySerializer.Read(Child(root, "FamilySetup"));
+            definition.LaunchSetup = launchSetupSerializer.Read(Child(root, "LaunchSetup"));
             definition.StartingInventory = inventorySerializer.Read(Child(root, "StartingInventory"));
             definition.BunkerEdits = bunkerEditsSerializer.Read(Child(root, "BunkerEdits"));
             definition.TriggersAndEvents = triggerSerializer.Read(Child(root, "TriggersAndEvents"));
@@ -273,8 +404,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             definition.Scoring = ReadScoring(Child(root, "Scoring"));
             definition.AssetReferences = assetSerializer.Read(Child(root, "AssetReferences"));
             definition.BunkerGrid = bunkerGridSerializer.Read(Child(root, "BunkerGrid"));
+            XmlElement backendWorlds = Child(root, "BackendWorlds");
+            definition.BackendWorlds = ReadBackendWorlds(backendWorlds);
+            if (backendWorlds == null)
+                ScenarioBackendWorldMaterializer.MigrateLegacyCurrentWorld(definition);
+            else
+                ScenarioBackendWorldMaterializer.MaterializeCurrentWorld(definition, definition.BaseGameMode);
             gateSerializer.Read(Child(root, "Gates"), definition.Gates);
             scheduledSerializer.Read(Child(root, "ScheduledActions"), definition.ScheduledActions);
+            definition.Journal = ReadJournal(Child(root, "Journal"));
+            definition.AuthorTestChecklist = checklistSerializer.Read(Child(root, "AuthorTestChecklist"));
             return definition;
         }
 
@@ -317,6 +456,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                 ScenarioNpcDefinition character = new ScenarioNpcDefinition();
                 character.CharacterId = AttributeOrChild(node, "id", "Id");
+                character.DisplayName = AttributeOrChild(node, "displayName", "DisplayName");
+                character.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(node);
+                ScenarioActorXmlSerializer.ReadActorComponents(node, character.ActorComponents);
                 character.PresetId = AttributeOrChild(node, "presetId", "PresetId");
                 character.WeaponItemId = AttributeOrChild(node, "weapon", "Weapon");
                 character.EquippedItem1Id = AttributeOrChild(node, "equippedItem1", "EquippedItem1");
@@ -674,7 +816,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                             WallSpriteIndex = ReadNullableIntAttribute(roomElement, "wallSpriteIndex"),
                             WireSpriteIndex = ReadNullableIntAttribute(roomElement, "wireSpriteIndex"),
                             WallRuntimeSpriteKey = AttributeOrChild(roomElement, "wallRuntimeSpriteKey", "WallRuntimeSpriteKey"),
-                            WireRuntimeSpriteKey = AttributeOrChild(roomElement, "wireRuntimeSpriteKey", "WireRuntimeSpriteKey")
+                            WireRuntimeSpriteKey = AttributeOrChild(roomElement, "wireRuntimeSpriteKey", "WireRuntimeSpriteKey"),
+                            WallCleared = ReadBoolAttribute(roomElement, "wallCleared", false),
+                            WireCleared = ReadBoolAttribute(roomElement, "wireCleared", false)
                         });
                     }
                 }
@@ -955,6 +1099,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                         SpriteId = AttributeOrChild(swapElement, "spriteId", "SpriteId"),
                         RelativePath = AttributeOrChild(swapElement, "path", "Path"),
                         RuntimeSpriteKey = AttributeOrChild(swapElement, "runtimeSpriteKey", "RuntimeSpriteKey"),
+                        AnimationFrameIndex = ReadNullableIntAttribute(swapElement, "animationFrameIndex"),
+                        AnimationFrameRuntimeSpriteKey = AttributeOrChild(swapElement, "animationFrameRuntimeSpriteKey", "AnimationFrameRuntimeSpriteKey"),
                         Day = ReadNullableIntAttribute(swapElement, "day"),
                         TargetComponent = ReadEnumAttribute(swapElement, "targetComponent", ScenarioSpriteTargetComponentKind.Auto)
                     });
@@ -962,47 +1108,109 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
 
             XmlElement scenePlacements = Child(element, "SceneSpritePlacements");
-            if (scenePlacements != null)
-            {
-                XmlNodeList placementNodes = scenePlacements.GetElementsByTagName("Placement");
-                for (int i = 0; i < placementNodes.Count; i++)
-                {
-                    XmlElement placementElement = placementNodes[i] as XmlElement;
-                    if (placementElement == null)
-                        continue;
+            ReadSceneSpritePlacements(scenePlacements, result.SceneSpritePlacements);
 
-                    SceneSpritePlacement placement = new SceneSpritePlacement();
-                    placement.Id = AttributeOrChild(placementElement, "id", "Id");
-                    placement.ScenarioObjectId = AttributeOrChild(placementElement, "scenarioObjectId", "ScenarioObjectId");
-                    placement.RuntimeBindingKey = AttributeOrChild(placementElement, "runtimeBindingKey", "RuntimeBindingKey");
-                    placement.SpriteId = AttributeOrChild(placementElement, "spriteId", "SpriteId");
-                    placement.RelativePath = AttributeOrChild(placementElement, "path", "Path");
-                    placement.RuntimeSpriteKey = AttributeOrChild(placementElement, "runtimeSpriteKey", "RuntimeSpriteKey");
-                    placement.Position = ReadVector(Child(placementElement, "Position"));
-                    placement.SnapToGrid = ReadBoolAttribute(placementElement, "snapToGrid", false);
-                    placement.GridX = ReadNullableIntAttribute(placementElement, "gridX");
-                    placement.GridY = ReadNullableIntAttribute(placementElement, "gridY");
-                    placement.StartState = ReadEnumAttribute(placementElement, "startState", ScenarioObjectStartState.StartsEnabled);
-                    placement.PlacementPhase = AttributeOrChild(placementElement, "placementPhase", "PlacementPhase");
-                    placement.RequiredFoundationId = AttributeOrChild(placementElement, "requiredFoundationId", "RequiredFoundationId");
-                    placement.RequiredBunkerExpansionId = AttributeOrChild(placementElement, "requiredExpansionId", "RequiredBunkerExpansionId");
-                    placement.UnlockGateId = AttributeOrChild(placementElement, "unlockGateId", "UnlockGateId");
-                    placement.ScheduledActivationId = AttributeOrChild(placementElement, "scheduledActivationId", "ScheduledActivationId");
-                    ReadStringList(Child(placementElement, "Tags"), "Tag", placement.Tags);
-                    placement.SortingLayerName = AttributeOrChild(placementElement, "sortingLayer", "SortingLayer");
-                    placement.SortingOrder = ReadIntAttribute(placementElement, "sortingOrder", 0);
-                    result.SceneSpritePlacements.Add(placement);
+            XmlElement assetCredits = Child(element, "AssetCredits");
+            if (assetCredits != null)
+            {
+                XmlNodeList creditNodes = assetCredits.GetElementsByTagName("Credit");
+                for (int i = 0; i < creditNodes.Count; i++)
+                {
+                    XmlElement creditElement = creditNodes[i] as XmlElement;
+                    if (creditElement != null)
+                    {
+                        result.AssetCredits.Add(new ScenarioAssetCreditDefinition
+                        {
+                            RelativePath = AttributeOrChild(creditElement, "path", "Path"),
+                            Credit = AttributeOrChild(creditElement, "note", "Note")
+                        });
+                    }
                 }
             }
 
             return result;
         }
 
+        private static void ReadSceneSpritePlacements(XmlElement scenePlacements, System.Collections.Generic.List<SceneSpritePlacement> target)
+        {
+            if (scenePlacements == null || target == null)
+                return;
+
+            XmlNodeList placementNodes = scenePlacements.GetElementsByTagName("Placement");
+            for (int i = 0; i < placementNodes.Count; i++)
+            {
+                XmlElement placementElement = placementNodes[i] as XmlElement;
+                if (placementElement == null)
+                    continue;
+
+                SceneSpritePlacement placement = new SceneSpritePlacement();
+                placement.Id = AttributeOrChild(placementElement, "id", "Id");
+                placement.ScenarioObjectId = AttributeOrChild(placementElement, "scenarioObjectId", "ScenarioObjectId");
+                placement.RuntimeBindingKey = AttributeOrChild(placementElement, "runtimeBindingKey", "RuntimeBindingKey");
+                placement.SpriteId = AttributeOrChild(placementElement, "spriteId", "SpriteId");
+                placement.RelativePath = AttributeOrChild(placementElement, "path", "Path");
+                placement.RuntimeSpriteKey = AttributeOrChild(placementElement, "runtimeSpriteKey", "RuntimeSpriteKey");
+                placement.Position = ReadVector(Child(placementElement, "Position"));
+                placement.SnapToGrid = ReadBoolAttribute(placementElement, "snapToGrid", false);
+                placement.GridX = ReadNullableIntAttribute(placementElement, "gridX");
+                placement.GridY = ReadNullableIntAttribute(placementElement, "gridY");
+                placement.StartState = ReadEnumAttribute(placementElement, "startState", ScenarioObjectStartState.StartsEnabled);
+                placement.PlacementPhase = AttributeOrChild(placementElement, "placementPhase", "PlacementPhase");
+                placement.RequiredFoundationId = AttributeOrChild(placementElement, "requiredFoundationId", "RequiredFoundationId");
+                placement.RequiredBunkerExpansionId = AttributeOrChild(placementElement, "requiredExpansionId", "RequiredBunkerExpansionId");
+                placement.UnlockGateId = AttributeOrChild(placementElement, "unlockGateId", "UnlockGateId");
+                placement.ScheduledActivationId = AttributeOrChild(placementElement, "scheduledActivationId", "ScheduledActivationId");
+                ReadStringList(Child(placementElement, "Tags"), "Tag", placement.Tags);
+                placement.SortingLayerName = AttributeOrChild(placementElement, "sortingLayer", "SortingLayer");
+                placement.SortingOrder = ReadIntAttribute(placementElement, "sortingOrder", 0);
+                target.Add(placement);
+            }
+        }
+
+        private static ScenarioBackendWorldsDefinition ReadBackendWorlds(XmlElement element)
+        {
+            ScenarioBackendWorldsDefinition backendWorlds = new ScenarioBackendWorldsDefinition();
+            if (element == null)
+                return backendWorlds;
+
+            XmlNodeList nodes = element.GetElementsByTagName("BackendWorld");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement worldElement = nodes[i] as XmlElement;
+                if (worldElement == null)
+                    continue;
+
+                ScenarioBackendWorldDefinition world = new ScenarioBackendWorldDefinition();
+                world.BaseMode = ReadEnumAttribute(worldElement, "baseMode", ScenarioBaseGameMode.Survival);
+                world.BunkerEdits = ReadBunkerEdits(Child(worldElement, "BunkerEdits"));
+                world.BunkerGrid = ReadBunkerGrid(Child(worldElement, "BunkerGrid"));
+                world.SceneSpritePlacements.Clear();
+                ReadSceneSpritePlacements(Child(worldElement, "SceneSpritePlacements"), world.SceneSpritePlacements);
+
+                ScenarioBackendWorldDefinition existing = backendWorlds.Find(world.BaseMode);
+                if (existing == null)
+                    backendWorlds.Worlds.Add(world);
+                else
+                {
+                    existing.BunkerEdits = world.BunkerEdits;
+                    existing.BunkerGrid = world.BunkerGrid;
+                    existing.SceneSpritePlacements.Clear();
+                    for (int placementIndex = 0; placementIndex < world.SceneSpritePlacements.Count; placementIndex++)
+                        existing.SceneSpritePlacements.Add(world.SceneSpritePlacements[placementIndex]);
+                }
+            }
+
+            return backendWorlds;
+        }
+
         private static void WriteDocument(ScenarioDefinition definition, XmlWriter writer)
         {
+            ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
+
             writer.WriteStartDocument();
             writer.WriteStartElement("Scenario");
             IScenarioSectionSerializer<FamilySetupDefinition> familySerializer = new FamilyScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioLaunchSetupDefinition> launchSetupSerializer = new LaunchSetupScenarioSectionSerializer();
             IScenarioSectionSerializer<StartingInventoryDefinition> inventorySerializer = new InventoryScenarioSectionSerializer();
             IScenarioSectionSerializer<BunkerEditsDefinition> bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
             IScenarioSectionSerializer<TriggersAndEventsDefinition> triggerSerializer = new TriggerEventScenarioSectionSerializer();
@@ -1012,13 +1220,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioAuthorTestChecklist> checklistSerializer = new AuthorTestChecklistScenarioSectionSerializer();
 
             writer.WriteStartElement("Meta");
             WriteElement(writer, "Id", definition.Id);
             WriteElement(writer, "DisplayName", definition.DisplayName);
             WriteElement(writer, "Description", definition.Description);
+            if (!string.IsNullOrEmpty(definition.Goal))
+                WriteElement(writer, "Goal", definition.Goal);
             WriteElement(writer, "Author", definition.Author);
             WriteElement(writer, "Version", definition.Version);
+            WriteElement(writer, "Credits", definition.Credits);
+            WriteStringList(writer, "Tags", "Tag", definition.Tags);
             writer.WriteEndElement();
 
             writer.WriteStartElement("Dependencies");
@@ -1045,13 +1258,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteEndElement();
 
             WriteElement(writer, "BaseMode", definition.BaseGameMode.ToString());
+            if (!string.IsNullOrEmpty(definition.BaseFamilyChoice))
+                WriteElement(writer, "BaseFamilyChoice", definition.BaseFamilyChoice.ToString());
             if (definition.SeedOverride.HasValue)
                 WriteElement(writer, "SeedOverride", definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture));
             WriteSelectionRules(writer, definition.SelectionRules, definition.BaseGameMode);
             WriteScenarioCharacters(writer, definition.ScenarioCharacters);
             WriteScenarioFlow(writer, definition.ScenarioFlow);
+            WriteConversations(writer, definition.Conversations);
+            WriteVanillaSuppression(writer, definition.VanillaSuppression);
 
             familySerializer.Write(writer, definition.FamilySetup);
+            launchSetupSerializer.Write(writer, definition.LaunchSetup);
             inventorySerializer.Write(writer, definition.StartingInventory);
             bunkerEditsSerializer.Write(writer, definition.BunkerEdits);
             triggerSerializer.Write(writer, definition.TriggersAndEvents);
@@ -1061,11 +1279,42 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             WriteScoring(writer, definition.Scoring);
             assetSerializer.Write(writer, definition.AssetReferences);
             bunkerGridSerializer.Write(writer, definition.BunkerGrid);
+            WriteBackendWorlds(writer, definition.BackendWorlds);
             gateSerializer.Write(writer, definition.Gates);
             scheduledSerializer.Write(writer, definition.ScheduledActions);
+            WriteJournal(writer, definition.Journal);
+            checklistSerializer.Write(writer, definition.AuthorTestChecklist);
 
             writer.WriteEndElement();
             writer.WriteEndDocument();
+        }
+
+        private static ScenarioVanillaSuppressionDefinition ReadVanillaSuppression(XmlElement element)
+        {
+            ScenarioVanillaSuppressionDefinition suppression = new ScenarioVanillaSuppressionDefinition();
+            if (element == null)
+                return suppression;
+
+            suppression.RandomVisitors = ReadBoolAttribute(element, "randomVisitors", false);
+            suppression.Binman = ReadBoolAttribute(element, "binman", false);
+            suppression.Raids = ReadBoolAttribute(element, "raids", false);
+            suppression.StasisVisitors = ReadBoolAttribute(element, "stasisVisitors", false);
+            suppression.RadioBroadcastOdds = ReadBoolAttribute(element, "radioBroadcastOdds", false);
+            return suppression;
+        }
+
+        private static void WriteVanillaSuppression(XmlWriter writer, ScenarioVanillaSuppressionDefinition suppression)
+        {
+            if (suppression == null)
+                suppression = new ScenarioVanillaSuppressionDefinition();
+
+            writer.WriteStartElement("VanillaSuppression");
+            writer.WriteAttributeString("randomVisitors", suppression.RandomVisitors ? "true" : "false");
+            writer.WriteAttributeString("binman", suppression.Binman ? "true" : "false");
+            writer.WriteAttributeString("raids", suppression.Raids ? "true" : "false");
+            writer.WriteAttributeString("stasisVisitors", suppression.StasisVisitors ? "true" : "false");
+            writer.WriteAttributeString("radioBroadcastOdds", suppression.RadioBroadcastOdds ? "true" : "false");
+            writer.WriteEndElement();
         }
 
         private static void WriteSelectionRules(XmlWriter writer, ScenarioSelectionRulesDefinition rules, ScenarioBaseGameMode baseMode)
@@ -1102,6 +1351,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                 writer.WriteStartElement("Character");
                 WriteAttribute(writer, "id", character.CharacterId);
+                WriteAttribute(writer, "displayName", character.DisplayName);
                 WriteAttribute(writer, "presetId", character.PresetId);
                 WriteAttribute(writer, "weapon", character.WeaponItemId);
                 WriteAttribute(writer, "equippedItem1", character.EquippedItem1Id);
@@ -1113,6 +1363,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteAttributeString("flipMesh", character.FlipMesh.ToString());
                 WriteAttribute(writer, "species", character.Species);
                 WriteAttribute(writer, "avatarOverrideSpriteId", character.AvatarOverrideSpriteId);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, character.ActorRef);
+                ScenarioActorXmlSerializer.WriteActorComponents(writer, character.ActorComponents);
                 WriteScenarioNpcStats(writer, character.Stats);
                 WriteItemEntries(writer, "CarriedItems", "Item", character.CarriedItems);
                 writer.WriteEndElement();
@@ -1414,6 +1666,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     writer.WriteAttributeString("wireSpriteIndex", room.WireSpriteIndex.Value.ToString(CultureInfo.InvariantCulture));
                 WriteAttribute(writer, "wallRuntimeSpriteKey", room.WallRuntimeSpriteKey);
                 WriteAttribute(writer, "wireRuntimeSpriteKey", room.WireRuntimeSpriteKey);
+                if (room.WallCleared)
+                    writer.WriteAttributeString("wallCleared", "true");
+                if (room.WireCleared)
+                    writer.WriteAttributeString("wireCleared", "true");
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
@@ -1628,6 +1884,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "spriteId", swap.SpriteId);
                 WriteAttribute(writer, "path", swap.RelativePath);
                 WriteAttribute(writer, "runtimeSpriteKey", swap.RuntimeSpriteKey);
+                if (swap.AnimationFrameIndex.HasValue)
+                    writer.WriteAttributeString("animationFrameIndex", swap.AnimationFrameIndex.Value.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "animationFrameRuntimeSpriteKey", swap.AnimationFrameRuntimeSpriteKey);
                 if (swap.Day.HasValue)
                     writer.WriteAttributeString("day", swap.Day.Value.ToString(CultureInfo.InvariantCulture));
                 writer.WriteAttributeString("targetComponent", swap.TargetComponent.ToString());
@@ -1635,10 +1894,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
             writer.WriteEndElement();
 
-            writer.WriteStartElement("SceneSpritePlacements");
-            for (int i = 0; i < value.SceneSpritePlacements.Count; i++)
+            WriteSceneSpritePlacements(writer, value.SceneSpritePlacements);
+            writer.WriteStartElement("AssetCredits");
+            for (int i = 0; value.AssetCredits != null && i < value.AssetCredits.Count; i++)
             {
-                SceneSpritePlacement placement = value.SceneSpritePlacements[i];
+                ScenarioAssetCreditDefinition credit = value.AssetCredits[i];
+                if (credit == null || string.IsNullOrEmpty(credit.RelativePath) || string.IsNullOrEmpty(credit.Credit))
+                    continue;
+                writer.WriteStartElement("Credit");
+                WriteAttribute(writer, "path", credit.RelativePath);
+                WriteAttribute(writer, "note", credit.Credit);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+            writer.WriteEndElement();
+        }
+
+        private static void WriteSceneSpritePlacements(XmlWriter writer, System.Collections.Generic.List<SceneSpritePlacement> placements)
+        {
+            writer.WriteStartElement("SceneSpritePlacements");
+            for (int i = 0; placements != null && i < placements.Count; i++)
+            {
+                SceneSpritePlacement placement = placements[i];
                 if (placement == null)
                     continue;
 
@@ -1667,6 +1944,24 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
+        }
+
+        private static void WriteBackendWorlds(XmlWriter writer, ScenarioBackendWorldsDefinition backendWorlds)
+        {
+            writer.WriteStartElement("BackendWorlds");
+            for (int i = 0; backendWorlds != null && backendWorlds.Worlds != null && i < backendWorlds.Worlds.Count; i++)
+            {
+                ScenarioBackendWorldDefinition world = backendWorlds.Worlds[i];
+                if (world == null)
+                    continue;
+
+                writer.WriteStartElement("BackendWorld");
+                writer.WriteAttributeString("baseMode", world.BaseMode.ToString());
+                WriteBunkerEdits(writer, world.BunkerEdits);
+                WriteBunkerGrid(writer, world.BunkerGrid);
+                WriteSceneSpritePlacements(writer, world.SceneSpritePlacements);
+                writer.WriteEndElement();
+            }
             writer.WriteEndElement();
         }
 
@@ -1912,6 +2207,146 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteEndElement();
         }
 
+        private static JournalDefinition ReadJournal(XmlElement element)
+        {
+            JournalDefinition journal = new JournalDefinition();
+            if (element == null)
+                return journal;
+
+            XmlElement entries = Child(element, "Entries");
+            XmlNodeList entryNodes = entries != null ? entries.GetElementsByTagName("Entry") : element.GetElementsByTagName("Entry");
+            for (int i = 0; i < entryNodes.Count; i++)
+            {
+                XmlElement node = entryNodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                JournalEntryDefinition entry = new JournalEntryDefinition();
+                entry.Id = AttributeOrChild(node, "id", "Id");
+                entry.Text = AttributeOrChild(node, "text", "Text");
+                entry.TriggerId = AttributeOrChild(node, "triggerId", "TriggerId");
+                entry.GateId = AttributeOrChild(node, "gateId", "GateId");
+                entry.Mode = ReadEnumAttribute(node, "mode", ScenarioJournalEntryMode.Once);
+                entry.CooldownMinutes = ReadIntAttribute(node, "cooldownMinutes", 0);
+                entry.DueTime = ReadOptionalScheduleTime(Child(node, "DueTime"));
+                entry.Writer = ReadJournalWriter(node);
+                ReadConditionRefs(Child(node, "Conditions"), entry.Conditions);
+                journal.Entries.Add(entry);
+            }
+
+            XmlElement policy = Child(element, "VanillaPolicy");
+            if (policy != null)
+            {
+                journal.VanillaPolicy.SuppressFirstEntry = ReadBoolAttribute(policy, "suppressFirstEntry", false);
+                XmlNodeList suppressNodes = policy.GetElementsByTagName("Suppress");
+                for (int i = 0; i < suppressNodes.Count; i++)
+                {
+                    XmlElement suppress = suppressNodes[i] as XmlElement;
+                    if (suppress == null)
+                        continue;
+
+                    ScenarioJournalVanillaCategory category;
+                    if (TryParseJournalCategory(AttributeOrChild(suppress, "category", "Category"), out category)
+                        && !journal.VanillaPolicy.SuppressedCategories.Contains(category))
+                    {
+                        journal.VanillaPolicy.SuppressedCategories.Add(category);
+                    }
+                }
+            }
+
+            return journal;
+        }
+
+        private static void WriteJournal(XmlWriter writer, JournalDefinition journal)
+        {
+            if (journal == null)
+                journal = new JournalDefinition();
+            if (journal.VanillaPolicy == null)
+                journal.VanillaPolicy = new JournalVanillaPolicyDefinition();
+
+            writer.WriteStartElement("Journal");
+            writer.WriteStartElement("Entries");
+            for (int i = 0; journal.Entries != null && i < journal.Entries.Count; i++)
+            {
+                JournalEntryDefinition entry = journal.Entries[i];
+                if (entry == null)
+                    continue;
+
+                writer.WriteStartElement("Entry");
+                WriteAttribute(writer, "id", entry.Id);
+                writer.WriteAttributeString("mode", entry.Mode.ToString());
+                WriteAttribute(writer, "triggerId", entry.TriggerId);
+                WriteAttribute(writer, "gateId", entry.GateId);
+                writer.WriteAttributeString("cooldownMinutes", entry.CooldownMinutes.ToString(CultureInfo.InvariantCulture));
+                WriteJournalWriter(writer, entry.Writer);
+                WriteOptionalScheduleTime(writer, "DueTime", entry.DueTime);
+                WriteElement(writer, "Text", entry.Text);
+                WriteConditionRefs(writer, "Conditions", entry.Conditions);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+
+            writer.WriteStartElement("VanillaPolicy");
+            writer.WriteAttributeString("suppressFirstEntry", journal.VanillaPolicy.SuppressFirstEntry ? "true" : "false");
+            for (int i = 0; journal.VanillaPolicy.SuppressedCategories != null && i < journal.VanillaPolicy.SuppressedCategories.Count; i++)
+            {
+                writer.WriteStartElement("Suppress");
+                writer.WriteAttributeString("category", journal.VanillaPolicy.SuppressedCategories[i].ToString());
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+            writer.WriteEndElement();
+        }
+
+        private static ScenarioActorRef ReadJournalWriter(XmlElement entry)
+        {
+            XmlElement writer = Child(entry, "Writer");
+            if (writer == null)
+                return null;
+
+            ScenarioActorRef actorRef = new ScenarioActorRef();
+            actorRef.Kind = AttributeOrChild(writer, "kind", "Kind");
+            actorRef.LocalId = ReadIntAttribute(writer, "localId", 0);
+            actorRef.Domain = AttributeOrChild(writer, "domain", "Domain");
+            actorRef.BindingType = AttributeOrChild(writer, "bindingType", "BindingType");
+            actorRef.BindingKey = AttributeOrChild(writer, "bindingKey", "BindingKey");
+            actorRef.DisplayNameFallback = AttributeOrChild(writer, "displayNameFallback", "DisplayNameFallback");
+            actorRef.RequiredModId = AttributeOrChild(writer, "requiredModId", "RequiredModId");
+            return actorRef;
+        }
+
+        private static void WriteJournalWriter(XmlWriter writer, ScenarioActorRef actorRef)
+        {
+            if (actorRef == null)
+                return;
+
+            writer.WriteStartElement("Writer");
+            WriteAttribute(writer, "kind", actorRef.Kind);
+            writer.WriteAttributeString("localId", actorRef.LocalId.ToString(CultureInfo.InvariantCulture));
+            WriteAttribute(writer, "domain", actorRef.Domain);
+            WriteAttribute(writer, "bindingType", actorRef.BindingType);
+            WriteAttribute(writer, "bindingKey", actorRef.BindingKey);
+            WriteAttribute(writer, "displayNameFallback", actorRef.DisplayNameFallback);
+            WriteAttribute(writer, "requiredModId", actorRef.RequiredModId);
+            writer.WriteEndElement();
+        }
+
+        private static bool TryParseJournalCategory(string value, out ScenarioJournalVanillaCategory category)
+        {
+            category = ScenarioJournalVanillaCategory.Death;
+            if (string.IsNullOrEmpty(value))
+                return false;
+            try
+            {
+                category = (ScenarioJournalVanillaCategory)Enum.Parse(typeof(ScenarioJournalVanillaCategory), value, true);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         internal static void ReadScheduledActions(XmlElement element, System.Collections.Generic.List<ScenarioScheduledActionDefinition> target)
         {
             if (element == null || target == null)
@@ -1934,6 +2369,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 {
                     action.Policy.Repeatable = ReadBoolAttribute(policy, "repeatable", false);
                     action.Policy.CooldownMinutes = ReadIntAttribute(policy, "cooldownMinutes", 0);
+                    action.Policy.WindowEndDay = ReadIntAttribute(policy, "windowEndDay", 0);
+                    action.Policy.Chance = ReadFloatAttribute(policy, "chance", 1f);
+                    action.Policy.JitterMinutes = ReadIntAttribute(policy, "jitterMinutes", 0);
+                    action.Policy.MaxRuns = ReadIntAttribute(policy, "maxRuns", 0);
                 }
                 ReadConditionRefs(Child(actionElement, "Conditions"), action.ConditionRefs);
                 ReadEffects(Child(actionElement, "Effects"), action.Effects);
@@ -1959,6 +2398,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     writer.WriteStartElement("Policy");
                     writer.WriteAttributeString("repeatable", action.Policy != null && action.Policy.Repeatable ? "true" : "false");
                     writer.WriteAttributeString("cooldownMinutes", action.Policy != null ? action.Policy.CooldownMinutes.ToString(CultureInfo.InvariantCulture) : "0");
+                    if (action.Policy != null && action.Policy.WindowEndDay > 0)
+                        writer.WriteAttributeString("windowEndDay", action.Policy.WindowEndDay.ToString(CultureInfo.InvariantCulture));
+                    if (action.Policy != null && action.Policy.Chance < 1f)
+                        writer.WriteAttributeString("chance", action.Policy.Chance.ToString(CultureInfo.InvariantCulture));
+                    if (action.Policy != null && action.Policy.JitterMinutes > 0)
+                        writer.WriteAttributeString("jitterMinutes", action.Policy.JitterMinutes.ToString(CultureInfo.InvariantCulture));
+                    if (action.Policy != null && action.Policy.MaxRuns > 0)
+                        writer.WriteAttributeString("maxRuns", action.Policy.MaxRuns.ToString(CultureInfo.InvariantCulture));
                     writer.WriteEndElement();
                     WriteConditionRefs(writer, "Conditions", action.ConditionRefs);
                     WriteEffects(writer, "Effects", action.Effects);
@@ -2015,6 +2462,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 condition.Id = AttributeOrChild(node, "id", "Id");
                 condition.Kind = ReadEnumAttribute(node, "kind", ScenarioConditionKind.TimeReached);
                 condition.TargetId = AttributeOrChild(node, "targetId", "TargetId");
+                condition.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(node);
                 condition.Comparison = AttributeOrChild(node, "comparison", "Comparison");
                 condition.Quantity = ReadIntAttribute(node, "quantity", 0);
                 condition.StatId = AttributeOrChild(node, "statId", "StatId");
@@ -2047,6 +2495,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "traitId", condition.TraitId);
                 WriteAttribute(writer, "flagId", condition.FlagId);
                 WriteAttribute(writer, "flagValue", condition.FlagValue);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, condition.ActorRef);
                 WriteOptionalScheduleTime(writer, "Time", condition.Time);
                 WriteProperties(writer, "Properties", condition.Properties);
                 writer.WriteEndElement();
@@ -2070,6 +2519,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 effect.Id = AttributeOrChild(node, "id", "Id");
                 effect.Kind = ReadEnumAttribute(node, "kind", ScenarioEffectKind.SetScenarioFlag);
                 effect.TargetId = AttributeOrChild(node, "targetId", "TargetId");
+                effect.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(node);
                 effect.ItemId = AttributeOrChild(node, "itemId", "ItemId");
                 effect.Quantity = ReadIntAttribute(node, "quantity", 0);
                 effect.WeatherState = AttributeOrChild(node, "weatherState", "WeatherState");
@@ -2081,6 +2531,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 effect.FlagId = AttributeOrChild(node, "flagId", "FlagId");
                 effect.FlagValue = AttributeOrChild(node, "flagValue", "FlagValue");
                 effect.TriggerId = AttributeOrChild(node, "triggerId", "TriggerId");
+                effect.ConversationId = AttributeOrChild(node, "conversationId", "ConversationId");
                 ReadProperties(Child(node, "Properties"), effect.Properties);
                 target.Add(effect);
             }
@@ -2109,6 +2560,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "flagId", effect.FlagId);
                 WriteAttribute(writer, "flagValue", effect.FlagValue);
                 WriteAttribute(writer, "triggerId", effect.TriggerId);
+                WriteAttribute(writer, "conversationId", effect.ConversationId);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, effect.ActorRef);
                 WriteProperties(writer, "Properties", effect.Properties);
                 writer.WriteEndElement();
             }
@@ -2149,6 +2602,184 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     WriteProperties(writer, "Properties", condition.Properties);
                     writer.WriteEndElement();
                 }
+            }
+            writer.WriteEndElement();
+        }
+
+        private static ScenarioConversationAuthoringDefinition ReadConversations(XmlElement element)
+        {
+            ScenarioConversationAuthoringDefinition authoring = new ScenarioConversationAuthoringDefinition();
+            if (element == null)
+                return authoring;
+
+            XmlElement settings = Child(element, "Settings");
+            if (settings != null)
+            {
+                authoring.Settings.SuppressVanillaRandomChatter = ReadBool(settings, "SuppressVanillaRandomChatter", authoring.Settings.SuppressVanillaRandomChatter);
+                ReadStringList(Child(settings, "SuppressedVanillaCategories"), "string", authoring.Settings.SuppressedVanillaCategories);
+                ReadStringList(Child(settings, "SuppressedVanillaTopicKeys"), "string", authoring.Settings.SuppressedVanillaTopicKeys);
+            }
+
+            XmlNodeList nodes = element.GetElementsByTagName("Conversation");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement conversationElement = nodes[i] as XmlElement;
+                if (conversationElement == null)
+                    continue;
+
+                ScenarioConversationDefinition conversation = new ScenarioConversationDefinition();
+                conversation.Id = AttributeOrChild(conversationElement, "id", "Id");
+                conversation.Trigger = ReadConversationTrigger(Child(conversationElement, "Trigger"));
+                ReadConversationParticipants(Child(conversationElement, "Participants"), conversation.Participants);
+                ReadConditionRefs(Child(conversationElement, "Conditions"), conversation.Conditions);
+                ReadConversationLines(Child(conversationElement, "Lines"), conversation.Lines);
+                ReadStringList(Child(conversationElement, "Tags"), "Tag", conversation.Tags);
+                authoring.Conversations.Add(conversation);
+            }
+
+            return authoring;
+        }
+
+        private static ScenarioConversationTriggerDefinition ReadConversationTrigger(XmlElement element)
+        {
+            ScenarioConversationTriggerDefinition trigger = new ScenarioConversationTriggerDefinition();
+            if (element == null)
+                return trigger;
+
+            trigger.Source = ReadEnumAttribute(element, "source", trigger.Source);
+            trigger.Weight = ReadFloatAttribute(element, "weight", trigger.Weight);
+            trigger.TriggerId = AttributeOrChild(element, "triggerId", "TriggerId");
+            trigger.CooldownDays = ReadFloatAttribute(element, "cooldownDays", trigger.CooldownDays);
+            trigger.Once = ReadBoolAttribute(element, "once", trigger.Once);
+            trigger.Time = ReadScheduleTime(Child(element, "Time"));
+            return trigger;
+        }
+
+        private static void ReadConversationParticipants(XmlElement element, System.Collections.Generic.List<ScenarioConversationParticipantDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Participant");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement participantElement = nodes[i] as XmlElement;
+                if (participantElement == null)
+                    continue;
+
+                ScenarioConversationParticipantDefinition participant = new ScenarioConversationParticipantDefinition();
+                participant.Slot = AttributeOrChild(participantElement, "slot", "Slot");
+                participant.StoryCharacterId = AttributeOrChild(participantElement, "storyCharacterId", "StoryCharacterId");
+                participant.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(participantElement);
+                participant.Fallback = ReadEnumAttribute(participantElement, "fallback", participant.Fallback);
+                participant.Required = ReadBoolAttribute(participantElement, "required", participant.Required);
+                target.Add(participant);
+            }
+        }
+
+        private static void ReadConversationLines(XmlElement element, System.Collections.Generic.List<ScenarioConversationLineDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Line");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement lineElement = nodes[i] as XmlElement;
+                if (lineElement == null)
+                    continue;
+
+                ScenarioConversationLineDefinition line = new ScenarioConversationLineDefinition();
+                line.SpeakerSlot = AttributeOrChild(lineElement, "speakerSlot", "SpeakerSlot");
+                line.TextKey = AttributeOrChild(lineElement, "textKey", "TextKey");
+                line.RawText = AttributeOrChild(lineElement, "rawText", "RawText");
+                line.DelaySeconds = ReadFloatAttribute(lineElement, "delaySeconds", line.DelaySeconds);
+                target.Add(line);
+            }
+        }
+
+        private static void WriteConversations(XmlWriter writer, ScenarioConversationAuthoringDefinition authoring)
+        {
+            if (authoring == null)
+                authoring = new ScenarioConversationAuthoringDefinition();
+
+            writer.WriteStartElement("Conversations");
+            ScenarioConversationSuppressionDefinition settings = authoring.Settings ?? new ScenarioConversationSuppressionDefinition();
+            writer.WriteStartElement("Settings");
+            WriteElement(writer, "SuppressVanillaRandomChatter", settings.SuppressVanillaRandomChatter ? "true" : "false");
+            WriteStringList(writer, "SuppressedVanillaCategories", "string", settings.SuppressedVanillaCategories);
+            WriteStringList(writer, "SuppressedVanillaTopicKeys", "string", settings.SuppressedVanillaTopicKeys);
+            writer.WriteEndElement();
+
+            for (int i = 0; authoring.Conversations != null && i < authoring.Conversations.Count; i++)
+            {
+                ScenarioConversationDefinition conversation = authoring.Conversations[i];
+                if (conversation == null)
+                    continue;
+
+                writer.WriteStartElement("Conversation");
+                WriteAttribute(writer, "id", conversation.Id);
+                WriteConversationTrigger(writer, conversation.Trigger);
+                WriteConversationParticipants(writer, conversation.Participants);
+                WriteConditionRefs(writer, "Conditions", conversation.Conditions);
+                WriteConversationLines(writer, conversation.Lines);
+                WriteStringList(writer, "Tags", "Tag", conversation.Tags);
+                writer.WriteEndElement();
+            }
+
+            writer.WriteEndElement();
+        }
+
+        private static void WriteConversationTrigger(XmlWriter writer, ScenarioConversationTriggerDefinition trigger)
+        {
+            if (trigger == null)
+                trigger = new ScenarioConversationTriggerDefinition();
+
+            writer.WriteStartElement("Trigger");
+            writer.WriteAttributeString("source", trigger.Source.ToString());
+            writer.WriteAttributeString("weight", trigger.Weight.ToString(CultureInfo.InvariantCulture));
+            WriteAttribute(writer, "triggerId", trigger.TriggerId);
+            writer.WriteAttributeString("cooldownDays", trigger.CooldownDays.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("once", trigger.Once ? "true" : "false");
+            WriteScheduleTime(writer, "Time", trigger.Time);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteConversationParticipants(XmlWriter writer, System.Collections.Generic.List<ScenarioConversationParticipantDefinition> participants)
+        {
+            writer.WriteStartElement("Participants");
+            for (int i = 0; participants != null && i < participants.Count; i++)
+            {
+                ScenarioConversationParticipantDefinition participant = participants[i];
+                if (participant == null)
+                    continue;
+
+                writer.WriteStartElement("Participant");
+                WriteAttribute(writer, "slot", participant.Slot);
+                WriteAttribute(writer, "storyCharacterId", participant.StoryCharacterId);
+                writer.WriteAttributeString("fallback", participant.Fallback.ToString());
+                writer.WriteAttributeString("required", participant.Required ? "true" : "false");
+                ScenarioActorXmlSerializer.WriteActorRef(writer, participant.ActorRef);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteConversationLines(XmlWriter writer, System.Collections.Generic.List<ScenarioConversationLineDefinition> lines)
+        {
+            writer.WriteStartElement("Lines");
+            for (int i = 0; lines != null && i < lines.Count; i++)
+            {
+                ScenarioConversationLineDefinition line = lines[i];
+                if (line == null)
+                    continue;
+
+                writer.WriteStartElement("Line");
+                WriteAttribute(writer, "speakerSlot", line.SpeakerSlot);
+                WriteAttribute(writer, "textKey", line.TextKey);
+                WriteAttribute(writer, "rawText", line.RawText);
+                writer.WriteAttributeString("delaySeconds", line.DelaySeconds.ToString(CultureInfo.InvariantCulture));
+                writer.WriteEndElement();
             }
             writer.WriteEndElement();
         }

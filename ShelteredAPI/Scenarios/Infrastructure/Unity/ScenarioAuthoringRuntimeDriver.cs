@@ -5,6 +5,7 @@ using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioAuthoringRuntimeDriver : MonoBehaviour
     {
@@ -50,8 +51,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             {
                 ScenarioCompositionRoot.EnsureAuthoringInitialized();
                 ShelteredApiRuntimeBootstrap.EnsureAuthoringApiRegistered();
-                ScenarioAuthoringBootstrapService.Instance.Update();
+                if (ScenarioOpeningCutsceneAuthoringService.IsPreviewActive)
+                {
+                    ScenarioCompositionRoot.Resolve<ScenarioAuthoringPresentationService>().Update();
+                    ScenarioOpeningCutsceneAuthoringService.UpdateActivePreview();
+                }
+                else
+                {
+                    ScenarioAuthoringBootstrapService.Instance.Update();
+                    ScenarioOpeningCutsceneAuthoringService.UpdateActivePreview();
+                    ScenarioOpeningCutsceneAuthoringService.UpdateAuthoringIntroCutsceneFallback();
+                    ScenarioOpeningCutsceneAuthoringService.RestoreStaleCutscenePanelIfAuthoringVisible();
+                }
                 ScenarioSpriteSwapService.Instance.Update();
+                ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>().Update();
             }
             catch (System.Exception ex)
             {

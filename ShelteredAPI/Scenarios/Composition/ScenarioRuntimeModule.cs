@@ -1,4 +1,5 @@
 using ShelteredAPI.Core;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -34,7 +35,10 @@ namespace ShelteredAPI.Scenarios.Composition{
                 return new ScenarioPlaytestOrchestrator(
                     resolver.Get<IScenarioApplier>(),
                     resolver.Get<IScenarioRuntimeBindingService>(),
-                    resolver.Get<IScenarioPauseService>());
+                    resolver.Get<IScenarioPauseService>(),
+                    resolver.Get<ScenarioAuthorTestChecklistService>(),
+                    resolver.Get<IVanillaScenarioRuntime>(),
+                    resolver.Get<IScenarioPlaytestUiService>());
             });
             services.AddScenarioRuntime();
             services.AddSingleton<IScenarioRuntimeOrchestrator>(delegate(IServiceResolver resolver)

@@ -1,15 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine;
 
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+using ShelteredAPI.Scenarios.Infrastructure.Persistence;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringDraftRepository
     {
@@ -23,8 +26,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         internal const string DraftOwnerId = "smm.authoring";
         internal const string DraftStorageScenarioId = "ScenarioAuthoringDrafts";
         private readonly object _sync = new object();
+        private readonly object _listProgressSync = new object();
         private readonly ScenarioDefinitionSerializer _serializer = new ScenarioDefinitionSerializer();
         private readonly IScenarioSaveLibrary _saveLibrary;
+        private bool _listProgressRunning;
+        private int _listProgressCompleted;
+        private int _listProgressTotal;
+        private int _listProgressVersion;
 
         public static ScenarioAuthoringDraftRepository Instance
         {
@@ -37,6 +45,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 throw new ArgumentNullException("saveLibrary");
 
             _saveLibrary = saveLibrary;
+            ScenarioDefinitionMetadataCache.ConfigurePersistentStore(
+                ScenarioAuthoringStoragePaths.GetDraftMetadataCacheFilePath(),
+                DraftOwnerId);
             ScenarioRegistry.RegisterScenario(new ScenarioDescriptor
             {
                 id = DraftStorageScenarioId,
@@ -75,20 +86,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 ScenarioDefinition definition = new ScenarioDefinition();
                 definition.Id = scenarioId;
-                definition.DisplayName = "New Custom Scenario";
-                definition.Description = "Local scenario authoring draft.";
-                definition.Author = "SMM Authoring";
-                definition.Version = "0.1.0";
+                definition.DisplayName = ScenarioMetadataDefaults.DefaultTitle;
+                definition.Description = string.Empty;
+                definition.Author = ScenarioMetadataDefaults.DefaultAuthor;
+                definition.Version = ScenarioMetadataDefaults.DefaultVersion;
                 definition.BaseGameMode = baseMode;
                 definition.SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(baseMode);
 
                 string scenarioFilePath = Path.Combine(draftRoot, ScenarioDefinitionSerializer.DefaultFileName);
                 _serializer.Save(definition, scenarioFilePath);
+                ScenarioDefinitionMetadataCache.Invalidate(scenarioFilePath);
+                new ScenarioAuthoringSetupStateService().CreateInitialForScenarioFile(scenarioFilePath);
                 MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Created draft '" + scenarioId + "' in save-system slot " + slot
                     + " at " + scenarioFilePath + ".");
                 return new DraftRecord
                 {
-                    Info = _serializer.LoadInfo(scenarioFilePath, DraftOwnerId),
+                    Info = LoadInfoWithRecovery(scenarioFilePath),
                     StartupSave = startupSave,
                     Slot = slot
                 };
@@ -115,11 +128,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
 
                 Dictionary<string, ScenarioInfo> byId = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
+                bool allowMetadataLoads = Thread.CurrentThread.IsThreadPoolThread;
+                if (allowMetadataLoads)
+                    SetListProgress(true, 0, files.Length);
                 for (int i = 0; i < files.Length; i++)
                 {
                     try
                     {
-                        ScenarioInfo info = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        ScenarioInfo info;
+                        if (allowMetadataLoads)
+                        {
+                            info = LoadInfoWithRecovery(files[i]);
+                        }
+                        else
+                        {
+                            ScenarioDefinitionMetadata cached;
+                            info = ScenarioDefinitionMetadataCache.TryGetCached(files[i], DraftOwnerId, out cached)
+                                && cached != null ? cached.Info : null;
+                        }
                         if (info == null || string.IsNullOrEmpty(info.Id) || byId.ContainsKey(info.Id))
                             continue;
 
@@ -129,7 +155,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     {
                         MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Skipping invalid draft scenario '" + files[i] + "': " + ex.Message);
                     }
+                    finally
+                    {
+                        if (allowMetadataLoads)
+                            SetListProgress(true, i + 1, files.Length);
+                    }
                 }
+
+                if (allowMetadataLoads)
+                    SetListProgress(false, files.Length, files.Length);
 
                 List<ScenarioInfo> results = new List<ScenarioInfo>();
                 foreach (KeyValuePair<string, ScenarioInfo> pair in byId)
@@ -146,63 +180,124 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (string.IsNullOrEmpty(scenarioId))
                 return false;
 
-            lock (_sync)
-            {
-                string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
-                for (int i = 0; i < files.Length; i++)
-                {
-                    try
-                    {
-                        ScenarioInfo loaded = _serializer.LoadInfo(files[i], DraftOwnerId);
-                        if (loaded != null && string.Equals(loaded.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
-                        {
-                            info = loaded;
-                            return true;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed while resolving draft '" + scenarioId + "': " + ex.Message);
-                    }
-                }
-
+            ScenarioDefinitionMetadata metadata;
+            if (!ScenarioDefinitionMetadataCache.TryGetByScenarioId(scenarioId, DraftOwnerId, out metadata)
+                || metadata == null || metadata.Info == null)
                 return false;
-            }
+
+            info = metadata.Info;
+            return true;
         }
 
         public bool TryGetDraftSaveEntry(string draftId, out SaveEntry entry)
         {
-            entry = null;
-            if (string.IsNullOrEmpty(draftId))
+            string ignored;
+            return TryGetDraftSaveEntry(draftId, out entry, out ignored);
+        }
+
+        internal bool TryGetDraftRecord(string draftId, out DraftRecord record, out string error)
+        {
+            record = null;
+            error = null;
+            ScenarioInfo info;
+            if (!TryGet(draftId, out info) || info == null)
+            {
+                error = "Could not locate indexed draft metadata for '" + draftId + "'. Refresh the Draft Scenarios view and try again.";
+                return false;
+            }
+
+            SaveEntry startupSave;
+            if (!TryGetDraftSaveEntry(draftId, out startupSave, out error) || startupSave == null)
                 return false;
 
-            lock (_sync)
+            record = new DraftRecord
             {
-                string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
-                for (int i = 0; i < files.Length; i++)
+                Info = info,
+                StartupSave = startupSave,
+                Slot = startupSave.absoluteSlot
+            };
+            return true;
+        }
+
+        public bool TryGetDraftSaveEntry(string draftId, out SaveEntry entry, out string error)
+        {
+            error = null;
+            entry = null;
+            if (string.IsNullOrEmpty(draftId))
+            {
+                error = "Draft id is required.";
+                return false;
+            }
+
+            ScenarioInfo loaded;
+            if (TryGet(draftId, out loaded) && loaded != null && !string.IsNullOrEmpty(loaded.FilePath))
+            {
+                string filePath = loaded.FilePath;
+                try
                 {
-                    try
+                    int slot = TryParseSlotNumber(filePath);
+                    if (slot <= 0)
                     {
-                        ScenarioInfo loaded = _serializer.LoadInfo(files[i], DraftOwnerId);
-                        if (loaded == null || !string.Equals(loaded.Id, draftId, StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        int slot = TryParseSlotNumber(files[i]);
-                        if (slot <= 0)
-                            return false;
-
-                        string saveId = DraftStorageScenarioId + "_" + slot;
-                        entry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
-                        return entry != null;
+                        error = "Could not resolve the draft save slot for '" + draftId + "'.";
+                        return false;
                     }
-                    catch (Exception ex)
+
+                    string saveId = DraftStorageScenarioId + "_" + slot;
+                    entry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
+                    if (entry != null)
                     {
-                        MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to resolve draft save entry for '" + draftId + "': " + ex.Message);
+                        return true;
                     }
+
+                    entry = new SaveEntry
+                    {
+                        id = saveId,
+                        absoluteSlot = slot,
+                        name = string.IsNullOrEmpty(loaded.DisplayName) ? loaded.Id : loaded.DisplayName,
+                        scenarioId = DraftStorageScenarioId,
+                        scenarioVersion = loaded.Version,
+                        createdAt = DateTime.UtcNow.ToString("o"),
+                        updatedAt = File.GetLastWriteTimeUtc(filePath).ToString("o")
+                    };
+                    MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Reconstructed draft save entry for '"
+                        + draftId + "' from slot " + slot + " because no SaveData.xml entry exists yet.");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    error = ex.Message;
+                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to resolve draft save entry for '" + draftId + "': " + ex.Message);
+                    return false;
                 }
             }
 
+            if (string.IsNullOrEmpty(error))
+                error = "Could not locate indexed draft metadata for '" + draftId + "'. Refresh the Draft Scenarios view and try again.";
+
             return false;
+        }
+
+        internal bool TryGetListProgress(out int completed, out int total, out int version, out bool running)
+        {
+            lock (_listProgressSync)
+            {
+                completed = _listProgressCompleted;
+                total = _listProgressTotal;
+                version = _listProgressVersion;
+                running = _listProgressRunning;
+                return running || total > 0;
+            }
+        }
+
+        private void SetListProgress(bool running, int completed, int total)
+        {
+            lock (_listProgressSync)
+            {
+                _listProgressRunning = running;
+                _listProgressCompleted = completed;
+                _listProgressTotal = total;
+                _listProgressVersion++;
+            }
         }
 
         public bool TryUpdateMetadata(string draftId, string displayName, string description, out ScenarioInfo updatedInfo, out string error)
@@ -236,7 +331,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         definition.DisplayName = displayName;
                         definition.Description = description ?? string.Empty;
                         _serializer.Save(definition, files[i]);
-                        updatedInfo = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        ScenarioDefinitionMetadataCache.Invalidate(files[i]);
+                        updatedInfo = LoadInfoWithRecovery(files[i]);
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Updated draft metadata for '" + draftId + "'.");
                         return true;
                     }
@@ -253,10 +349,84 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
-        public bool DeleteDraft(string draftId, string reason)
+        public bool TryRenameDraft(string draftId, string newDraftId, string displayName, string description, out ScenarioInfo updatedInfo, out string error)
         {
+            updatedInfo = null;
+            error = null;
+
             if (string.IsNullOrEmpty(draftId))
+            {
+                error = "Draft id is required.";
                 return false;
+            }
+
+            string normalizedId = NormalizeDraftId(newDraftId);
+            if (string.IsNullOrEmpty(normalizedId))
+            {
+                error = "Draft file name is required.";
+                return false;
+            }
+
+            lock (_sync)
+            {
+                string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
+                if (ScenarioIdExistsOutsideDrafts(normalizedId))
+                {
+                    error = "A published or exported scenario already uses file name '" + normalizedId + "'.";
+                    return false;
+                }
+
+                for (int i = 0; i < files.Length; i++)
+                {
+                    ScenarioDefinition existing = SafeLoadDefinition(files[i]);
+                    if (existing != null
+                        && !string.Equals(existing.Id, draftId, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(existing.Id, normalizedId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        error = "A draft already uses file name '" + normalizedId + "'.";
+                        return false;
+                    }
+                }
+
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try
+                    {
+                        ScenarioDefinition definition = _serializer.Load(files[i]);
+                        if (definition == null || !string.Equals(definition.Id, draftId, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        definition.Id = normalizedId;
+                        definition.DisplayName = string.IsNullOrEmpty(displayName) ? definition.DisplayName : displayName;
+                        definition.Description = description ?? string.Empty;
+                        _serializer.Save(definition, files[i]);
+                        ScenarioDefinitionMetadataCache.Invalidate(files[i]);
+                        updatedInfo = LoadInfoWithRecovery(files[i]);
+                        MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Renamed draft '" + draftId + "' to '" + normalizedId + "'.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        error = ex.Message;
+                        MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to rename draft '" + draftId + "': " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+
+            error = "Draft '" + draftId + "' was not found.";
+            return false;
+        }
+
+        public bool TryDuplicateDraft(string draftId, out ScenarioInfo duplicateInfo, out string error)
+        {
+            duplicateInfo = null;
+            error = null;
+            if (string.IsNullOrEmpty(draftId))
+            {
+                error = "Draft id is required.";
+                return false;
+            }
 
             lock (_sync)
             {
@@ -265,24 +435,99 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     try
                     {
-                        ScenarioInfo loaded = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        ScenarioDefinition source = _serializer.Load(files[i]);
+                        if (source == null || !string.Equals(source.Id, draftId, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        DraftRecord duplicate = CreateDraft(source.BaseGameMode);
+                        if (duplicate == null || duplicate.Info == null || string.IsNullOrEmpty(duplicate.Info.FilePath))
+                        {
+                            error = "Could not allocate duplicate draft storage.";
+                            return false;
+                        }
+
+                        string duplicateId = duplicate.Info.Id;
+                        CopyDraftFolder(Path.GetDirectoryName(files[i]), Path.GetDirectoryName(duplicate.Info.FilePath));
+                        ScenarioDefinitionMetadataCache.InvalidateUnder(Path.GetDirectoryName(duplicate.Info.FilePath));
+                        source.Id = duplicateId;
+                        source.DisplayName = BuildDuplicateDisplayName(source.DisplayName);
+                        _serializer.Save(source, duplicate.Info.FilePath);
+                        ScenarioDefinitionMetadataCache.Invalidate(duplicate.Info.FilePath);
+                        duplicateInfo = LoadInfoWithRecovery(duplicate.Info.FilePath);
+                        MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Duplicated draft '" + draftId + "' as '" + duplicateId + "'.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        error = ex.Message;
+                        MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to duplicate draft '" + draftId + "': " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+
+            error = "Draft '" + draftId + "' was not found.";
+            return false;
+        }
+
+        public bool DeleteDraft(string draftId, string reason)
+        {
+            if (string.IsNullOrEmpty(draftId))
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused draft delete because the draft id was empty.");
+                return false;
+            }
+
+            lock (_sync)
+            {
+                string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try
+                    {
+                        ScenarioInfo loaded = LoadInfoWithRecovery(files[i]);
                         if (loaded == null || !string.Equals(loaded.Id, draftId, StringComparison.OrdinalIgnoreCase))
                             continue;
 
                         int slot = TryParseSlotNumber(files[i]);
-                        bool saveDeleted = false;
+                        // A draft has two owned persistence surfaces: the authoring
+                        // definition folder and its reserved virtual save slot.  Do
+                        // not let a stale save entry select an arbitrary directory.
+                        // The scenario definition above is the authority for both
+                        // the draft id and slot before either surface is mutated.
+                        bool saveDeleted = true;
                         if (slot > 0)
                         {
                             string saveId = DraftStorageScenarioId + "_" + slot;
-                            saveDeleted = _saveLibrary.Delete(DraftStorageScenarioId, saveId);
+                            SaveEntry saveEntry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
+                            if (saveEntry != null)
+                            {
+                                if (saveEntry.absoluteSlot != slot)
+                                {
+                                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused to delete mismatched virtual save for draft '"
+                                        + draftId + "'. expectedSlot=" + slot + " actualSlot=" + saveEntry.absoluteSlot
+                                        + ".");
+                                    return false;
+                                }
+
+                                saveDeleted = _saveLibrary.Delete(DraftStorageScenarioId, saveId);
+                                if (!saveDeleted)
+                                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to delete virtual save for draft '"
+                                        + draftId + "'. slot=" + slot + ".");
+                            }
                         }
 
                         string draftRoot = Path.GetDirectoryName(files[i]);
-                        bool draftDeleted = DeleteDraftDirectory(draftRoot);
+                        ScenarioDefinitionMetadataCache.InvalidateUnder(draftRoot);
+                        bool draftDeleted = DeleteDraftDirectory(GetDraftsRootPath(), draftRoot);
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Deleted pending draft '" + draftId + "'. slot=" + slot
                             + " saveDeleted=" + saveDeleted + " draftDeleted=" + draftDeleted
                             + " reason=" + (reason ?? "unspecified") + ".");
-                        return saveDeleted || draftDeleted;
+                        // The definition folder is the catalog authority.  Once it
+                        // is durably gone, report deletion complete so the browser
+                        // refreshes instead of retaining a ghost row merely because
+                        // an optional virtual-save cleanup failed.
+                        return draftDeleted;
                     }
                     catch (Exception ex)
                     {
@@ -291,6 +536,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
 
+            MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused draft delete because no matching draft definition was found. draft='"
+                + draftId + "'.");
             return false;
         }
 
@@ -304,6 +551,133 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (name != 0) return name;
 
             return string.Compare(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private ScenarioDefinition SafeLoadDefinition(string filePath)
+        {
+            try
+            {
+                ScenarioDefinition definition;
+                string recoveryMessage;
+                bool recovered;
+                if (!_serializer.TryLoadWithRecovery(filePath, out definition, out recoveryMessage, out recovered))
+                    return null;
+
+                if (recovered)
+                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] " + recoveryMessage);
+                return definition;
+            }
+            catch { return null; }
+        }
+
+        private ScenarioInfo LoadInfoWithRecovery(string filePath)
+        {
+            ScenarioDefinitionMetadata metadata;
+            string recoveryMessage;
+            bool recovered;
+            if (!ScenarioDefinitionMetadataCache.TryLoad(
+                _serializer,
+                filePath,
+                DraftOwnerId,
+                _serializer.TryLoadWithRecovery,
+                out metadata,
+                out recoveryMessage,
+                out recovered)
+                || metadata == null
+                || metadata.Info == null)
+            {
+                throw new IOException(string.IsNullOrEmpty(recoveryMessage) ? "Scenario XML could not be loaded." : recoveryMessage);
+            }
+
+            if (recovered)
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] " + recoveryMessage);
+
+            return metadata.Info;
+        }
+
+        private static bool ScenarioIdExistsOutsideDrafts(string scenarioId)
+        {
+            if (string.IsNullOrEmpty(scenarioId))
+                return false;
+
+            try
+            {
+                IScenarioDefinitionCatalogService catalog = ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>();
+                if (catalog == null)
+                    return false;
+
+                ScenarioInfo[] infos = catalog.ListDefinitions();
+                for (int i = 0; infos != null && i < infos.Length; i++)
+                {
+                    ScenarioInfo info = infos[i];
+                    if (info != null && string.Equals(info.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Published scenario collision check failed: " + ex.Message);
+            }
+
+            return false;
+        }
+
+        private static void CopyDraftFolder(string sourceRoot, string destinationRoot)
+        {
+            if (string.IsNullOrEmpty(sourceRoot) || string.IsNullOrEmpty(destinationRoot) || !Directory.Exists(sourceRoot))
+                return;
+
+            string sourceFull = Path.GetFullPath(sourceRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string destinationFull = Path.GetFullPath(destinationRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(sourceFull, destinationFull, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string[] directories = Directory.GetDirectories(sourceFull, "*", SearchOption.AllDirectories);
+            for (int i = 0; i < directories.Length; i++)
+            {
+                string relative = directories[i].Substring(sourceFull.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                Directory.CreateDirectory(Path.Combine(destinationFull, relative));
+            }
+
+            string[] files = Directory.GetFiles(sourceFull, "*", SearchOption.AllDirectories);
+            for (int i = 0; i < files.Length; i++)
+            {
+                string relative = files[i].Substring(sourceFull.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string destination = Path.Combine(destinationFull, relative);
+                string directory = Path.GetDirectoryName(destination);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    Directory.CreateDirectory(directory);
+
+                File.Copy(files[i], destination, true);
+            }
+        }
+
+        private static string BuildDuplicateDisplayName(string displayName)
+        {
+            return (string.IsNullOrEmpty(displayName) ? "Custom Scenario" : displayName) + " Copy";
+        }
+
+        private static string NormalizeDraftId(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return null;
+
+            string trimmed = value.Trim();
+            if (trimmed.Length == 0)
+                return null;
+
+            char[] invalid = Path.GetInvalidFileNameChars();
+            List<char> chars = new List<char>();
+            for (int i = 0; i < trimmed.Length; i++)
+            {
+                char c = trimmed[i];
+                bool bad = char.IsWhiteSpace(c);
+                for (int j = 0; !bad && j < invalid.Length; j++)
+                    bad = c == invalid[j];
+                chars.Add(bad ? '_' : c);
+            }
+
+            return new string(chars.ToArray()).Trim('_', '.');
         }
 
         private static string CreateDraftId()
@@ -367,6 +741,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
         }
 
+        // Resolves the on-disk scenario.xml for a draft save slot without enumerating
+        // every draft. Book rows already hold the draft's absolute slot, so this keeps
+        // per-row recovery/history checks O(1).
+        internal static string GetDraftScenarioFilePath(int slot)
+        {
+            if (slot <= 0)
+                return null;
+
+            return Path.Combine(Path.Combine(GetDraftsRootPath(), "Slot_" + slot), ScenarioDefinitionSerializer.DefaultFileName);
+        }
+
         private static string GetDraftsRootPath()
         {
             return GetScenarioRootPath(false);
@@ -385,32 +770,54 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return path;
         }
 
-        private static bool DeleteDraftDirectory(string draftRoot)
+        // This is also used by ScenarioFrameworkVerification.  It accepts the
+        // drafts root explicitly so the fixture can prove that a deleted draft is
+        // absent from a fresh on-disk catalog scan without relying on Unity paths.
+        internal static bool DeleteDraftDirectory(string draftsRoot, string draftRoot)
         {
             if (string.IsNullOrEmpty(draftRoot) || !Directory.Exists(draftRoot))
                 return false;
 
             try
             {
-                string parent = Path.GetDirectoryName(draftRoot);
-                if (string.IsNullOrEmpty(parent))
+                string root = Path.GetFullPath(draftsRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string source = Path.GetFullPath(draftRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string parent = Path.GetDirectoryName(source);
+                string name = Path.GetFileName(source);
+                int slot;
+                if (string.IsNullOrEmpty(parent)
+                    || !string.Equals(parent, root, StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrEmpty(name)
+                    || !name.StartsWith("Slot_", StringComparison.OrdinalIgnoreCase)
+                    || !int.TryParse(name.Substring(5), out slot)
+                    || slot <= 0)
+                {
+                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused unsafe draft-directory delete. root='"
+                        + (draftsRoot ?? string.Empty) + "' draftRoot='" + (draftRoot ?? string.Empty) + "'.");
                     return false;
+                }
 
-                string trashRoot = Path.Combine(parent, "_trash");
+                // A same-volume move is the recovery boundary: a crash can leave a
+                // quarantined draft, but it cannot leave a catalog-visible partial
+                // slot.  We then purge the quarantine copy so confirmed deletion
+                // does not accumulate scenario.xml, backups, or history files.
+                string trashRoot = Path.Combine(root, "_trash");
                 if (!Directory.Exists(trashRoot))
                     Directory.CreateDirectory(trashRoot);
 
-                string name = Path.GetFileName(draftRoot) + "_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-                string deletedPath = Path.Combine(trashRoot, name);
+                string quarantineName = name + "_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+                string deletedPath = Path.Combine(trashRoot, quarantineName);
                 while (Directory.Exists(deletedPath))
-                    deletedPath = Path.Combine(trashRoot, name + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
+                    deletedPath = Path.Combine(trashRoot, quarantineName + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
 
-                Directory.Move(draftRoot, deletedPath);
+                Directory.Move(source, deletedPath);
+                Directory.Delete(deletedPath, true);
                 return true;
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to quarantine draft directory '" + draftRoot + "': " + ex.Message);
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to durably delete draft directory '" + draftRoot
+                    + "'. Any moved copy remains quarantined and is not catalog-visible: " + ex.Message);
                 return false;
             }
         }

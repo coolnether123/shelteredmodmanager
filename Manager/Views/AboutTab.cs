@@ -99,8 +99,9 @@ namespace Manager.Views
                 "- Desktop and in-game mod managers.\n" +
                 "- Rebindable Sheltered and mod-defined keybindings.\n" +
 
-                "Experimental scenario support:\n" +
-                "- Custom scenario browser, XML scenario packs, triggers, scheduled effects, and win/loss runtime support.\n\n" +
+                "Custom scenario support:\n" +
+                "- Custom scenario browser, XML scenario packs, triggers, scheduled effects, and win/loss runtime support.\n" +
+                "- Advanced in-game authoring is an opt-in preview and defaults off.\n\n" +
 
                 "Developer API:\n" +
                 "- ModAPI.dll provides the neutral modding framework surface.\n" +

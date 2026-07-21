@@ -1,41 +1,80 @@
+using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Textures.Generators;
 
 namespace ShelteredAPI.UI.FieldManual.Textures
 {
+    internal enum BookChromeTexture
+    {
+        Vignette = 0,
+        White = 1,
+        Gunmetal = 2,
+        Paper = 3,
+        Rivet = 4
+    }
+
+    internal enum MaterialSurfaceTier
+    {
+        Page = 0,
+        RaisedCard = 1,
+        RecessedInset = 2
+    }
+
     /// <summary>
     /// ITextureLibrary implementation that delegates to the per-kind generators and
-    /// caches results keyed by (kind, width, height, state). All textures are owned
-    /// by this instance; <see cref="Dispose"/> destroys them.
+    /// caches results for the process lifetime keyed by generator inputs and palette.
+    /// Instances are lightweight views over the shared cache and do not own textures.
     /// </summary>
     internal sealed class ProceduralTextureLibrary : ITextureLibrary
     {
+        internal const int BookChromeTextureCount = 5;
+
         private readonly IThemePalette _palette;
-        private readonly Dictionary<string, Texture2D> _cache = new Dictionary<string, Texture2D>();
-        private Texture2D _white;
+        private readonly string _paletteFingerprint;
+        private static readonly Dictionary<string, Texture2D> SharedCache = new Dictionary<string, Texture2D>();
+
+        internal static Texture2D MaterialSurface(MaterialSurfaceTier tier, int width, int height, int cornerCut, Color fill)
+        {
+            Color32 opaque = new Color(fill.r, fill.g, fill.b, 1f);
+            string key = "material:" + (int)tier + ":" + width + "x" + height + ":" + cornerCut + ":"
+                + opaque.r + ":" + opaque.g + ":" + opaque.b + ":255";
+            Texture2D texture;
+            if (SharedCache.TryGetValue(key, out texture) && texture != null)
+                return texture;
+
+            TextureCanvas canvas = new TextureCanvas(width, height);
+            canvas.FillOpaque(opaque);
+            canvas.CutChamferedCorners(cornerCut);
+            texture = canvas.ToTexture(FilterMode.Point);
+            texture.hideFlags = HideFlags.HideAndDontSave;
+            SharedCache[key] = texture;
+            return texture;
+        }
 
         public ProceduralTextureLibrary(IThemePalette palette)
         {
             _palette = palette;
+            _paletteFingerprint = BuildPaletteFingerprint(palette);
         }
 
         public Texture2D White
         {
             get
             {
-                if (_white == null)
+                return GetOrCreate("white:2x2", delegate
                 {
-                    _white = new Texture2D(2, 2, TextureFormat.ARGB32, false);
-                    Color[] px = new Color[4];
+                    Texture2D white = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+                    Color32[] px = new Color32[4];
                     for (int i = 0; i < 4; i++) px[i] = Color.white;
-                    _white.SetPixels(px);
-                    _white.filterMode = FilterMode.Point;
-                    _white.wrapMode = TextureWrapMode.Clamp;
-                    _white.Apply(false, false);
-                }
-                return _white;
+                    white.SetPixels32(px);
+                    white.filterMode = FilterMode.Point;
+                    white.wrapMode = TextureWrapMode.Clamp;
+                    white.Apply(false, true);
+                    return white;
+                });
             }
         }
 
@@ -81,25 +120,105 @@ namespace ShelteredAPI.UI.FieldManual.Textures
                 delegate { return VignetteGenerator.Generate(width, height, _palette); });
         }
 
+        internal Texture2D GetBookChromeTexture(BookChromeTexture texture)
+        {
+            switch (texture)
+            {
+                case BookChromeTexture.Vignette:
+                    return Vignette(512, 512);
+                case BookChromeTexture.White:
+                    return White;
+                case BookChromeTexture.Gunmetal:
+                    return Gunmetal(1240, 720);
+                case BookChromeTexture.Paper:
+                    return Paper(560, 660);
+                case BookChromeTexture.Rivet:
+                    return Rivet(18);
+                default:
+                    throw new ArgumentOutOfRangeException("texture");
+            }
+        }
+
+        /// <summary>
+        /// Warms a bounded slice of the exact unique texture keys used by the book
+        /// frame. Callers can pass one as maxTextures to keep generation to one
+        /// main-thread texture per frame.
+        /// </summary>
+        internal static int PrewarmAll(IThemePalette palette, int nextTextureIndex, int maxTextures)
+        {
+            if (palette == null) throw new ArgumentNullException("palette");
+            if (nextTextureIndex < 0) throw new ArgumentOutOfRangeException("nextTextureIndex");
+            if (maxTextures < 0) throw new ArgumentOutOfRangeException("maxTextures");
+
+            ProceduralTextureLibrary textures = new ProceduralTextureLibrary(palette);
+            int warmed = 0;
+            while (nextTextureIndex < BookChromeTextureCount && warmed < maxTextures)
+            {
+                textures.GetBookChromeTexture((BookChromeTexture)nextTextureIndex);
+                nextTextureIndex++;
+                warmed++;
+            }
+
+            return nextTextureIndex;
+        }
+
         public void Dispose()
         {
-            foreach (var kv in _cache)
-            {
-                if (kv.Value != null) Object.Destroy(kv.Value);
-            }
-            _cache.Clear();
-            if (_white != null) { Object.Destroy(_white); _white = null; }
+            // Shared textures intentionally live for the process lifetime. Unity may
+            // still destroy one externally; GetOrCreate detects fake-null and repairs it.
         }
 
         private delegate Texture2D Factory();
 
         private Texture2D GetOrCreate(string key, Factory factory)
         {
+            string sharedKey = _paletteFingerprint + ":" + key;
             Texture2D tex;
-            if (_cache.TryGetValue(key, out tex) && tex != null) return tex;
+            if (SharedCache.TryGetValue(sharedKey, out tex) && tex != null) return tex;
             tex = factory();
-            _cache[key] = tex;
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            SharedCache[sharedKey] = tex;
             return tex;
+        }
+
+        private static string BuildPaletteFingerprint(IThemePalette palette)
+        {
+            StringBuilder fingerprint = new StringBuilder(640);
+            AppendColor(fingerprint, palette.Gunmetal);
+            AppendColor(fingerprint, palette.GunmetalShadow);
+            AppendColor(fingerprint, palette.GunmetalHighlight);
+            AppendColor(fingerprint, palette.OliveBand);
+            AppendColor(fingerprint, palette.Brass);
+            AppendColor(fingerprint, palette.Paper);
+            AppendColor(fingerprint, palette.PaperShadow);
+            AppendColor(fingerprint, palette.PaperGrain);
+            AppendColor(fingerprint, palette.Ink);
+            AppendColor(fingerprint, palette.InkFaded);
+            AppendColor(fingerprint, palette.StampRed);
+            AppendColor(fingerprint, palette.GraphitePencil);
+            AppendColor(fingerprint, palette.KeycapFace);
+            AppendColor(fingerprint, palette.KeycapBevelLight);
+            AppendColor(fingerprint, palette.KeycapBevelDark);
+            AppendColor(fingerprint, palette.KeycapInk);
+            AppendColor(fingerprint, palette.KeycapPulse);
+            AppendColor(fingerprint, palette.MaskingTape);
+            AppendColor(fingerprint, palette.Vignette);
+            return fingerprint.ToString();
+        }
+
+        private static void AppendColor(StringBuilder fingerprint, Color color)
+        {
+            AppendFloat(fingerprint, color.r);
+            AppendFloat(fingerprint, color.g);
+            AppendFloat(fingerprint, color.b);
+            AppendFloat(fingerprint, color.a);
+        }
+
+        private static void AppendFloat(StringBuilder fingerprint, float value)
+        {
+            byte[] bytes = BitConverter.GetBytes(value);
+            for (int i = 0; i < bytes.Length; i++)
+                fingerprint.Append(bytes[i].ToString("X2"));
         }
     }
 }

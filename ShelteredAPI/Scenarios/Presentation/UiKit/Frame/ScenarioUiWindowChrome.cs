@@ -1,6 +1,7 @@
 using UnityEngine;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Layout;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
@@ -36,8 +37,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
         {
             IScenarioUiMetrics metrics = _styles.Theme.Metrics;
 
-            // Paint the outer panel surface.
-            GUI.Box(outer, GUIContent.none, _styles.PanelBase);
+            DrawLayeredPanel(outer);
 
             Rect inner = ScenarioUiLayoutEngine.Inset(outer, metrics.CornerInset);
 
@@ -62,9 +62,23 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
             return regions;
         }
 
+        private void DrawLayeredPanel(Rect outer)
+        {
+            if (!ScenarioUiAtlasSkin.DrawPanel(outer))
+            {
+                ScenarioUiAtlasSkin.DrawCornerCutShadow(outer);
+                GUI.Box(outer, GUIContent.none, _styles.PanelBase);
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(outer, _styles.BorderStrongTexture, _styles.BorderSubtleTexture);
+            }
+        }
+
         private void DrawHeader(Rect rect, string title, string subtitle, IScenarioUiMetrics metrics, float titleRightInset)
         {
-            GUI.Box(rect, GUIContent.none, _styles.Header);
+            if (!ScenarioUiAtlasSkin.DrawHeader(rect))
+            {
+                GUI.Box(rect, GUIContent.none, _styles.Header);
+                GUI.DrawTexture(new Rect(rect.x, rect.yMax - metrics.DividerThickness, rect.width, metrics.DividerThickness), _styles.BorderSubtleTexture);
+            }
             Rect inner = ScenarioUiLayoutEngine.Inset(
                 rect,
                 metrics.HeaderPaddingX,
@@ -84,12 +98,12 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
                     out titleRect,
                     out subtitleRect);
 
-                GUI.Label(titleRect, title ?? string.Empty, _styles.TitleText);
-                GUI.Label(subtitleRect, subtitle, _styles.SubtitleText);
+                GUI.Label(titleRect, title ?? string.Empty, _styles.HeaderTitleText);
+                GUI.Label(subtitleRect, subtitle, _styles.HeaderSubtitleText);
             }
             else
             {
-                GUI.Label(inner, title ?? string.Empty, _styles.TitleText);
+                GUI.Label(inner, title ?? string.Empty, _styles.HeaderTitleText);
             }
         }
     }

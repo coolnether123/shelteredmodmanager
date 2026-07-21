@@ -9,13 +9,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     {
         private readonly ScenarioScheduleRuntimeCoordinator _scheduleCoordinator;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
+        private readonly ScenarioConversationRuntimeService _conversationRuntimeService;
 
         public TriggerRuntimeAdapter(
             ScenarioScheduleRuntimeCoordinator scheduleCoordinator,
-            IScenarioRuntimeBindingService runtimeBindingService)
+            IScenarioRuntimeBindingService runtimeBindingService,
+            ScenarioConversationRuntimeService conversationRuntimeService)
         {
             _scheduleCoordinator = scheduleCoordinator;
             _runtimeBindingService = runtimeBindingService;
+            _conversationRuntimeService = conversationRuntimeService;
         }
 
         public void Apply(ScenarioDefinition definition, ScenarioApplyResult result)
@@ -27,6 +30,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 definition,
                 _scheduleCoordinator,
                 _runtimeBindingService != null ? _runtimeBindingService.GetActiveBindingForStartup() : null);
+            if (_conversationRuntimeService != null)
+                _conversationRuntimeService.Activate(definition);
 
             result.TriggerChanges += definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null ? definition.TriggersAndEvents.Triggers.Count : 0;
             result.ConditionChanges += definition.WinLossConditions != null

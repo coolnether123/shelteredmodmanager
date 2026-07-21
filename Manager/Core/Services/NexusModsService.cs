@@ -39,10 +39,11 @@ namespace Manager.Core.Services
         private readonly object _cacheLock = new object();
         private readonly Dictionary<string, CacheEntry<NexusRemoteMod>> _modCache = new Dictionary<string, CacheEntry<NexusRemoteMod>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteMod>>> _latestCache = new Dictionary<string, CacheEntry<List<NexusRemoteMod>>>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, CacheEntry<List<NexusModFileUpdateGroup>>> _groupCache = new Dictionary<string, CacheEntry<List<NexusModFileUpdateGroup>>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, CacheEntry<List<NexusV3ModFileRecord>>> _v3ModFileCache = new Dictionary<string, CacheEntry<List<NexusV3ModFileRecord>>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteModFile>>> _versionCache = new Dictionary<string, CacheEntry<List<NexusRemoteModFile>>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteModFile>>> _fileListCache = new Dictionary<string, CacheEntry<List<NexusRemoteModFile>>>(StringComparer.OrdinalIgnoreCase);
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
+        private int _cacheGeneration;
 
         private sealed class CacheEntry<T>
         {
@@ -61,9 +62,10 @@ namespace Manager.Core.Services
         {
             lock (_cacheLock)
             {
+                _cacheGeneration++;
                 _modCache.Clear();
                 _latestCache.Clear();
-                _groupCache.Clear();
+                _v3ModFileCache.Clear();
                 _versionCache.Clear();
                 _fileListCache.Clear();
             }
@@ -112,11 +114,12 @@ namespace Manager.Core.Services
             if (TryGetCached(_latestCache, cacheKey, out cachedLatest))
                 return cachedLatest;
 
+            int cacheGeneration = GetCacheGeneration();
             string v2Error;
             list = QueryV2LatestMods(gameDomain, count, out v2Error);
             if (string.IsNullOrEmpty(v2Error))
             {
-                StoreCached(_latestCache, cacheKey, list);
+                StoreCached(_latestCache, cacheKey, list, cacheGeneration);
                 return list;
             }
 
@@ -138,6 +141,7 @@ namespace Manager.Core.Services
             if (TryGetCached(_modCache, cacheKey, out cached))
                 return cached;
 
+            int cacheGeneration = GetCacheGeneration();
             var refs = new List<NexusModReference>();
             refs.Add(new NexusModReference { GameDomain = gameDomain, ModId = modId });
             string v2Error;
@@ -147,7 +151,7 @@ namespace Manager.Core.Services
                 NexusRemoteMod v2Mod;
                 if (found.TryGetValue(NormalizeDomain(gameDomain) + ":" + modId.ToString(), out v2Mod))
                 {
-                    StoreCached(_modCache, cacheKey, v2Mod);
+                    StoreCached(_modCache, cacheKey, v2Mod, cacheGeneration);
                     return v2Mod;
                 }
 
@@ -193,67 +197,69 @@ namespace Manager.Core.Services
             return new List<NexusRemoteMod>();
         }
 
-        public List<NexusModFileUpdateGroup> GetModFileUpdateGroups(string modUniqueId, out string errorMessage)
+        private List<NexusV3ModFileRecord> GetV3ModFiles(string modUniqueId, out string errorMessage)
         {
             errorMessage = null;
-            var groups = new List<NexusModFileUpdateGroup>();
+            var modFiles = new List<NexusV3ModFileRecord>();
             if (string.IsNullOrEmpty(modUniqueId))
             {
                 errorMessage = "Nexus v3 mod id is required.";
-                return groups;
+                return modFiles;
             }
 
-            string cacheKey = "groups:" + modUniqueId;
-            List<NexusModFileUpdateGroup> cached;
-            if (TryGetCached(_groupCache, cacheKey, out cached))
+            string cacheKey = "v3-mod-files:" + modUniqueId;
+            List<NexusV3ModFileRecord> cached;
+            if (TryGetCached(_v3ModFileCache, cacheKey, out cached))
                 return cached;
 
-            NexusV3RestResult response = _v3Client.Get("/mods/" + Escape(modUniqueId) + "/file-update-groups");
+            int cacheGeneration = GetCacheGeneration();
+            NexusV3RestResult response = _v3Client.Get("/mods/" + Escape(modUniqueId) + "/files");
             if (!string.IsNullOrEmpty(response.ErrorMessage))
             {
                 errorMessage = response.ErrorMessage;
-                return groups;
+                return modFiles;
             }
 
-            object[] rawGroups = AsArray(response.Data, "groups");
-            if (rawGroups == null)
-                return groups;
+            object[] rawModFiles = AsArray(response.Data, "mod_files");
+            if (rawModFiles == null)
+                return modFiles;
 
-            for (int i = 0; i < rawGroups.Length; i++)
+            for (int i = 0; i < rawModFiles.Length; i++)
             {
-                var node = rawGroups[i] as Dictionary<string, object>;
+                var node = rawModFiles[i] as Dictionary<string, object>;
                 if (node == null) continue;
 
-                var group = new NexusModFileUpdateGroup();
-                group.Id = ReadString(node, "id");
-                group.Name = ReadString(node, "name");
-                group.IsActive = ReadBool(node, "is_active");
-                group.LastFileUploadedAtUtc = ReadDateTime(node, "last_file_uploaded_at");
-                group.VersionsCount = ReadInt(node, "versions_count");
-                if (!string.IsNullOrEmpty(group.Id))
-                    groups.Add(group);
+                var modFile = new NexusV3ModFileRecord();
+                modFile.Id = ReadString(node, "id");
+                modFile.Name = ReadString(node, "name");
+                modFile.IsActive = ReadBool(node, "is_active");
+                modFile.LastFileUploadedAtUtc = ReadDateTime(node, "last_file_uploaded_at");
+                modFile.VersionsCount = ReadInt(node, "versions_count");
+                if (!string.IsNullOrEmpty(modFile.Id))
+                    modFiles.Add(modFile);
             }
 
-            StoreCached(_groupCache, cacheKey, groups);
-            return groups;
+            StoreCached(_v3ModFileCache, cacheKey, modFiles, cacheGeneration);
+            return modFiles;
         }
 
-        public List<NexusRemoteModFile> GetFileUpdateGroupVersions(string groupId, out string errorMessage)
+        private List<NexusRemoteModFile> GetV3ModFileVersions(string modFileId, out string errorMessage)
         {
             errorMessage = null;
             var files = new List<NexusRemoteModFile>();
-            if (string.IsNullOrEmpty(groupId))
+            if (string.IsNullOrEmpty(modFileId))
             {
-                errorMessage = "File update group id is required.";
+                errorMessage = "Nexus v3 mod file id is required.";
                 return files;
             }
 
-            string cacheKey = "versions:" + groupId;
+            string cacheKey = "v3-versions:" + modFileId;
             List<NexusRemoteModFile> cached;
             if (TryGetCached(_versionCache, cacheKey, out cached))
                 return cached;
 
-            NexusV3RestResult response = _v3Client.Get("/file-update-groups/" + Escape(groupId) + "/versions");
+            int cacheGeneration = GetCacheGeneration();
+            NexusV3RestResult response = _v3Client.Get("/mod-files/" + Escape(modFileId) + "/versions");
             if (!string.IsNullOrEmpty(response.ErrorMessage))
             {
                 errorMessage = response.ErrorMessage;
@@ -267,13 +273,12 @@ namespace Manager.Core.Services
             for (int i = 0; i < versions.Length; i++)
             {
                 var version = versions[i] as Dictionary<string, object>;
-                var fileNode = AsDictionary(version, "file");
-                NexusRemoteModFile file = ParseMinimalFile(fileNode, groupId);
+                NexusRemoteModFile file = ParseMinimalFile(version, modFileId);
                 if (file != null)
                     files.Add(file);
             }
 
-            StoreCached(_versionCache, cacheKey, files);
+            StoreCached(_versionCache, cacheKey, files, cacheGeneration);
             return files;
         }
 
@@ -298,6 +303,7 @@ namespace Manager.Core.Services
             if (TryGetCached(_fileListCache, cacheKey, out cached))
                 return cached;
 
+            int cacheGeneration = GetCacheGeneration();
             string readError = null;
             NexusRemoteMod mod = GetModByDomainAndId(gameDomain, modId, out readError);
             if (string.IsNullOrEmpty(readError) && mod != null && mod.GameId > 0)
@@ -306,7 +312,7 @@ namespace Manager.Core.Services
                 List<NexusRemoteModFile> v2Files = QueryV2ModFiles(mod.GameId, modId, out v2FilesError);
                 if (v2Files.Count > 0)
                 {
-                    StoreCached(_fileListCache, cacheKey, v2Files);
+                    StoreCached(_fileListCache, cacheKey, v2Files, cacheGeneration);
                     return v2Files;
                 }
 
@@ -314,17 +320,11 @@ namespace Manager.Core.Services
                     readError = v2FilesError;
             }
 
-            if (HasManagerInstallableFile(files))
-            {
-                StoreCached(_fileListCache, cacheKey, files);
-                return files;
-            }
-
             string legacyError;
             List<NexusRemoteModFile> legacyFiles = GetLegacyModFiles(gameDomain, modId, out legacyError);
             if (legacyFiles.Count > 0)
             {
-                StoreCached(_fileListCache, cacheKey, legacyFiles);
+                StoreCached(_fileListCache, cacheKey, legacyFiles, cacheGeneration);
                 return legacyFiles;
             }
 
@@ -338,7 +338,7 @@ namespace Manager.Core.Services
 
             if (files.Count > 0)
             {
-                StoreCached(_fileListCache, cacheKey, files);
+                StoreCached(_fileListCache, cacheKey, files, cacheGeneration);
                 return files;
             }
 
@@ -407,15 +407,15 @@ namespace Manager.Core.Services
                 (!string.IsNullOrEmpty(status.UserName) ? status.UserName : "user " + status.UserId.ToString()) +
                 " (" + status.GetMembershipLabel() + ").";
 
-            if (isPremium || isSupporter)
+            if (isPremium)
             {
                 status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Available;
-                status.DirectDownloadSummary = "Direct installs should usually work, but Nexus can still deny specific files or unapproved app access.";
+                status.DirectDownloadSummary = "Premium direct installs should usually work, but Nexus can still deny specific files or unapproved app access.";
             }
             else
             {
                 status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Limited;
-                status.DirectDownloadSummary = "Browsing and update checks work. Direct installs may require Nexus mod-manager download authorization for non-premium accounts.";
+                status.DirectDownloadSummary = "Browsing and update checks work. Downloads use a short-lived Nexus website authorization for non-premium accounts.";
             }
 
             return status;
@@ -584,9 +584,9 @@ namespace Manager.Core.Services
 
             Dictionary<string, object> request = BuildModFileRequest(draft, uploadId);
             NexusV3RestResult publishResponse;
-            if (!string.IsNullOrEmpty(draft.UpdateGroupId))
+            if (!string.IsNullOrEmpty(draft.ExistingModFileId))
             {
-                publishResponse = _v3Client.Post("/mod-file-update-groups/" + Escape(draft.UpdateGroupId) + "/versions", request);
+                publishResponse = _v3Client.Post("/mod-files/" + Escape(draft.ExistingModFileId) + "/versions", request);
             }
             else
             {
@@ -600,8 +600,9 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            string fileId = ReadString(publishResponse.Data, "id");
-            string scopedFileId = ReadString(publishResponse.Data, "game_scoped_id");
+            Dictionary<string, object> publishedFile = AsDictionary(publishResponse.Data, "file") ?? publishResponse.Data;
+            string fileId = ReadString(publishedFile, "id");
+            string scopedFileId = ReadString(publishedFile, "game_scoped_id");
             return new NexusUploadPublishResult
             {
                 UploadId = uploadId,
@@ -758,7 +759,7 @@ namespace Manager.Core.Services
             request["primary_mod_manager_download"] = draft.PrimaryModManagerDownload;
             request["allow_mod_manager_download"] = draft.AllowModManagerDownload;
             request["show_requirements_pop_up"] = draft.ShowRequirementsPopup;
-            if (!string.IsNullOrEmpty(draft.UpdateGroupId))
+            if (!string.IsNullOrEmpty(draft.ExistingModFileId))
                 request["archive_existing_file"] = draft.ArchiveExistingFile;
             return request;
         }
@@ -974,6 +975,8 @@ query modFiles($modId: ID!, $gameId: ID!){
     primary
     manager
     uri
+    description
+    changelogText
   }
 }";
 
@@ -1002,6 +1005,11 @@ query modFiles($modId: ID!, $gameId: ID!){
                 file.FileId = ReadFirstIntLike(node, "fileId", "file_id");
                 file.Name = ReadString(node, "name");
                 file.Version = ReadString(node, "version");
+                file.Description = ReadString(node, "description");
+                // GraphQL v2 exposes changelogText and no md5 field (live-introspected
+                // 2026-07-19); md5 arrives only via the REST fallback path.
+                file.Changelog = ReadFirstString(node, "changelogText", "changelog");
+                file.Md5 = ReadFirstString(node, "md5", "MD5");
                 file.UnixDate = ReadInt(node, "date");
                 file.Category = ReadString(node, "category");
                 file.Primary = ReadFirstIntLike(node, "primary", "is_primary");
@@ -1045,19 +1053,19 @@ query modFiles($modId: ID!, $gameId: ID!){
             if (mod == null || string.IsNullOrEmpty(mod.Uid))
                 return;
 
-            string groupsError;
-            List<NexusModFileUpdateGroup> groups = GetModFileUpdateGroups(mod.Uid, out groupsError);
-            if (!string.IsNullOrEmpty(groupsError))
+            string modFilesError;
+            List<NexusV3ModFileRecord> modFiles = GetV3ModFiles(mod.Uid, out modFilesError);
+            if (!string.IsNullOrEmpty(modFilesError))
             {
-                warningMessage = groupsError;
+                warningMessage = modFilesError;
                 return;
             }
 
             NexusRemoteModFile latest = null;
-            for (int i = 0; i < groups.Count; i++)
+            for (int i = 0; i < modFiles.Count; i++)
             {
                 string versionError;
-                List<NexusRemoteModFile> files = GetFileUpdateGroupVersions(groups[i].Id, out versionError);
+                List<NexusRemoteModFile> files = GetV3ModFileVersions(modFiles[i].Id, out versionError);
                 if (!string.IsNullOrEmpty(versionError))
                 {
                     if (string.IsNullOrEmpty(warningMessage))
@@ -1087,7 +1095,7 @@ query modFiles($modId: ID!, $gameId: ID!){
             {
                 if (file == null)
                     continue;
-                if (!IsManagerDownloadEnabled(file))
+                if (!IsInstallCandidate(file))
                     continue;
 
                 bool isPrerelease = NexusReleaseClassifier.IsPrerelease(file);
@@ -1153,23 +1161,16 @@ query modFiles($modId: ID!, $gameId: ID!){
             return files;
         }
 
-        private static bool HasManagerInstallableFile(List<NexusRemoteModFile> files)
+        private static bool IsInstallCandidate(NexusRemoteModFile file)
         {
-            if (files == null)
+            if (file == null || file.FileId <= 0)
                 return false;
 
-            for (int i = 0; i < files.Count; i++)
-            {
-                if (IsManagerDownloadEnabled(files[i]))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsManagerDownloadEnabled(NexusRemoteModFile file)
-        {
-            return file != null && file.FileId > 0 && file.Manager > 0;
+            string category = (file.Category ?? string.Empty).Trim();
+            return !string.Equals(category, "archived", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(category, "deleted", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(category, "old_version", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(category, "old version", StringComparison.OrdinalIgnoreCase);
         }
 
         private static List<NexusModReference> GetDistinctReferences(IEnumerable<NexusModReference> references)
@@ -1240,17 +1241,20 @@ query modFiles($modId: ID!, $gameId: ID!){
             return mod;
         }
 
-        private static NexusRemoteModFile ParseMinimalFile(Dictionary<string, object> node, string groupId)
+        private static NexusRemoteModFile ParseMinimalFile(Dictionary<string, object> node, string modFileId)
         {
             if (node == null)
                 return null;
 
             var file = new NexusRemoteModFile();
             file.Id = ReadString(node, "id");
-            file.UpdateGroupId = groupId;
+            file.ModFileId = modFileId;
             file.FileId = ReadInt(node, "game_scoped_id");
             file.Name = ReadString(node, "name");
             file.Version = ReadString(node, "version");
+            file.Description = ReadString(node, "description");
+            file.Changelog = ReadString(node, "changelog");
+            file.Md5 = ReadFirstString(node, "md5", "MD5");
             file.Category = ReadString(node, "category");
             file.UploadedAtUtc = ReadDateTime(node, "uploaded_at");
             file.Primary = ReadFirstIntLike(node, "primary", "is_primary");
@@ -1268,6 +1272,9 @@ query modFiles($modId: ID!, $gameId: ID!){
             file.FileId = ReadFirstIntLike(node, "file_id", "fileId", "game_scoped_id");
             file.Name = ReadFirstString(node, "name", "file_name");
             file.Version = ReadFirstString(node, "version", "mod_version");
+            file.Description = ReadFirstString(node, "description", "desc");
+            file.Changelog = ReadFirstString(node, "changelog", "change_log");
+            file.Md5 = ReadFirstString(node, "md5", "MD5");
             file.UnixDate = ReadFirstIntLike(node, "uploaded_timestamp", "date");
             file.Category = ReadFirstString(node, "category_name", "category");
             file.Primary = ReadFirstIntLike(node, "is_primary", "primary");
@@ -1473,13 +1480,27 @@ query modFiles($modId: ID!, $gameId: ID!){
             }
         }
 
-        private void StoreCached<T>(Dictionary<string, CacheEntry<T>> cache, string key, T value)
+        private int GetCacheGeneration()
+        {
+            lock (_cacheLock)
+            {
+                return _cacheGeneration;
+            }
+        }
+
+        private void StoreCached<T>(
+            Dictionary<string, CacheEntry<T>> cache,
+            string key,
+            T value,
+            int generation)
         {
             if (cache == null || string.IsNullOrEmpty(key))
                 return;
 
             lock (_cacheLock)
             {
+                if (generation != _cacheGeneration)
+                    return;
                 cache[key] = new CacheEntry<T>
                 {
                     Value = value,

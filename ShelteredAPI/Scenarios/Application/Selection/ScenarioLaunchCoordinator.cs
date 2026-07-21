@@ -6,6 +6,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Core;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     /// <summary>
     /// Owns the "what happens after the player picks a scenario+save" flow.
@@ -19,19 +20,27 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly ICustomScenarioLifecycleService _scenarioLifecycle;
+        private readonly IScenarioDefinitionCatalogService _definitions;
+        private readonly IScenarioWinLossOutcomeService _outcomeService;
 
         public ScenarioLaunchCoordinator(
             IScenarioSaveLibrary saveLibrary,
             IScenarioSelectionCatalogService catalog,
-            ICustomScenarioLifecycleService scenarioLifecycle)
+            ICustomScenarioLifecycleService scenarioLifecycle,
+            IScenarioDefinitionCatalogService definitions,
+            IScenarioWinLossOutcomeService outcomeService)
         {
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
             if (catalog == null) throw new ArgumentNullException("catalog");
             if (scenarioLifecycle == null) throw new ArgumentNullException("scenarioLifecycle");
+            if (definitions == null) throw new ArgumentNullException("definitions");
+            if (outcomeService == null) throw new ArgumentNullException("outcomeService");
 
             _saveLibrary = saveLibrary;
             _catalog = catalog;
             _scenarioLifecycle = scenarioLifecycle;
+            _definitions = definitions;
+            _outcomeService = outcomeService;
         }
 
         public SaveManager.SaveType GetVirtualSaveType(ScenarioCatalogEntry entry)
@@ -62,6 +71,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             public CustomScenarioInfo Scenario;
             public SaveEntry StartupSave;
             public SaveManager.SaveType VirtualSaveType;
+            public ScenarioDefinition Definition;
         }
 
         /// <summary>
@@ -106,6 +116,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error);
                 return false;
             }
+            if (usesCustomLifecycle)
+                _outcomeService.ResetForNewRun();
 
             SaveEntry startupSave;
             try
@@ -138,7 +150,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 Entry = entry,
                 Scenario = scenario,
                 StartupSave = startupSave,
-                VirtualSaveType = GetVirtualSaveType(entry)
+                VirtualSaveType = GetVirtualSaveType(entry),
+                Definition = LoadLaunchDefinition(entry)
             };
 
             MMLog.WriteInfo("[ScenarioLaunchCoordinator] PrepareNewGame ready. scenarioId="
@@ -184,9 +197,11 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             string launchTargetLabel = BuildLaunchTargetLabel(preparation);
-            if (ShouldLaunchWithoutStartup(preparation.Entry))
+            ScenarioLaunchSetupMode launchMode = ScenarioLaunchSetupPolicy.GetMode(preparation.Definition);
+            if (launchMode == ScenarioLaunchSetupMode.Direct || ShouldLaunchWithoutStartup(preparation.Entry, launchMode))
             {
-                if (!BeginDirectScenarioTransition(adapter, launchTargetLabel, virtualSaveType, preparation.Entry.BaseGameMode))
+                ScenarioDefinition directDefinition = launchMode == ScenarioLaunchSetupMode.Direct ? preparation.Definition : null;
+                if (!BeginDirectScenarioTransition(adapter, launchTargetLabel, virtualSaveType, preparation.Entry.BaseGameMode, directDefinition))
                 {
                     error = "Could not launch the scenario scene.";
                     _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
@@ -238,6 +253,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             string draftStorageScenarioId,
             SaveEntry draftStartupSave,
             SaveManager.SaveType virtualSaveType,
+            ScenarioBaseGameMode baseGameMode,
             string launchTargetLabel,
             out string error)
         {
@@ -255,10 +271,62 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 error = "Failed to queue draft target: " + ex.Message;
                 return false;
             }
+            string directSceneName;
+            if (TryGetAuthoringLaunchScene(baseGameMode, out directSceneName))
+            {
+                if (!BeginDirectSceneTransition(directSceneName, launchTargetLabel, virtualSaveType))
+                {
+                    error = "Could not launch the " + directSceneName + " scene for the draft.";
+                    _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+                    return false;
+                }
+
+                return true;
+            }
 
             if (!BeginCustomisationTransition(adapter, launchTargetLabel, virtualSaveType))
             {
                 error = "Could not push the customisation panel for the draft.";
+                _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool QueueAuthoringDraftSceneReload(
+            string draftStorageScenarioId,
+            SaveEntry draftStartupSave,
+            SaveManager.SaveType virtualSaveType,
+            string launchTargetLabel,
+            ScenarioBaseGameMode baseGameMode,
+            out string error)
+        {
+            error = null;
+
+            if (draftStartupSave == null) { error = "draft save is null"; return false; }
+
+            try
+            {
+                _saveLibrary.QueueNewGameSaveTarget(draftStorageScenarioId, draftStartupSave, virtualSaveType);
+            }
+            catch (Exception ex)
+            {
+                error = "Failed to queue draft target: " + ex.Message;
+                return false;
+            }
+
+            string sceneName;
+            if (!TryGetAuthoringLaunchScene(baseGameMode, out sceneName))
+            {
+                error = "Could not resolve the authoring scene for " + baseGameMode + ".";
+                _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+                return false;
+            }
+
+            if (!BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType))
+            {
+                error = "Could not launch the " + sceneName + " scene for the draft.";
                 _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
                 return false;
             }
@@ -456,13 +524,14 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             ScenarioBrowserPanelAdapter adapter,
             string launchTargetLabel,
             SaveManager.SaveType virtualSaveType,
-            ScenarioBaseGameMode baseGameMode)
+            ScenarioBaseGameMode baseGameMode,
+            ScenarioDefinition definition)
         {
             if (adapter == null)
                 return false;
 
             string sceneName;
-            if (!TryGetDirectLaunchScene(baseGameMode, out sceneName))
+            if (!TryGetAuthoringLaunchScene(baseGameMode, out sceneName))
                 return false;
 
             try
@@ -470,28 +539,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 if (!adapter.GetInputEnabled())
                     adapter.SetInputEnabled(true);
 
-                SaveManager saveManager = SaveManager.instance;
-                if (saveManager == null)
-                {
-                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] SaveManager unavailable for direct scenario launch. target="
-                        + (launchTargetLabel ?? "<unknown>") + ".");
-                    return false;
-                }
-
-                if (LoadingScreen.Instance == null)
-                {
-                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] LoadingScreen unavailable for direct scenario launch. target="
-                        + (launchTargetLabel ?? "<unknown>") + ".");
-                    return false;
-                }
-
-                saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
-                DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
-                LoadingScreen.Instance.ShowLoadingScreen(sceneName);
-                MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scenario scene launch started. target="
-                    + (launchTargetLabel ?? "<unknown>") + " scene=" + sceneName
-                    + " virtualSaveType=" + virtualSaveType + ".");
-                return true;
+                return BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType, definition, true);
             }
             catch (Exception ex)
             {
@@ -532,6 +580,13 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 UIPanelManager panelManager = UIPanelManager.instance;
                 if (customizationPanel != null && panelManager != null)
                 {
+                    if (panelManager.IsPanelOnStack(customizationPanel))
+                    {
+                        MMLog.WriteInfo("[ScenarioLaunchCoordinator] Customisation panel already active or queued; duplicate push skipped. target="
+                            + (launchTargetLabel ?? "<unknown>") + ".");
+                        return true;
+                    }
+
                     panelManager.PushPanel(customizationPanel);
                     MMLog.WriteInfo("[ScenarioLaunchCoordinator] Customisation panel opened. target="
                         + (launchTargetLabel ?? "<unknown>") + ".");
@@ -550,10 +605,11 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
         }
 
-        private static bool ShouldLaunchWithoutStartup(ScenarioCatalogEntry entry)
+        private static bool ShouldLaunchWithoutStartup(ScenarioCatalogEntry entry, ScenarioLaunchSetupMode launchMode)
         {
             return entry != null
                 && entry.Source != ScenarioCatalogSource.Draft
+                && launchMode == ScenarioLaunchSetupMode.FullSetup
                 && entry.BaseGameMode != ScenarioBaseGameMode.Survival;
         }
 
@@ -571,6 +627,70 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                     sceneName = null;
                     return false;
             }
+        }
+
+        private static bool TryGetAuthoringLaunchScene(ScenarioBaseGameMode baseGameMode, out string sceneName)
+        {
+            if (baseGameMode == ScenarioBaseGameMode.Survival)
+            {
+                sceneName = "ShelterScene";
+                return true;
+            }
+
+            return TryGetDirectLaunchScene(baseGameMode, out sceneName);
+        }
+
+        private static bool BeginDirectSceneTransition(
+            string sceneName,
+            string launchTargetLabel,
+            SaveManager.SaveType virtualSaveType,
+            ScenarioDefinition definition = null,
+            bool ownsDirectLaunchFadeHandoff = false)
+        {
+            if (string.IsNullOrEmpty(sceneName))
+                return false;
+
+            SaveManager saveManager = SaveManager.instance;
+            if (saveManager == null)
+            {
+                MMLog.WriteWarning("[ScenarioLaunchCoordinator] SaveManager unavailable for scene launch. target="
+                    + (launchTargetLabel ?? "<unknown>") + ".");
+                return false;
+            }
+
+            if (LoadingScreen.Instance == null)
+            {
+                MMLog.WriteWarning("[ScenarioLaunchCoordinator] LoadingScreen unavailable for scene launch. target="
+                    + (launchTargetLabel ?? "<unknown>") + ".");
+                return false;
+            }
+
+            ShelteredAPI.Harmony.ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("ScenarioLaunchCoordinator.BeginDirectSceneTransition");
+            ShelteredAPI.Harmony.ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("ScenarioLaunchCoordinator.BeginDirectSceneTransition");
+            ScenarioLoadingTransitionGuard.PrepareForManagedTransition(launchTargetLabel);
+            saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
+            if (definition != null)
+                ScenarioLaunchSetupPolicy.ApplyDifficulty(definition);
+            else
+                DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
+            LoadingScreen.Instance.ShowLoadingScreen(sceneName);
+            ScenarioLoadingTransitionGuard.OwnManagedLoadingTransition(sceneName, launchTargetLabel);
+            if (ownsDirectLaunchFadeHandoff)
+                ScenarioLoadingTransitionGuard.OwnDirectLaunchTransition(sceneName, launchTargetLabel);
+            MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scene launch started. target="
+                + (launchTargetLabel ?? "<unknown>") + " scene=" + sceneName
+                + " virtualSaveType=" + virtualSaveType + ".");
+            return true;
+        }
+
+        private ScenarioDefinition LoadLaunchDefinition(ScenarioCatalogEntry entry)
+        {
+            if (entry == null || entry.IsVanilla || string.IsNullOrEmpty(entry.ScenarioId))
+                return null;
+            ScenarioDefinition definition;
+            string path;
+            ScenarioValidationResult validation;
+            return _definitions.TryLoadDefinition(entry.ScenarioId, out definition, out path, out validation) ? definition : null;
         }
 
         private static int GetSlotNumber(SaveManager.SaveType saveType)
