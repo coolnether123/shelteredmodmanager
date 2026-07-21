@@ -199,24 +199,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool active = state != null && state.ActiveTool == button.Tool;
             GUIStyle style = active ? _activeButtonStyle : _buttonStyle;
             bool hovered = button.Action.Enabled && IsInteractiveHoverAllowed(rect);
-            bool pressed = button.Action.Enabled && IsInteractiveMouseDownAllowed(rect);
-            float press = button.Action.Enabled ? _animations.GetButtonPressForAction(button.Action.Id, pressed) : 0f;
-            Rect visualRect = press > 0.001f
-                ? new Rect(rect.x + press, rect.y - press, rect.width, rect.height)
-                : rect;
-            RegisterTourTarget("tool:" + button.Tool, visualRect);
-            if (DrawPlainButton(visualRect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style, button.Action.Enabled))
+            RegisterTourTarget("tool:" + button.Tool, rect);
+            if (DrawPlainButton(rect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style, button.Action.Enabled))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(button.Action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
 
-            DrawButtonAnimationOverlay(visualRect, button.Action.Id, button.Action.Enabled, hovered, pressed);
-            float labelHeight = visualRect.height < 28f ? 16f : 20f;
-            float labelY = visualRect.y + Math.Max(3f, (visualRect.height - labelHeight) * 0.5f);
-            GUIStyle labelStyle = active ? _textStyle : _mutedTextStyle;
-            Rect labelRect = new Rect(visualRect.x + 8f, labelY, visualRect.width - 16f, labelHeight);
+            float labelHeight = rect.height < 28f ? 16f : 20f;
+            float labelY = rect.y + Math.Max(3f, (rect.height - labelHeight) * 0.5f);
+            GUIStyle labelStyle = active || hovered ? _textStyle : _mutedTextStyle;
+            Rect labelRect = new Rect(rect.x + 8f, labelY, rect.width - 16f, labelHeight);
             GUI.Label(labelRect, ShortenToFit(button.Label ?? string.Empty, labelRect.width, labelStyle), labelStyle);
         }
 

@@ -3380,6 +3380,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     if (count % columns == 0 && HasMoreVisibleCandidate(section, i + 1, candidateSearchText, candidateFilter))
                     {
                         GUILayout.EndHorizontal();
+                        GUILayout.Space(cardGap);
                         GUILayout.BeginHorizontal();
                     }
                     else
