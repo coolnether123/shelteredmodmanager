@@ -20,6 +20,21 @@ namespace Manager.Core.Services
         private const ushort GeneralPurposeUtf8Flag = 0x0800;
         private const ushort StoredCompression = 0;
         private const ushort DeflateCompression = 8;
+        private readonly int _maximumEntries;
+        private readonly long _maximumEntryBytes;
+        private readonly long _maximumExpandedBytes;
+
+        public ZipArchiveExtractor()
+            : this(int.MaxValue, long.MaxValue, long.MaxValue)
+        {
+        }
+
+        public ZipArchiveExtractor(int maximumEntries, long maximumEntryBytes, long maximumExpandedBytes)
+        {
+            _maximumEntries = maximumEntries > 0 ? maximumEntries : int.MaxValue;
+            _maximumEntryBytes = maximumEntryBytes > 0 ? maximumEntryBytes : long.MaxValue;
+            _maximumExpandedBytes = maximumExpandedBytes > 0 ? maximumExpandedBytes : long.MaxValue;
+        }
 
         public bool TryExtract(string archivePath, string destinationPath, out string errorMessage)
         {
@@ -162,10 +177,14 @@ namespace Manager.Core.Services
             return false;
         }
 
-        private static List<ZipEntry> ReadCentralDirectory(BinaryReader reader, CentralDirectoryInfo centralDirectory)
+        private List<ZipEntry> ReadCentralDirectory(BinaryReader reader, CentralDirectoryInfo centralDirectory)
         {
+            if (centralDirectory.EntryCount > _maximumEntries)
+                throw new InvalidDataException("Archive contains too many entries.");
+
             List<ZipEntry> entries = new List<ZipEntry>(centralDirectory.EntryCount);
             reader.BaseStream.Position = centralDirectory.Offset;
+            long totalExpandedBytes = 0;
 
             for (int i = 0; i < centralDirectory.EntryCount; i++)
             {
@@ -200,6 +219,12 @@ namespace Manager.Core.Services
 
                 if (compressedSize == uint.MaxValue || uncompressedSize == uint.MaxValue || localHeaderOffset == uint.MaxValue)
                     throw new InvalidDataException("Zip64 entries are not supported by this installer.");
+                if (uncompressedSize > _maximumEntryBytes)
+                    throw new InvalidDataException("Archive entry exceeds the allowed expanded size.");
+
+                totalExpandedBytes += uncompressedSize;
+                if (totalExpandedBytes > _maximumExpandedBytes)
+                    throw new InvalidDataException("Archive exceeds the allowed total expanded size.");
 
                 byte[] nameBytes = reader.ReadBytes(fileNameLength);
                 string name = DecodeEntryName(nameBytes, flags);
