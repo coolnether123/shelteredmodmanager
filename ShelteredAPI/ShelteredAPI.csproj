@@ -223,6 +223,7 @@
     <Compile Include="Saves\SaveBackups\SaveBackupLineageStore.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupSidecarCapture.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupBlobCodec.cs" />
+    <Compile Include="Saves\SaveBackups\DurableFileWriter.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupModels.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupRepository.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupService.cs" />

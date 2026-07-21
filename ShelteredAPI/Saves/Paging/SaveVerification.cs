@@ -119,8 +119,8 @@ namespace ShelteredAPI.Saves.Paging
                     
                     bgTex.mainTexture = whiteTex;
                     bgTex.depth = baseDepth;
-                    bgTex.width = 60;
-                    bgTex.height = 60;
+                    bgTex.width = SaveSnapshotSlotControls.VerificationButtonSize;
+                    bgTex.height = SaveSnapshotSlotControls.VerificationButtonSize;
                     bgTex.pivot = UIWidget.Pivot.Center;
                     bgTex.color = new Color(0.3f, 0.25f, 0.2f, 0.9f); // Dark brown, more opaque
                     
@@ -137,7 +137,10 @@ namespace ShelteredAPI.Saves.Paging
                     
                     // Collider and button on the parent container
                     var col = iconGO.AddComponent<BoxCollider>();
-                    col.size = new Vector3(70, 70, 1);
+                    col.size = new Vector3(
+                        SaveSnapshotSlotControls.VerificationColliderSize,
+                        SaveSnapshotSlotControls.VerificationColliderSize,
+                        1);
                     var uiBtn = iconGO.AddComponent<UIButton>();
                     uiBtn.tweenTarget = iconGO; 
                     
@@ -161,7 +164,10 @@ namespace ShelteredAPI.Saves.Paging
 
                 iconGO.SetActive(true);
                 // local Z: -20 to win raycast against slot button
-                iconGO.transform.localPosition = new Vector3(-320, 0, -20);
+                iconGO.transform.localPosition = new Vector3(
+                    SaveSnapshotSlotControls.VerificationButtonX,
+                    0,
+                    -20);
                 
                 var iconChildObj = iconGO.transform.Find("Icon");
                 UISprite childSprite = iconChildObj != null ? iconChildObj.GetComponent<UISprite>() : null;
@@ -370,19 +376,21 @@ namespace ShelteredAPI.Saves.Paging
                 VerificationState state = manifest != null ? Verify(manifest) : VerificationState.Unknown;
                 GameObject iconGO = GetOrCreateSnapshotIcon(panel, btn, snapshot.AbsoluteSlot, sampleAtlas);
                 iconGO.SetActive(true);
-                iconGO.transform.localPosition = new Vector3(-320, 0, -20);
+                iconGO.transform.localPosition = new Vector3(
+                    SaveSnapshotSlotControls.VerificationButtonX,
+                    0,
+                    -20);
                 ApplyVerificationVisual(iconGO, sampleAtlas, state);
 
                 SaveBackupSnapshotInfo capSnapshot = snapshot;
                 SlotManifest capManifest = manifest;
                 VerificationState capState = state;
-                int capIndex = i;
                 UIButton iconButton = iconGO.GetComponent<UIButton>();
                 EventDelegate.Set(iconButton.onClick, () =>
                 {
                     SaveDetailsWindow.ShowSnapshot(capSnapshot.Entry, capManifest, capState, () =>
                     {
-                        SlotSelectionPatchCoordinator.RestoreSnapshotAfterVerification(panel, capIndex, capSnapshot);
+                        SlotSelectionPatchCoordinator.RestoreSnapshotAfterVerification(panel, capSnapshot);
                     });
                 });
             }
@@ -431,8 +439,8 @@ namespace ShelteredAPI.Saves.Paging
 
             bgTex.mainTexture = whiteTex;
             bgTex.depth = baseDepth;
-            bgTex.width = 60;
-            bgTex.height = 60;
+            bgTex.width = SaveSnapshotSlotControls.VerificationButtonSize;
+            bgTex.height = SaveSnapshotSlotControls.VerificationButtonSize;
             bgTex.pivot = UIWidget.Pivot.Center;
             bgTex.color = new Color(0.3f, 0.25f, 0.2f, 0.9f);
 
@@ -447,7 +455,10 @@ namespace ShelteredAPI.Saves.Paging
             iconSprite.pivot = UIWidget.Pivot.Center;
 
             var col = iconGO.AddComponent<BoxCollider>();
-            col.size = new Vector3(70, 70, 1);
+            col.size = new Vector3(
+                SaveSnapshotSlotControls.VerificationColliderSize,
+                SaveSnapshotSlotControls.VerificationColliderSize,
+                1);
             var uiBtn = iconGO.AddComponent<UIButton>();
             uiBtn.tweenTarget = iconGO;
 

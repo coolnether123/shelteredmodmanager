@@ -10,12 +10,16 @@ namespace ShelteredAPI.Saves.Paging
 {
     internal static class SaveSnapshotSlotControls
     {
-        private const float VerificationButtonX = -320f;
-        private const float SnapshotButtonX = VerificationButtonX - 75f;
+        internal const float VerificationButtonX = -320f;
+        internal const int VerificationButtonSize = 60;
+        internal const int VerificationColliderSize = 70;
         private const int ButtonWidth = 84;
         private const int ButtonHeight = 60;
         private const int ColliderWidth = 92;
         private const int ColliderHeight = 70;
+        private const int ControlGap = 8;
+        private const float SnapshotButtonX =
+            VerificationButtonX - ((ColliderWidth + VerificationColliderSize) / 2f) - ControlGap;
         private static readonly Color ButtonRestColor = new Color(0.3f, 0.25f, 0.2f, 0.9f);
         private static readonly Color ButtonHoverColor = new Color(0.43f, 0.35f, 0.27f, 0.98f);
         private static readonly Color LabelRestColor = Color.white;
@@ -94,13 +98,22 @@ namespace ShelteredAPI.Saves.Paging
 
                 string capTimelineKey = timelineKey;
                 SaveEntry capEntry = visible.Entry;
-                SlotPagingScope capScope = visible.Scope;
-                bool capIsVanilla = visible.IsVanillaPage && !IsSmmStoredEntry(visible);
+                bool capIsVanilla = vanillaSaveType != SaveManager.SaveType.Invalid;
                 SaveManager.SaveType capVanillaType = vanillaSaveType;
                 int capDisplaySlotNumber = visible.DisplaySlotNumber;
+                SaveManager.SaveType capTransportSaveType = visible.TransportSaveType;
+                int capTransportSlotNumber = visible.TransportSlotNumber;
                 EventDelegate.Set(button.GetComponent<UIButton>().onClick, () =>
                 {
-                    SaveSnapshotBrowserState.Enter(panel, capTimelineKey, capEntry, capScope, capIsVanilla, capVanillaType, capDisplaySlotNumber);
+                    SaveSnapshotBrowserState.Enter(
+                        panel,
+                        capTimelineKey,
+                        capEntry,
+                        capIsVanilla,
+                        capVanillaType,
+                        capDisplaySlotNumber,
+                        capTransportSaveType,
+                        capTransportSlotNumber);
                     panel.RefreshSaveSlotInfo();
                     PagingManager.Update(panel);
                 });
@@ -114,18 +127,48 @@ namespace ShelteredAPI.Saves.Paging
         {
             timelineKey = null;
             vanillaSaveType = SaveManager.SaveType.Invalid;
-            if (visible == null || visible.Entry == null)
+            if (visible == null)
                 return false;
 
             if (visible.IsVanillaPage)
             {
-                if (IsSmmStoredEntry(visible) && SaveBackupService.TryGetCustomTimelineKey(visible.Entry, out timelineKey))
+                if (SaveBackupService.TryGetVanillaTimelineKey(
+                    visible.TransportSlotNumber,
+                    out timelineKey,
+                    out vanillaSaveType)
+                    && SaveBackupService.CountSnapshots(timelineKey) > 0)
+                {
+                    return true;
+                }
+
+                timelineKey = null;
+                vanillaSaveType = SaveManager.SaveType.Invalid;
+
+                if (visible.Entry != null
+                    && IsSmmStoredEntry(visible)
+                    && SaveBackupService.TryGetCustomTimelineKey(visible.Entry, out timelineKey))
                     return true;
 
-                return SaveBackupService.TryGetVanillaTimelineKey(visible.TransportSlotNumber, out timelineKey, out vanillaSaveType);
+                if (SaveBackupService.TryFindTimelineKey(
+                    "CustomSlot",
+                    visible.StorageScenarioId,
+                    visible.DisplaySlotNumber,
+                    out timelineKey))
+                {
+                    return true;
+                }
+
+                return false;
             }
 
-            return SaveBackupService.TryGetCustomTimelineKey(visible.Entry, out timelineKey);
+            if (visible.Entry != null && SaveBackupService.TryGetCustomTimelineKey(visible.Entry, out timelineKey))
+                return true;
+
+            return SaveBackupService.TryFindTimelineKey(
+                "CustomSlot",
+                visible.StorageScenarioId,
+                visible.DisplaySlotNumber,
+                out timelineKey);
         }
 
         private static bool IsSmmStoredEntry(SlotSelectionVisibleSave visible)

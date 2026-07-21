@@ -172,7 +172,11 @@ namespace ShelteredAPI.Saves.Runtime
                 return false;
             }
 
-            SaveBackupService.BackupVanillaBeforeOverwrite(type);
+            if (!SaveBackupService.BackupVanillaBeforeOverwrite(type))
+            {
+                MMLog.WriteError("Mirrored vanilla save cancelled because its recovery snapshot failed.");
+                return false;
+            }
 
             string scenarioId = SaveStorageRouter.NormalizeScenarioId(active.scenarioId);
             SaveEntry result = SaveStorageRouter.Overwrite(scenarioId, active.id, new SaveOverwriteOptions(), data);
@@ -220,7 +224,11 @@ namespace ShelteredAPI.Saves.Runtime
                 ModRuntime.MarkSaveExit("PlatformSave.FallbackVanilla", "type=" + type);
             }
 
-            SaveBackupService.BackupVanillaBeforeOverwrite(type);
+            if (!SaveBackupService.BackupVanillaBeforeOverwrite(type))
+            {
+                MMLog.WriteError("Vanilla save cancelled because its recovery snapshot failed.");
+                return false;
+            }
             bool success = _inner.PlatformSave(type, data);
             if (success)
             {

@@ -310,7 +310,11 @@ namespace ShelteredAPI.Saves
             if (entry == null && !TryCreateTransientEntryFromId(saveId, opts, out entry))
                 return null;
 
-            SaveBackupService.BackupCustomEntryBeforeOverwrite(entry);
+            if (!SaveBackupService.BackupCustomEntryBeforeOverwrite(entry))
+            {
+                MMLog.WriteError("[SaveBackup] Refusing to overwrite custom save because its recovery snapshot failed.");
+                return null;
+            }
 
             if (opts != null && !string.IsNullOrEmpty(opts.name))
                 entry.name = NameSanitizer.SanitizeName(opts.name);
@@ -1014,7 +1018,13 @@ namespace ShelteredAPI.Saves
             SaveRegistryCore registry = new SaveRegistryCore(scenarioId);
             SaveEntry existing = registry.GetSaveBySlot(comparison.SlotNumber);
             if (backupExistingMirror && existing != null && File.Exists(comparison.MirrorPath))
-                SaveBackupService.BackupCustomEntryBeforeOverwrite(existing);
+            {
+                if (!SaveBackupService.BackupCustomEntryBeforeOverwrite(existing))
+                {
+                    MMLog.WriteError("[SaveBackup] Refusing to overwrite the vanilla mirror because its recovery snapshot failed.");
+                    return null;
+                }
+            }
 
             long fileSize;
             uint crc;

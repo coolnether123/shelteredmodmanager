@@ -8,10 +8,11 @@ namespace ShelteredAPI.Saves.Paging
     {
         public string TimelineKey;
         public SaveEntry SourceEntry;
-        public SlotPagingScope SourceScope;
         public bool SourceIsVanilla;
         public SaveManager.SaveType SourceVanillaSaveType;
         public int SourceSlotNumber;
+        public SaveManager.SaveType SourceTransportSaveType;
+        public int SourceTransportSlotNumber;
         public int ReturnPage;
         public SaveBackupSnapshotSortOrder SortOrder = SaveBackupSnapshotSortOrder.NewestFirst;
         public List<SaveBackupSnapshotInfo> Snapshots = new List<SaveBackupSnapshotInfo>();
@@ -75,10 +76,11 @@ namespace ShelteredAPI.Saves.Paging
             SlotSelectionPanel panel,
             string timelineKey,
             SaveEntry sourceEntry,
-            SlotPagingScope sourceScope,
             bool sourceIsVanilla,
             SaveManager.SaveType sourceVanillaSaveType,
-            int sourceSlotNumber)
+            int sourceSlotNumber,
+            SaveManager.SaveType sourceTransportSaveType,
+            int sourceTransportSlotNumber)
         {
             if (panel == null || string.IsNullOrEmpty(timelineKey))
                 return;
@@ -87,10 +89,11 @@ namespace ShelteredAPI.Saves.Paging
             {
                 TimelineKey = timelineKey,
                 SourceEntry = sourceEntry,
-                SourceScope = sourceScope,
                 SourceIsVanilla = sourceIsVanilla,
                 SourceVanillaSaveType = sourceVanillaSaveType,
                 SourceSlotNumber = sourceSlotNumber,
+                SourceTransportSaveType = sourceTransportSaveType,
+                SourceTransportSlotNumber = sourceTransportSlotNumber,
                 ReturnPage = PagingManager.GetPage(panel)
             };
             session.Reload();
