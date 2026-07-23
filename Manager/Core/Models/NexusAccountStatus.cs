@@ -84,8 +84,8 @@ namespace Manager.Core.Models
                 IsConfigured = false,
                 IsConnected = false,
                 DirectDownloadAvailability = NexusDirectDownloadAvailability.Unavailable,
-                Summary = "No Nexus API key stored.",
-                DirectDownloadSummary = "Browsing and update checks still work. Direct installs stay disabled until an API key is added."
+                Summary = "Not signed in to Nexus.",
+                DirectDownloadSummary = "Browsing and update checks still work. Direct installs stay disabled until OAuth sign-in or a legacy API key is configured."
             };
         }
 
@@ -97,7 +97,7 @@ namespace Manager.Core.Models
                 IsConnected = false,
                 DirectDownloadAvailability = NexusDirectDownloadAvailability.Unknown,
                 Summary = "Checking Nexus account...",
-                DirectDownloadSummary = "Validating the stored API key and fetching account capability details."
+                DirectDownloadSummary = "Validating the stored Nexus credential and fetching account capability details."
             };
         }
 
@@ -109,7 +109,7 @@ namespace Manager.Core.Models
                 IsConnected = false,
                 DirectDownloadAvailability = NexusDirectDownloadAvailability.Unknown,
                 Summary = "Could not verify the Nexus account.",
-                DirectDownloadSummary = "Direct-download capability is unknown until the API key can be validated.",
+                DirectDownloadSummary = "Direct-download capability is unknown until the Nexus credential can be validated.",
                 ErrorMessage = message ?? string.Empty
             };
         }

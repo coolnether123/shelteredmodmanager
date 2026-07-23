@@ -36,6 +36,7 @@ namespace Manager.Core.Services
         private readonly NexusGraphQlClient _v2Client;
         private readonly NexusV3RestClient _v3Client;
         private readonly string _apiKey;
+        private readonly INexusCredentialProvider _credentialProvider;
         private readonly object _cacheLock = new object();
         private readonly Dictionary<string, CacheEntry<NexusRemoteMod>> _modCache = new Dictionary<string, CacheEntry<NexusRemoteMod>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteMod>>> _latestCache = new Dictionary<string, CacheEntry<List<NexusRemoteMod>>>(StringComparer.OrdinalIgnoreCase);
@@ -52,10 +53,21 @@ namespace Manager.Core.Services
         }
 
         public NexusModsService(string apiKey)
+            : this(new StaticNexusCredentialProvider(apiKey), apiKey)
+        {
+        }
+
+        internal NexusModsService(INexusCredentialProvider credentialProvider)
+            : this(credentialProvider, string.Empty)
+        {
+        }
+
+        private NexusModsService(INexusCredentialProvider credentialProvider, string apiKey)
         {
             _apiKey = apiKey ?? string.Empty;
-            _v2Client = new NexusGraphQlClient(apiKey);
-            _v3Client = new NexusV3RestClient(apiKey);
+            _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(_apiKey);
+            _v2Client = new NexusGraphQlClient(_credentialProvider);
+            _v3Client = new NexusV3RestClient(_credentialProvider);
         }
 
         public void ClearCachedResponses()
@@ -382,7 +394,7 @@ namespace Manager.Core.Services
         public NexusAccountStatus GetAccountStatus(out string errorMessage)
         {
             errorMessage = null;
-            if (string.IsNullOrEmpty(_apiKey))
+            if (!_credentialProvider.HasConfiguredCredential)
                 return NexusAccountStatus.CreateNotConfigured();
 
             Dictionary<string, object> data = SendLegacyGet("/users/validate", null, null, out errorMessage);
@@ -436,9 +448,9 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            if (string.IsNullOrEmpty(apiKey))
+            if (string.IsNullOrEmpty(apiKey) && !_credentialProvider.HasConfiguredCredential)
             {
-                errorMessage = "Nexus API key is required for direct Manager download.";
+                errorMessage = "Nexus sign-in or a personal API key is required for direct Manager download.";
                 return null;
             }
 
@@ -481,8 +493,23 @@ namespace Manager.Core.Services
                 request.Timeout = 15000;
                 request.ReadWriteTimeout = 15000;
                 request.KeepAlive = false;
-                string key = !string.IsNullOrEmpty(apiKeyOverride) ? apiKeyOverride : _apiKey;
-                NexusRequestHeaders.ApplyJsonHeaders(request, key);
+                NexusRequestCredential credential;
+                if (!string.IsNullOrEmpty(apiKeyOverride))
+                {
+                    credential = NexusRequestCredential.FromApiKey(apiKeyOverride);
+                }
+                else
+                {
+                    string credentialError;
+                    credential = _credentialProvider.GetCredential(out credentialError);
+                    if (!string.IsNullOrEmpty(credentialError) &&
+                        (credential == null || !credential.IsConfigured))
+                    {
+                        errorMessage = credentialError;
+                        return null;
+                    }
+                }
+                NexusRequestHeaders.ApplyJsonHeaders(request, credential);
 
                 using (var response = (HttpWebResponse)request.GetResponse())
                 using (Stream stream = response.GetResponseStream())
@@ -515,7 +542,7 @@ namespace Manager.Core.Services
                 {
                     if (response.StatusCode == HttpStatusCode.Unauthorized)
                     {
-                        errorMessage = "Unauthorized Nexus request. Check the API key.";
+                        errorMessage = "Unauthorized Nexus request. Sign in again or check the legacy API key.";
                         return null;
                     }
 

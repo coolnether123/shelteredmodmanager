@@ -19,12 +19,17 @@ namespace Manager.Core.Services
     internal sealed class NexusGraphQlClient
     {
         private const string Endpoint = "https://api.nexusmods.com/v2/graphql";
-        private readonly string _apiKey;
+        private readonly INexusCredentialProvider _credentialProvider;
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
 
         public NexusGraphQlClient(string apiKey)
         {
-            _apiKey = apiKey ?? string.Empty;
+            _credentialProvider = new StaticNexusCredentialProvider(apiKey);
+        }
+
+        internal NexusGraphQlClient(INexusCredentialProvider credentialProvider)
+        {
+            _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(string.Empty);
         }
 
         public NexusGraphQlResponse Execute(string query, Dictionary<string, object> variables)
@@ -45,7 +50,11 @@ namespace Manager.Core.Services
                 request.ReadWriteTimeout = 15000;
                 request.KeepAlive = false;
                 request.ProtocolVersion = HttpVersion.Version11;
-                NexusRequestHeaders.ApplyJsonHeaders(request, _apiKey);
+                string credentialError;
+                NexusRequestCredential credential = _credentialProvider.GetCredential(out credentialError);
+                if (!string.IsNullOrEmpty(credentialError) && (credential == null || !credential.IsConfigured))
+                    return new NexusGraphQlResponse { ErrorMessage = credentialError };
+                NexusRequestHeaders.ApplyJsonHeaders(request, credential);
 
                 string body = _serializer.Serialize(payload);
                 byte[] bytes = Encoding.UTF8.GetBytes(body);

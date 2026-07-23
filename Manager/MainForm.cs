@@ -49,6 +49,7 @@ namespace Manager
         private ModDiscoveryService _discoveryService;
         private LoadOrderService _orderService;
         private NexusModsService _nexusService;
+        private NexusOAuthService _nexusOAuthService;
 
         // State
         private AppSettings _settings;
@@ -137,7 +138,8 @@ namespace Manager
             ApplyInstalledApiVersions(_settings, installedApiVersions);
 
             _discoveryService = new ModDiscoveryService(installedApiVersions);
-            _nexusService = new NexusModsService(_settings.NexusApiKey);
+            _nexusOAuthService = new NexusOAuthService(_settingsService, _settings);
+            _nexusService = new NexusModsService(_nexusOAuthService);
         }
 
         private static Dictionary<string, string> DetectInstalledApiVersions(AppSettings settings)
@@ -170,7 +172,11 @@ namespace Manager
 
         private void RecreateNexusService()
         {
-            _nexusService = new NexusModsService(_settings != null ? _settings.NexusApiKey : string.Empty);
+            if (_nexusOAuthService == null)
+                _nexusOAuthService = new NexusOAuthService(_settingsService, _settings);
+            else
+                _nexusOAuthService.UpdateSettings(_settings);
+            _nexusService = new NexusModsService(_nexusOAuthService);
         }
 
         private void ApplyNexusAccountStatus(NexusAccountStatus status)
@@ -197,7 +203,7 @@ namespace Manager
                 return;
             }
 
-            if (string.IsNullOrEmpty(_settings.NexusApiKey))
+            if (!_settings.HasNexusCredential)
             {
                 ApplyNexusAccountStatus(NexusAccountStatus.CreateNotConfigured());
                 return;
@@ -565,6 +571,8 @@ namespace Manager
             _settingsTab.SettingsChanged += SettingsTab_SettingsChanged;
             _settingsTab.DarkModeChanged += SettingsTab_DarkModeChanged;
             _settingsTab.ResetWindowRequested += SettingsTab_ResetWindowRequested;
+            _settingsTab.NexusOAuthSignInRequested += SettingsTab_NexusOAuthSignInRequested;
+            _settingsTab.NexusOAuthSignOutRequested += SettingsTab_NexusOAuthSignOutRequested;
             _settingsService.SettingsChanged += SettingsService_SettingsChanged;
 
             // Tab change
@@ -614,6 +622,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             RefreshNexusAccountStatusAsync(true);
@@ -1767,6 +1776,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             
@@ -1798,6 +1808,68 @@ namespace Manager
             {
                 _gameSetupTab.Log("Settings updated: Dark mode " + (isDark ? "enabled" : "disabled") + ".");
             }
+        }
+
+        private void SettingsTab_NexusOAuthSignInRequested()
+        {
+            if (_nexusOAuthService == null)
+                return;
+
+            ApplyNexusAccountStatus(NexusAccountStatus.CreateChecking());
+            NexusOAuthService oauthService = _nexusOAuthService;
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                string errorMessage;
+                bool signedIn = oauthService.SignIn(out errorMessage);
+                if (IsDisposed || Disposing)
+                    return;
+
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (signedIn)
+                        {
+                            RecreateNexusService();
+                            _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
+                            _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
+                            _nexusUploadTab.Initialize(_nexusService, _settings);
+                            _settingsTab.Initialize(_settings);
+                            _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
+                            RefreshNexusAccountStatusAsync(true);
+                            _gameSetupTab.Log("Nexus OAuth sign-in completed.");
+                        }
+                        else
+                        {
+                            ApplyNexusAccountStatus(NexusAccountStatus.CreateUnavailable(errorMessage));
+                            MessageBox.Show(
+                                errorMessage ?? "Nexus sign-in was not completed.",
+                                "Nexus Sign In",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information);
+                        }
+                    });
+                }
+                catch
+                {
+                }
+            });
+        }
+
+        private void SettingsTab_NexusOAuthSignOutRequested()
+        {
+            if (_nexusOAuthService == null)
+                return;
+
+            _nexusOAuthService.SignOut();
+            RecreateNexusService();
+            _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
+            _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
+            _nexusUploadTab.Initialize(_nexusService, _settings);
+            _settingsTab.Initialize(_settings);
+            _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
+            RefreshNexusAccountStatusAsync(true);
+            _gameSetupTab.Log("Signed out of Nexus OAuth.");
         }
 
         private void SettingsTab_ResetWindowRequested()
