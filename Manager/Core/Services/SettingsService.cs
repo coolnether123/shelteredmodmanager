@@ -16,6 +16,9 @@ namespace Manager.Core.Services
         private const string INI_FILENAME = "mod_manager.ini";
         private const string LegacyNexusApiKeyKey = "NexusApiKey";
         private const string ProtectedNexusApiKeyKey = "NexusApiKeyProtected";
+        private const string ProtectedNexusOAuthAccessTokenKey = "NexusOAuthAccessTokenProtected";
+        private const string ProtectedNexusOAuthRefreshTokenKey = "NexusOAuthRefreshTokenProtected";
+        private const string NexusOAuthExpiresAtUtcKey = "NexusOAuthExpiresAtUtc";
         private readonly string _iniPath;
         private FileSystemWatcher _watcher;
         private DateTime _lastRead = DateTime.MinValue;
@@ -235,6 +238,41 @@ namespace Manager.Core.Services
                     settings.NexusApiKey = legacyNexusApiKey;
             }
 
+            string protectedAccessToken;
+            if (raw.TryGetValue(ProtectedNexusOAuthAccessTokenKey, out protectedAccessToken) &&
+                !string.IsNullOrEmpty(protectedAccessToken))
+            {
+                string accessToken;
+                if (NexusOAuthTokenProtector.TryUnprotectAccessToken(protectedAccessToken, out accessToken))
+                    settings.NexusOAuthTokens.AccessToken = accessToken;
+                else
+                    System.Diagnostics.Debug.WriteLine("Nexus OAuth access token decrypt failed.");
+            }
+
+            string protectedRefreshToken;
+            if (raw.TryGetValue(ProtectedNexusOAuthRefreshTokenKey, out protectedRefreshToken) &&
+                !string.IsNullOrEmpty(protectedRefreshToken))
+            {
+                string refreshToken;
+                if (NexusOAuthTokenProtector.TryUnprotectRefreshToken(protectedRefreshToken, out refreshToken))
+                    settings.NexusOAuthTokens.RefreshToken = refreshToken;
+                else
+                    System.Diagnostics.Debug.WriteLine("Nexus OAuth refresh token decrypt failed.");
+            }
+
+            string oauthExpiresAt;
+            DateTime parsedExpiresAt;
+            if (raw.TryGetValue(NexusOAuthExpiresAtUtcKey, out oauthExpiresAt) &&
+                DateTime.TryParse(
+                    oauthExpiresAt,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal |
+                        System.Globalization.DateTimeStyles.AssumeUniversal,
+                    out parsedExpiresAt))
+            {
+                settings.NexusOAuthTokens.ExpiresAtUtc = parsedExpiresAt.ToUniversalTime();
+            }
+
             string managerNexusModId;
             if (raw.TryGetValue("ManagerNexusModId", out managerNexusModId))
             {
@@ -370,6 +408,20 @@ namespace Manager.Core.Services
             }
             // Never persist plaintext Nexus API key.
             data.Remove(LegacyNexusApiKeyKey);
+            NexusOAuthTokenSet oauthTokens = settings.NexusOAuthTokens;
+            PersistProtectedSecret(
+                data,
+                ProtectedNexusOAuthAccessTokenKey,
+                oauthTokens.AccessToken,
+                NexusOAuthTokenProtector.ProtectAccessToken);
+            PersistProtectedSecret(
+                data,
+                ProtectedNexusOAuthRefreshTokenKey,
+                oauthTokens.RefreshToken,
+                NexusOAuthTokenProtector.ProtectRefreshToken);
+            data[NexusOAuthExpiresAtUtcKey] = oauthTokens.ExpiresAtUtc > DateTime.MinValue
+                ? oauthTokens.ExpiresAtUtc.ToUniversalTime().ToString("o", System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty;
             data["ManagerNexusModId"] = settings.ManagerNexusModId.ToString();
             data["AutoLoadSaveSlot"] = settings.AutoLoadSaveSlot.ToString();
             data["WindowX"] = settings.WindowX.ToString();
@@ -382,6 +434,30 @@ namespace Manager.Core.Services
             
             if (SettingsChanged != null)
                 SettingsChanged(settings);
+        }
+
+        private static void PersistProtectedSecret(
+            Dictionary<string, string> data,
+            string key,
+            string plainText,
+            Func<string, string> protect)
+        {
+            if (string.IsNullOrEmpty(plainText))
+            {
+                data[key] = string.Empty;
+                return;
+            }
+
+            string protectedValue = protect(plainText);
+            if (!string.IsNullOrEmpty(protectedValue))
+            {
+                data[key] = protectedValue;
+                return;
+            }
+
+            if (!data.ContainsKey(key))
+                data[key] = string.Empty;
+            System.Diagnostics.Debug.WriteLine("Failed to protect " + key + ". Keeping the previously stored protected value.");
         }
 
         private Dictionary<string, string> ReadIniFile()

@@ -25,6 +25,8 @@ if ($LASTEXITCODE -ne 0) { throw "Release build failed with exit code $LASTEXITC
 
 & (Join-Path $PSScriptRoot 'Test-NexusManagerContracts.ps1') -RepoRoot $repoRoot
 if ($LASTEXITCODE -ne 0) { throw "Nexus contract checks failed with exit code $LASTEXITCODE." }
+& (Join-Path $PSScriptRoot 'Test-NexusOAuthContracts.ps1') -RepoRoot $repoRoot
+if ($LASTEXITCODE -ne 0) { throw "Nexus OAuth contract checks failed with exit code $LASTEXITCODE." }
 & (Join-Path $PSScriptRoot 'Test-ManagerSelfUpdate.ps1') -RepoRoot $repoRoot
 if ($LASTEXITCODE -ne 0) { throw "Manager self-update tests failed with exit code $LASTEXITCODE." }
 if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'Dist\SMM\ManagerUpdater.exe'))) {
@@ -35,6 +37,7 @@ if (Test-Path -LiteralPath $stageRoot) { Remove-Item -LiteralPath $stageRoot -Re
 New-Item -ItemType Directory -Path $stageRoot | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'Dist\SMM') -Destination (Join-Path $stageRoot 'SMM') -Recurse
 Copy-Item -LiteralPath (Join-Path $repoRoot 'documentation\Nexus_Registration_Submission.md') -Destination (Join-Path $stageRoot 'NEXUS_REVIEW.md')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'documentation\Nexus_OAuth_Implementation.md') -Destination (Join-Path $stageRoot 'NEXUS_OAUTH.md')
 
 $smmStage = Join-Path $stageRoot 'SMM'
 Get-ChildItem -LiteralPath $smmStage -Recurse -File | Where-Object {

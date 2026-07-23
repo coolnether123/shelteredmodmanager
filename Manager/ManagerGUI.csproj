@@ -155,10 +155,13 @@
     <Compile Include="Core\Models\NexusRemoteMod.cs" />
     <Compile Include="Core\Models\NexusRemoteModFile.cs" />
     <Compile Include="Core\Models\NexusAccountStatus.cs" />
+    <Compile Include="Core\Models\NexusOAuthTokenSet.cs" />
     <Compile Include="Core\Models\NexusNxmLink.cs" />
     <Compile Include="Core\Models\NexusUploadDraft.cs" />
     <!-- Core Services -->
     <Compile Include="Core\Security\NexusApiKeyProtector.cs" />
+    <Compile Include="Core\Security\DpapiSecretProtector.cs" />
+    <Compile Include="Core\Security\NexusOAuthTokenProtector.cs" />
     <Compile Include="Core\Services\SettingsService.cs" />
     <Compile Include="Core\Services\ApiCompatibilityService.cs" />
     <Compile Include="Core\Services\ManagerBooleanOptionsService.cs" />
@@ -172,6 +175,12 @@
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
     <Compile Include="Core\Services\NexusRequestHeaders.cs" />
+    <Compile Include="Core\Services\NexusRequestCredential.cs" />
+    <Compile Include="Core\Services\NexusOAuthConfiguration.cs" />
+    <Compile Include="Core\Services\NexusOAuthProtocol.cs" />
+    <Compile Include="Core\Services\NexusLoopbackCallbackListener.cs" />
+    <Compile Include="Core\Services\NexusOAuthClient.cs" />
+    <Compile Include="Core\Services\NexusOAuthService.cs" />
     <Compile Include="Core\Services\NexusProtocolHandlerService.cs" />
     <Compile Include="Core\Services\NexusModsService.cs" />
     <Compile Include="Core\Services\NexusUploadDraftService.cs" />
