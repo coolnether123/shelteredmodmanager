@@ -123,6 +123,14 @@ namespace Manager.Views
             _enableNexusCheckBox.Location = new Point(x + 10, y);
             y += 32;
 
+            _nexusOAuthSignInButton.Location = new Point(x + 10, y);
+            _nexusOAuthSignOutButton.Location = new Point(x + 170, y);
+            y += 34;
+
+            _nexusOAuthStatusLabel.Location = new Point(x + 10, y);
+            _nexusOAuthStatusLabel.Width = summaryWidth;
+            y += 42;
+
             _nexusApiKeyLabel.Location = new Point(x + 10, y + 4);
             _nexusApiKeyTextBox.Location = new Point(x + 155, y);
             _nexusApiHelpButton.Location = new Point(x + 395, y - 1);

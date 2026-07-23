@@ -10,6 +10,7 @@ namespace Manager.Views
     public delegate void SettingsChangedHandler(AppSettings settings);
     public delegate void DarkModeChangedHandler(bool isDark);
     public delegate void ResetWindowRequestedHandler();
+    public delegate void NexusOAuthRequestedHandler();
 
     // Section taxonomy: where each kind of setting belongs.
     //
@@ -60,6 +61,9 @@ namespace Manager.Views
         // 3. Nexus
         private Label _nexusLabel;
         private CheckBox _enableNexusCheckBox;
+        private Button _nexusOAuthSignInButton;
+        private Button _nexusOAuthSignOutButton;
+        private Label _nexusOAuthStatusLabel;
         private Label _nexusApiKeyLabel;
         private TextBox _nexusApiKeyTextBox;
         private Button _nexusApiHelpButton;
@@ -103,6 +107,7 @@ namespace Manager.Views
         private bool _nexusApiKeyRevealed;
         private bool _skipNextNexusApiAutoHide;
         private bool _showAdvancedNexusOptions;
+        private bool _nexusOAuthRegistrationAvailable;
         private ToolTip _helpToolTip;
         private readonly ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
         private readonly List<CheckBox> _runtimeFeatureCheckBoxes = new List<CheckBox>();
@@ -112,6 +117,8 @@ namespace Manager.Views
         public event SettingsChangedHandler SettingsChanged;
         public event DarkModeChangedHandler DarkModeChanged;
         public event ResetWindowRequestedHandler ResetWindowRequested;
+        public event NexusOAuthRequestedHandler NexusOAuthSignInRequested;
+        public event NexusOAuthRequestedHandler NexusOAuthSignOutRequested;
 
         public SettingsTab()
         {
@@ -130,6 +137,12 @@ namespace Manager.Views
         {
             _nexusAccountStatus = status;
             UpdateNexusStatusLabels();
+        }
+
+        public void SetNexusOAuthRegistrationAvailable(bool available)
+        {
+            _nexusOAuthRegistrationAvailable = available;
+            UpdateNexusOAuthControls();
         }
 
         private void InitializeComponent()
@@ -255,15 +268,36 @@ namespace Manager.Views
             _enableNexusCheckBox.Font = new Font("Segoe UI", 10f);
             _enableNexusCheckBox.AutoSize = true;
 
+            _nexusOAuthSignInButton = new Button();
+            _nexusOAuthSignInButton.Text = "Sign in with Nexus";
+            _nexusOAuthSignInButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _nexusOAuthSignInButton.Size = new Size(150, 29);
+            _nexusOAuthSignInButton.FlatStyle = FlatStyle.Flat;
+            _nexusOAuthSignInButton.Cursor = Cursors.Hand;
+            _helpToolTip.SetToolTip(_nexusOAuthSignInButton, "Sign in through Nexus OAuth using PKCE and a temporary loopback callback.");
+
+            _nexusOAuthSignOutButton = new Button();
+            _nexusOAuthSignOutButton.Text = "Sign out";
+            _nexusOAuthSignOutButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _nexusOAuthSignOutButton.Size = new Size(95, 29);
+            _nexusOAuthSignOutButton.FlatStyle = FlatStyle.Flat;
+            _nexusOAuthSignOutButton.Cursor = Cursors.Hand;
+
+            _nexusOAuthStatusLabel = new Label();
+            _nexusOAuthStatusLabel.Font = new Font("Segoe UI", 8.5f);
+            _nexusOAuthStatusLabel.AutoSize = false;
+            _nexusOAuthStatusLabel.Size = new Size(680, 35);
+            _nexusOAuthStatusLabel.Text = "OAuth registration is pending Nexus approval.";
+
             _nexusApiKeyLabel = new Label();
-            _nexusApiKeyLabel.Text = "Personal API Key:";
+            _nexusApiKeyLabel.Text = "Legacy API Key:";
             _nexusApiKeyLabel.Font = new Font("Segoe UI", 10f);
             _nexusApiKeyLabel.AutoSize = true;
 
             _nexusApiKeyTextBox = new TextBox();
             _nexusApiKeyTextBox.Font = new Font("Segoe UI", 10f);
             _nexusApiKeyTextBox.Width = 230;
-            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads and account validation; browsing and update checks do not require it.");
+            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Optional personal API key fallback. OAuth sign-in is preferred after Nexus registers the application.");
 
             _nexusApiHelpButton = new Button();
             _nexusApiHelpButton.Text = "Get API Key";
@@ -291,7 +325,7 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Font = new Font("Segoe UI", 9f);
             _nexusDownloadSummaryLabel.AutoSize = false;
             _nexusDownloadSummaryLabel.Size = new Size(680, 38);
-            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and may still require Nexus download authorization.";
+            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without sign-in. Direct installs require OAuth or a legacy API key and may still require Nexus download authorization.";
 
             // Update-channel opt-in: lives with Nexus (not Developer) because it
             // changes which Nexus files surface as available updates.
@@ -472,6 +506,9 @@ namespace Manager.Views
             // 3. Nexus
             _contentPanel.Controls.Add(_nexusLabel);
             _contentPanel.Controls.Add(_enableNexusCheckBox);
+            _contentPanel.Controls.Add(_nexusOAuthSignInButton);
+            _contentPanel.Controls.Add(_nexusOAuthSignOutButton);
+            _contentPanel.Controls.Add(_nexusOAuthStatusLabel);
             _contentPanel.Controls.Add(_nexusApiKeyLabel);
             _contentPanel.Controls.Add(_nexusApiKeyTextBox);
             _contentPanel.Controls.Add(_nexusApiHelpButton);
@@ -517,6 +554,8 @@ namespace Manager.Views
             _saveBackupRetentionCombo.SelectedIndexChanged += SaveBackupRetentionCombo_SelectedIndexChanged;
             _saveBackupRetentionCountNumeric.ValueChanged += SaveBackupRetentionCountNumeric_ValueChanged;
             _enableNexusCheckBox.CheckedChanged += EnableNexusCheckBox_CheckedChanged;
+            _nexusOAuthSignInButton.Click += NexusOAuthSignInButton_Click;
+            _nexusOAuthSignOutButton.Click += NexusOAuthSignOutButton_Click;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
             _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
             _nexusApiKeyTextBox.KeyDown += NexusApiKeyTextBox_KeyDown;
@@ -555,6 +594,10 @@ namespace Manager.Views
 
         private void SetNexusInputsEnabled(bool enabled)
         {
+            _nexusOAuthSignInButton.Enabled = enabled && _nexusOAuthRegistrationAvailable &&
+                (_settings == null || !_settings.HasNexusOAuthSession);
+            _nexusOAuthSignOutButton.Enabled = enabled && _settings != null && _settings.HasNexusOAuthSession;
+            _nexusOAuthStatusLabel.Enabled = enabled;
             _nexusApiKeyLabel.Enabled = enabled;
             _nexusApiKeyTextBox.Enabled = enabled;
             _nexusApiHelpButton.Enabled = enabled;
@@ -671,6 +714,7 @@ namespace Manager.Views
                 ApplyNexusApiKeyDisplayMode();
                 SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
                 UpdateNexusStatusLabels();
+                UpdateNexusOAuthControls();
                 LoadRuntimeOptions();
                 UpdateDynamicLayout();
             }
@@ -783,7 +827,7 @@ namespace Manager.Views
             if (_nexusAccountStatus == null)
             {
                 _nexusAccountSummaryLabel.Text = "Nexus account: not checked yet.";
-                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and may still require Nexus download authorization.";
+                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without sign-in. Direct installs require OAuth or a legacy API key and may still require Nexus download authorization.";
                 return;
             }
 
@@ -802,6 +846,30 @@ namespace Manager.Views
             if (!string.IsNullOrEmpty(_nexusAccountStatus.ErrorMessage))
                 detail += " Details: " + _nexusAccountStatus.ErrorMessage;
             _nexusDownloadSummaryLabel.Text = detail;
+        }
+
+        private void UpdateNexusOAuthControls()
+        {
+            if (_nexusOAuthSignInButton == null)
+                return;
+
+            bool enabled = _settings == null || _settings.EnableNexusIntegration;
+            bool hasSession = _settings != null && _settings.HasNexusOAuthSession;
+            _nexusOAuthSignInButton.Enabled = enabled && _nexusOAuthRegistrationAvailable && !hasSession;
+            _nexusOAuthSignOutButton.Enabled = enabled && hasSession;
+
+            if (hasSession)
+            {
+                _nexusOAuthStatusLabel.Text = "OAuth session stored securely with Windows DPAPI.";
+            }
+            else if (_nexusOAuthRegistrationAvailable)
+            {
+                _nexusOAuthStatusLabel.Text = "OAuth is ready. Sign in opens Nexus in your browser and returns only to 127.0.0.1.";
+            }
+            else
+            {
+                _nexusOAuthStatusLabel.Text = "OAuth callback ready at http://127.0.0.1:52147/callback; Nexus client registration is pending.";
+            }
         }
 
         private void ApplyNexusApiKeyDisplayMode()
@@ -967,6 +1035,30 @@ namespace Manager.Views
             _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
             SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
             TriggerSave();
+        }
+
+        private void NexusOAuthSignInButton_Click(object sender, EventArgs e)
+        {
+            if (NexusOAuthSignInRequested != null)
+                NexusOAuthSignInRequested();
+        }
+
+        private void NexusOAuthSignOutButton_Click(object sender, EventArgs e)
+        {
+            if (_settings == null || !_settings.HasNexusOAuthSession)
+                return;
+
+            if (MessageBox.Show(
+                "Sign out of Nexus in Sheltered Mod Manager?",
+                "Nexus Sign Out",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            if (NexusOAuthSignOutRequested != null)
+                NexusOAuthSignOutRequested();
         }
 
         private void NexusDomainTextBox_TextChanged(object sender, EventArgs e)

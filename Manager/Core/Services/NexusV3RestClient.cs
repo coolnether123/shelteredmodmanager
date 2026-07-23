@@ -25,12 +25,17 @@ namespace Manager.Core.Services
     internal sealed class NexusV3RestClient
     {
         private const string BaseUrl = "https://api.nexusmods.com/v3";
-        private readonly string _apiKey;
+        private readonly INexusCredentialProvider _credentialProvider;
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
 
         public NexusV3RestClient(string apiKey)
         {
-            _apiKey = apiKey ?? string.Empty;
+            _credentialProvider = new StaticNexusCredentialProvider(apiKey);
+        }
+
+        internal NexusV3RestClient(INexusCredentialProvider credentialProvider)
+        {
+            _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(string.Empty);
         }
 
         public NexusV3RestResult Get(string relativePath)
@@ -160,7 +165,11 @@ namespace Manager.Core.Services
                 request.Timeout = 30000;
                 request.ReadWriteTimeout = 30000;
                 request.KeepAlive = false;
-                NexusRequestHeaders.ApplyJsonHeaders(request, _apiKey);
+                string credentialError;
+                NexusRequestCredential credential = _credentialProvider.GetCredential(out credentialError);
+                if (!string.IsNullOrEmpty(credentialError) && (credential == null || !credential.IsConfigured))
+                    return new NexusV3RestResult { ErrorMessage = credentialError };
+                NexusRequestHeaders.ApplyJsonHeaders(request, credential);
 
                 if (body != null)
                 {

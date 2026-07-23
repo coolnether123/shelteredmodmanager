@@ -54,6 +54,7 @@ $installPath = Join-Path $RepoRoot 'Manager\Core\Services\NexusInstallService.cs
 
 Assert-Contains $headersPath 'Application-Name' 'Nexus requests must include Application-Name.'
 Assert-Contains $headersPath 'Application-Version' 'Nexus requests must include Application-Version.'
+Assert-Contains $headersPath '"Authorization"\]\s*=\s*"Bearer "' 'Nexus requests must support OAuth bearer tokens.'
 Assert-Contains $servicePath 'GetDownloadUrlWithAuthorization' 'Non-premium download authorization must be supported.'
 Assert-Contains $servicePath '_cacheGeneration\+\+' 'Cache invalidation must advance a generation.'
 Assert-Contains $servicePath 'generation\s*!=\s*_cacheGeneration' 'Responses started before invalidation must not repopulate caches.'

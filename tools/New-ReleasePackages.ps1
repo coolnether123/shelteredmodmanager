@@ -50,6 +50,8 @@ if (-not $SkipBuild) {
 if (-not $SkipTests) {
     & (Join-Path $PSScriptRoot 'Test-NexusManagerContracts.ps1') -RepoRoot $repoRoot
     if ($LASTEXITCODE -ne 0) { throw "Nexus contract checks failed ($LASTEXITCODE)." }
+    & (Join-Path $PSScriptRoot 'Test-NexusOAuthContracts.ps1') -RepoRoot $repoRoot
+    if ($LASTEXITCODE -ne 0) { throw "Nexus OAuth contract checks failed ($LASTEXITCODE)." }
     & (Join-Path $PSScriptRoot 'Test-ManagerSelfUpdate.ps1') -RepoRoot $repoRoot
     if ($LASTEXITCODE -ne 0) { throw "Manager self-update tests failed ($LASTEXITCODE)." }
 }
