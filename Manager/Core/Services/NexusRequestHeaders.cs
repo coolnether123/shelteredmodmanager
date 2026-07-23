@@ -7,6 +7,11 @@ namespace Manager.Core.Services
     {
         internal static void ApplyJsonHeaders(HttpWebRequest request, string apiKey)
         {
+            ApplyJsonHeaders(request, NexusRequestCredential.FromApiKey(apiKey));
+        }
+
+        internal static void ApplyJsonHeaders(HttpWebRequest request, NexusRequestCredential credential)
+        {
             if (request == null)
                 return;
 
@@ -16,8 +21,13 @@ namespace Manager.Core.Services
             request.Headers["Application-Name"] = AppVersionInfo.ApplicationName;
             request.Headers["Application-Version"] = AppVersionInfo.NexusHeader;
 
-            if (!string.IsNullOrEmpty(apiKey))
-                request.Headers["APIKEY"] = apiKey;
+            if (credential == null)
+                return;
+
+            if (!string.IsNullOrEmpty(credential.BearerToken))
+                request.Headers["Authorization"] = "Bearer " + credential.BearerToken;
+            else if (!string.IsNullOrEmpty(credential.ApiKey))
+                request.Headers["APIKEY"] = credential.ApiKey;
         }
     }
 }
