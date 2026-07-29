@@ -1,3 +1,5 @@
+using ParalivesAPI.Stable;
+
 namespace ParalivesAPI.Core
 {
     public sealed class ParalivesRuntimeInfo
@@ -8,14 +10,21 @@ namespace ParalivesAPI.Core
 
         private ParalivesRuntimeInfo()
         {
+            Version = ParalivesApiVersion.Current;
+            Capabilities = ParalivesCapabilityRegistry.CreateDefault();
+            Compatibility = new ParalivesCompatibilityFacade();
+            Safe = Compatibility;
             Localizations = new ParalivesLocalizationRegistry();
             Interactions = new ParalivesInteractionRegistry();
             Notifications = new ParalivesNotificationRegistry();
             InteractionSelections = new ParalivesInteractionSelectionDispatcher();
             ActionCompletions = new ParalivesActionCompletionDispatcher();
+            ActionLifecycle = new ParalivesActionLifecycleFacade(ActionCompletions);
             Settings = new ParalivesSettingsFacade();
             Players = new ParalivesPlayerFacade();
             Characters = new ParalivesCharacterFacade(Players);
+            Content = Settings.Content;
+            Requirements = Characters.Requirements;
             Time = new ParalivesTimeFacade();
             Occupations = new ParalivesOccupationFacade(Characters);
             Skills = new ParalivesSkillFacade(Characters);
@@ -33,18 +42,47 @@ namespace ParalivesAPI.Core
             World = new ParalivesWorldFacade();
             Windows = new ParalivesUiFacade(Characters);
             AttendancePolicies = new ParalivesAttendancePolicyRegistry(Occupations);
+            Occupations.AttachRuntimeServices(AttendancePolicies, Windows);
             People = new ParalivesPeopleFacade(Characters, Players, Queues, Occupations);
             Game = new ParalivesGameFacade(this);
         }
 
         public string GameId
         {
-            get { return "paralives"; }
+            get { return Version.GameId; }
         }
 
         public string DisplayName
         {
-            get { return "Paralives"; }
+            get { return Version.DisplayName; }
+        }
+
+        public ParalivesApiVersion Version { get; private set; }
+
+        public string ApiVersion
+        {
+            get { return Version.ApiVersion; }
+        }
+
+        public string AdapterVersion
+        {
+            get { return Version.AdapterVersion; }
+        }
+
+        public ParalivesCapabilityRegistry Capabilities { get; private set; }
+
+        public ParalivesCompatibilityFacade Compatibility { get; private set; }
+
+        public ParalivesCompatibilityFacade Safe { get; private set; }
+
+        public string[] CapabilityStrings
+        {
+            get { return Capabilities.CapabilityStrings; }
+        }
+
+        public bool HasCapability(string capability)
+        {
+            return Capabilities.HasCapability(capability);
         }
 
         public ParalivesInteractionRegistry Interactions { get; private set; }
@@ -57,17 +95,53 @@ namespace ParalivesAPI.Core
 
         public ParalivesActionCompletionDispatcher ActionCompletions { get; private set; }
 
+        public ParalivesActionLifecycleFacade ActionLifecycle { get; private set; }
+
         public ParalivesGameFacade Game { get; private set; }
 
         public ParalivesSettingsFacade Settings { get; private set; }
+
+        public ParalivesContentFacade Content { get; private set; }
 
         public ParalivesPlayerFacade Players { get; private set; }
 
         public ParalivesCharacterFacade Characters { get; private set; }
 
+        public ParalivesRequirementFacade Requirements { get; private set; }
+
         public ParalivesTimeFacade Time { get; private set; }
 
         public ParalivesOccupationFacade Occupations { get; private set; }
+
+        public ParalivesOccupationRegistry OccupationRegistry
+        {
+            get { return Occupations.Registry; }
+        }
+
+        public ParalivesOccupationEnrollmentFacade OccupationEnrollment
+        {
+            get { return Occupations.Enrollment; }
+        }
+
+        public ParalivesOccupationScheduleFacade OccupationSchedules
+        {
+            get { return Occupations.Schedules; }
+        }
+
+        public ParalivesOccupationTaskFacade OccupationTasks
+        {
+            get { return Occupations.Tasks; }
+        }
+
+        public ParalivesOccupationUnlockableFacade OccupationUnlockables
+        {
+            get { return Occupations.Unlockables; }
+        }
+
+        public IParalivesOccupationPanelProviders OccupationPanelProviders
+        {
+            get { return Occupations.PanelProviders; }
+        }
 
         public ParalivesSkillFacade Skills { get; private set; }
 

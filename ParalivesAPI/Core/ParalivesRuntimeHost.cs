@@ -34,6 +34,8 @@ namespace ParalivesAPI.Core
                     ParalivesRuntimeInfo.Current.Localizations.ApplyWhenReady();
                     ParalivesRuntimeInfo.Current.Interactions.ApplyWhenReady();
                     ParalivesRuntimeInfo.Current.Notifications.ApplyWhenReady();
+                    ParalivesRuntimeInfo.Current.Occupations.Schedules.ApplyWhenReady();
+                    ParalivesRuntimeInfo.Current.Occupations.ApplyWhenReady();
                 }
                 catch (Exception ex)
                 {

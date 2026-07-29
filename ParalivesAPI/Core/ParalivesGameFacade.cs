@@ -1,3 +1,5 @@
+using ParalivesAPI.Stable;
+
 namespace ParalivesAPI.Core
 {
     public sealed class ParalivesGameFacade
@@ -14,9 +16,64 @@ namespace ParalivesAPI.Core
             get { return global::Settings.Instance != null; }
         }
 
+        public ParalivesApiVersion Version
+        {
+            get { return _runtime.Version; }
+        }
+
+        public string ApiVersion
+        {
+            get { return _runtime.ApiVersion; }
+        }
+
+        public string AdapterVersion
+        {
+            get { return _runtime.AdapterVersion; }
+        }
+
+        public string GameId
+        {
+            get { return _runtime.GameId; }
+        }
+
+        public string DisplayName
+        {
+            get { return _runtime.DisplayName; }
+        }
+
+        public ParalivesCapabilityRegistry Capabilities
+        {
+            get { return _runtime.Capabilities; }
+        }
+
+        public ParalivesCompatibilityFacade Compatibility
+        {
+            get { return _runtime.Compatibility; }
+        }
+
+        public ParalivesCompatibilityFacade Safe
+        {
+            get { return _runtime.Safe; }
+        }
+
+        public string[] CapabilityStrings
+        {
+            get { return _runtime.CapabilityStrings; }
+        }
+
+        public bool HasCapability(string capability)
+        {
+            return _runtime.HasCapability(capability);
+        }
+
         public ParalivesSettingsFacade Settings
         {
             get { return _runtime.Settings; }
+        }
+
+        public ParalivesContentFacade Content
+        {
+            get { return _runtime.Content; }
         }
 
         public ParalivesPlayerFacade Players
@@ -29,6 +86,11 @@ namespace ParalivesAPI.Core
             get { return _runtime.Characters; }
         }
 
+        public ParalivesRequirementFacade Requirements
+        {
+            get { return _runtime.Requirements; }
+        }
+
         public ParalivesTimeFacade Time
         {
             get { return _runtime.Time; }
@@ -37,6 +99,36 @@ namespace ParalivesAPI.Core
         public ParalivesOccupationFacade Occupations
         {
             get { return _runtime.Occupations; }
+        }
+
+        public ParalivesOccupationRegistry OccupationRegistry
+        {
+            get { return _runtime.OccupationRegistry; }
+        }
+
+        public ParalivesOccupationEnrollmentFacade OccupationEnrollment
+        {
+            get { return _runtime.OccupationEnrollment; }
+        }
+
+        public ParalivesOccupationScheduleFacade OccupationSchedules
+        {
+            get { return _runtime.OccupationSchedules; }
+        }
+
+        public ParalivesOccupationTaskFacade OccupationTasks
+        {
+            get { return _runtime.OccupationTasks; }
+        }
+
+        public ParalivesOccupationUnlockableFacade OccupationUnlockables
+        {
+            get { return _runtime.OccupationUnlockables; }
+        }
+
+        public IParalivesOccupationPanelProviders OccupationPanelProviders
+        {
+            get { return _runtime.OccupationPanelProviders; }
         }
 
         public ParalivesSkillFacade Skills

@@ -19,6 +19,11 @@ namespace ParalivesAPI.Core
 
         public ulong InteractionInstanceGuid { get; internal set; }
 
+        public ulong InteractionGuid
+        {
+            get { return InteractionSettingGuid; }
+        }
+
         public ulong InteractionSettingGuid { get; internal set; }
 
         public ulong ActionGuid
@@ -66,8 +71,23 @@ namespace ParalivesAPI.Core
 
         public bool IsCancelling { get; internal set; }
 
+        public bool IsCancelled
+        {
+            get { return IsCancelling; }
+        }
+
+        public bool IsCanceled
+        {
+            get { return IsCancelling; }
+        }
+
         public bool HasSuccessBeenDetermined { get; internal set; }
 
         public bool IsSuccess { get; internal set; }
+
+        public bool WasSuccessful
+        {
+            get { return HasSuccessBeenDetermined && IsSuccess; }
+        }
     }
 }

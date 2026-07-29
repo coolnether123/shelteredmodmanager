@@ -1,3 +1,4 @@
+using System;
 using Setting;
 
 namespace ParalivesAPI.Core
@@ -30,6 +31,19 @@ namespace ParalivesAPI.Core
         internal ParalivesUiFacade(ParalivesCharacterFacade characters)
         {
             _characters = characters;
+            Extensions = new ParalivesUiExtensionFacade();
+        }
+
+        public ParalivesUiExtensionFacade Extensions { get; private set; }
+
+        public IDisposable RegisterOccupationPanelProvider(IParalivesOccupationPanelProvider provider)
+        {
+            return Extensions.RegisterOccupationPanelProvider(provider);
+        }
+
+        public bool UnregisterOccupationPanelProvider(IParalivesOccupationPanelProvider provider)
+        {
+            return Extensions.UnregisterOccupationPanelProvider(provider);
         }
 
         public bool TryGet<TWindow>(int playerIndex, out TWindow window) where TWindow : global::UIWindow
@@ -86,8 +100,78 @@ namespace ParalivesAPI.Core
 
         public bool OpenOccupationsForCharacter(ulong characterGuid, int playerIndex, int occupationIndex)
         {
+            return OpenOccupationsCore(characterGuid, playerIndex, occupationIndex, false);
+        }
+
+        public bool OpenOccupations(ulong characterGuid)
+        {
+            return OpenOccupations(characterGuid, 0);
+        }
+
+        public bool OpenOccupations(ulong characterGuid, int playerIndex)
+        {
+            return OpenOccupations(characterGuid, playerIndex, -1);
+        }
+
+        public bool OpenOccupations(ulong characterGuid, int playerIndex, int occupationIndex)
+        {
+            return OpenOccupationsCore(characterGuid, playerIndex, occupationIndex, true);
+        }
+
+        public bool OpenSkills(ulong characterGuid)
+        {
+            return OpenSkills(characterGuid, 0);
+        }
+
+        public bool OpenSkills(ulong characterGuid, int playerIndex)
+        {
+            global::UISkills skills;
+            return OpenCharacterTabCore(characterGuid, playerIndex, out skills);
+        }
+
+        public bool OpenCharacterTab(ulong characterGuid, ParalivesCharacterTab tab)
+        {
+            return OpenCharacterTab(characterGuid, tab, 0);
+        }
+
+        public bool OpenCharacterTab(ulong characterGuid, ParalivesCharacterTab tab, int playerIndex)
+        {
+            switch (tab)
+            {
+                case ParalivesCharacterTab.Thoughts:
+                    global::UIThoughts thoughts;
+                    return OpenCharacterTabCore(characterGuid, playerIndex, out thoughts);
+                case ParalivesCharacterTab.Profile:
+                    global::UICharacterProfile profile;
+                    return OpenCharacterTabCore(characterGuid, playerIndex, out profile);
+                case ParalivesCharacterTab.Skills:
+                    return OpenSkills(characterGuid, playerIndex);
+                case ParalivesCharacterTab.Social:
+                    global::UIRelationships relationships;
+                    return OpenCharacterTabCore(characterGuid, playerIndex, out relationships);
+                case ParalivesCharacterTab.Occupations:
+                    return OpenOccupations(characterGuid, playerIndex);
+                case ParalivesCharacterTab.Inventory:
+                    global::UIInventory inventory;
+                    return OpenCharacterTabCore(characterGuid, playerIndex, out inventory);
+                case ParalivesCharacterTab.Memories:
+                    global::UIMemories memories;
+                    return OpenCharacterTabCore(characterGuid, playerIndex, out memories);
+                case ParalivesCharacterTab.Goals:
+                    global::UIGoals goals;
+                    return OpenCharacterTabCore(characterGuid, playerIndex, out goals);
+                default:
+                    return false;
+            }
+        }
+
+        private bool OpenOccupationsCore(ulong characterGuid, int playerIndex, int occupationIndex, bool showCharacterSubMenu)
+        {
             if (!_characters.Select(characterGuid, playerIndex, true))
                 return false;
+
+            if (showCharacterSubMenu)
+                ShowCharacterSubMenu(playerIndex);
 
             global::UIOccupations occupations;
             if (!Show<global::UIOccupations>(playerIndex, out occupations))
@@ -97,6 +181,23 @@ namespace ParalivesAPI.Core
                 occupations.SetSelectedOccupation(occupationIndex);
 
             return true;
+        }
+
+        private bool OpenCharacterTabCore<TWindow>(ulong characterGuid, int playerIndex, out TWindow window)
+            where TWindow : global::UIWindow
+        {
+            window = null;
+            if (!_characters.Select(characterGuid, playerIndex, true))
+                return false;
+
+            ShowCharacterSubMenu(playerIndex);
+            return Show<TWindow>(playerIndex, out window);
+        }
+
+        private void ShowCharacterSubMenu(int playerIndex)
+        {
+            global::UICharacterSubMenuBar subMenu;
+            Show<global::UICharacterSubMenuBar>(playerIndex, out subMenu);
         }
 
         public bool AnimateNewOccupationTask(ulong wantGuid)

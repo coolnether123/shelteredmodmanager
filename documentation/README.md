@@ -91,6 +91,21 @@ These surfaces are useful after a first plugin is working. Preview or experiment
 
 Services should be treated as public authoring surfaces only when they appear in a guide and the signature reference.
 
+## Paralives Research Notes
+
+These notes are reverse-engineered from the local decompiled Paralives build and are intended for API/plugin planning, not as stable public game contracts.
+
+| Topic | Document |
+|-------|----------|
+| Paralives API seam map and boundary rules | [Paralives API Seams](Paralives_API_Seams.md) |
+| Generic Paralives occupation API direction | [Paralives Occupation API](Paralives_Occupation_API.md) |
+| Current and proposed ParalivesAPI public surface | [Paralives API Public Surface](Paralives_API_Public_Surface.md) |
+| Concurrent refactor ownership and status tracking | [Paralives API Refactor Status](Paralives_API_Refactor_Status.md) |
+| Current Paralives gameplay facades and native footguns | [Paralives Decompiled Systems](Paralives_Decompiled_Systems.md) |
+| Plugin opportunities from the current decompiled build | [Paralives Plugin Mod Opportunities](Paralives_Plugin_Mod_Opportunities.md) |
+| Newspaper issue generation and claimable article actions | [Paralives Newspaper Issue Generation And Claimable Articles](Paralives_Newspaper_Issue_Generation_Claimable_Articles.md) |
+| Save lifecycle, asset dirty flags, and persistence rules | [Paralives Save Lifecycle And Dirty State Research](Paralives_Save_Lifecycle_Dirty_State_Research.md) |
+
 ## API Reference
 
 | Need | Document |

@@ -1,5 +1,11 @@
 # Paralives Plugin Mod Opportunities
 
+> **Build/reference metadata**
+> Research note created/reviewed: 2026-05-27.
+> Game build represented: local Paralives managed assemblies from A:\SteamLibrary\steamapps\common\Paralives, DLL timestamps 2026-05-29 UTC.
+> Assembly fingerprint: Assembly-CSharp.dll SHA256 885D46DF..., Paralives.dll SHA256 BEE83983..., Plugins.dll SHA256 311E9ED9.... Full hashes are in Decompiled/decompile-state.json.
+> Metadata added: 2026-05-30.
+
 Date reviewed: 2026-05-27
 
 Scope: local repository and decompiled Paralives code under `Decompiled/Paralives.dll`, plus the current SMM/ModAPI/ParalivesAPI integration. This is a reverse-engineered code review, not an in-game QA pass.

@@ -7,6 +7,13 @@ namespace ParalivesAPI.Core
     {
         internal ParalivesSettingsFacade()
         {
+            Content = new ParalivesContentFacade(this);
+        }
+
+        public ParalivesContentFacade Content
+        {
+            get;
+            private set;
         }
 
         public bool IsReady
@@ -60,8 +67,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Actions>(out actions))
                 return false;
 
-            action = actions.GetActionByGUID(actionGuid);
-            return action != null;
+            try
+            {
+                action = actions.GetActionByGUID(actionGuid);
+                return action != null;
+            }
+            catch
+            {
+                action = null;
+                return false;
+            }
         }
 
         public bool TryGetInteraction(ulong interactionGuid, out InteractionUnit interaction)
@@ -74,8 +89,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Interactions>(out interactions))
                 return false;
 
-            interaction = interactions.GetInteractionByGUID(interactionGuid);
-            return interaction != null;
+            try
+            {
+                interaction = interactions.GetInteractionByGUID(interactionGuid);
+                return interaction != null;
+            }
+            catch
+            {
+                interaction = null;
+                return false;
+            }
         }
 
         public bool TryGetInteractionGroup(ulong groupGuid, out InteractionGroup group)
@@ -88,8 +111,38 @@ namespace ParalivesAPI.Core
             if (!TryGet<Interactions>(out interactions))
                 return false;
 
-            group = interactions.GetInteractionGroupByGUID(groupGuid);
-            return group != null;
+            try
+            {
+                group = interactions.GetInteractionGroupByGUID(groupGuid);
+                return group != null;
+            }
+            catch
+            {
+                group = null;
+                return false;
+            }
+        }
+
+        public bool TryGetCharacterRequirement(ulong requirementGuid, out CharacterRequirement requirement)
+        {
+            requirement = null;
+            if (requirementGuid == 0UL)
+                return false;
+
+            CharacterRequirements requirements;
+            if (!TryGet<CharacterRequirements>(out requirements))
+                return false;
+
+            try
+            {
+                requirement = requirements.GetCharacterRequirementByGUID(requirementGuid);
+                return requirement != null;
+            }
+            catch
+            {
+                requirement = null;
+                return false;
+            }
         }
 
         public bool TryGetNotification(ulong notificationGuid, out Notification notification)
@@ -102,8 +155,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Notifications>(out notifications))
                 return false;
 
-            notification = notifications.GetNotificationByGUID(notificationGuid);
-            return notification != null;
+            try
+            {
+                notification = notifications.GetNotificationByGUID(notificationGuid);
+                return notification != null;
+            }
+            catch
+            {
+                notification = null;
+                return false;
+            }
         }
 
         public bool TryGetOccupation(ulong occupationGuid, out Occupation occupation)
@@ -116,8 +177,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Occupations>(out occupations))
                 return false;
 
-            occupation = occupations.GetOccupationByGUID(occupationGuid);
-            return occupation != null;
+            try
+            {
+                occupation = occupations.GetOccupationByGUID(occupationGuid);
+                return occupation != null;
+            }
+            catch
+            {
+                occupation = null;
+                return false;
+            }
         }
 
         public bool TryGetSkill(ulong skillGuid, out Skill skill)
@@ -130,8 +199,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Skills>(out skills))
                 return false;
 
-            skill = skills.GetSkillByGUID(skillGuid);
-            return skill != null;
+            try
+            {
+                skill = skills.GetSkillByGUID(skillGuid);
+                return skill != null;
+            }
+            catch
+            {
+                skill = null;
+                return false;
+            }
         }
 
         public bool TryGetWant(ulong wantGuid, out Want want)
@@ -144,8 +221,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Wants>(out wants))
                 return false;
 
-            want = wants.GetWantByGUID(wantGuid);
-            return want != null;
+            try
+            {
+                want = wants.GetWantByGUID(wantGuid);
+                return want != null;
+            }
+            catch
+            {
+                want = null;
+                return false;
+            }
         }
 
         public bool TryGetNeed(ulong needGuid, out Need need)
@@ -158,8 +243,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Needs>(out needs))
                 return false;
 
-            need = needs.GetNeedByGUID(needGuid);
-            return need != null;
+            try
+            {
+                need = needs.GetNeedByGUID(needGuid);
+                return need != null;
+            }
+            catch
+            {
+                need = null;
+                return false;
+            }
         }
 
         public bool TryGetStatusEffect(ulong statusEffectGuid, out StatusEffect statusEffect)
@@ -172,8 +265,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<StatusEffects>(out statusEffects))
                 return false;
 
-            statusEffect = statusEffects.GetStatusEffectByGUID(statusEffectGuid);
-            return statusEffect != null;
+            try
+            {
+                statusEffect = statusEffects.GetStatusEffectByGUID(statusEffectGuid);
+                return statusEffect != null;
+            }
+            catch
+            {
+                statusEffect = null;
+                return false;
+            }
         }
 
         public bool TryGetRelationshipLabel(ulong labelGuid, out RelationshipLabel label)
@@ -186,8 +287,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<RelationshipLabels>(out labels))
                 return false;
 
-            label = labels.GetLabelByGUID(labelGuid);
-            return label != null;
+            try
+            {
+                label = labels.GetLabelByGUID(labelGuid);
+                return label != null;
+            }
+            catch
+            {
+                label = null;
+                return false;
+            }
         }
 
         public bool TryGetPersonalityTrait(ulong traitGuid, out PersonalityTrait trait)
@@ -200,8 +309,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Personalities>(out personalities))
                 return false;
 
-            trait = personalities.GetPersonalityTraitByGUID(traitGuid);
-            return trait != null;
+            try
+            {
+                trait = personalities.GetPersonalityTraitByGUID(traitGuid);
+                return trait != null;
+            }
+            catch
+            {
+                trait = null;
+                return false;
+            }
         }
 
         public bool TryGetOccupationUnlockable(ulong unlockableGuid, out OccupationUnlockable unlockable)
@@ -214,8 +331,16 @@ namespace ParalivesAPI.Core
             if (!TryGet<Occupations>(out occupations))
                 return false;
 
-            unlockable = occupations.GetOccupationUnlockableByGUID(unlockableGuid);
-            return unlockable != null;
+            try
+            {
+                unlockable = occupations.GetOccupationUnlockableByGUID(unlockableGuid);
+                return unlockable != null;
+            }
+            catch
+            {
+                unlockable = null;
+                return false;
+            }
         }
 
         public object GetByClassName(string className)

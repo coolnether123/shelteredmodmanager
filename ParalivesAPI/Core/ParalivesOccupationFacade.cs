@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ParalivesAPI.Stable;
 using Setting;
 
 namespace ParalivesAPI.Core
@@ -70,13 +71,97 @@ namespace ParalivesAPI.Core
         public string Message { get; internal set; }
     }
 
-    public sealed class ParalivesOccupationFacade
+    public sealed class ParalivesOccupationFacade : IParalivesOccupations
     {
         private readonly ParalivesCharacterFacade _characters;
+        private readonly IParalivesOccupationRegistry _registryContract;
+        private readonly IParalivesOccupationTasks _taskContract;
+        private readonly ParalivesOccupationPanelProviderService _panelProviders;
+        private ParalivesOccupationTaskFacade _tasks;
+        private IParalivesOccupationAttendancePolicies _attendancePolicies;
 
         internal ParalivesOccupationFacade(ParalivesCharacterFacade characters)
         {
             _characters = characters;
+            Registry = new ParalivesOccupationRegistry();
+            Schedules = new ParalivesOccupationScheduleFacade(this, characters);
+            Enrollment = new ParalivesOccupationEnrollmentFacade(characters, this);
+            Unlockables = new ParalivesOccupationUnlockableFacade(characters, this);
+            _registryContract = new ParalivesOccupationRegistryContract(Registry);
+            _taskContract = new ParalivesOccupationTaskContract(this);
+            _panelProviders = new ParalivesOccupationPanelProviderService();
+        }
+
+        public ParalivesOccupationRegistry Registry { get; private set; }
+
+        public ParalivesOccupationScheduleFacade Schedules { get; private set; }
+
+        public ParalivesOccupationEnrollmentFacade Enrollment { get; private set; }
+
+        public ParalivesOccupationUnlockableFacade Unlockables { get; private set; }
+
+        public IParalivesOccupationAttendancePolicies AttendancePolicies
+        {
+            get { return _attendancePolicies; }
+        }
+
+        public IParalivesOccupationPanelProviders PanelProviders
+        {
+            get { return _panelProviders; }
+        }
+
+        IParalivesOccupationRegistry IParalivesOccupations.Registry
+        {
+            get { return _registryContract; }
+        }
+
+        IParalivesOccupationEnrollment IParalivesOccupations.Enrollment
+        {
+            get { return Enrollment; }
+        }
+
+        IParalivesOccupationSchedules IParalivesOccupations.Schedules
+        {
+            get { return Schedules; }
+        }
+
+        IParalivesOccupationTasks IParalivesOccupations.Tasks
+        {
+            get { return _taskContract; }
+        }
+
+        IParalivesOccupationUnlockables IParalivesOccupations.Unlockables
+        {
+            get { return Unlockables; }
+        }
+
+        public ParalivesOccupationTaskFacade Tasks
+        {
+            get
+            {
+                if (_tasks == null)
+                    _tasks = new ParalivesOccupationTaskFacade(_characters, this, ParalivesRuntimeInfo.Current.Wants);
+
+                return _tasks;
+            }
+        }
+
+        internal void AttachRuntimeServices(
+            ParalivesAttendancePolicyRegistry attendancePolicies,
+            ParalivesUiFacade ui)
+        {
+            _attendancePolicies = attendancePolicies;
+            _panelProviders.Attach(ui);
+        }
+
+        public ParalivesOccupationRegistrationResult RegisterOccupation(ParalivesOccupationDefinition definition)
+        {
+            return Registry.RegisterOccupation(definition);
+        }
+
+        public ParalivesOccupationRegistrationResult ApplyWhenReady()
+        {
+            return Registry.ApplyWhenReady();
         }
 
         public bool TryGetOccupationData(
@@ -726,6 +811,232 @@ namespace ParalivesAPI.Core
                 };
         }
 
+        public ParalivesOccupationSnapshot ReadSnapshot(ulong characterGuid, int occupationIndex)
+        {
+            ParalivesOccupationSnapshot snapshot;
+            return TryReadSnapshot(characterGuid, occupationIndex, out snapshot)
+                ? snapshot
+                : CreateMissingSnapshot(characterGuid, occupationIndex);
+        }
+
+        public bool TryReadSnapshot(
+            ulong characterGuid,
+            int occupationIndex,
+            out ParalivesOccupationSnapshot snapshot)
+        {
+            snapshot = CreateMissingSnapshot(characterGuid, occupationIndex);
+
+            global::AssetCharacter character;
+            return _characters.TryGet(characterGuid, out character)
+                && TryReadSnapshot(character, occupationIndex, out snapshot);
+        }
+
+        public ParalivesOccupationSnapshot[] ReadActiveSnapshots(ulong characterGuid)
+        {
+            List<ParalivesOccupationSnapshot> snapshots = new List<ParalivesOccupationSnapshot>();
+            int[] activeIndexes = GetActiveOccupationIndexes(characterGuid);
+            for (int i = 0; i < activeIndexes.Length; i++)
+            {
+                ParalivesOccupationSnapshot snapshot;
+                if (TryReadSnapshot(characterGuid, activeIndexes[i], out snapshot))
+                    snapshots.Add(snapshot);
+            }
+
+            return snapshots.ToArray();
+        }
+
+        internal bool TryReadSnapshot(
+            global::AssetCharacter character,
+            int occupationIndex,
+            out ParalivesOccupationSnapshot snapshot)
+        {
+            snapshot = CreateMissingSnapshot(
+                character == null ? 0UL : character.GUID,
+                occupationIndex);
+
+            global::AssetCharacterOccupationData data;
+            if (!TryGetOccupationData(character, occupationIndex, out data))
+                return false;
+
+            Occupation occupation;
+            TryGetOccupation(character, occupationIndex, out occupation);
+
+            ParalivesScheduleStatus scheduleStatus = GetScheduleStatus(character, occupationIndex);
+            snapshot = new ParalivesOccupationSnapshot
+            {
+                Exists = true,
+                CharacterGuid = character.GUID,
+                OccupationIndex = occupationIndex,
+                OccupationGuid = data.Occupation,
+                DisplayName = occupation == null ? string.Empty : occupation.DisplayName ?? string.Empty,
+                IsKnownOccupation = occupation != null,
+                Kind = occupation == null
+                    ? ParalivesOccupationKind.Unknown
+                    : ToOccupationKind(occupation.Type),
+                NativeKindValue = occupation == null ? -1 : (int)occupation.Type,
+                IsActive = data.IsActive,
+                Level = data.Level,
+                StartTimestamp = data.StartTimestamp,
+                EndTimestamp = data.EndTimestamp,
+                Schedule = CreateAssignedScheduleSnapshot(
+                    character,
+                    occupationIndex,
+                    data,
+                    occupation,
+                    scheduleStatus),
+                TimeLastChangedSchedule = data.TimeLastChangedSchedule,
+                StartingUsefulSkills = CreateSkillSnapshots(data.StartingUsefulSkillsLevels),
+                PendingUpgradeCount = data.PendingUpgradeCount,
+                UpgradesCompletedCount = data.UpgradesCompletedCount,
+                CurrentPendingUpgradeLastGeneratedAtCount = data.CurrentPendingUpgradeLastGeneratedAtCount,
+                Extras = CreateUnlockableSnapshots(data.Extras),
+                Expertises = CreateUnlockableSnapshots(
+                    character.Data == null ? null : character.Data.OccupationExpertises),
+                PendingRandomizedUpgradeGuids = ToUlongArray(data.PendingRandomizedUpgrades),
+                JobPerformance = data.JobPerformance,
+                TimestampsOfStrikes = ToFloatArray(data.TimestampsOfStrikes),
+                NumberOfVacationDaysAvailable = data.NumberOfVacationDaysAvailable,
+                NextSkippedDays = ToIntArray(data.NextSkippedDays),
+                LastDayUpdated = data.LastDayUpdated,
+                HasEndedWorkedDay = data.HasEndedWorkedDay,
+                NumberOfStrikes = data.NumberOfStrikes,
+                MaxExtraSlots = GetMaxExtraSlots(character, occupationIndex),
+                AverageGrade = GetAverageGrade(character, data.Occupation),
+                CurrentOccupationIndex = character.Data == null ? -1 : character.Data.CurrentOccupationIndex,
+                OccupationIndexToGoTo = character.Data == null ? -1 : character.Data.OccupationIndexToGoTo,
+                CurrentlyAffectedOccupationIndex = character.Data == null ? -1 : character.Data.CurrentlyAffectedOccupationIndex,
+                TimeLeftCurrentlyAffectedOccupation = character.Data == null
+                    ? 0f
+                    : character.Data.TimeLeftCurrentlyAffectedOccupation,
+                WasCurrentOccupation = character.Data != null && character.Data.CurrentOccupationIndex == occupationIndex,
+                WasOccupationIndexToGoTo = character.Data != null && character.Data.OccupationIndexToGoTo == occupationIndex,
+                WasCurrentlyAffectedOccupation = character.Data != null && character.Data.CurrentlyAffectedOccupationIndex == occupationIndex,
+                IsInScheduledDay = scheduleStatus.IsInScheduledDay,
+                IsInScheduledHours = scheduleStatus.IsInScheduledHours,
+                ShouldBeWorkingNow = scheduleStatus.ShouldBeWorkingNow
+            };
+            return true;
+        }
+
+        private static ParalivesOccupationSnapshot CreateMissingSnapshot(
+            ulong characterGuid,
+            int occupationIndex)
+        {
+            return new ParalivesOccupationSnapshot
+            {
+                CharacterGuid = characterGuid,
+                OccupationIndex = occupationIndex,
+                Kind = ParalivesOccupationKind.Unknown,
+                NativeKindValue = -1
+            };
+        }
+
+        private static ParalivesAssignedOccupationScheduleSnapshot CreateAssignedScheduleSnapshot(
+            global::AssetCharacter character,
+            int occupationIndex,
+            global::AssetCharacterOccupationData data,
+            Occupation occupation,
+            ParalivesScheduleStatus scheduleStatus)
+        {
+            return new ParalivesAssignedOccupationScheduleSnapshot
+            {
+                Exists = true,
+                CharacterGuid = character == null ? 0UL : character.GUID,
+                OccupationIndex = occupationIndex,
+                OccupationGuid = data == null ? 0UL : data.Occupation,
+                ScheduleGuid = occupation == null ? 0UL : occupation.Schedule,
+                IsKnownOccupation = occupation != null,
+                OccupationType = occupation == null ? -1 : (int)occupation.Type,
+                IsSchool = occupation != null && occupation.Type == SchoolJobTypes.School,
+                IsActive = data != null && data.IsActive,
+                ChosenDays = data == null ? ScheduleDaysOfWeek.None : data.ChosenScheduledDays,
+                ChosenHours = CreateScheduleHours(data == null ? null : data.ChosenScheduleHours),
+                IsInScheduledDay = scheduleStatus != null && scheduleStatus.IsInScheduledDay,
+                IsInScheduledHours = scheduleStatus != null && scheduleStatus.IsInScheduledHours,
+                ShouldBeWorkingNow = scheduleStatus != null && scheduleStatus.ShouldBeWorkingNow,
+                DayOfWeek = global::ParaTime.DayOfWeek,
+                MinutesOfDay = global::ParaTime.MinutesOfDay
+            };
+        }
+
+        private static ParalivesOccupationScheduleHoursOption CreateScheduleHours(
+            OccupiedHours hours)
+        {
+            if (hours == null)
+                return new ParalivesOccupationScheduleHoursOption();
+
+            return new ParalivesOccupationScheduleHoursOption
+            {
+                Guid = hours.GUID,
+                StartTime = hours.StartTime,
+                Duration = hours.Duration,
+                IsDefault = hours.IsDefault
+            };
+        }
+
+        private static ParalivesOccupationSkillLevelSnapshot[] CreateSkillSnapshots(
+            StartingSkillLevelForOccupation[] skills)
+        {
+            if (skills == null || skills.Length == 0)
+                return new ParalivesOccupationSkillLevelSnapshot[0];
+
+            ParalivesOccupationSkillLevelSnapshot[] snapshots =
+                new ParalivesOccupationSkillLevelSnapshot[skills.Length];
+            for (int i = 0; i < skills.Length; i++)
+            {
+                snapshots[i] = new ParalivesOccupationSkillLevelSnapshot
+                {
+                    SkillGuid = skills[i].SkillGUID,
+                    Level = skills[i].Level
+                };
+            }
+
+            return snapshots;
+        }
+
+        private static ParalivesOccupationUnlockableSnapshot[] CreateUnlockableSnapshots(
+            List<global::AssetCharacterOccupationUnlockableData> unlockables)
+        {
+            if (unlockables == null || unlockables.Count == 0)
+                return new ParalivesOccupationUnlockableSnapshot[0];
+
+            List<ParalivesOccupationUnlockableSnapshot> snapshots =
+                new List<ParalivesOccupationUnlockableSnapshot>();
+            for (int i = 0; i < unlockables.Count; i++)
+            {
+                global::AssetCharacterOccupationUnlockableData data = unlockables[i];
+                if (data == null)
+                    continue;
+
+                snapshots.Add(new ParalivesOccupationUnlockableSnapshot
+                {
+                    UnlockableGuid = data.OccupationUnlockable,
+                    Level = data.Level,
+                    TimeOfLastLeveledUp = data.TimeOfLastLeveledUp,
+                    TimeAdded = data.TimeAdded,
+                    UnlockableWasAdded = (int)data.UnlockableWasAdded,
+                    Value = data.Value
+                });
+            }
+
+            return snapshots.ToArray();
+        }
+
+        private static ulong[] ToUlongArray(List<ulong> values)
+        {
+            return values == null ? new ulong[0] : values.ToArray();
+        }
+
+        private static float[] ToFloatArray(List<float> values)
+        {
+            return values == null ? new float[0] : values.ToArray();
+        }
+
+        private static int[] ToIntArray(List<int> values)
+        {
+            return values == null ? new int[0] : values.ToArray();
+        }
+
         private static int Clamp(int value, int min, int max)
         {
             if (value < min)
@@ -733,6 +1044,15 @@ namespace ParalivesAPI.Core
             if (value > max)
                 return max;
             return value;
+        }
+
+        private static ParalivesOccupationKind ToOccupationKind(SchoolJobTypes nativeKind)
+        {
+            if (nativeKind == SchoolJobTypes.School)
+                return ParalivesOccupationKind.School;
+            if (nativeKind == SchoolJobTypes.Job)
+                return ParalivesOccupationKind.Job;
+            return ParalivesOccupationKind.Unknown;
         }
     }
 }

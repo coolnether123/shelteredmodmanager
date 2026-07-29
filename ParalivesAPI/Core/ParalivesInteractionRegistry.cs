@@ -51,6 +51,19 @@ namespace ParalivesAPI.Core
                 RegisterGroupChild(content.GroupChildren[i]);
         }
 
+        public void Register(ParalivesInteractionPack pack)
+        {
+            RegisterPack(pack);
+        }
+
+        public void RegisterPack(ParalivesInteractionPack pack)
+        {
+            if (pack == null)
+                throw new ArgumentNullException("pack");
+
+            Register(ParalivesInteractionFactory.CreateContent(pack));
+        }
+
         public ulong GetOtherCharacterInteractionsGroupGuid()
         {
             return GetRootGroupGuid(ParalivesInteractionRootGroup.OtherCharacter);
@@ -99,6 +112,11 @@ namespace ParalivesAPI.Core
                 Upsert(_actions, action, delegate(ActionUnit value) { return value.GUID; });
         }
 
+        public void RegisterAction(ParalivesActionDefinition action)
+        {
+            RegisterAction(ParalivesInteractionFactory.CreateAction(action));
+        }
+
         public void RegisterGroup(InteractionGroup group)
         {
             if (group == null)
@@ -110,6 +128,11 @@ namespace ParalivesAPI.Core
                 Upsert(_groups, group, delegate(InteractionGroup value) { return value.GUID; });
         }
 
+        public void RegisterGroup(ParalivesInteractionGroupDefinition group)
+        {
+            RegisterGroup(ParalivesInteractionFactory.CreateGroup(group));
+        }
+
         public void RegisterInteraction(InteractionUnit interaction)
         {
             if (interaction == null)
@@ -119,6 +142,11 @@ namespace ParalivesAPI.Core
 
             lock (_sync)
                 Upsert(_interactions, interaction, delegate(InteractionUnit value) { return value.GUID; });
+        }
+
+        public void RegisterInteraction(ParalivesInteractionDefinition interaction)
+        {
+            RegisterInteraction(ParalivesInteractionFactory.CreateInteraction(interaction));
         }
 
         public void RegisterGroupChild(ParalivesInteractionGroupChildRegistration child)
@@ -134,6 +162,11 @@ namespace ParalivesAPI.Core
 
             lock (_sync)
                 Upsert(_groupChildren, child, GetGroupChildKey);
+        }
+
+        public void RegisterGroupChild(ParalivesInteractionGroupChildDefinition child)
+        {
+            RegisterGroupChild(ParalivesInteractionFactory.CreateGroupChildRegistration(child));
         }
 
         public void AddInteractionToGroup(ulong parentGroupGuid, ulong interactionGuid, string nestedInteractionDisplayName = null)

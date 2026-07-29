@@ -1,5 +1,11 @@
 # Paralives Decompiled Systems
 
+> **Build/reference metadata**
+> Research note created/reviewed: 2026-05-27.
+> Game build represented: local Paralives managed assemblies from A:\SteamLibrary\steamapps\common\Paralives, DLL timestamps 2026-05-29 UTC.
+> Assembly fingerprint: Assembly-CSharp.dll SHA256 885D46DF..., Paralives.dll SHA256 BEE83983..., Plugins.dll SHA256 311E9ED9.... Full hashes are in Decompiled/decompile-state.json.
+> Metadata added: 2026-05-30.
+
 Date reviewed: 2026-05-27
 
 Scope: `Decompiled/Paralives.dll`, the Homeschool-style modding pattern, and the gameplay helpers added to `ParalivesAPI`.

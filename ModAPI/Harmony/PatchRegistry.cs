@@ -119,6 +119,8 @@ namespace ModAPI.Harmony
         public HashSet<PatchStartupTiming> IncludedStartupTimings { get; private set; }
         /// <summary>Whether optional patches should be included.</summary>
         public bool IncludeOptionalPatches { get; set; }
+        /// <summary>Optional predicate used to skip hosts already applied by an earlier registry/bootstrap pass.</summary>
+        public Func<Type, bool> IsPatchTypeAlreadyApplied { get; set; }
         /// <summary>Human-readable source label used in patch registry logging.</summary>
         public string SourceName { get; set; }
         /// <summary>Human-readable runtime trigger that requested this patch scan.</summary>
@@ -352,6 +354,14 @@ namespace ModAPI.Harmony
                     continue;
                 }
 
+                if (IsPatchTypeAlreadyApplied(record, options))
+                {
+                    report.Skipped.Add(record);
+                    NotifyPatchResult(options, type, "skipped: already applied");
+                    LogSkip(record, options);
+                    continue;
+                }
+
                 var patched = HarmonyUtil.PatchKnownType(harmony, type, options.PatchOptions, record.Targets);
                 if (patched != null && patched.Count > 0)
                 {
@@ -434,6 +444,7 @@ namespace ModAPI.Harmony
             {
                 options.PatchOptions = source.PatchOptions;
                 options.IncludeOptionalPatches = source.IncludeOptionalPatches;
+                options.IsPatchTypeAlreadyApplied = source.IsPatchTypeAlreadyApplied;
                 options.SourceName = source.SourceName;
                 options.TriggerName = source.TriggerName;
                 foreach (PatchDomain domain in source.DisabledDomains)
@@ -509,6 +520,38 @@ namespace ModAPI.Harmony
             });
 
             return ManagerBooleanOptions.GetBool(record.ManagerToggleId, record.ManagerToggleDefault);
+        }
+
+        private static bool IsPatchTypeAlreadyApplied(PatchRecord record, PatchRegistryOptions options)
+        {
+            if (record == null
+                || record.PatchType == null
+                || options == null
+                || options.IsPatchTypeAlreadyApplied == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                return options.IsPatchTypeAlreadyApplied(record.PatchType);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce(
+                    "PatchRegistry.IsPatchTypeAlreadyApplied." + DescribeType(record.PatchType),
+                    "[PatchRegistry] Already-applied predicate failed for "
+                    + DescribeType(record.PatchType) + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        private static void NotifyPatchResult(PatchRegistryOptions options, object target, string result)
+        {
+            if (options == null || options.PatchOptions == null || options.PatchOptions.OnResult == null)
+                return;
+
+            options.PatchOptions.OnResult(target, result);
         }
 
         private static PatchRecord CreateRecord(Type type)

@@ -6,60 +6,22 @@ namespace ParalivesAPI.Core
 {
     public static class ParalivesReflection
     {
+        private static readonly ParalivesCompatibilityFacade Compatibility = new ParalivesCompatibilityFacade();
+
         public static object ReadMember(object source, string name)
         {
-            if (source == null || string.IsNullOrEmpty(name))
-                return null;
-
-            return ReadMember(source.GetType(), source, name);
+            object value;
+            return Compatibility.TryReadMember<object>(source, name, out value) ? value : null;
         }
 
         public static bool TryReadMember<T>(object source, string name, out T value)
         {
-            value = default(T);
-            object raw = ReadMember(source, name);
-            if (raw == null)
-                return false;
-
-            if (raw is T)
-            {
-                value = (T)raw;
-                return true;
-            }
-
-            try
-            {
-                value = (T)Convert.ChangeType(raw, typeof(T));
-                return true;
-            }
-            catch
-            {
-                value = default(T);
-                return false;
-            }
+            return Compatibility.TryReadMember<T>(source, name, out value);
         }
 
         public static ulong ReadUlong(object source, params string[] names)
         {
-            if (source == null || names == null)
-                return 0UL;
-
-            for (int i = 0; i < names.Length; i++)
-            {
-                object value = ReadMember(source, names[i]);
-                if (value == null)
-                    continue;
-
-                try
-                {
-                    return Convert.ToUInt64(value);
-                }
-                catch
-                {
-                }
-            }
-
-            return 0UL;
+            return Compatibility.ReadGuidOrDefault(source, 0UL, names);
         }
 
         public static bool InvokeAny(object target, string[] methodNames, params object[] args)
@@ -70,22 +32,7 @@ namespace ParalivesAPI.Core
 
         public static bool InvokeAny(object target, string[] methodNames, out object result, params object[] args)
         {
-            result = null;
-            if (target == null || methodNames == null)
-                return false;
-
-            MethodInfo[] methods = target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public);
-            for (int i = 0; i < methods.Length; i++)
-            {
-                MethodInfo method = methods[i];
-                if (!Contains(methodNames, method.Name) || !ParametersMatch(method.GetParameters(), args))
-                    continue;
-
-                result = method.Invoke(target, args);
-                return true;
-            }
-
-            return false;
+            return Compatibility.TryCallAllowValueTypeReturn<object>(target, out result, methodNames, args);
         }
 
         public static bool TrySubscribe(
@@ -122,10 +69,16 @@ namespace ParalivesAPI.Core
                 if (eventInfo == null)
                     continue;
 
-                Delegate handler = CreateForwardingDelegate(eventInfo.EventHandlerType, callback);
-                eventInfo.AddEventHandler(target, handler);
-                subscription = new EventSubscription(target, eventInfo, handler);
-                return true;
+                try
+                {
+                    Delegate handler = CreateForwardingDelegate(eventInfo.EventHandlerType, callback);
+                    eventInfo.AddEventHandler(target, handler);
+                    subscription = new EventSubscription(target, eventInfo, handler);
+                    return true;
+                }
+                catch
+                {
+                }
             }
 
             return false;
@@ -152,26 +105,19 @@ namespace ParalivesAPI.Core
                 if (parameters.Length != 1 || !typeof(Delegate).IsAssignableFrom(parameters[0].ParameterType))
                     continue;
 
-                Delegate handler = CreateForwardingDelegate(parameters[0].ParameterType, callback);
-                method.Invoke(target, new object[] { handler });
-                subscription = new NoopSubscription();
-                return true;
+                try
+                {
+                    Delegate handler = CreateForwardingDelegate(parameters[0].ParameterType, callback);
+                    method.Invoke(target, new object[] { handler });
+                    subscription = new NoopSubscription();
+                    return true;
+                }
+                catch
+                {
+                }
             }
 
             return false;
-        }
-
-        private static object ReadMember(Type type, object source, string name)
-        {
-            PropertyInfo property = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
-            if (property != null)
-                return property.GetValue(source, null);
-
-            FieldInfo field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
-            if (field != null)
-                return field.GetValue(source);
-
-            return null;
         }
 
         private static Delegate CreateForwardingDelegate(Type delegateType, Action<object> callback)
