@@ -38,4 +38,23 @@ namespace ShelteredAPI.Saves.Backups
             }
         }
     }
+
+    /// <summary>
+    /// Defines the single filesystem-segment policy shared by backup timelines and branch markers.
+    /// </summary>
+    internal static class SaveBackupPathPolicy
+    {
+        private const int MaximumSegmentLength = 96;
+
+        internal static string SanitizeSegment(string value)
+        {
+            string safe = string.IsNullOrEmpty(value) ? "unknown" : value;
+            char[] invalid = Path.GetInvalidFileNameChars();
+            for (int i = 0; i < invalid.Length; i++)
+                safe = safe.Replace(invalid[i], '_');
+
+            safe = safe.Replace('\\', '_').Replace('/', '_').Replace(':', '_').Replace('|', '_');
+            return safe.Length > MaximumSegmentLength ? safe.Substring(0, MaximumSegmentLength) : safe;
+        }
+    }
 }

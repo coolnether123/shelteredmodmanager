@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.People;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 {
@@ -109,8 +110,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (_actorResolver == null)
                 return;
 
-            ScenarioActorRef actorRef = pending.Survivor.ActorRef
-                ?? (pending.Survivor.Survivor != null ? pending.Survivor.Survivor.ActorRef : null);
+            ScenarioActorRef actorRef = ScenarioFutureSurvivorActorReference.Resolve(pending.Survivor);
             string bindMessage;
             if (_actorResolver.BindMaterializedFamilyMember(
                 pending.Definition,

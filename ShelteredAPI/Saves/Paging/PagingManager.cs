@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using ShelteredAPI.Saves;
 using UnityEngine;
 using ModAPI.Core;
-using ShelteredAPI.Saves;
 
 namespace ShelteredAPI.Saves.Paging
 {
@@ -19,7 +18,13 @@ namespace ShelteredAPI.Saves.Paging
 
         internal class UIElements { public GameObject prev; public GameObject next; public GameObject sort; public UILabel label; public GameObject archiveTitleRoot; public UILabel archiveTitle; }
 
-        public static int GetPage(SlotSelectionPanel p) { int v; _page.TryGetValue(p, out v); return v; }
+        public static int GetPage(SlotSelectionPanel p)
+        {
+            int value;
+            _page.TryGetValue(p, out value);
+            SlotPagingScope scope = SlotPagingScopeResolver.Resolve(p);
+            return scope != null && !scope.IsStandard && !SaveSnapshotBrowserState.IsActive(p) ? 0 : value;
+        }
         private static void SetPage(SlotSelectionPanel p, int v) { _page[p] = Math.Max(0, v); }
         public static void SetPageDirect(SlotSelectionPanel p, int v) { SetPage(p, v); }
         public static void Reset(SlotSelectionPanel p) { _page[p] = 0; }
@@ -112,6 +117,7 @@ namespace ShelteredAPI.Saves.Paging
             SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
             SaveSnapshotBrowserSession snapshotSession;
             bool browsingSnapshots = SaveSnapshotBrowserState.TryGet(panel, out snapshotSession);
+            bool showPaging = browsingSnapshots || scope.IsStandard;
 
             bool canPrev = browsingSnapshots ? true : p > 0;
 
@@ -126,6 +132,9 @@ namespace ShelteredAPI.Saves.Paging
             var nextBtn = ui.next?.GetComponent<UIButton>();
             if (prevBtn != null) prevBtn.isEnabled = canPrev;
             if (nextBtn != null) nextBtn.isEnabled = canNext;
+            if (ui.prev != null) ui.prev.SetActive(showPaging);
+            if (ui.next != null) ui.next.SetActive(showPaging);
+            if (ui.label != null) ui.label.gameObject.SetActive(showPaging);
             if (ui.prev != null)
             {
                 UILabel prevLabel = ui.prev.GetComponent<UILabel>();
@@ -181,6 +190,13 @@ namespace ShelteredAPI.Saves.Paging
                     SetPage(panel, targetPage);
                     panel.RefreshSaveSlotInfo();
                     Update(panel);
+                    return;
+                }
+
+                SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
+                if (scope != null && !scope.IsStandard)
+                {
+                    MMLog.WriteDebug("[PagingManager] Ignored ChangePage - the vanilla scenario panel owns only its stock save slot.");
                     return;
                 }
 

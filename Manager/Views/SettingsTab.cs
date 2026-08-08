@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Manager.Core.Models;
 using Manager.Core.Services;
+using ModAPI.Core;
 
 namespace Manager.Views
 {

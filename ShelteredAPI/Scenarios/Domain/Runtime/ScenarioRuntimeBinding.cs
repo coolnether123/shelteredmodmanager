@@ -16,7 +16,7 @@ namespace ShelteredAPI.Scenarios.Domain.Runtime{
         public bool IsConvertedToNormalSave { get; set; }
         public int DayCreated { get; set; }
         public string RunId { get; set; }
-        public int? LastEditorSaveTick { get; set; }
+        public bool IsPreview { get; set; }
         public int? ScenarioQuestInstanceId { get; set; }
     }
 }

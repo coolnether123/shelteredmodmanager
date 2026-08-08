@@ -33,7 +33,7 @@ try {
     @('[General]', 'enabled=true', 'target_assembly=SMM\\bin\\Doorstop.dll') | Set-Content (Join-Path $install 'doorstop_config.ini') -Encoding UTF8
     @{
         version = 1
-        booleans = @(@{ id = 'ShelteredAPI.PatchCustomScenarioEditor'; value = $true })
+        booleans = @(@{ id = 'ShelteredScenarioEditor.Enabled'; value = $true })
     } | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $install 'SMM\bin\manager_options.json') -Encoding UTF8
 
     $manifests = @(
@@ -82,6 +82,32 @@ try {
         Assert-True ($entrypointSource -match 'Test-BenchmarkDeploymentHashes[\s\S]*Add-Member -NotePropertyName sha256[\s\S]*frozen_deployment_hashes\.json') 'The live runner no longer freezes its preflight-verified hashes before collecting cases.'
     }
 
+    Invoke-Contract 'scenario editor deployment and profiles use one canonical identity' {
+        $configSource = Get-Content (Join-Path $PSScriptRoot 'benchmark.config.example.json') -Raw
+        $benchmarkConfig = $configSource | ConvertFrom-Json
+        $retiredEditorOptionId = @('ShelteredAPI', 'PatchCustomScenarioEditor') -join '.'
+        Assert-True (-not $configSource.Contains($retiredEditorOptionId)) 'Retired ShelteredAPI editor toggle remains in benchmark configuration.'
+        foreach ($platform in @($benchmarkConfig.platforms)) {
+            $editorGates = @($platform.hashGates | Where-Object role -EQ 'scenarioeditor')
+            Assert-Equal 1 $editorGates.Count "Platform '$($platform.name)' does not have exactly one scenario-editor hash gate."
+            Assert-Equal 'SMM\bin\ShelteredScenarioEditor.dll' ([string]$editorGates[0].deployedPath) "Platform '$($platform.name)' editor gate targets the wrong deployment."
+        }
+        $offProfile = $benchmarkConfig.profiles | Where-Object name -EQ 'smm-scenario-editor-off' | Select-Object -First 1
+        $onProfile = $benchmarkConfig.profiles | Where-Object name -EQ 'smm-core' | Select-Object -First 1
+        Assert-True ($null -ne $offProfile -and $null -ne $onProfile) 'Editor off/on benchmark profiles are missing.'
+        Assert-True ([bool]$offProfile.scenarioTransition) 'Editor-off profile no longer verifies custom-scenario browsing.'
+        Assert-True (-not [bool]$offProfile.managerOptions.'ShelteredScenarioEditor.Enabled') 'Editor-off profile does not disable the canonical option.'
+        Assert-True ([bool]$onProfile.managerOptions.'ShelteredScenarioEditor.Enabled') 'Editor-on profile does not enable the canonical option.'
+        Assert-True ([array]::IndexOf(@($benchmarkConfig.profiles.name), 'smm-scenario-editor-off') -lt [array]::IndexOf(@($benchmarkConfig.profiles.name), 'smm-core')) 'Configuration no longer exercises editor off before editor on.'
+
+        $deploySource = Get-Content (Join-Path $PSScriptRoot 'Deploy-ShelteredBenchmarkBuild.ps1') -Raw
+        Assert-True ($deploySource.Contains('ShelteredScenarioEditor\obj\$Configuration\ShelteredScenarioEditor.dll')) 'Deployment does not consume the current editor build output.'
+        Assert-True ($deploySource.Contains("Copy-VerifiedArtifact `$scenarioEditorOutput (Join-Path `$targetSmm 'bin\ShelteredScenarioEditor.dll')")) 'Deployment does not hash-verify the editor DLL for each storefront.'
+
+        $coreSource = Get-Content (Join-Path $PSScriptRoot 'ShelteredBenchmark.Core.psm1') -Raw
+        Assert-True ($coreSource.Contains("SMM\bin\ShelteredScenarioEditor.dll'); Role = 'scenarioeditor'")) 'Environment evidence no longer fingerprints the editor DLL.'
+    }
+
     Invoke-Contract 'Git diff fingerprint ignores autocrlf advice' {
         $coreSource = Get-Content (Join-Path $PSScriptRoot 'ShelteredBenchmark.Core.psm1') -Raw
         Assert-True ($coreSource -match 'git -c core\.autocrlf=false -C \$RepositoryRoot diff --binary --no-ext-diff 2>\$null') 'Environment fingerprinting can again fail a case on harmless Git line-ending advice.'
@@ -127,9 +153,21 @@ try {
     Invoke-Contract 'Doorstop and manager-option mutations are targeted' {
         Set-DoorstopEnabled $install $false
         Assert-True ((Get-Content (Join-Path $install 'doorstop_config.ini') -Raw) -match '(?m)^enabled=false$') 'Doorstop was not disabled.'
-        Set-ShelteredManagerOptions $install ([pscustomobject]@{ 'ShelteredAPI.PatchCustomScenarioEditor' = $false })
+        $retiredEditorOptionId = @('ShelteredAPI', 'PatchCustomScenarioEditor') -join '.'
+        [pscustomobject]@{
+            version = 1
+            booleans = @(
+                [pscustomobject]@{ id = $retiredEditorOptionId; value = $true },
+                [pscustomobject]@{ id = 'ModAPI.DisableUnityLogSuppression'; value = $true }
+            )
+        } | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $install 'SMM\bin\manager_options.json') -Encoding UTF8
+        Set-ShelteredManagerOptions $install ([pscustomobject]@{ 'ShelteredScenarioEditor.Enabled' = $false })
         $options = Get-Content (Join-Path $install 'SMM\bin\manager_options.json') -Raw | ConvertFrom-Json
-        Assert-True (-not $options.booleans[0].value) 'Manager option was not changed.'
+        $canonicalEditorOption = @($options.booleans | Where-Object id -EQ 'ShelteredScenarioEditor.Enabled')
+        Assert-Equal 1 $canonicalEditorOption.Count 'Canonical editor option was not seeded exactly once.'
+        Assert-True (-not [bool]$canonicalEditorOption[0].value) 'Canonical editor option override was not applied.'
+        Assert-Equal 0 @($options.booleans | Where-Object id -EQ $retiredEditorOptionId).Count 'Retired editor option was not removed.'
+        Assert-True ([bool]($options.booleans | Where-Object id -EQ 'ModAPI.DisableUnityLogSuppression').value) 'Unrelated manager option changed.'
     }
 
     Invoke-Contract 'install snapshot restores changed and originally absent files' {
@@ -201,6 +239,8 @@ try {
     Invoke-Contract 'cross-process install mutex rejects a second runner' {
         $locks = Enter-BenchmarkInstallLocks @($install)
         try {
+            Assert-True (-not [string]::IsNullOrWhiteSpace([string]$locks[0].OwnershipToken)) 'Install lock has no transferable ownership token.'
+            Assert-Equal $PID ([int]$locks[0].OwnerProcessId) 'Install lock owner PID is not recorded.'
             $modulePath = Join-Path $PSScriptRoot 'ShelteredBenchmark.Core.psm1'
             $job = Start-Job -ScriptBlock {
                 param($module, $root)
@@ -212,6 +252,51 @@ try {
             $outcome = Receive-Job $job
             Remove-Job $job -Force
             Assert-Equal 'blocked' $outcome 'Second process acquired an owned install mutex.'
+
+            $envelope = New-BenchmarkInstallLockEnvelope -Locks $locks
+            $runnerModule = Join-Path $PSScriptRoot 'ShelteredBenchmark.Runner.psm1'
+            $authorizationJob = Start-Job -ScriptBlock {
+                param($module, $authorization, $root, $scratch)
+                Import-Module $module -Force -DisableNameChecking
+                try {
+                    [void](Start-ShelteredPlatformSession `
+                        -Platform ([pscustomobject]@{ name = 'job-contract'; installRoot = $root; processName = 'powershell'; executable = 'unused.exe'; agentPort = 0 }) `
+                        -Profile ([pscustomobject]@{ name = 'vanilla'; mode = 'vanilla'; harness = $false }) `
+                        -Config ([pscustomobject]@{ _configRoot = $scratch }) -StateRoot (Join-Path $scratch 'job-state') -ArtifactRoot $scratch `
+                        -LeaseOwner 'job-contract' -InstallLocks @($authorization.Locks))
+                    'unexpected'
+                }
+                catch { $_.Exception.Message }
+            } -ArgumentList $runnerModule, $envelope, $install, $tempRoot
+            [void](Wait-Job $authorizationJob)
+            $authorizationOutcome = [string](Receive-Job $authorizationJob)
+            Remove-Job $authorizationJob -Force
+            Assert-True ($authorizationOutcome -match 'Refusing to launch because job-contract already has process') 'A real Start-Job did not preserve parent-issued install-lock authorization.'
+
+            $preflightState = Join-Path $tempRoot 'preflight-must-not-snapshot'
+            $preflightRejected = $false
+            try {
+                [void](Start-ShelteredPlatformSession `
+                    -Platform ([pscustomobject]@{ name = 'contract'; installRoot = $install; processName = 'powershell'; executable = 'unused.exe'; agentPort = 0 }) `
+                    -Profile ([pscustomobject]@{ name = 'vanilla'; mode = 'vanilla'; harness = $false }) `
+                    -Config ([pscustomobject]@{ _configRoot = $tempRoot }) -StateRoot $preflightState -ArtifactRoot $tempRoot `
+                    -LeaseOwner 'contract-preflight' -InstallLocks $locks)
+            }
+            catch { $preflightRejected = $_.Exception.Message -match 'Refusing to launch because contract already has process' }
+            Assert-True $preflightRejected 'A valid ownership set did not reach the existing-process preflight.'
+            Assert-True (-not (Test-Path -LiteralPath $preflightState)) 'Existing-process preflight created an install snapshot.'
+
+            $invalidAuthorization = @([pscustomobject]@{ InstallRoot = $locks[0].InstallRoot; Name = $locks[0].Name; OwnershipToken = ''; OwnerProcessId = $PID })
+            $invalidRejected = $false
+            try { [void](Assert-BenchmarkInstallLockAuthorization -InstallRoot $install -InstallLocks $invalidAuthorization) }
+            catch { $invalidRejected = $_.Exception.Message -match 'invalid or expired' }
+            Assert-True $invalidRejected 'Malformed install-lock authorization was accepted.'
+
+            $deadOwnerAuthorization = @([pscustomobject]@{ InstallRoot = $locks[0].InstallRoot; Name = $locks[0].Name; OwnershipToken = $locks[0].OwnershipToken; OwnerProcessId = [int]::MaxValue })
+            $deadOwnerRejected = $false
+            try { [void](Assert-BenchmarkInstallLockAuthorization -InstallRoot $install -InstallLocks $deadOwnerAuthorization) }
+            catch { $deadOwnerRejected = $_.Exception.Message -match 'invalid or expired' }
+            Assert-True $deadOwnerRejected 'Dead-owner install-lock authorization was accepted.'
         }
         finally { Exit-BenchmarkInstallLocks $locks }
     }
@@ -269,6 +354,21 @@ try {
         Assert-True ($runnerSource -match "Prefix 'scenario_selection_failure'[\s\S]*Prefix 'scenario_book_failure'") 'Selection and book failures no longer share the diagnostic capture path.'
     }
 
+    Invoke-Contract 'screenshot persistence rejects non-PNG error bodies' {
+        $harnessSource = Get-Content (Join-Path $PSScriptRoot 'ShelteredBenchmark.Harness.psm1') -Raw
+        Assert-True ($harnessSource -match 'signature\[0\][\s\S]*0x89[\s\S]*signature\[7\][\s\S]*0x0A[\s\S]*\.error\.json') 'Harness screenshots can again save an error response under a PNG filename.'
+    }
+
+    Invoke-Contract 'automated screenshots never activate a game window' {
+        $harnessSource = Get-Content (Join-Path $PSScriptRoot 'ShelteredBenchmark.Harness.psm1') -Raw
+        $captureStart = $harnessSource.IndexOf('function Save-ShelteredHarnessScreenshot')
+        $captureEnd = $harnessSource.IndexOf('function Get-SmoothFpsSummary', $captureStart)
+        Assert-True ($captureStart -ge 0 -and $captureEnd -gt $captureStart) 'Screenshot helper boundaries could not be inspected.'
+        $captureSource = $harnessSource.Substring($captureStart, $captureEnd - $captureStart)
+        Assert-True ($captureSource -match "activate\s*=\s*'false'") 'Automated screenshots no longer explicitly disable foreground activation.'
+        Assert-True ($captureSource -notmatch "activate\s*=\s*'true'") 'Automated screenshots can steal foreground focus again.'
+    }
+
     Invoke-Contract 'smooth FPS summary filters perturbing requests' {
         $samples = @(
             [pscustomobject]@{ Ok = $true; RequestMs = 10; SmoothFps = 60 },
@@ -286,10 +386,54 @@ try {
     Invoke-Contract 'process sampler records without launching a game' {
         $current = Get-Process -Id $PID
         $sampler = Start-BenchmarkProcessSampler $PID ([DateTimeOffset]$current.StartTime.ToUniversalTime()) 50
+        Assert-True ($sampler.State.Rows.Count -ge 1) 'Sampler returned before its first successful row.'
         Start-Sleep -Milliseconds 220
         $rows = Stop-BenchmarkProcessSampler $sampler
         Assert-True ($rows.Count -ge 2) 'Sampler did not collect enough rows.'
         Assert-True ($rows[0].WorkingSetBytes -gt 0) 'Sampler did not record working set.'
+    }
+
+    Invoke-Contract 'process sampler reports initialization failure explicitly' {
+        $rejected = $false
+        try { [void](Start-BenchmarkProcessSampler ([int]::MaxValue) ([DateTimeOffset]::UtcNow) 50) }
+        catch { $rejected = $_.Exception.Message -match 'initialization failed' }
+        Assert-True $rejected 'Invalid PID did not produce an explicit sampler initialization failure.'
+    }
+
+    Invoke-Contract 'shared session refuses PID reuse and remains retryable' {
+        $owned = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 30') -PassThru
+        $ownedId = $owned.Id
+        try {
+            $actualStart = [DateTimeOffset]$owned.StartTime.ToUniversalTime()
+            $session = [pscustomobject]@{
+                NativeReadinessProbe = $null; LeaseAcquired = $false; Port = 0; LeaseOwner = 'contract'
+                ProcessStopped = $false; Process = $owned; ProcessStartUtc = $actualStart.AddMinutes(-5)
+                Sampler = $null; Samples = @()
+            }
+            $errors = @(Stop-ShelteredPlatformSession -Session $session)
+            Assert-True (($errors -join ' ') -match 'Refusing to stop reused PID') 'Mismatched process identity was not refused.'
+            Assert-True ($null -ne (Get-Process -Id $ownedId -ErrorAction SilentlyContinue)) 'Identity refusal stopped the unrelated process.'
+            Assert-True (-not $session.ProcessStopped) 'Identity refusal incorrectly marked ProcessStopped true.'
+            $session.ProcessStartUtc = $actualStart
+            $errors = @(Stop-ShelteredPlatformSession -Session $session)
+            Assert-Equal 0 $errors.Count 'A valid retry did not stop the owned process cleanly.'
+            Assert-True $session.ProcessStopped 'Session did not record successful process cleanup.'
+        }
+        finally {
+            $remaining = Get-Process -Id $ownedId -ErrorAction SilentlyContinue
+            if ($null -ne $remaining) { Stop-Process -Id $remaining.Id -Force }
+        }
+    }
+
+    Invoke-Contract 'session boundary requires owned lock and preflights processes before mutation' {
+        $runnerSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'ShelteredBenchmark.Runner.psm1') -Raw
+        Assert-True ($runnerSource -match 'Start-ShelteredPlatformSession[\s\S]*\[object\[\]\]\$InstallLocks') 'Session start no longer requires an install-lock ownership set.'
+        $startIndex = $runnerSource.IndexOf('function Start-ShelteredPlatformSession')
+        $preflightIndex = $runnerSource.IndexOf('$existingProcesses = @(Get-Process', $startIndex)
+        $snapshotIndex = $runnerSource.IndexOf('$session.Snapshot = New-InstallStateSnapshot', $startIndex)
+        $mutationIndex = $runnerSource.IndexOf('Set-DoorstopEnabled', $startIndex)
+        Assert-True ($preflightIndex -ge 0 -and $preflightIndex -lt $snapshotIndex -and $preflightIndex -lt $mutationIndex) 'Existing-process preflight occurs after snapshot or install mutation.'
+        Assert-True ($runnerSource -match 'Transactional cleanup also failed:[\s\S]*transactionErrors') 'Startup cleanup failures are no longer aggregated with the initiating failure.'
     }
 
     Invoke-Contract 'single process sample retains collection shape' {

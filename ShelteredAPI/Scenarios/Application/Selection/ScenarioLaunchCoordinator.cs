@@ -60,7 +60,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         }
 
         /// <summary>
-        /// Result of <see cref="PrepareNewGame"/> Ã¢â‚¬â€ an allocated, validated startup save plus
+        /// Result of <see cref="PrepareNewGame"/> - an allocated, validated startup save plus
         /// the virtual save type the caller should commit through <see cref="CommitNewGame"/>.
         /// Held by the caller across the UI mode change so the browser can exit
         /// custom mode only after allocation has succeeded.
@@ -248,53 +248,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 _scenarioLifecycle.ClearState();
         }
 
-        public bool QueueAuthoringDraftLaunch(
-            ScenarioBrowserPanelAdapter adapter,
-            string draftStorageScenarioId,
-            SaveEntry draftStartupSave,
-            SaveManager.SaveType virtualSaveType,
-            ScenarioBaseGameMode baseGameMode,
-            string launchTargetLabel,
-            out string error)
-        {
-            error = null;
-
-            if (adapter == null) { error = "adapter is null"; return false; }
-            if (draftStartupSave == null) { error = "draft save is null"; return false; }
-
-            try
-            {
-                _saveLibrary.QueueNewGameSaveTarget(draftStorageScenarioId, draftStartupSave, virtualSaveType);
-            }
-            catch (Exception ex)
-            {
-                error = "Failed to queue draft target: " + ex.Message;
-                return false;
-            }
-            string directSceneName;
-            if (TryGetAuthoringLaunchScene(baseGameMode, out directSceneName))
-            {
-                if (!BeginDirectSceneTransition(directSceneName, launchTargetLabel, virtualSaveType))
-                {
-                    error = "Could not launch the " + directSceneName + " scene for the draft.";
-                    _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
-                    return false;
-                }
-
-                return true;
-            }
-
-            if (!BeginCustomisationTransition(adapter, launchTargetLabel, virtualSaveType))
-            {
-                error = "Could not push the customisation panel for the draft.";
-                _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
-                return false;
-            }
-
-            return true;
-        }
-
-        public bool QueueAuthoringDraftSceneReload(
+        internal bool QueuePreviewSceneReload(
             string draftStorageScenarioId,
             SaveEntry draftStartupSave,
             SaveManager.SaveType virtualSaveType,
@@ -317,9 +271,9 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             string sceneName;
-            if (!TryGetAuthoringLaunchScene(baseGameMode, out sceneName))
+            if (!TryGetPreviewLaunchScene(baseGameMode, out sceneName))
             {
-                error = "Could not resolve the authoring scene for " + baseGameMode + ".";
+                error = "Could not resolve the preview scene for " + baseGameMode + ".";
                 _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
                 return false;
             }
@@ -531,7 +485,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return false;
 
             string sceneName;
-            if (!TryGetAuthoringLaunchScene(baseGameMode, out sceneName))
+            if (!TryGetPreviewLaunchScene(baseGameMode, out sceneName))
                 return false;
 
             try
@@ -608,7 +562,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private static bool ShouldLaunchWithoutStartup(ScenarioCatalogEntry entry, ScenarioLaunchSetupMode launchMode)
         {
             return entry != null
-                && entry.Source != ScenarioCatalogSource.Draft
                 && launchMode == ScenarioLaunchSetupMode.FullSetup
                 && entry.BaseGameMode != ScenarioBaseGameMode.Survival;
         }
@@ -629,7 +582,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
         }
 
-        private static bool TryGetAuthoringLaunchScene(ScenarioBaseGameMode baseGameMode, out string sceneName)
+        private static bool TryGetPreviewLaunchScene(ScenarioBaseGameMode baseGameMode, out string sceneName)
         {
             if (baseGameMode == ScenarioBaseGameMode.Survival)
             {

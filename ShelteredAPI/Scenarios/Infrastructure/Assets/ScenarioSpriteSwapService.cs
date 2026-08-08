@@ -22,7 +22,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
         public static ScenarioSpriteSwapService Instance
         {
-            get { return ScenarioCompositionRoot.Resolve<ScenarioSpriteSwapService>(); }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<ScenarioSpriteSwapService>(); }
         }
 
         internal ScenarioSpriteSwapService(ScenarioSpriteSwapPlanner planner, ScenarioSpriteSwapRenderer renderer)

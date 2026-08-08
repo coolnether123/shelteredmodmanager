@@ -13,7 +13,6 @@ namespace ShelteredAPI.Saves
         public const string VanillaStasisStorageScenarioId = "Stasis";
         public const string VanillaSurroundedSaveId = "vanilla_surrounded";
         public const string VanillaStasisSaveId = "vanilla_stasis";
-        public const string ScenarioAuthoringDraftStorageScenarioId = "ScenarioAuthoringDrafts";
 
         private static readonly HashSet<string> ReservedStorageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -22,8 +21,7 @@ namespace ShelteredAPI.Saves
             VanillaSurroundedScenarioId,
             VanillaStasisScenarioId,
             VanillaSurroundedStorageScenarioId,
-            VanillaStasisStorageScenarioId,
-            ScenarioAuthoringDraftStorageScenarioId
+            VanillaStasisStorageScenarioId
         };
 
         public static bool IsReservedStorageId(string scenarioId)

@@ -15,9 +15,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         private readonly ICustomScenarioRegistry _customScenarioRegistry;
         private readonly IScenarioDependencyVerifier _dependencyVerifier;
         private readonly IScenarioDefinitionFactory _definitionFactory;
-        private readonly IScenarioDefinitionCatalogService _definitionCatalog;
+        private readonly ScenarioRuntimeDefinitionResolver _definitionResolver;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
-        private readonly IScenarioRuntimeDefinitionOverrideProvider _definitionOverrideProvider;
         private readonly IScenarioApplier _applier;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
@@ -33,9 +32,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             ICustomScenarioRegistry customScenarioRegistry,
             IScenarioDependencyVerifier dependencyVerifier,
             IScenarioDefinitionFactory definitionFactory,
-            IScenarioDefinitionCatalogService definitionCatalog,
+            ScenarioRuntimeDefinitionResolver definitionResolver,
             IScenarioRuntimeBindingService runtimeBindingService,
-            IScenarioRuntimeDefinitionOverrideProvider definitionOverrideProvider,
             IScenarioApplier applier,
             IScenarioSpriteSwapEngine spriteSwapEngine,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
@@ -45,9 +43,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             _customScenarioRegistry = customScenarioRegistry;
             _dependencyVerifier = dependencyVerifier;
             _definitionFactory = definitionFactory;
-            _definitionCatalog = definitionCatalog;
+            _definitionResolver = definitionResolver;
             _runtimeBindingService = runtimeBindingService;
-            _definitionOverrideProvider = definitionOverrideProvider;
             _applier = applier;
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
@@ -169,20 +166,14 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             if (binding == null || string.IsNullOrEmpty(binding.ScenarioId))
                 return false;
 
-            if (_definitionOverrideProvider.TryGetDefinitionOverride(binding.ScenarioId, out definition, out scenarioFilePath))
-            {
-                MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Using active authoring definition for scenario '" + binding.ScenarioId + "'.");
-                return true;
-            }
-
-            return _definitionCatalog.TryLoadDefinition(binding.ScenarioId, out definition, out scenarioFilePath, out validation);
+            return _definitionResolver.TryResolve(binding, out definition, out scenarioFilePath, out validation);
         }
 
         private bool IsApplyStillBlocked(string applyKey)
         {
             return !string.IsNullOrEmpty(_blockedApplyKey)
                 && string.Equals(_blockedApplyKey, applyKey, StringComparison.OrdinalIgnoreCase)
-                && _blockedCatalogRevision == _definitionCatalog.CatalogRevision
+                && _blockedCatalogRevision == _definitionResolver.Revision
                 && _blockedReason != ScenarioRuntimeApplyBlockReason.None;
         }
 
@@ -190,12 +181,12 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         {
             string normalizedDetails = details ?? string.Empty;
             bool changed = !string.Equals(_blockedApplyKey, applyKey, StringComparison.OrdinalIgnoreCase)
-                || _blockedCatalogRevision != _definitionCatalog.CatalogRevision
+                || _blockedCatalogRevision != _definitionResolver.Revision
                 || _blockedReason != reason
                 || !string.Equals(_blockedDetails ?? string.Empty, normalizedDetails, StringComparison.Ordinal);
 
             _blockedApplyKey = applyKey;
-            _blockedCatalogRevision = _definitionCatalog.CatalogRevision;
+            _blockedCatalogRevision = _definitionResolver.Revision;
             _blockedReason = reason;
             _blockedDetails = normalizedDetails;
 

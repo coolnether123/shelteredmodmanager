@@ -1,0 +1,167 @@
+using ShelteredAPI.Scenarios.Public;
+using System;
+using System.Globalization;
+using System.Text;
+
+using ModAPI.Core;
+using UnityEngine;
+
+using ShelteredScenarioEditor.Application.Authoring;
+using ShelteredScenarioEditor.Application.Commands;
+using ShelteredScenarioEditor.Application.Map;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Map;
+using ShelteredScenarioEditor.Infrastructure.Runtime;
+
+namespace ShelteredScenarioEditor.Presentation.Authoring.Shell
+{
+    internal sealed partial class ScenarioAuthoringShellImguiRenderModule
+    {
+        private string _mapLootPreviewKey;
+        private ScenarioMapLootPreview _mapLootPreview;
+
+        private float DrawMapAuthoringLegend(Rect inner, float y)
+        {
+            GUI.Label(new Rect(inner.x, y, inner.width, 20f), "Show on Map", _smallTitleStyle);
+            y += 23f;
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.VanillaRegions, "World Locations", "WL");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.AuthoredLocations, "My Locations", "ML");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.HiddenUntilDiscovered, "Undiscovered", "UD");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.InvalidOrBlocked, "Needs Attention", "!!");
+            y = DrawMapFilterChip(inner, y, ScenarioMapAuthoringFilter.DependencyLocked, "Unavailable", "NA");
+            GUI.Label(new Rect(inner.x, y + 3f, inner.width, 34f), "Turn off a group to fade those markers.", _mutedTextStyle);
+            return y + 37f;
+        }
+
+        private float DrawMapFilterChip(Rect inner, float y, ScenarioMapAuthoringFilter filter, string label, string glyph)
+        {
+            bool visible = ScenarioMapAuthoringFilterState.IsVisible(filter);
+            Rect rect = new Rect(inner.x, y, inner.width, 27f);
+            GUIStyle style = visible ? _activeButtonStyle : _buttonStyle;
+            if (GUI.Button(rect, new GUIContent(glyph + "  " + label, "Toggle " + label + " markers."), style))
+                ExecuteRendererCommand(RendererInteractionCommand.ForMapFilter(filter));
+            return y + 31f;
+        }
+
+        private void DrawMapUxSelectionDetails(ScenarioMapRegionSelection selection, ScenarioAuthoringState state)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            MapLocationDefinition location = FindSelectedMapLocation(definition, selection);
+            GUILayout.Space(8f);
+            GUILayout.Label("In Playtests", _smallTitleStyle);
+            GUILayout.Label("Location details and loot are ready to use.", _mutedTextStyle);
+            DrawEncounterProjectionHonesty();
+
+            if (location == null)
+                return;
+
+            DrawOverlayLootPreview(definition, location);
+            if (selection.Authored)
+            {
+                GUILayout.Space(6f);
+                MapAuthoringCommand duplicateCommand = MapAuthoringCommand.BeginDuplicateLocation(location.Id);
+                DrawButton(GUILayoutUtility.GetRect(0f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f)), new ScenarioAuthoringInspectorAction
+                {
+                    Id = duplicateCommand.AutomationId,
+                    Command = duplicateCommand,
+                    Label = "Copy to Another Spot",
+                    Hint = "Copy this location and then choose a new spot on the map.",
+                    Enabled = true,
+                    IconText = "CP"
+                }, false);
+            }
+        }
+
+        private void DrawEncounterProjectionHonesty()
+        {
+            ScenarioMapProjectionField[] fields = ShelteredScenarioAuthoring.GetMapEncounterProjectionFields();
+            string previousGroup = null;
+            for (int i = 0; i < fields.Length; i++)
+            {
+                ScenarioMapProjectionField field = fields[i];
+                if (field == null || string.Equals(previousGroup, field.Group, StringComparison.Ordinal))
+                    continue;
+                previousGroup = field.Group;
+                GUILayout.Label(field.Group + ": " + (field.AppliesInGame ? "Ready for playtests" : "Saved, but not used in playtests yet"), _mutedTextStyle);
+            }
+        }
+
+        private void DrawOverlayLootPreview(ScenarioDefinition definition, MapLocationDefinition location)
+        {
+            string key = BuildLootPreviewKey(definition, location);
+            if (!string.Equals(key, _mapLootPreviewKey, StringComparison.Ordinal))
+            {
+                _mapLootPreviewKey = key;
+                _mapLootPreview = ScenarioMapLootPreviewService.Build(definition, location, ModRandom.CurrentSeed, ScenarioMapLootPreviewService.DefaultSimulationRolls);
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Loot Preview", _smallTitleStyle);
+            if (_mapLootPreview == null || !string.IsNullOrEmpty(_mapLootPreview.Error))
+            {
+                GUILayout.Label(_mapLootPreview != null ? _mapLootPreview.Error : "Preview unavailable.", _mutedTextStyle);
+                return;
+            }
+            GUILayout.Label("Example search result: " + FormatOverlayExactRoll(_mapLootPreview), _textStyle);
+            GUILayout.Label("Average results from 1,000 searches", _mutedTextStyle);
+            for (int i = 0; i < _mapLootPreview.Distribution.Count; i++)
+            {
+                ScenarioMapLootDistributionEntry entry = _mapLootPreview.Distribution[i];
+                GUILayout.Label(
+                    (entry.Hidden ? "Hidden " : string.Empty) + entry.ItemId + " — "
+                    + entry.PercentOfRolls.ToString("0.0", CultureInfo.InvariantCulture) + "% | average "
+                    + entry.AverageQuantityPerRoll.ToString("0.00", CultureInfo.InvariantCulture),
+                    _mutedTextStyle);
+            }
+        }
+
+        private static MapLocationDefinition FindSelectedMapLocation(ScenarioDefinition definition, ScenarioMapRegionSelection selection)
+        {
+            string id = selection != null ? (!string.IsNullOrEmpty(selection.LocationId) ? selection.LocationId : selection.CapturedLocationId) : null;
+            MapAuthoringDefinition map = definition != null ? definition.Map : null;
+            for (int i = 0; map != null && map.Locations != null && i < map.Locations.Count; i++)
+            {
+                MapLocationDefinition location = map.Locations[i];
+                if (location != null && string.Equals(location.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return location;
+            }
+            return null;
+        }
+
+        private static string FormatOverlayExactRoll(ScenarioMapLootPreview preview)
+        {
+            if (preview.ExactRoll.Count == 0)
+                return "Nothing";
+            StringBuilder value = new StringBuilder();
+            for (int i = 0; i < preview.ExactRoll.Count; i++)
+            {
+                ScenarioMapLootEntrySnapshot item = preview.ExactRoll[i];
+                if (item == null) continue;
+                if (value.Length > 0) value.Append(", ");
+                if (item.Hidden) value.Append("hidden ");
+                value.Append(item.ItemId).Append(" x").Append(item.Quantity.ToString(CultureInfo.InvariantCulture));
+            }
+            return value.Length == 0 ? "Nothing" : value.ToString();
+        }
+
+        private static string BuildLootPreviewKey(ScenarioDefinition definition, MapLocationDefinition location)
+        {
+            StringBuilder key = new StringBuilder();
+            key.Append(ModRandom.CurrentSeed).Append('|').Append(location != null ? location.Id : null).Append('|').Append(location != null ? location.LootTableId : null);
+            MapAuthoringDefinition map = definition != null ? definition.Map : null;
+            for (int i = 0; map != null && map.LootTables != null && i < map.LootTables.Count; i++)
+            {
+                MapLootTableDefinition table = map.LootTables[i];
+                if (table == null || location == null || !string.Equals(table.Id, location.LootTableId, StringComparison.OrdinalIgnoreCase)) continue;
+                for (int entryIndex = 0; table.Entries != null && entryIndex < table.Entries.Count; entryIndex++)
+                {
+                    MapLootEntryDefinition entry = table.Entries[entryIndex];
+                    if (entry != null)
+                        key.Append('|').Append(entry.ItemId).Append(':').Append(entry.MinQuantity).Append(':').Append(entry.MaxQuantity).Append(':').Append(entry.Weight).Append(':').Append(entry.Chance).Append(':').Append(entry.Hidden);
+                }
+            }
+            return key.ToString();
+        }
+    }
+}

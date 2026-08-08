@@ -48,14 +48,14 @@ namespace ShelteredAPI.Scenarios.Application.Selection
             definition = null;
             try
             {
-                ICustomScenarioLifecycleService lifecycle = ScenarioCompositionRoot.Resolve<ICustomScenarioLifecycleService>();
+                ICustomScenarioLifecycleService lifecycle = ScenarioRuntimeCompositionRoot.Resolve<ICustomScenarioLifecycleService>();
                 CustomScenarioState state = lifecycle != null ? lifecycle.CurrentState : null;
                 if (state == null || state.LifecycleState != CustomScenarioLifecycleState.Pending || string.IsNullOrEmpty(state.ScenarioId))
                     return false;
 
                 string path;
                 ScenarioValidationResult validation;
-                IScenarioDefinitionCatalogService catalog = ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>();
+                IScenarioDefinitionCatalogService catalog = ScenarioRuntimeCompositionRoot.Resolve<IScenarioDefinitionCatalogService>();
                 return catalog != null
                     && catalog.TryLoadDefinition(state.ScenarioId, out definition, out path, out validation)
                     && GetMode(definition) == ScenarioLaunchSetupMode.Guided;

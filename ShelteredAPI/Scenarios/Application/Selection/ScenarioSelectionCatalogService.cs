@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
-using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioSelectionCatalogService : IScenarioSelectionCatalogService
     {
@@ -13,20 +11,17 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private readonly IScenarioDefinitionCatalogService _definitions;
         private readonly IScenarioDependencyVerifier _dependencies;
         private readonly IScenarioSaveLibrary _saveLibrary;
-        private readonly IScenarioDefinitionSerializer _definitionSerializer;
 
         public ScenarioSelectionCatalogService(
             ICustomScenarioRegistry customScenarios,
             IScenarioDefinitionCatalogService definitions,
             IScenarioDependencyVerifier dependencies,
-            IScenarioSaveLibrary saveLibrary,
-            IScenarioDefinitionSerializer definitionSerializer)
+            IScenarioSaveLibrary saveLibrary)
         {
             _customScenarios = customScenarios;
             _definitions = definitions;
             _dependencies = dependencies;
             _saveLibrary = saveLibrary;
-            _definitionSerializer = definitionSerializer;
         }
 
         public void Refresh()
@@ -42,7 +37,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             List<ScenarioCatalogEntry> entries = new List<ScenarioCatalogEntry>();
             AddVanillaEntries(entries);
             AddModdedEntries(entries);
-            AddDraftEntries(entries);
             entries.Sort(CompareEntries);
             return entries.ToArray();
         }
@@ -86,9 +80,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             {
                 ScenarioCatalogEntry candidate = all[i];
                 if (candidate == null)
-                    continue;
-
-                if (candidate.Source == ScenarioCatalogSource.Draft)
                     continue;
 
                 if (!string.Equals(candidate.StorageScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
@@ -167,9 +158,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 CustomScenarioInfo scenario = scenarios[i];
                 if (scenario == null || string.IsNullOrEmpty(scenario.Id))
                     continue;
-                if (IsAuthoringDraftScenario(scenario))
-                    continue;
-
                 SlotManifest manifest = _dependencies.CreateDependencyManifest(scenario);
                 ScenarioDependencyVerificationState dependencyState = _dependencies.VerifyDependencies(scenario);
                 ScenarioBaseGameMode baseGameMode = ResolveBaseGameMode(scenario);
@@ -209,88 +197,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
         }
 
-        private static bool IsAuthoringDraftScenario(CustomScenarioInfo scenario)
-        {
-            if (scenario == null)
-                return false;
-
-            if (string.Equals(scenario.OwnerModId, ScenarioAuthoringDraftRepository.DraftOwnerId, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // A published package can intentionally retain the authored draft's
-            // scenario id. Its loaded mod owner is the authoritative source, so
-            // do not hide that package merely because the local draft remains.
-            if (!string.IsNullOrEmpty(scenario.OwnerModId))
-                return false;
-
-            try
-            {
-                ScenarioInfo ignored;
-                return ScenarioAuthoringDraftRepository.Instance.TryGet(scenario.Id, out ignored);
-            }
-            catch
-            {
-                return !string.IsNullOrEmpty(scenario.Id)
-                    && scenario.Id.StartsWith(ScenarioAuthoringDraftRepository.DraftOwnerId + ".", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        // Drafts live in a dedicated storage scenario id (ScenarioAuthoringDrafts)
-        // so their saves are physically separated from published modded scenarios.
-        // Surfacing them as ScenarioCatalogSource.Draft keeps the browser's
-        // Modded tab to published mods only.
-        private void AddDraftEntries(List<ScenarioCatalogEntry> entries)
-        {
-            ScenarioAuthoringDraftRepository repo;
-            try { repo = ScenarioAuthoringDraftRepository.Instance; }
-            catch { return; }
-
-            if (repo == null)
-                return;
-
-            ScenarioInfo[] drafts;
-            try { drafts = repo.ListAll(); }
-            catch (System.Exception ex)
-            {
-                ModAPI.Core.MMLog.WriteWarning("[ScenarioSelectionCatalogService] Draft enumeration failed: " + ex.Message);
-                return;
-            }
-
-            int order = 1000;
-            for (int i = 0; i < drafts.Length; i++)
-            {
-                ScenarioInfo draft = drafts[i];
-                if (draft == null || string.IsNullOrEmpty(draft.Id))
-                    continue;
-
-                ScenarioDefinition definition = LoadDraftDefinition(draft);
-                ScenarioBaseGameMode baseGameMode = ResolveDraftBaseGameMode(definition);
-                string displayName = definition != null && !string.IsNullOrEmpty(definition.DisplayName)
-                    ? definition.DisplayName
-                    : (string.IsNullOrEmpty(draft.DisplayName) ? draft.Id : draft.DisplayName);
-                string description = definition != null && definition.Description != null
-                    ? definition.Description
-                    : "Authoring draft. Open the editor to continue working on this scenario.";
-                entries.Add(new ScenarioCatalogEntry
-                {
-                    ScenarioId = draft.Id,
-                    StorageScenarioId = ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
-                    Source = ScenarioCatalogSource.Draft,
-                    LaunchMode = ScenarioLaunchMode.AuthoringDraft,
-                    BaseGameMode = baseGameMode,
-                    DefaultSaveType = ScenarioSelectionIds.GetDefaultSaveType(baseGameMode),
-                    DisplayName = displayName,
-                    Description = description,
-                    Version = draft.Version,
-                    OwnerModId = draft.OwnerModId,
-                    Order = order + i,
-                    SaveCount = _saveLibrary.CountSaves(ScenarioAuthoringDraftRepository.DraftStorageScenarioId),
-                    CanStart = true,
-                    DependencyState = ScenarioDependencyVerificationState.Match
-                });
-            }
-        }
-
         private ScenarioBaseGameMode ResolveBaseGameMode(CustomScenarioInfo scenario)
         {
             if (scenario == null || string.IsNullOrEmpty(scenario.Id))
@@ -312,41 +218,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             {
             }
 
-            return ScenarioBaseGameMode.Survival;
-        }
-
-        private ScenarioDefinition LoadDraftDefinition(ScenarioInfo draft)
-        {
-            if (draft == null || string.IsNullOrEmpty(draft.FilePath))
-                return null;
-
-            try
-            {
-                ScenarioDefinitionMetadata metadata;
-                if (ScenarioDefinitionMetadataCache.TryLoad(_definitionSerializer, draft.FilePath, draft.OwnerModId, out metadata)
-                    && metadata != null)
-                {
-                    ScenarioDefinition definition = new ScenarioDefinition();
-                    definition.Id = draft.Id;
-                    definition.DisplayName = draft.DisplayName;
-                    definition.Description = metadata.Description;
-                    definition.Version = draft.Version;
-                    definition.BaseGameMode = metadata.BaseGameMode;
-                    return definition;
-                }
-
-                return _definitionSerializer.Load(draft.FilePath);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static ScenarioBaseGameMode ResolveDraftBaseGameMode(ScenarioDefinition definition)
-        {
-            if (definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
-                return definition.BaseGameMode;
             return ScenarioBaseGameMode.Survival;
         }
 

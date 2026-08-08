@@ -29,7 +29,7 @@ using System;
 using System.Collections.Generic;
 '@ + [Environment]::NewLine + ($sourceBodies -join [Environment]::NewLine)
 
-Add-Type -TypeDefinition $source -Language CSharp
+$compiledTypes = @(Add-Type -TypeDefinition $source -Language CSharp -PassThru)
 
 $failures = New-Object 'System.Collections.Generic.List[string]'
 function Assert-True([string]$name, [bool]$condition) {
@@ -39,11 +39,20 @@ function Assert-True([string]$name, [bool]$condition) {
 }
 
 $pixelNamespace = 'ShelteredModManager.Shared.PixelEditing'
-$transparent = New-Object "$pixelNamespace.Rgba32" ([byte]0), ([byte]0), ([byte]0), ([byte]0)
-$redHalf = New-Object "$pixelNamespace.Rgba32" ([byte]255), ([byte]0), ([byte]0), ([byte]127)
-$blue = New-Object "$pixelNamespace.Rgba32" ([byte]0), ([byte]0), ([byte]255), ([byte]255)
+function Get-PixelType([string]$name) {
+    $type = @($compiledTypes | Where-Object { $_.FullName -eq "$pixelNamespace.$name" }) | Select-Object -First 1
+    if ($null -eq $type) { throw "Compiled pixel type '$name' was not found." }
+    return $type
+}
+function New-PixelObject([string]$name, [object[]]$arguments = @()) {
+    return [Activator]::CreateInstance((Get-PixelType $name), $arguments)
+}
 
-$document = New-Object "$pixelNamespace.PixelDocument" 3, 2
+$transparent = New-PixelObject 'Rgba32' @([byte]0, [byte]0, [byte]0, [byte]0)
+$redHalf = New-PixelObject 'Rgba32' @([byte]255, [byte]0, [byte]0, [byte]127)
+$blue = New-PixelObject 'Rgba32' @([byte]0, [byte]0, [byte]255, [byte]255)
+
+$document = New-PixelObject 'PixelDocument' @(3, 2)
 $document.SetPixel(1, 1, $redHalf)
 Assert-True 'RGBA alpha is preserved' ($document.GetPixel(1, 1).Equals($redHalf))
 Assert-True 'out-of-bounds try-set is rejected' (-not $document.TrySetPixel(-1, 0, $blue))
@@ -55,22 +64,22 @@ $clone = $document.Clone()
 $clone.SetPixel(1, 1, $blue)
 Assert-True 'document clone is detached' ($document.GetPixel(1, 1).Equals($redHalf))
 
-$selection = New-Object "$pixelNamespace.PixelSelection" -2, 0, 4, 3
+$selection = New-PixelObject 'PixelSelection' @(-2, 0, 4, 3)
 $clipped = $selection.ClipTo(3, 2)
 Assert-True 'selection clips x' ($clipped.X -eq 0 -and $clipped.Width -eq 2)
 Assert-True 'selection clips y' ($clipped.Y -eq 0 -and $clipped.Height -eq 2)
-$reverse = [ShelteredModManager.Shared.PixelEditing.PixelSelection]::FromCorners(2, 1, 0, 0)
+$reverse = (Get-PixelType 'PixelSelection').GetMethod('FromCorners').Invoke($null, @(2, 1, 0, 0))
 Assert-True 'selection corners normalize' ($reverse.X -eq 0 -and $reverse.Y -eq 0 -and $reverse.Width -eq 3 -and $reverse.Height -eq 2)
 
-$clipboard = New-Object "$pixelNamespace.PixelClipboard"
+$clipboard = New-PixelObject 'PixelClipboard'
 $document.SetPixel(0, 0, $blue)
 Assert-True 'clipboard copies clipped selection' ($clipboard.CopyFrom($document, $clipped))
-$pasteTarget = New-Object "$pixelNamespace.PixelDocument" 2, 2
+$pasteTarget = New-PixelObject 'PixelDocument' @(2, 2)
 Assert-True 'clipboard paste changes destination' ($clipboard.PasteInto($pasteTarget, 1, 1))
 Assert-True 'clipboard paste clips to destination' ($pasteTarget.GetPixel(1, 1).Equals($blue))
 
-$sessionDocument = New-Object "$pixelNamespace.PixelDocument" 4, 4
-$session = New-Object "$pixelNamespace.PixelEditorSession" $sessionDocument, 2
+$sessionDocument = New-PixelObject 'PixelDocument' @(4, 4)
+$session = New-PixelObject 'PixelEditorSession' @($sessionDocument, 2)
 $session.ActiveColor = $redHalf
 $session.BeginStroke()
 [void]$session.PaintPixel(0, 0)
@@ -100,15 +109,15 @@ Assert-True 'net-no-op stroke stays clean' (-not $session.Dirty)
 [void]$session.SetPixel(0, 1, $blue)
 Assert-True 'history remains bounded' ($session.History.UndoCount -eq 2)
 
-$session.SetSelection((New-Object "$pixelNamespace.PixelSelection" 0, 0, 2, 1))
+$session.SetSelection((New-PixelObject 'PixelSelection' @(0, 0, 2, 1)))
 Assert-True 'session copies selection' $session.CopySelection()
 Assert-True 'session pastes selection' $session.Paste(2, 2)
 $viewModel = $session.CreateViewModel()
 Assert-True 'view model is detached' (-not [Object]::ReferenceEquals($viewModel.Document, $session.Document))
 Assert-True 'view model reports clipboard' ($viewModel.HasClipboard -and $viewModel.ClipboardWidth -eq 2 -and $viewModel.ClipboardHeight -eq 1)
 
-$codec = [ShelteredModManager.Shared.PixelEditing.IPixelImageCodec]
-$destination = [ShelteredModManager.Shared.PixelEditing.IPixelEditorDestination]
+$codec = Get-PixelType 'IPixelImageCodec'
+$destination = Get-PixelType 'IPixelEditorDestination'
 Assert-True 'codec contract is framework-neutral interface' $codec.IsInterface
 Assert-True 'destination contract is framework-neutral interface' $destination.IsInterface
 

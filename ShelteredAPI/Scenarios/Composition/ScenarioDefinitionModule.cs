@@ -1,5 +1,4 @@
 using ShelteredAPI.Core;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Registration;
@@ -13,8 +12,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                 return new ScenarioDefinitionReader(
                     resolver.Get<IScenarioDefinitionSerializer>(),
                     resolver.Get<IScenarioDefinitionCatalog>(),
-                    resolver.Get<IScenarioDefinitionValidator>(),
-                    resolver.Get<ScenarioAuthoringDraftRepository>());
+                    resolver.Get<IScenarioDefinitionValidator>());
             });
             services.AddSingleton<IScenarioDefinitionReader>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDefinitionReader>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

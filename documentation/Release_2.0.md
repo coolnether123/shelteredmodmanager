@@ -15,7 +15,9 @@ It supersedes the previous beta checklist for the public 2.0 stable line.
 ## User-Facing Scope
 
 - Split API surface: neutral `ModAPI.dll` plus Sheltered-specific `ShelteredAPI.dll`.
-- Custom scenario browser, XML packs, dependency lockout, trigger runtime, scheduled effects, and win/loss support. Advanced in-game authoring ships as an opt-in preview and defaults off.
+- Custom scenario browser, XML packs, dependency lockout, trigger runtime, scheduled effects, and win/loss support ship in ShelteredAPI. Advanced in-game authoring ships separately as optional `ShelteredScenarioEditor.dll`, defaults off, and is controlled only by `ShelteredScenarioEditor.Enabled`.
+- The vanilla scenario window contains only the stock Surrounded/Stasis saves. Separate unlimited-save archives for those modes and modded-scenario saves remain in the Custom Scenarios window.
+- Unlimited scenario archives use only the canonical `Surrounded` and `Stasis` storage buckets. Unreleased pre-2.0 `VanillaSurrounded` and `VanillaStasis` buckets are intentionally ignored rather than supported through migration aliases.
 - Custom-scenario save APIs now reject reserved built-in save ids such as `Standard`, `Vanilla.Surrounded`, `Vanilla.Stasis`, and draft storage. Mods should use the explicit `ShelteredSaves.*Standard` helpers for built-in save buckets.
 - Scenario authoring writes `scenario.xml` through same-directory temp files, parse validation, replace, and `.bak` recovery files so failed writes preserve the previous XML.
 - Save backup lineage support records manager-created save backups so users can recover from failed save writes or compatibility testing regressions.
@@ -27,10 +29,10 @@ It supersedes the previous beta checklist for the public 2.0 stable line.
 ## Safety And Compatibility
 
 - Players should back up saves before upgrading major framework versions.
-- Custom scenario playback and Stasis/Surrounded expanded saves should be smoke tested before long-running playthroughs. Use disposable saves for the opt-in authoring preview.
+- Custom scenario playback and Stasis/Surrounded expanded saves should be smoke tested before long-running playthroughs. `ShelteredScenarioEditor.dll` is optional; use disposable saves when testing it with `ShelteredScenarioEditor.Enabled=true`.
 - Family Expansion and Deep Expansion should be treated as not compatible until rebuilt and smoke tested against ModAPI/ShelteredAPI 2.0.
 - Some 1.2.2 mods may break because Sheltered-specific API surface moved from `ModAPI.dll` to `ShelteredAPI.dll`.
-- Bug reports should include storefront/version, mod list, save type, custom scenario authoring preview state, reproduction steps, and `SMM\mod_manager.log`.
+- Bug reports should include storefront/version, mod list, save type, whether `ShelteredScenarioEditor.dll` was present, the value of `ShelteredScenarioEditor.Enabled`, reproduction steps, and `SMM\mod_manager.log`.
 
 ## Documentation Readiness
 
@@ -82,7 +84,9 @@ Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with t
 - Run `tools\verify-shelteredapi-public-surface.cmd`.
 - Run `tools\test-shelteredapi-contracts.cmd`.
 - Run `tools\verify-runtimecompat-rect.cmd`.
+- Run `tools\Test-ScenarioEditorAssemblyBoundary.ps1` and `tools\Test-ShelteredScenarioEditorContracts.ps1`.
 - Run `tools\scan-stale-version-references.cmd`.
+- Build and launch with the editor DLL physically absent, present/disabled, and present/enabled.
 - Smoke test Steam/GOG package against `Sheltered.exe`.
 - Smoke test Epic package against `ShelteredWindows64_EOS.exe`.
 - Verify `SMM\Manager.exe` About tab shows `Version 2.0.0`.

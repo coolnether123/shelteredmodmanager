@@ -46,7 +46,7 @@ namespace ShelteredAPI.Saves.Runtime
                     var updatedEntry = SaveStorageRouter.Overwrite(scenarioId, active.id, null, bytes);
                     if (updatedEntry != null)
                     {
-                        SaveRuntimeState.ActiveCustomSave = updatedEntry;
+                        SaveRuntimeState.ReplaceActiveCustomSave(updatedEntry);
                         MMLog.Write("[SaveGlobalData_Patch] Successfully updated custom save file and manifest. scenario=" + scenarioId
                             + " saveId=" + updatedEntry.id + " absoluteSlot=" + updatedEntry.absoluteSlot + ".");
                     }

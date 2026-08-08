@@ -5,7 +5,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
     internal sealed class ScenarioRuntimeBindingPersistence : IScenarioRuntimeBindingPersistence
     {
         private const string SaveGroupName = "CustomScenarioBinding";
-        private const string HasLastEditorTickName = "HasLastEditorSaveTick";
         private const string HasScenarioQuestInstanceIdName = "HasScenarioQuestInstanceId";
 
         public ScenarioRuntimeBinding Load(SaveData data)
@@ -18,8 +17,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             bool isConverted = false;
             int dayCreated = 0;
             string runId = string.Empty;
-            int lastEditorTick = 0;
-            bool hasLastEditorTick = false;
+            bool isPreview = false;
             int scenarioQuestInstanceId = -1;
             bool hasScenarioQuestInstanceId = false;
 
@@ -29,8 +27,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             data.SaveLoad("IsConverted", ref isConverted);
             data.SaveLoad("DayCreated", ref dayCreated);
             data.SaveLoad("RunId", ref runId);
-            data.SaveLoad(HasLastEditorTickName, ref hasLastEditorTick);
-            data.SaveLoad("LastEditorSaveTick", ref lastEditorTick);
+            data.SaveLoad("IsPreview", ref isPreview);
             data.SaveLoad(HasScenarioQuestInstanceIdName, ref hasScenarioQuestInstanceId);
             data.SaveLoad("ScenarioQuestInstanceId", ref scenarioQuestInstanceId);
             data.GroupEnd();
@@ -44,7 +41,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             binding.IsConvertedToNormalSave = isConverted;
             binding.DayCreated = dayCreated;
             binding.RunId = runId;
-            binding.LastEditorSaveTick = hasLastEditorTick ? new int?(lastEditorTick) : null;
+            binding.IsPreview = isPreview;
             binding.ScenarioQuestInstanceId = hasScenarioQuestInstanceId ? new int?(scenarioQuestInstanceId) : null;
             return binding;
         }
@@ -58,8 +55,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             bool isConverted = binding.IsConvertedToNormalSave;
             int dayCreated = binding.DayCreated;
             string runId = binding.RunId ?? string.Empty;
-            bool hasLastEditorTick = binding.LastEditorSaveTick.HasValue;
-            int lastEditorTick = binding.LastEditorSaveTick.HasValue ? binding.LastEditorSaveTick.Value : 0;
+            bool isPreview = binding.IsPreview;
             bool hasScenarioQuestInstanceId = binding.ScenarioQuestInstanceId.HasValue;
             int scenarioQuestInstanceId = binding.ScenarioQuestInstanceId.HasValue ? binding.ScenarioQuestInstanceId.Value : -1;
 
@@ -69,8 +65,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             data.SaveLoad("IsConverted", ref isConverted);
             data.SaveLoad("DayCreated", ref dayCreated);
             data.SaveLoad("RunId", ref runId);
-            data.SaveLoad(HasLastEditorTickName, ref hasLastEditorTick);
-            data.SaveLoad("LastEditorSaveTick", ref lastEditorTick);
+            data.SaveLoad("IsPreview", ref isPreview);
             data.SaveLoad(HasScenarioQuestInstanceIdName, ref hasScenarioQuestInstanceId);
             data.SaveLoad("ScenarioQuestInstanceId", ref scenarioQuestInstanceId);
             data.GroupEnd();

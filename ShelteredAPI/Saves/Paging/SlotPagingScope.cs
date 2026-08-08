@@ -1,6 +1,7 @@
 using System.IO;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Saves.Paging
 {
@@ -92,7 +93,13 @@ namespace ShelteredAPI.Saves.Paging
 
         public int GetTransportSlotNumber(int zeroBasedSlotIndex)
         {
-            return IsStandard ? zeroBasedSlotIndex + 1 : SaveTypeToSlotNumber(TransportSaveType);
+            if (IsStandard)
+                return zeroBasedSlotIndex + 1;
+
+            VanillaSaveRoute route;
+            return VanillaSaveRouting.TryGetRoute(TransportSaveType, out route)
+                ? route.VanillaSlotNumber
+                : 1;
         }
 
         public SlotManifest ReadManifest(int absoluteSlot)
@@ -100,17 +107,5 @@ namespace ShelteredAPI.Saves.Paging
             return SaveRegistryCore.ReadSlotManifest(StorageScenarioId, absoluteSlot);
         }
 
-        public static int SaveTypeToSlotNumber(SaveManager.SaveType saveType)
-        {
-            switch (saveType)
-            {
-                case SaveManager.SaveType.Slot1: return 1;
-                case SaveManager.SaveType.Slot2: return 2;
-                case SaveManager.SaveType.Slot3: return 3;
-                case SaveManager.SaveType.SlotSurrounded: return 4;
-                case SaveManager.SaveType.SlotStasis: return 5;
-                default: return 1;
-            }
-        }
     }
 }

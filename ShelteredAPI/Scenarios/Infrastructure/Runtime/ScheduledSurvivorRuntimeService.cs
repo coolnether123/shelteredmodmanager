@@ -7,6 +7,7 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Conditions;
 using ShelteredAPI.Scenarios.Application.Effects;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Runtime;
@@ -336,7 +337,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
                 {
                     FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
-                    ScenarioActorRef survivorRef = survivor != null ? survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null) : null;
+                    ScenarioActorRef survivorRef = ScenarioFutureSurvivorActorReference.Resolve(survivor);
                     if (_actorResolver.ReferencesSameActor(definition, effect.ActorRef, survivorRef))
                         return survivor;
                 }
@@ -350,7 +351,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (_actorResolver == null || survivor == null || spawned == null)
                 return;
 
-            ScenarioActorRef actorRef = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+            ScenarioActorRef actorRef = ScenarioFutureSurvivorActorReference.Resolve(survivor);
             string message;
             _actorResolver.BindMaterializedFamilyMember(definition, actorRef, spawned, out message);
         }

@@ -5,7 +5,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Coordinates document editing state while leaving rendering, codecs, and persistence to hosts.
     /// </summary>
-    public sealed class PixelEditorSession
+    internal sealed class PixelEditorSession
     {
         private PixelDocument _document;
         private PixelDocument _savedDocument;

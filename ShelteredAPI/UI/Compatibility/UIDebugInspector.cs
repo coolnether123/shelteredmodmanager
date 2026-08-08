@@ -14,7 +14,6 @@ using ModAPI.Inspector;
 
 using ShelteredAPI.Content;
 using ShelteredAPI.Persistence;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 using ShelteredAPI.UI.Internal.Settings;
 namespace ShelteredAPI.UI.Compatibility
@@ -589,7 +588,7 @@ namespace ShelteredAPI.UI.Compatibility
                 GUILayout.Label($"<b><color=orange>Validation Warnings ({_selectedSnapshot.Warnings.Count}):</color></b>");
                 foreach (var warn in _selectedSnapshot.Warnings)
                 {
-                    GUILayout.Label($"<color=orange>â€¢ {warn}</color>");
+                    GUILayout.Label($"<color=orange>- {warn}</color>");
                 }
                 GUILayout.EndVertical();
             }
@@ -2272,7 +2271,7 @@ namespace ShelteredAPI.UI.Compatibility
                 {
                     ModAPI.Core.ModEntry entry;
                     string mId = ModAPI.Core.ModRegistry.TryGetModByAssembly(p.GetType().Assembly, out entry) ? entry.Id : p.GetType().Name;
-                    modSummary += $"â€¢ {mId}\n";
+                    modSummary += $"- {mId}\n";
                 }
                 GUI.Label(new Rect(x + 5, y + 25, w - 10, h - 30), modSummary);
             }

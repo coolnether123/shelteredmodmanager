@@ -1,0 +1,117 @@
+using System;
+using ModAPI.Scenarios;
+using ShelteredAPI.Saves;
+using SaveType = SaveManager.SaveType;
+
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredScenarioEditor.Application.Authoring{
+    internal sealed class ScenarioAuthoringSession
+    {
+        private ScenarioAuthoringSession()
+        {
+        }
+
+        public string DraftId { get; private set; }
+        public string ScenarioFilePath { get; private set; }
+        public string DisplayName { get; private set; }
+        public string Version { get; private set; }
+        public string OwnerId { get; private set; }
+        public ScenarioBaseGameMode BaseMode { get; private set; }
+        public DateTime CreatedUtc { get; private set; }
+        public string StorageScenarioId { get; private set; }
+        public string StartupSaveId { get; private set; }
+        public int StartupSaveSlot { get; private set; }
+        public SaveEntry StartupSave { get; private set; }
+        public SaveType LaunchSaveType { get; private set; }
+        public string ExpectedSceneName { get; private set; }
+        public bool ReenterPlaytestAfterBootstrap { get; private set; }
+        public bool CaptureBaseDefaultFamilyAfterBootstrap { get; private set; }
+        public bool SuppressIntroCutsceneAfterSceneLoad { get; private set; }
+        public bool AutoPopulateStartingCastAfterBootstrap { get; private set; }
+
+        public static ScenarioAuthoringSession Create(
+            ScenarioInfo draftInfo,
+            ScenarioBaseGameMode baseMode,
+            string storageScenarioId,
+            string startupSaveId,
+            int startupSaveSlot,
+            SaveEntry startupSave,
+            SaveType launchSaveType)
+        {
+            if (draftInfo == null)
+                throw new ArgumentNullException("draftInfo");
+
+            return new ScenarioAuthoringSession
+            {
+                DraftId = draftInfo.Id,
+                ScenarioFilePath = draftInfo.FilePath,
+                DisplayName = draftInfo.DisplayName,
+                Version = string.IsNullOrEmpty(draftInfo.Version) ? "0.1.0" : draftInfo.Version,
+                OwnerId = draftInfo.OwnerModId,
+                BaseMode = baseMode,
+                CreatedUtc = DateTime.UtcNow,
+                StorageScenarioId = storageScenarioId,
+                StartupSaveId = startupSaveId,
+                StartupSaveSlot = startupSaveSlot,
+                StartupSave = startupSave,
+                LaunchSaveType = launchSaveType,
+                ExpectedSceneName = ResolveExpectedSceneName(baseMode)
+            };
+        }
+
+        public void RequestPlaytestAfterBootstrap()
+        {
+            ReenterPlaytestAfterBootstrap = true;
+        }
+
+        public void RequestBaseDefaultFamilyCaptureAfterBootstrap()
+        {
+            CaptureBaseDefaultFamilyAfterBootstrap = true;
+        }
+
+        public void RequestSuppressIntroCutsceneAfterSceneLoad()
+        {
+            SuppressIntroCutsceneAfterSceneLoad = true;
+        }
+
+        public void RequestStartingCastAutoPopulateAfterBootstrap()
+        {
+            AutoPopulateStartingCastAfterBootstrap = true;
+        }
+
+        internal ScenarioAuthoringSession CreateReloadSession(
+            ScenarioBaseGameMode baseMode,
+            SaveType launchSaveType)
+        {
+            return new ScenarioAuthoringSession
+            {
+                DraftId = DraftId,
+                ScenarioFilePath = ScenarioFilePath,
+                DisplayName = DisplayName,
+                Version = Version,
+                OwnerId = OwnerId,
+                BaseMode = baseMode,
+                CreatedUtc = DateTime.UtcNow,
+                StorageScenarioId = StorageScenarioId,
+                StartupSaveId = StartupSaveId,
+                StartupSaveSlot = StartupSaveSlot,
+                StartupSave = StartupSave,
+                LaunchSaveType = launchSaveType,
+                ExpectedSceneName = ResolveExpectedSceneName(baseMode)
+            };
+        }
+
+        private static string ResolveExpectedSceneName(ScenarioBaseGameMode baseMode)
+        {
+            switch (baseMode)
+            {
+                case ScenarioBaseGameMode.Surrounded:
+                    return "ShelterScene_Surrounded";
+                case ScenarioBaseGameMode.Stasis:
+                    return "ShelterScene_Stasis";
+                default:
+                    return "ShelterScene";
+            }
+        }
+    }
+}

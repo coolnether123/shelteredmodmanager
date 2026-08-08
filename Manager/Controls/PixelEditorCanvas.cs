@@ -13,7 +13,7 @@ namespace Manager.Controls
     /// System.Drawing host for the shared pixel-editing session. This control owns
     /// pointer/rendering concerns only; history and document mutations stay shared.
     /// </summary>
-    public sealed class PixelEditorCanvas : ScrollableControl
+    internal sealed class PixelEditorCanvas : ScrollableControl
     {
         private PixelEditorSession _session;
         private bool _pointerDown;

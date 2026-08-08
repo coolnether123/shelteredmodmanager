@@ -2263,10 +2263,6 @@ namespace Manager
 
         #endregion
 
-        private void _gameSetupTab_Load(object sender, EventArgs e)
-        {
-
-        }
     }
 }
 

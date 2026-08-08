@@ -5,7 +5,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Framework-neutral 8-bit RGBA color used by the shared pixel editor.
     /// </summary>
-    public struct Rgba32 : IEquatable<Rgba32>
+    internal struct Rgba32 : IEquatable<Rgba32>
     {
         public readonly byte R;
         public readonly byte G;

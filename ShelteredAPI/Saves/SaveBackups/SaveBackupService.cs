@@ -128,25 +128,13 @@ namespace ShelteredAPI.Saves.Backups
 
             string storageScenarioId = SaveStorageRouter.NormalizeScenarioId(scenarioId);
             SaveBackupTarget target;
-            SaveManager.SaveType vanillaSaveType = SaveManager.SaveType.Invalid;
-            if (SaveStorageRouter.IsStandardScenario(storageScenarioId))
-            {
-                switch (absoluteSlot)
-                {
-                    case 1: vanillaSaveType = SaveManager.SaveType.Slot1; break;
-                    case 2: vanillaSaveType = SaveManager.SaveType.Slot2; break;
-                    case 3: vanillaSaveType = SaveManager.SaveType.Slot3; break;
-                }
-            }
-            else
-            {
-                VanillaSaveRoute specialRoute;
-                if (VanillaSaveRouting.TryGetRouteByStorageScenarioId(storageScenarioId, out specialRoute)
-                    && specialRoute.AbsoluteSlot == absoluteSlot)
-                {
-                    vanillaSaveType = specialRoute.SaveType;
-                }
-            }
+            VanillaSaveRoute storageRoute;
+            SaveManager.SaveType vanillaSaveType = VanillaSaveRouting.TryGetRouteByStorageLocation(
+                storageScenarioId,
+                absoluteSlot,
+                out storageRoute)
+                ? storageRoute.SaveType
+                : SaveManager.SaveType.Invalid;
 
             if (vanillaSaveType != SaveManager.SaveType.Invalid)
             {
@@ -222,15 +210,11 @@ namespace ShelteredAPI.Saves.Backups
             timelineKey = null;
             saveType = SaveManager.SaveType.Invalid;
 
-            switch (vanillaSlotNumber)
-            {
-                case 1: saveType = SaveManager.SaveType.Slot1; break;
-                case 2: saveType = SaveManager.SaveType.Slot2; break;
-                case 3: saveType = SaveManager.SaveType.Slot3; break;
-                case 4: saveType = SaveManager.SaveType.SlotSurrounded; break;
-                case 5: saveType = SaveManager.SaveType.SlotStasis; break;
-                default: return false;
-            }
+            VanillaSaveRoute route;
+            if (!VanillaSaveRouting.TryGetRouteByVanillaSlotNumber(vanillaSlotNumber, out route))
+                return false;
+
+            saveType = route.SaveType;
 
             timelineKey = "vanilla:" + saveType;
             return true;
@@ -606,18 +590,7 @@ namespace ShelteredAPI.Saves.Backups
         private static string GetBranchMarkerPath(string timelineKey)
         {
             string branchRoot = Path.Combine(DirectoryProvider.SaveBackupsRoot, BranchMarkerDirectoryName);
-            return Path.Combine(branchRoot, SanitizePathSegment(timelineKey) + ".json");
-        }
-
-        private static string SanitizePathSegment(string value)
-        {
-            string safe = string.IsNullOrEmpty(value) ? "unknown" : value;
-            char[] invalid = Path.GetInvalidFileNameChars();
-            for (int i = 0; i < invalid.Length; i++)
-                safe = safe.Replace(invalid[i], '_');
-
-            safe = safe.Replace('\\', '_').Replace('/', '_').Replace(':', '_').Replace('|', '_');
-            return safe.Length > 96 ? safe.Substring(0, 96) : safe;
+            return Path.Combine(branchRoot, SaveBackupPathPolicy.SanitizeSegment(timelineKey) + ".json");
         }
 
         private static SaveBackupRetentionPolicy ReadRetentionPolicy()

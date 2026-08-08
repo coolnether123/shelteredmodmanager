@@ -80,6 +80,20 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Canonical storage root for scenario packages installed by user-facing tools.
+        /// Mod-owned scenarios remain in each mod's own Scenarios directory.
+        /// </summary>
+        public static string ScenarioPackagesRoot
+        {
+            get
+            {
+                string root = Path.Combine(UserRoot, "Scenarios");
+                EnsureDirectory(root);
+                return root;
+            }
+        }
+
         public static string LibsRoot
         {
             get

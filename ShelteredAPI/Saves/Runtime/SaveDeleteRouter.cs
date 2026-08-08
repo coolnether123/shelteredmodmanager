@@ -17,7 +17,8 @@ namespace ShelteredAPI.Saves.Runtime
         {
             result = false;
 
-            if (!IsProxyVanillaSlot(requestedType))
+            VanillaSaveRoute requestedRoute;
+            if (!VanillaSaveRouting.TryGetRoute(requestedType, out requestedRoute))
             {
                 return false;
             }
@@ -122,13 +123,5 @@ namespace ShelteredAPI.Saves.Runtime
             SaveRuntimeState.ClearTrackedReferences(requestedType, deletedSaveId);
         }
 
-        private static bool IsProxyVanillaSlot(SaveManager.SaveType type)
-        {
-            return type == SaveManager.SaveType.Slot1 ||
-                   type == SaveManager.SaveType.Slot2 ||
-                   type == SaveManager.SaveType.Slot3 ||
-                   type == SaveManager.SaveType.SlotSurrounded ||
-                   type == SaveManager.SaveType.SlotStasis;
-        }
     }
 }

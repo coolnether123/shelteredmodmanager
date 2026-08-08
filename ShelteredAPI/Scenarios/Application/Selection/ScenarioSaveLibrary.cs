@@ -8,8 +8,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
     {
         private const string VanillaSurroundedSaveId = ScenarioSaveIdGuards.VanillaSurroundedSaveId;
         private const string VanillaStasisSaveId = ScenarioSaveIdGuards.VanillaStasisSaveId;
-        private const string LegacySurroundedStorageScenarioId = "VanillaSurrounded";
-        private const string LegacyStasisStorageScenarioId = "VanillaStasis";
 
         public ScenarioSaveLibrary()
         {
@@ -25,7 +23,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         {
             string storageScenarioId = ToStorageScenarioId(scenarioId);
             if (IsBuiltInScenarioStorage(storageScenarioId))
-                return ListBuiltInScenarioSaves(storageScenarioId);
+                return ListUnlimitedBuiltInScenarioSaves(storageScenarioId);
 
             return GetRegistry(storageScenarioId).ListSaves();
         }
@@ -34,7 +32,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         {
             string storageScenarioId = ToStorageScenarioId(scenarioId);
             if (IsBuiltInScenarioStorage(storageScenarioId))
-                return ListBuiltInScenarioSaves(storageScenarioId).Length;
+                return ListUnlimitedBuiltInScenarioSaves(storageScenarioId).Length;
 
             return GetRegistry(storageScenarioId).CountSaves();
         }
@@ -103,15 +101,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 : registry.DeleteSave(saveId);
             if (!deleted && IsBuiltInScenarioStorage(storageScenarioId))
             {
-                string legacyStorageScenarioId = GetLegacyStorageScenarioId(storageScenarioId);
-                if (!string.IsNullOrEmpty(legacyStorageScenarioId))
-                    deleted = GetRegistry(legacyStorageScenarioId).TryDeleteSave(saveId);
-
-                if (!deleted)
-                {
-                    MMLog.WriteWarning("[ScenarioSaveLibrary] Delete save failed after storage and legacy fallback attempts. scenarioId="
-                        + storageScenarioId + " saveId=" + saveId + ".");
-                }
+                MMLog.WriteWarning("[ScenarioSaveLibrary] Delete save failed in canonical scenario storage. scenarioId="
+                    + storageScenarioId + " saveId=" + saveId + ".");
             }
 
             MMLog.WriteInfo("[ScenarioSaveLibrary] Delete save result=" + deleted
@@ -172,8 +163,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 throw new ArgumentNullException("startupSave");
 
             string storageScenarioId = ResolveStorageScenarioId(scenarioId, startupSave);
-            PlatformSaveProxy.ClearNextSave(saveType);
-            PlatformSaveProxy.SetNextSave(saveType, storageScenarioId, startupSave.id);
+            SaveRuntimeState.ClearPendingSave(saveType);
+            SaveRuntimeState.QueueSave(saveType, storageScenarioId, startupSave.id);
             MMLog.WriteInfo("[ScenarioSaveLibrary] Queued new-game save target. scenarioId="
                 + storageScenarioId + " saveId=" + startupSave.id + " slot=" + startupSave.absoluteSlot
                 + " virtualSaveType=" + saveType + ".");
@@ -185,7 +176,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 throw new ArgumentNullException("save");
 
             string storageScenarioId = ResolveStorageScenarioId(scenarioId, save);
-            PlatformSaveProxy.SetNextLoad(saveType, storageScenarioId, save.id);
+            SaveRuntimeState.QueueLoad(saveType, storageScenarioId, save.id);
             MMLog.WriteInfo("[ScenarioSaveLibrary] Queued load target. scenarioId="
                 + storageScenarioId + " saveId=" + save.id + " slot=" + save.absoluteSlot
                 + " virtualSaveType=" + saveType + ".");
@@ -193,22 +184,22 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
         public bool ClearQueuedNewGameSave(SaveManager.SaveType saveType)
         {
-            return PlatformSaveProxy.ClearNextSave(saveType);
+            return SaveRuntimeState.ClearPendingSave(saveType);
         }
 
         public bool ClearQueuedLoad(SaveManager.SaveType saveType)
         {
-            return PlatformSaveProxy.ClearNextLoad(saveType);
+            return SaveRuntimeState.ClearPendingLoad(saveType);
         }
 
         public bool ClearQueuedNewGameSaveIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId)
         {
-            return PlatformSaveProxy.ClearNextSaveIfMatches(saveType, CreateTarget(scenarioId, saveId));
+            return SaveRuntimeState.ClearPendingSaveIfMatches(saveType, CreateTarget(scenarioId, saveId));
         }
 
         public bool ClearQueuedLoadIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId)
         {
-            return PlatformSaveProxy.ClearNextLoadIfMatches(saveType, CreateTarget(scenarioId, saveId));
+            return SaveRuntimeState.ClearPendingLoadIfMatches(saveType, CreateTarget(scenarioId, saveId));
         }
 
         private SaveCreateOptions NormalizeCreateOptions(string scenarioId, SaveCreateOptions options)
@@ -229,16 +220,12 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
         private static SaveRegistryCore GetRegistry(string scenarioId)
         {
-            string storageScenarioId = ScenarioSelectionIds.ToStorageScenarioId(scenarioId);
-            if (ExpandedVanillaSaves.IsStandardScenario(storageScenarioId))
-                return (SaveRegistryCore)ExpandedVanillaSaves.Instance;
-
-            return ScenarioSaves.GetTrustedRegistry(storageScenarioId);
+            return SaveStorageRouter.GetRegistry(ScenarioSelectionIds.ToStorageScenarioId(scenarioId));
         }
 
-        private static PlatformSaveProxy.Target CreateTarget(string scenarioId, string saveId)
+        private static SaveRuntimeState.Target CreateTarget(string scenarioId, string saveId)
         {
-            return new PlatformSaveProxy.Target { scenarioId = scenarioId, saveId = saveId };
+            return new SaveRuntimeState.Target { ScenarioId = scenarioId, SaveId = saveId };
         }
 
         private static string ResolveStorageScenarioId(string scenarioId, SaveEntry entry)
@@ -299,17 +286,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return true;
             }
 
-            if (IsBuiltInScenarioStorage(storageScenarioId))
-            {
-                string legacyStorageScenarioId = GetLegacyStorageScenarioId(storageScenarioId);
-                if (!string.IsNullOrEmpty(legacyStorageScenarioId)
-                    && TryGetStorageSave(legacyStorageScenarioId, save.id, out storageEntry))
-                {
-                    storageScenarioId = legacyStorageScenarioId;
-                    return true;
-                }
-            }
-
             storageEntry = null;
             return false;
         }
@@ -344,69 +320,42 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 || string.Equals(storageScenarioId, ScenarioSelectionIds.VanillaStasisStorageScenarioId, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static SaveEntry[] ListBuiltInScenarioSaves(string storageScenarioId)
+        private static SaveEntry[] ListUnlimitedBuiltInScenarioSaves(string storageScenarioId)
         {
             List<SaveEntry> entries = new List<SaveEntry>();
-            SaveEntry vanilla = TryReadVanillaScenarioSave(storageScenarioId);
-            if (vanilla != null)
-                entries.Add(vanilla);
-
-            int displaySlot = entries.Count + 1;
-            string legacyStorageScenarioId = GetLegacyStorageScenarioId(storageScenarioId);
-            if (!string.IsNullOrEmpty(legacyStorageScenarioId))
-            {
-                AddRegistryEntries(entries, GetRegistry(legacyStorageScenarioId), displaySlot);
-                displaySlot = entries.Count + 1;
-            }
-
-            AddRegistryEntries(entries, GetRegistry(storageScenarioId), displaySlot);
-
-            return entries.ToArray();
-        }
-
-        private static void AddRegistryEntries(List<SaveEntry> target, SaveRegistryCore registry, int firstDisplaySlot)
-        {
-            if (target == null || registry == null)
-                return;
-
-            SaveEntry[] saves = registry.ListSaves();
-            int displaySlot = firstDisplaySlot <= 0 ? 1 : firstDisplaySlot;
+            SaveEntry[] saves = GetRegistry(storageScenarioId).ListSaves();
+            int displaySlot = 1;
             for (int i = 0; saves != null && i < saves.Length; i++)
             {
                 SaveEntry save = saves[i];
                 if (save == null || IsVanillaScenarioSaveId(save.id))
                     continue;
 
-                SaveEntry display = CloneSaveEntry(save);
-                display.absoluteSlot = displaySlot++;
-                target.Add(display);
+                entries.Add(new SaveEntry
+                {
+                    id = save.id,
+                    absoluteSlot = displaySlot++,
+                    name = save.name,
+                    createdAt = save.createdAt,
+                    updatedAt = save.updatedAt,
+                    gameVersion = save.gameVersion,
+                    modApiVersion = save.modApiVersion,
+                    scenarioId = save.scenarioId,
+                    scenarioVersion = save.scenarioVersion,
+                    fileSize = save.fileSize,
+                    crc32 = save.crc32,
+                    previewPath = save.previewPath,
+                    extra = save.extra,
+                    saveInfo = save.saveInfo ?? new SaveInfo()
+                });
             }
-        }
 
-        private static SaveEntry CloneSaveEntry(SaveEntry source)
-        {
-            return new SaveEntry
-            {
-                id = source.id,
-                absoluteSlot = source.absoluteSlot,
-                name = source.name,
-                createdAt = source.createdAt,
-                updatedAt = source.updatedAt,
-                gameVersion = source.gameVersion,
-                modApiVersion = source.modApiVersion,
-                scenarioId = source.scenarioId,
-                scenarioVersion = source.scenarioVersion,
-                fileSize = source.fileSize,
-                crc32 = source.crc32,
-                previewPath = source.previewPath,
-                extra = source.extra,
-                saveInfo = source.saveInfo ?? new SaveInfo()
-            };
+            return entries.ToArray();
         }
 
         private static SaveEntry FindBuiltInScenarioSave(string storageScenarioId, string saveId)
         {
-            SaveEntry[] saves = ListBuiltInScenarioSaves(storageScenarioId);
+            SaveEntry[] saves = ListUnlimitedBuiltInScenarioSaves(storageScenarioId);
             for (int i = 0; i < saves.Length; i++)
             {
                 if (saves[i] != null && string.Equals(saves[i].id, saveId, StringComparison.OrdinalIgnoreCase))
@@ -418,7 +367,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
         private static SaveEntry FindBuiltInScenarioSaveByDisplaySlot(string storageScenarioId, int displaySlot)
         {
-            SaveEntry[] saves = ListBuiltInScenarioSaves(storageScenarioId);
+            SaveEntry[] saves = ListUnlimitedBuiltInScenarioSaves(storageScenarioId);
             for (int i = 0; i < saves.Length; i++)
             {
                 if (saves[i] != null && saves[i].absoluteSlot == displaySlot)
@@ -430,10 +379,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
         private static int GetNextBuiltInScenarioSlot(string storageScenarioId)
         {
-            int firstSlot = TryReadVanillaScenarioSave(storageScenarioId) != null ? 2 : 1;
-            int nextSlot = ListBuiltInScenarioSaves(storageScenarioId).Length + 1;
-            if (nextSlot < firstSlot)
-                nextSlot = firstSlot;
+            int nextSlot = Math.Max(2, ListUnlimitedBuiltInScenarioSaves(storageScenarioId).Length + 1);
 
             SaveEntry[] current = GetRegistry(storageScenarioId).ListSaves();
             int maxCurrentSlot = 0;
@@ -452,32 +398,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 if (save != null && save.absoluteSlot > maxSlot)
                     maxSlot = save.absoluteSlot;
             }
-        }
-
-        private static SaveEntry TryReadVanillaScenarioSave(string storageScenarioId)
-        {
-            VanillaSaveRoute route;
-            if (VanillaSaveRouting.TryGetRouteByStorageScenarioId(storageScenarioId, out route))
-            {
-                return SaveRegistryCore.ReadVanillaSaveEntry(
-                    route.VanillaSlotNumber,
-                    route.StorageScenarioId,
-                    route.SaveId,
-                    route.AbsoluteSlot);
-            }
-
-            return null;
-        }
-
-        private static string GetLegacyStorageScenarioId(string storageScenarioId)
-        {
-            if (string.Equals(storageScenarioId, ScenarioSelectionIds.VanillaSurroundedStorageScenarioId, StringComparison.OrdinalIgnoreCase))
-                return LegacySurroundedStorageScenarioId;
-
-            if (string.Equals(storageScenarioId, ScenarioSelectionIds.VanillaStasisStorageScenarioId, StringComparison.OrdinalIgnoreCase))
-                return LegacyStasisStorageScenarioId;
-
-            return null;
         }
 
     }

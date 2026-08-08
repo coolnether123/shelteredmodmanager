@@ -35,7 +35,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
             _issues.Add(new ValidationIssue(ScenarioIssueSeverity.Warning, code, message));
         }
 
-        public ScenarioValidationResult ToLegacyResult()
+        public ScenarioValidationResult ToValidationResult()
         {
             ScenarioValidationResult result = new ScenarioValidationResult();
             for (int i = 0; i < _issues.Count; i++)

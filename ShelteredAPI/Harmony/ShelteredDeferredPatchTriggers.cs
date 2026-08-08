@@ -1,10 +1,6 @@
 using ModAPI.Core;
 using ModAPI.Harmony;
 using ShelteredAPI.Core;
-using ShelteredAPI.Scenarios;
-
-using ShelteredAPI.Scenarios.Infrastructure.Unity;
-using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Harmony
 {
     /// <summary>
@@ -26,24 +22,6 @@ namespace ShelteredAPI.Harmony
         public static void ApplyGameplayDeferred(string trigger)
         {
             HarmonyBootstrap.ApplyDeferredPatchGroup(PatchStartupTiming.GameplayDeferred, trigger);
-        }
-
-        public static void ApplyEditorDeferred(string trigger)
-        {
-            EnsureEditorRuntime(trigger);
-        }
-
-        // Kept as the compatibility seam used by the in-game agent harness.
-        // Applying the deferred patch group here ensures older harness builds
-        // cannot start the runtime driver without the authoring patches it needs.
-        public static void EnsureEditorRuntime(string trigger)
-        {
-            if (!ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
-                return;
-
-            HarmonyBootstrap.ApplyDeferredPatchGroup(PatchStartupTiming.EditorDeferred, trigger);
-            ScenarioAuthoringInputActions.EnsureRegistered();
-            ScenarioAuthoringRuntimeDriver.EnsureCreated();
         }
 
         public static void ApplyDebugDeferred(string trigger)

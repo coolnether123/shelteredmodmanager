@@ -6,7 +6,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Bounded document snapshot history. Call RecordBeforeChange once per logical edit.
     /// </summary>
-    public sealed class PixelEditHistory
+    internal sealed class PixelEditHistory
     {
         private readonly int _capacity;
         private readonly List<PixelDocument> _undo = new List<PixelDocument>();

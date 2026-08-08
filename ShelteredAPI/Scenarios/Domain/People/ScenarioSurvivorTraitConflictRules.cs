@@ -10,7 +10,8 @@ namespace ShelteredAPI.Scenarios.Domain.People
     /// One source of truth for vanilla strength/weakness conflicts. Validation,
     /// authoring pickers, and runtime sanitization all consume this policy.
     /// </summary>
-    internal static class ScenarioSurvivorTraitConflictRules
+    /// <summary>Stable validation rules for mutually exclusive vanilla survivor traits.</summary>
+    public static class ScenarioSurvivorTraitConflictRules
     {
         public static bool ConflictsWithSelection(FamilyMemberConfig member, bool selectingStrength, object candidate)
         {

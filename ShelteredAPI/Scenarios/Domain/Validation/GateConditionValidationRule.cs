@@ -6,9 +6,9 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Content;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 namespace ShelteredAPI.Scenarios.Domain.Validation{
     internal sealed class GateConditionValidationRule : IScenarioValidationRule
@@ -93,8 +93,8 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 case ScenarioConditionKind.SurvivorTraitCheck:
                     if (condition.ActorRef != null)
                     {
-                        if (!ScenarioCastMemberReferenceCatalog.HasActorRef(definition, condition.ActorRef, true, true))
-                            summary.AddError("people.condition.deleted_actor", scope + " references deleted cast member actor '" + ScenarioCastMemberReferenceCatalog.FormatActorRef(condition.ActorRef) + "'. Fix: open Events > Conditions and pick an existing cast member, or clear the actor link.");
+                        if (!ScenarioActorReferenceIndex.Contains(definition, condition.ActorRef, true, true))
+                            summary.AddError("people.condition.deleted_actor", scope + " references deleted cast member actor '" + ScenarioActorReferenceIndex.Format(condition.ActorRef) + "'. Fix: open Events > Conditions and pick an existing cast member, or clear the actor link.");
                     }
                     else if (target == null)
                         summary.AddError("people.condition.survivor_required", scope + " survivor condition is missing target id.");

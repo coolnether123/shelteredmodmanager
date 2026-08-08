@@ -16,7 +16,7 @@ namespace ShelteredAPI.Saves.Runtime
         internal bool Save(SaveManager.SaveType type, byte[] data)
         {
             string slotName = type.ToString();
-            PlatformSaveProxy.Target operationPendingTarget = null;
+            SaveRuntimeState.Target operationPendingTarget = null;
             MMLog.WriteInfo(string.Format("Saving triggered! Saving to {0}", slotName));
 
             if (ModRuntime.IsQuitting)
@@ -32,7 +32,7 @@ namespace ShelteredAPI.Saves.Runtime
                 if (ShouldSkipRedundantQuitSave(slotName))
                     return true;
 
-                PlatformSaveProxy.Target target;
+                SaveRuntimeState.Target target;
                 bool hasPendingSave = SaveRuntimeState.TryGetPendingSave(type, out target) && target != null;
                 if (hasPendingSave)
                 {
@@ -58,8 +58,8 @@ namespace ShelteredAPI.Saves.Runtime
                     MMLog.WriteWarning(string.Format(
                         "PlatformSaveProxy.PlatformSave: cleared pending save redirect after exception. proxySlot={0}, scenario={1}, saveId={2}, cleared={3}",
                         slotName,
-                        SaveStorageRouter.NormalizeScenarioId(operationPendingTarget.scenarioId),
-                        operationPendingTarget.saveId,
+                        SaveStorageRouter.NormalizeScenarioId(operationPendingTarget.ScenarioId),
+                        operationPendingTarget.SaveId,
                         clearedPending));
                 }
 
@@ -95,20 +95,20 @@ namespace ShelteredAPI.Saves.Runtime
             return success;
         }
 
-        private bool SavePendingTarget(SaveManager.SaveType type, byte[] data, string slotName, PlatformSaveProxy.Target target)
+        private bool SavePendingTarget(SaveManager.SaveType type, byte[] data, string slotName, SaveRuntimeState.Target target)
         {
             if (ModRuntime.IsQuitting)
             {
-                ModRuntime.MarkSaveExit("PlatformSave.Redirect", "saveId=" + target.saveId);
+                ModRuntime.MarkSaveExit("PlatformSave.Redirect", "saveId=" + target.SaveId);
             }
 
-            string scenarioId = SaveStorageRouter.NormalizeScenarioId(target.scenarioId);
-            SaveEntry entry = SaveStorageRouter.Overwrite(scenarioId, target.saveId, new SaveOverwriteOptions(), data);
+            string scenarioId = SaveStorageRouter.NormalizeScenarioId(target.ScenarioId);
+            SaveEntry entry = SaveStorageRouter.Overwrite(scenarioId, target.SaveId, new SaveOverwriteOptions(), data);
             if (entry == null)
             {
-                MMLog.WriteError(string.Format("PlatformSaveProxy.PlatformSave: redirected save failed. proxySlot={0}, scenario={1}, saveId={2}", slotName, scenarioId, target.saveId));
+                MMLog.WriteError(string.Format("PlatformSaveProxy.PlatformSave: redirected save failed. proxySlot={0}, scenario={1}, saveId={2}", slotName, scenarioId, target.SaveId));
                 bool clearedPending = SaveRuntimeState.ClearPendingSaveIfMatches(type, target);
-                MMLog.WriteWarning(string.Format("PlatformSaveProxy.PlatformSave: cleared failed pending save redirect. proxySlot={0}, scenario={1}, saveId={2}, cleared={3}", slotName, scenarioId, target.saveId, clearedPending));
+                MMLog.WriteWarning(string.Format("PlatformSaveProxy.PlatformSave: cleared failed pending save redirect. proxySlot={0}, scenario={1}, saveId={2}, cleared={3}", slotName, scenarioId, target.SaveId, clearedPending));
                 return false;
             }
 
@@ -127,7 +127,7 @@ namespace ShelteredAPI.Saves.Runtime
                 "Save finished {0} (custom slot: {1}, scenario: {2})",
                 slotName,
                 entry.id ?? "unknown",
-                entry.scenarioId ?? target.scenarioId ?? "unknown"));
+                entry.scenarioId ?? target.ScenarioId ?? "unknown"));
             return true;
         }
 

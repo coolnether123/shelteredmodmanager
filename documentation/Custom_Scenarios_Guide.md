@@ -1,6 +1,6 @@
 # Custom Scenarios Guide (v2.0)
 
-The 2.0 line is a breaking clean API line. Custom scenario installation, playback, XML/code registration, and runtime bindings are supported 2.0 surfaces. The advanced in-game scenario authoring workspace is an opt-in preview and defaults off; enable `Custom Scenario Authoring (Preview)` in the manager's Runtime Features settings when you intend to create or edit drafts. Installed custom scenarios remain available while authoring is disabled.
+The 2.0 line is a breaking clean API line. Custom scenario installation, playback, XML/code registration, and runtime bindings are supported ShelteredAPI surfaces. The advanced in-game scenario editor is a separate optional assembly, `ShelteredScenarioEditor.dll`. It defaults off; enable the manager option `ShelteredScenarioEditor.Enabled` when you intend to create or edit drafts, then restart the game. Installed custom scenarios remain available when the editor is disabled or its DLL is absent.
 
 Exact scenario signatures are in [API Signatures Reference](API_Signatures_Reference.md); use this guide for authoring flow and behavior. Reference choices and facade rules are centralized in the canonical [assembly boundary](README.md#assembly-boundary-canonical).
 
@@ -19,11 +19,13 @@ Authoring checklist:
 4. Keep asset paths relative to the scenario pack folder.
 5. Test a new game, save/load, dependency-missing startup, and return-to-menu/reload.
 
-Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. The hub and installed-scenario playback remain available when authoring is disabled. `Add New Scenario` and draft editing appear only after `Custom Scenario Authoring (Preview)` is enabled in the manager.
+Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. ShelteredAPI owns this installed-scenario browser and playback lane, so it remains available when the editor is disabled or absent. Draft creation and editing belong to the optional editor and appear only when `ShelteredScenarioEditor.Enabled` is enabled.
 
-Downloaded and exported XML packages can be managed from `Install Downloads`. An installed package has an `Uninstall` action with confirmation. Uninstall deletes only that package's direct child folder under the manager-owned `Scenarios` directory and refreshes the scenario catalog immediately. It does not delete authoring drafts, exports, or saved-run archives. If saved runs exist, they remain archived while the package is absent and reconnect when a package with the same stable scenario id is installed again.
+When the optional editor is enabled, downloaded and exported XML packages can be managed from `Install Downloads`. An installed package has an `Uninstall` action with confirmation. Uninstall deletes only that package's direct child folder under the manager-owned `Scenarios` directory and refreshes the ShelteredAPI scenario catalog immediately. It does not delete authoring drafts, exports, or saved-run archives. If saved runs exist, they remain archived while the package is absent and reconnect when a package with the same stable scenario id is installed again.
 
-`ModAPI.Scenarios` is the neutral registration and lifecycle surface: custom scenario registrations, opaque definition factories, lifecycle state/events, portable catalog metadata, dependency manifest conversion, and validation result containers. `ShelteredAPI.Scenarios` is the Sheltered scenario authoring/runtime pack: Sheltered XML definitions, family/survivor/bunker/inventory/quest/weather sections, the `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` facades, plus the `ShelteredScenarioDefBuilder` escape hatch. Serializers, validators, runtime binding, browser controllers, and apply services are implementation details.
+`ModAPI.Scenarios` is the neutral registration and lifecycle surface: custom scenario registrations, opaque definition factories, lifecycle state/events, portable catalog metadata, dependency manifest conversion, and validation result containers. `ShelteredAPI.Scenarios` is the Sheltered scenario authoring/runtime API: Sheltered XML definitions, family/survivor/bunker/inventory/quest/weather sections, the `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` facades, plus the `ShelteredScenarioDefBuilder` escape hatch. `ShelteredScenarios` is the single Sheltered-specific registration/catalog facade; the pre-2.0 `ShelteredScenarioRegistration` wrapper was removed and has no forwarding alias. Its serializers, validators, runtime binding, installed-scenario browser, and apply services are implementation details. Interactive drafts, editor commands, editor presentation, and editor diagnostics are implemented by `ShelteredScenarioEditor.dll`; mod projects do not reference that assembly.
+
+Maintainers extending the preview authoring workspace should follow the [Scenario Authoring Architecture](Scenario_Authoring_Architecture.md), which identifies the single owners for target selection, backdrop discovery and projection, settings, services, and rendering.
 
 ## Code-Driven Registration
 
@@ -228,21 +230,38 @@ ShelteredScenarioRuntime.SetScoreSnapshot(snapshot);
 
 `SetScoreSnapshot` fills missing scenario identity/version/runtime binding fields from the active custom scenario state and stamps the current game time when no snapshot time is supplied. `GetScoreSnapshot` returns a defensive copy, and `ClearScoreSnapshot` removes the persisted snapshot. When win/loss conditions resolve an active custom scenario, an existing snapshot is marked `Won` or `Lost` and receives the outcome condition id.
 
-## Scenario Book Browser
+## Scenario Browser And Save Lanes
 
-The scenario book adds a `Custom Scenarios` button. Selecting it replaces the vanilla scenario buttons with:
+ShelteredAPI owns one runtime scenario-browser lane. The scenario book adds a `Custom Scenarios` button. Selecting it replaces the vanilla scenario buttons with:
 
 - a fixed-size paged list that reuses the vanilla scenario button count for visible custom scenarios
-- a dedicated `Add New Scenario` button when the authoring preview is enabled
 - save-style `< Previous`, `Next >`, and `Page X / Y` controls
 
 This keeps the browser usable for arbitrarily large scenario catalogs without instantiating one on-screen button per scenario, and it behaves like the regular custom-save paging flow.
 
-When the preview is enabled, `Add New Scenario` creates an in-memory draft with the default id `com.author.scenario.new` through internal browser/editor services. XML and code authors should use `ShelteredScenarioAuthoring` to create, load, validate, save, and run framework verification for scenario definitions; browser controllers and editor backend services are not public API. The Survivors workspace exposes the character editor for both starting crew and future survivors: add/remove starting people, move the start crew order, cycle names/gender/age, step individual stats, cycle strength/weakness traits, copy full identity from a selected live family member, and copy or clear appearance. Future survivors use the same character editor row underneath their arrival scheduling controls.
+The runtime browser contains installed scenarios and save archives only. It does not own `Add New Scenario`, drafts, editing, duplication, import, recovery, or editor package-management actions. The optional editor composes those actions when enabled without creating a second installed-scenario catalog or launch implementation.
+
+Save ownership remains deliberately separate:
+
+- The vanilla scenario window contains only Surrounded and Stasis and each mode's single stock save.
+- The Custom Scenarios window exposes separate unlimited-save archives for Surrounded and Stasis. Those archives never prepend or overwrite the physical stock vanilla save.
+- Each modded scenario's saves are scoped by its stable custom scenario ID and do not replace a vanilla scenario slot.
+
+The unlimited archives read and mutate only the canonical `Surrounded` and `Stasis` storage buckets. The unreleased pre-2.0 `VanillaSurrounded` and `VanillaStasis` bucket names are not aliases and are not migrated or merged at runtime.
+
+The editor's Survivors workspace exposes character editing for both starting crew and future survivors. XML and code authors use the ShelteredAPI facades documented below; editor controllers and editor backend services are not public API.
+
+### Editor-only metadata
+
+For an editor draft named `scenario.xml`, the author-test checklist is stored next to it in `scenario.editor.xml`. This sidecar is transactional editor state, not part of the runtime scenario schema: it is validated before atomic replacement and may recover from its `.bak`. Draft copies preserve it, and autosaves/saved versions pair their scenario XML with a matching `*.editor.xml` file so incomplete pairs are not offered for restore. Saved-version filenames remain bounded for Sheltered's legacy Mono path limit; their display labels are derived from their timestamps instead of being encoded into paths.
+
+Published packages intentionally exclude editor sidecars. If `README.txt` is enabled during export, the editor writes the current checklist summary into the README, but does not ship `scenario.editor.xml` itself. Mod code should neither depend on this sidecar nor add it to a package.
 
 ## Public XML Authoring API
 
-Use `ShelteredScenarioAuthoring` for XML scenario files and in-memory XML edits. Use `ShelteredScenarios` for the live catalog/registration surface. The editor controllers, browser controllers, serializers, validators, and runtime apply services are internal implementation details.
+Use `ShelteredScenarioAuthoring` for XML scenario files and in-memory XML edits. Use `ShelteredScenarios` as the only Sheltered registration/catalog facade. Use `ShelteredScenarioRuntime` for supported active-scenario operations. The optional editor consumes these ShelteredAPI surfaces; its controllers, draft services, presentation, sidecar store, and diagnostics are not mod APIs.
+
+The editor's live playtest uses `ShelteredScenarioRuntime.BeginPreview(...)`, which returns one coarse `IScenarioPreviewSession`. Refresh, restart, snapshot, and uncommon data-only preview operations stay on that session. The owner must dispose it when a preview is replaced or closed; there is no separate `EndPreview` API. Ordinary mods normally launch registered scenarios through the catalog rather than creating editor preview sessions.
 
 Create a new XML-backed definition:
 
@@ -263,6 +282,10 @@ if (validation.IsValid)
 ```
 
 `SaveDefinition` never overwrites the live `scenario.xml` directly. It writes a same-directory temp file, parses that temp file back into a scenario definition, then replaces the live file and leaves `scenario.xml.bak` when replacing an existing file. If a write or replace fails, the previous `scenario.xml` remains in place. If loading a scenario file fails and a `.bak` exists, the loader reports the backup path instead of silently discarding local edits.
+
+`TryLoadDefinitionWithRecovery` exposes that recovery result without requiring access to an internal serializer. `LoadDefinitionInfo` projects portable scenario metadata for a file. These deliberate ShelteredAPI ports are available to mods and the standalone editor; they do not expose editor types.
+
+The same facade owns the canonical authoring policies used by tooling: `DefaultTitle`, `DefaultAuthor`, and `DefaultVersion`; `BumpVersion`; the `GeneratedBlendTerrainId`; map-icon discovery and validation; and future-survivor actor-reference fallback. The optional editor calls these members instead of compiling a second copy of ShelteredAPI policy.
 
 Edit an existing XML scenario file:
 
@@ -363,14 +386,14 @@ Applied now:
 - extra starting family members when `OverrideVanillaFamily` defines more people than the vanilla startup spawned
 - base stats: `Strength`, `Dexterity`, `Intelligence`, `Charisma`, `Perception`
 - traits using `Strength:TraitName` or `Weakness:TraitName`
-- future survivor auto-join spawns and ask-to-join recruit arrivals using the same name, gender, stat, trait, and appearance config shape as starting family members
+- future survivor auto-join spawns and ask-to-join recruit arrivals using the same name, gender, stat, trait, and appearance config shape as starting family members; actor identity and actor components belong to the outer `FutureSurvivorDefinition`, not its nested survivor appearance/config record
 - starting inventory items resolvable by `ShelteredContent.ResolveItemType` from `ShelteredAPI.dll`
 - bunker wall and wiring sprite indexes
 - vanilla object placements by `ObjectManager.ObjectType` via `definition="Generator"` and optional `level`, `movable`, `lockDeconstruct` properties
 - asset path validation and sprite preloading
 - trigger runtime state: automatic trigger definitions can fire persisted `CustomTrigger` records, scheduled actions can use `FireTrigger`, and code can call `ShelteredScenarioRuntime.FireTrigger(...)`
 - trigger-started quests through `StartTriggerId`; the quest starts after the referenced trigger has fired
-- win/loss conditions when the active binding has a spawned `ScenarioQuestInstanceId`; supported condition types are `surviveDays`, `timeReached`/`dayReached`, `itemQuantityAvailable`, `questActive`, `questCompleted`, `questFailed`, `survivorPresent`, `bunkerExpansionUnlocked`, `technologyUnlocked`, `scenarioFlagSet`, and `customTrigger`
+- typed win/loss `ScenarioConditionRef` entries when the active binding has a spawned `ScenarioQuestInstanceId`; supported kinds are `SurviveDays`, `TimeReached`, `ItemQuantityAvailable`, `QuestActive`, `QuestCompleted`, `QuestFailed`, `SurvivorPresent`, `BunkerExpansionUnlocked`, `TechnologyUnlocked`, `ScenarioFlagSet`, and `CustomTrigger`. `SurviveDays` stores its positive duration in `Quantity` and optional target hour/minute in `Time`; `TimeReached` uses the absolute `Time` value.
 
 Explicitly deferred:
 
@@ -388,12 +411,4 @@ Asset paths must be relative to the scenario pack folder. Paths that escape the 
 
 `ShelteredScenarioDefBuilder` uses reflection to write Sheltered's private `ScenarioDef` fields. Missing critical fields now throw `InvalidOperationException` instead of returning a partial definition. Use `ShelteredScenarioDefBuilder.CheckCompatibility()` when diagnosing game-version mismatches; `DescribeFailures()` reports missing reflected fields. Selection-related fields are only required after calling `UseInModes` or `OnceOnly`.
 
-Run the built-in harness from a debug mod or immediate window when validating the framework:
-
-```csharp
-ScenarioValidationResult result = ShelteredScenarioAuthoring.RunFrameworkVerification();
-```
-
 XML parsing rejects DTD and external entity declarations. Scenario XML should be plain data under a `<Scenario>` root; do not rely on external XML entities or document type declarations.
-
-`result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, secure XML parsing, atomic XML replacement, or asset escape validation fails.

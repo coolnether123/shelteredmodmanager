@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 namespace ShelteredAPI.Scenarios.Definitions{
     internal sealed class ScenarioDefinitionReader : IScenarioDefinitionReader
@@ -11,18 +10,15 @@ namespace ShelteredAPI.Scenarios.Definitions{
         private readonly IScenarioDefinitionSerializer _definitionSerializer;
         private readonly IScenarioDefinitionCatalog _definitionCatalog;
         private readonly IScenarioDefinitionValidator _definitionValidator;
-        private readonly ScenarioAuthoringDraftRepository _draftRepository;
 
         public ScenarioDefinitionReader(
             IScenarioDefinitionSerializer definitionSerializer,
             IScenarioDefinitionCatalog definitionCatalog,
-            IScenarioDefinitionValidator definitionValidator,
-            ScenarioAuthoringDraftRepository draftRepository)
+            IScenarioDefinitionValidator definitionValidator)
         {
             _definitionSerializer = definitionSerializer;
             _definitionCatalog = definitionCatalog;
             _definitionValidator = definitionValidator;
-            _draftRepository = draftRepository;
         }
 
         public ScenarioInfo[] ListAll()
@@ -30,7 +26,6 @@ namespace ShelteredAPI.Scenarios.Definitions{
             List<ScenarioInfo> combined = new List<ScenarioInfo>();
             Dictionary<string, ScenarioInfo> byId = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
             AddDefinitionInfos(byId, _definitionCatalog.ListAll());
-            AddDefinitionInfos(byId, _draftRepository.ListAll());
 
             foreach (KeyValuePair<string, ScenarioInfo> pair in byId)
                 combined.Add(pair.Value);
@@ -45,10 +40,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             if (string.IsNullOrEmpty(scenarioId))
                 return false;
 
-            if (_definitionCatalog.TryGet(scenarioId, out info) && info != null)
-                return true;
-
-            return _draftRepository.TryGet(scenarioId, out info) && info != null;
+            return _definitionCatalog.TryGet(scenarioId, out info) && info != null;
         }
 
         public ScenarioValidationResult Validate(string scenarioId)

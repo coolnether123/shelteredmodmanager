@@ -7,6 +7,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "VerificationSupport.psm1") -Force
 
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -21,18 +22,6 @@ if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
 $ApiRoot = Join-Path $RepoRoot "ShelteredAPI"
 $DeclarationPattern = "(?m)^\s*public\s+(?:sealed\s+|static\s+|abstract\s+|partial\s+)*(class|interface|enum|struct)\s+([A-Za-z_][A-Za-z0-9_]*)"
 $NamespacePattern = "(?m)^\s*namespace\s+([A-Za-z0-9_.]+)"
-
-function ConvertTo-RepoRelativePath {
-    param([string]$Path)
-
-    $fullPath = (Resolve-Path -LiteralPath $Path).Path
-    $root = $RepoRoot.TrimEnd([char]'\', [char]'/')
-    if (-not $fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Path '$fullPath' is not under repo root '$root'."
-    }
-
-    return $fullPath.Substring($root.Length).TrimStart([char]'\', [char]'/') -replace "\\", "/"
-}
 
 function New-SurfaceEntry {
     param(
@@ -52,12 +41,12 @@ function New-SurfaceEntry {
 
 function New-Key {
     param($Entry)
-    return "{0}`t{1}`t{2}" -f $Entry.Kind, $Entry.Namespace, $Entry.Name
+    return ConvertTo-VerificationTsvLine -Values @($Entry.Kind, $Entry.Namespace, $Entry.Name)
 }
 
 function ConvertTo-TsvLine {
     param($Entry)
-    return "{0}`t{1}`t{2}`t{3}" -f $Entry.Kind, $Entry.Namespace, $Entry.Name, $Entry.Path
+    return ConvertTo-VerificationTsvLine -Values @($Entry.Kind, $Entry.Namespace, $Entry.Name, $Entry.Path)
 }
 
 function Get-CurrentSurface {
@@ -70,7 +59,7 @@ function Get-CurrentSurface {
         $text = Get-Content -LiteralPath $file.FullName -Raw
         $namespaceMatch = [System.Text.RegularExpressions.Regex]::Match($text, $NamespacePattern)
         $namespace = if ($namespaceMatch.Success) { $namespaceMatch.Groups[1].Value } else { "" }
-        $relativePath = ConvertTo-RepoRelativePath $file.FullName
+        $relativePath = ConvertTo-RepositoryRelativePath -Path $file.FullName -RepositoryRoot $RepoRoot
 
         $matches = [System.Text.RegularExpressions.Regex]::Matches($text, $DeclarationPattern)
         foreach ($match in $matches) {
@@ -82,36 +71,15 @@ function Get-CurrentSurface {
 }
 
 function Read-Baseline {
-    if (-not (Test-Path -LiteralPath $BaselinePath)) {
-        throw "Missing baseline file: $BaselinePath. Run with -ListCurrent to print current candidates."
-    }
-
     $baseline = @{}
-    $lineNumber = 0
-    foreach ($line in Get-Content -LiteralPath $BaselinePath) {
-        $lineNumber += 1
-        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) {
-            continue
-        }
-
-        $parts = $line -split "`t"
-        if ($parts.Length -ne 5) {
-            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Expected 5 tab-separated fields."
-        }
-
-        if ([string]::IsNullOrWhiteSpace($parts[4])) {
-            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Public API entries require a justification."
-        }
-
+    $rows = Import-VerificationTsvBaseline -Path $BaselinePath -DataColumnCount 4 -KeyColumnIndexes @(0, 1, 2) `
+        -JustificationRequirement 'Public API entries require a justification.' `
+        -MissingFileGuidance 'Run with -ListCurrent to print current candidates.'
+    foreach ($key in $rows.Keys) {
+        $parts = @($rows[$key].Fields)
         $entry = New-SurfaceEntry -Kind $parts[0] -Namespace $parts[1] -Name $parts[2] -Path $parts[3]
-        $key = New-Key $entry
-        if ($baseline.ContainsKey($key)) {
-            throw "Duplicate baseline entry on line ${lineNumber}: $key"
-        }
-
         $baseline[$key] = $entry
     }
-
     return $baseline
 }
 

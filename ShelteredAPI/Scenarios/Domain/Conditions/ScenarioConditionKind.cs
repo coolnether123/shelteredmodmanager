@@ -17,7 +17,8 @@ namespace ShelteredAPI.Scenarios.Domain.Conditions{
         SurvivorTraitCheck = 8,
         BunkerExpansionUnlocked = 9,
         CustomTrigger = 10,
-        ScenarioFlagSet = 11
+        ScenarioFlagSet = 11,
+        SurviveDays = 12
     }
 
     /// <summary>

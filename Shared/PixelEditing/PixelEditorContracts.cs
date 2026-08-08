@@ -1,6 +1,6 @@
 namespace ShelteredModManager.Shared.PixelEditing
 {
-    public enum PixelEditorTool
+    internal enum PixelEditorTool
     {
         Paint = 0,
         Erase = 1,
@@ -11,7 +11,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Host-provided codec. The shared editor does not depend on Unity or System.Drawing.
     /// </summary>
-    public interface IPixelImageCodec
+    internal interface IPixelImageCodec
     {
         bool TryDecode(byte[] encodedImage, out PixelDocument document, out string error);
         bool TryEncodePng(PixelDocument document, out byte[] encodedPng, out string error);
@@ -20,7 +20,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Host-specific persistence destination, such as a scenario patch or full item-icon PNG.
     /// </summary>
-    public interface IPixelEditorDestination
+    internal interface IPixelEditorDestination
     {
         bool TrySave(
             PixelDocument document,
@@ -29,7 +29,7 @@ namespace ShelteredModManager.Shared.PixelEditing
             out string error);
     }
 
-    public sealed class PixelEditorSaveResult
+    internal sealed class PixelEditorSaveResult
     {
         public PixelEditorSaveResult(string assetId, string relativePath)
         {
@@ -44,7 +44,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Detached read model suitable for either an IMGUI or WinForms renderer.
     /// </summary>
-    public sealed class PixelEditorViewModel
+    internal sealed class PixelEditorViewModel
     {
         internal PixelEditorViewModel(
             PixelDocument document,

@@ -212,18 +212,6 @@ namespace ModAPI.Core
             return DebugLogScope.Mod;
         }
 
-        private static LogCategory? TryParseLogCategory(string value)
-        {
-            try
-            {
-                return (LogCategory)Enum.Parse(typeof(LogCategory), value, true);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         public static void Write(string message)
         {
             if (!ShouldLog(LogLevel.Info, LogCategory.General)) return;

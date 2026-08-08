@@ -10,7 +10,7 @@ namespace ShelteredAPI.Saves
         private static readonly object _lock = new object();
 
         /// <summary>
-        /// Gets the registry for a specific scenario. Marked internal for use by PlatformSaveProxy.
+        /// Gets the registry for an already validated scenario identifier.
         /// </summary>
         internal static SaveRegistryCore GetTrustedRegistry(string scenarioId)
         {

@@ -9,13 +9,14 @@ using UnityEngine;
 using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Public;
 using ShelteredAPI.Scenarios.Shared;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal static class ScenarioStationUpgradePropertyService
     {
-        public const string UpgradePropertyPrefix = "upgrade.";
-        public const string StatPropertyPrefix = "stat.";
+        private const string UpgradePropertyPrefix = "upgrade.";
+        private const string StatPropertyPrefix = "stat.";
         public const int ObjectLevelMin = 1;
         public const int ObjectLevelMax = 5;
 
@@ -48,64 +49,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 || obj is Obj_Radio;
         }
 
-        public static bool HasStationProperties(ObjectPlacement placement)
-        {
-            if (placement == null || placement.CustomProperties == null)
-                return false;
-
-            for (int i = 0; i < placement.CustomProperties.Count; i++)
-            {
-                ScenarioProperty property = placement.CustomProperties[i];
-                if (property == null || string.IsNullOrEmpty(property.Key))
-                    continue;
-
-                if (string.Equals(property.Key, ScenarioPlacementDefinitions.PropertyLevel, StringComparison.OrdinalIgnoreCase)
-                    || property.Key.StartsWith(UpgradePropertyPrefix, StringComparison.OrdinalIgnoreCase)
-                    || property.Key.StartsWith(StatPropertyPrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         public static void Capture(Obj_Base obj, ObjectPlacement placement)
         {
             if (obj == null || placement == null || !IsStationObject(obj))
                 return;
 
-            ScenarioPropertyBag.Set(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyLevel, ClampInt(obj.objectLevel, ObjectLevelMin, ObjectLevelMax).ToString(CultureInfo.InvariantCulture));
+            ScenarioPropertyBag.Set(
+                placement.CustomProperties,
+                ScenarioPlacementDefinitions.PropertyLevel,
+                ClampInt(obj.objectLevel, ObjectLevelMin, ObjectLevelMax).ToString(CultureInfo.InvariantCulture));
             CaptureUpgradePaths(obj, placement);
             CaptureSafeStats(obj, placement);
-        }
-
-        public static void Apply(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
-        {
-            string message;
-            if (!SeamGuard.Run(
-                "scenario.station-upgrade.apply",
-                SeamRecoveryPolicy.DisableSeamAndDegrade,
-                delegate { ApplyCore(obj, placement, result); },
-                "Station upgrade projection unavailable - scenario still playable.",
-                null,
-                out message))
-            {
-                AddMessage(result, message);
-            }
-        }
-
-        private static void ApplyCore(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
-        {
-            if (obj == null || placement == null || !IsStationObject(obj) || !HasStationProperties(placement))
-                return;
-
-            int authoredLevel;
-            if (ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyLevel, out authoredLevel))
-                SetObjectLevel(obj, ClampInt(authoredLevel, ObjectLevelMin, ObjectLevelMax));
-
-            ApplyUpgradePaths(obj, placement, result);
-            ApplySafeStats(obj, placement, result);
         }
 
         public static ScenarioStationUpgradeSnapshot BuildSnapshot(Obj_Base obj, ObjectPlacement placement)
@@ -113,10 +67,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (obj == null || !IsStationObject(obj))
                 return null;
 
-            ScenarioStationUpgradeSnapshot snapshot = new ScenarioStationUpgradeSnapshot();
-            snapshot.ObjectType = obj.GetObjectType().ToString();
-            snapshot.Level = ScenarioPropertyBag.GetInt(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyLevel, ClampInt(obj.objectLevel, ObjectLevelMin, ObjectLevelMax));
-            snapshot.Level = ClampInt(snapshot.Level, ObjectLevelMin, ObjectLevelMax);
+            ScenarioStationUpgradeSnapshot snapshot = new ScenarioStationUpgradeSnapshot
+            {
+                ObjectType = obj.GetObjectType().ToString(),
+                Level = ClampInt(
+                    ScenarioPropertyBag.GetInt(
+                        placement != null ? placement.CustomProperties : null,
+                        ScenarioPlacementDefinitions.PropertyLevel,
+                        obj.objectLevel),
+                    ObjectLevelMin,
+                    ObjectLevelMax),
+                MinLevel = ObjectLevelMin,
+                MaxLevel = ObjectLevelMax
+            };
 
             UpgradeObject upgrade = obj.GetComponent<UpgradeObject>();
             if (upgrade != null)
@@ -126,19 +89,24 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 {
                     UpgradeObject.PathEnum path = paths[i];
                     int current = Math.Max(0, upgrade.GetUpgradeLevel(path));
-                    int authored = ScenarioPropertyBag.GetInt(placement != null ? placement.CustomProperties : null, UpgradeKey(path), current);
                     int max = Math.Max(0, upgrade.GetMaxUpgradeLevel(path));
-                    snapshot.Paths.Add(new ScenarioStationUpgradePathSnapshot
+                    snapshot.AddPath(new ScenarioStationUpgradePathSnapshot
                     {
                         Name = path.ToString(),
-                        Level = ClampInt(authored, 0, max),
+                        Level = ClampInt(
+                            ScenarioPropertyBag.GetInt(
+                                placement != null ? placement.CustomProperties : null,
+                                UpgradeKey(path),
+                                current),
+                            0,
+                            max),
                         CurrentLevel = current,
                         MaxLevel = max
                     });
                 }
             }
 
-            AddStatSnapshots(obj, placement, snapshot.Stats);
+            AddStatSnapshots(obj, placement, snapshot);
             return snapshot;
         }
 
@@ -151,7 +119,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            int current = ScenarioPropertyBag.GetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyLevel, ClampInt(obj.objectLevel, ObjectLevelMin, ObjectLevelMax));
+            int current = ScenarioPropertyBag.GetInt(
+                placement.CustomProperties,
+                ScenarioPlacementDefinitions.PropertyLevel,
+                ClampInt(obj.objectLevel, ObjectLevelMin, ObjectLevelMax));
             int next = ClampInt(current + delta, ObjectLevelMin, ObjectLevelMax);
             if (next == current)
             {
@@ -159,7 +130,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            ScenarioPropertyBag.Set(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyLevel, next.ToString(CultureInfo.InvariantCulture));
+            ScenarioPropertyBag.Set(
+                placement.CustomProperties,
+                ScenarioPlacementDefinitions.PropertyLevel,
+                next.ToString(CultureInfo.InvariantCulture));
             SetObjectLevel(obj, next);
             message = "Station level set to " + next.ToString(CultureInfo.InvariantCulture) + ".";
             return true;
@@ -184,23 +158,29 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             UpgradeObject upgrade = obj.GetComponent<UpgradeObject>();
             if (upgrade == null || !upgrade.HasPath(path))
             {
-                message = "Selected station does not support the " + path.ToString() + " upgrade path.";
+                message = "Selected station does not support the " + path + " upgrade path.";
                 return false;
             }
 
             int max = Math.Max(0, upgrade.GetMaxUpgradeLevel(path));
-            int current = ScenarioPropertyBag.GetInt(placement.CustomProperties, UpgradeKey(path), Math.Max(0, upgrade.GetUpgradeLevel(path)));
+            int current = ScenarioPropertyBag.GetInt(
+                placement.CustomProperties,
+                UpgradeKey(path),
+                Math.Max(0, upgrade.GetUpgradeLevel(path)));
             int next = ClampInt(current + delta, 0, max);
             if (next == current)
             {
-                message = path.ToString() + " is already at the vanilla bound.";
+                message = path + " is already at the vanilla bound.";
                 return false;
             }
 
-            ScenarioPropertyBag.Set(placement.CustomProperties, UpgradeKey(path), next.ToString(CultureInfo.InvariantCulture));
+            ScenarioPropertyBag.Set(
+                placement.CustomProperties,
+                UpgradeKey(path),
+                next.ToString(CultureInfo.InvariantCulture));
             ApplyUpgradeLevel(obj, upgrade, path, next, null);
             ApplySafeStats(obj, placement, null);
-            message = path.ToString() + " upgrade set to " + next.ToString(CultureInfo.InvariantCulture) + "/" + max.ToString(CultureInfo.InvariantCulture) + ".";
+            message = path + " upgrade set to " + next.ToString(CultureInfo.InvariantCulture) + "/" + max.ToString(CultureInfo.InvariantCulture) + ".";
             return true;
         }
 
@@ -242,9 +222,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            string key = StatKey(statName);
-            bool removed = RemoveProperty(placement.CustomProperties, key);
-            if (!removed)
+            if (!RemoveProperty(placement.CustomProperties, StatKey(statName)))
             {
                 message = "No " + statName + " override was set.";
                 return false;
@@ -256,14 +234,64 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return true;
         }
 
-        public static string UpgradeKey(UpgradeObject.PathEnum path)
+        private static bool HasStationProperties(ObjectPlacement placement)
         {
-            return UpgradePropertyPrefix + path.ToString();
+            if (placement == null || placement.CustomProperties == null)
+                return false;
+
+            for (int i = 0; i < placement.CustomProperties.Count; i++)
+            {
+                ScenarioProperty property = placement.CustomProperties[i];
+                if (property == null || string.IsNullOrEmpty(property.Key))
+                    continue;
+
+                if (string.Equals(property.Key, ScenarioPlacementDefinitions.PropertyLevel, StringComparison.OrdinalIgnoreCase)
+                    || property.Key.StartsWith(UpgradePropertyPrefix, StringComparison.OrdinalIgnoreCase)
+                    || property.Key.StartsWith(StatPropertyPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
-        public static string StatKey(string statName)
+        public static void Apply(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
+        {
+            string message;
+            if (!SeamGuard.Run(
+                "scenario.station-upgrade.apply",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { ApplyCore(obj, placement, result); },
+                "Station upgrade projection unavailable - scenario still playable.",
+                null,
+                out message))
+            {
+                AddMessage(result, message);
+            }
+        }
+
+        private static void ApplyCore(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
+        {
+            if (obj == null || placement == null || !IsStationObject(obj) || !HasStationProperties(placement))
+                return;
+
+            int authoredLevel;
+            if (ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyLevel, out authoredLevel))
+                SetObjectLevel(obj, ClampInt(authoredLevel, ObjectLevelMin, ObjectLevelMax));
+
+            ApplyUpgradePaths(obj, placement, result);
+            ApplySafeStats(obj, placement, result);
+        }
+
+        private static string StatKey(string statName)
         {
             return StatPropertyPrefix + statName;
+        }
+
+        private static string UpgradeKey(UpgradeObject.PathEnum path)
+        {
+            return UpgradePropertyPrefix + path;
         }
 
         private static void CaptureUpgradePaths(Obj_Base obj, ObjectPlacement placement)
@@ -276,21 +304,111 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             for (int i = 0; paths != null && i < paths.Count; i++)
             {
                 UpgradeObject.PathEnum path = paths[i];
-                int level = Math.Max(0, upgrade.GetUpgradeLevel(path));
-                ScenarioPropertyBag.Set(placement.CustomProperties, UpgradeKey(path), level.ToString(CultureInfo.InvariantCulture));
+                ScenarioPropertyBag.Set(
+                    placement.CustomProperties,
+                    UpgradeKey(path),
+                    Math.Max(0, upgrade.GetUpgradeLevel(path)).ToString(CultureInfo.InvariantCulture));
             }
         }
 
         private static void CaptureSafeStats(Obj_Base obj, ObjectPlacement placement)
         {
-            List<ScenarioStationStatSnapshot> stats = new List<ScenarioStationStatSnapshot>();
-            AddStatSnapshots(obj, placement, stats);
-            for (int i = 0; i < stats.Count; i++)
+            ScenarioStationUpgradeSnapshot snapshot = new ScenarioStationUpgradeSnapshot();
+            AddStatSnapshots(obj, placement, snapshot);
+            ScenarioStationStatSnapshot[] stats = snapshot.Stats;
+            for (int i = 0; i < stats.Length; i++)
+                ScenarioPropertyBag.Set(placement.CustomProperties, StatKey(stats[i].Name), FormatFloat(stats[i].Value));
+        }
+
+        private static void AddStatSnapshots(Obj_Base obj, ObjectPlacement placement, ScenarioStationUpgradeSnapshot snapshot)
+        {
+            Obj_Generator generator = obj as Obj_Generator;
+            if (generator != null)
             {
-                ScenarioStationStatSnapshot stat = stats[i];
-                if (stat != null)
-                    ScenarioPropertyBag.Set(placement.CustomProperties, StatKey(stat.Name), FormatFloat(stat.Value));
+                snapshot.AddStat(BuildStat(placement, StatFuelCapacity, "Fuel Capacity", generator.FuelCapacity, 1f, 10000f, 10f, "Generator fuel storage read by Obj_Generator.Update."));
+                snapshot.AddStat(BuildStat(placement, StatPowerOutput, "Power Output", generator.PowerOutput, 1f, 10000f, 25f, "Generator power output read by Obj_Generator.HowMuchPower."));
+                snapshot.AddStat(BuildStat(placement, StatOutputRate, "Output Rate", generator.OutputRate, 0f, 1f, 0.1f, "Generator output throttle read by Obj_Generator.HowMuchPower."));
+                return;
             }
+
+            Obj_WaterTank tank = obj as Obj_WaterTank;
+            if (tank != null)
+            {
+                snapshot.AddStat(BuildStat(placement, StatWaterCapacity, "Water Capacity", tank.Capacity, 0f, 10000f, 10f, "WaterManager.RegisterStorage reads Obj_WaterTank.Capacity."));
+                snapshot.AddStat(BuildStat(placement, StatWaterGeneration, "Water Generation", tank.WaterGeneration, 0f, 1000f, 1f, "Obj_WaterTank.Update reads WaterGeneration."));
+                return;
+            }
+
+            Obj_OxygenFilter filter = obj as Obj_OxygenFilter;
+            if (filter != null)
+                snapshot.AddStat(BuildStat(placement, StatOxygenMultiplier, "Oxygen Multiplier", filter.OxygenInMult, 0f, 10f, 0.1f, "EnvironmentManager reads Obj_OxygenFilter.OxygenInMult."));
+        }
+
+        private static bool TryBuildStatSnapshot(Obj_Base obj, ObjectPlacement placement, string statName, out ScenarioStationStatSnapshot stat)
+        {
+            ScenarioStationUpgradeSnapshot snapshot = new ScenarioStationUpgradeSnapshot();
+            AddStatSnapshots(obj, placement, snapshot);
+            ScenarioStationStatSnapshot[] stats = snapshot.Stats;
+            for (int i = 0; i < stats.Length; i++)
+            {
+                if (string.Equals(stats[i].Name, statName, StringComparison.OrdinalIgnoreCase))
+                {
+                    stat = stats[i];
+                    return true;
+                }
+            }
+
+            stat = null;
+            return false;
+        }
+
+        private static ScenarioStationStatSnapshot BuildStat(
+            ObjectPlacement placement,
+            string name,
+            string label,
+            float fallback,
+            float min,
+            float max,
+            float step,
+            string detail)
+        {
+            string authored = ScenarioPropertyBag.GetString(
+                placement != null ? placement.CustomProperties : null,
+                StatKey(name));
+            float parsed;
+            float value = float.TryParse(authored, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)
+                ? parsed
+                : fallback;
+            return new ScenarioStationStatSnapshot
+            {
+                Name = name,
+                Label = label,
+                Value = ClampFloat(value, min, max),
+                MinValue = min,
+                MaxValue = max,
+                Step = step,
+                HasOverride = !string.IsNullOrEmpty(authored),
+                Detail = detail
+            };
+        }
+
+        private static bool RemoveProperty(List<ScenarioProperty> properties, string key)
+        {
+            for (int i = properties != null ? properties.Count - 1 : -1; i >= 0; i--)
+            {
+                ScenarioProperty property = properties[i];
+                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    properties.RemoveAt(i);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static string FormatFloat(float value)
+        {
+            return value.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         private static void ApplyUpgradePaths(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
@@ -456,69 +574,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             SetField(filter, OxygenMultiplierField, multiplier);
         }
 
-        private static void AddStatSnapshots(Obj_Base obj, ObjectPlacement placement, List<ScenarioStationStatSnapshot> stats)
-        {
-            if (stats == null || obj == null)
-                return;
-
-            if (obj is Obj_Generator)
-            {
-                Obj_Generator generator = (Obj_Generator)obj;
-                stats.Add(BuildStat(placement, StatFuelCapacity, "Fuel Capacity", generator.FuelCapacity, 1f, 10000f, 10f, "Generator fuel storage read by Obj_Generator.Update."));
-                stats.Add(BuildStat(placement, StatPowerOutput, "Power Output", generator.PowerOutput, 1f, 10000f, 25f, "Generator power output read by Obj_Generator.HowMuchPower."));
-                stats.Add(BuildStat(placement, StatOutputRate, "Output Rate", generator.OutputRate, 0f, 1f, 0.1f, "Generator output throttle read by Obj_Generator.HowMuchPower."));
-                return;
-            }
-
-            if (obj is Obj_WaterTank)
-            {
-                Obj_WaterTank tank = (Obj_WaterTank)obj;
-                stats.Add(BuildStat(placement, StatWaterCapacity, "Water Capacity", tank.Capacity, 0f, 10000f, 10f, "WaterManager.RegisterStorage reads Obj_WaterTank.Capacity."));
-                stats.Add(BuildStat(placement, StatWaterGeneration, "Water Generation", tank.WaterGeneration, 0f, 1000f, 1f, "Obj_WaterTank.Update reads WaterGeneration."));
-                return;
-            }
-
-            if (obj is Obj_OxygenFilter)
-            {
-                Obj_OxygenFilter filter = (Obj_OxygenFilter)obj;
-                stats.Add(BuildStat(placement, StatOxygenMultiplier, "Oxygen Multiplier", filter.OxygenInMult, 0f, 10f, 0.1f, "EnvironmentManager reads Obj_OxygenFilter.OxygenInMult."));
-            }
-        }
-
-        private static bool TryBuildStatSnapshot(Obj_Base obj, ObjectPlacement placement, string statName, out ScenarioStationStatSnapshot stat)
-        {
-            stat = null;
-            List<ScenarioStationStatSnapshot> stats = new List<ScenarioStationStatSnapshot>();
-            AddStatSnapshots(obj, placement, stats);
-            for (int i = 0; i < stats.Count; i++)
-            {
-                ScenarioStationStatSnapshot candidate = stats[i];
-                if (candidate != null && string.Equals(candidate.Name, statName, StringComparison.OrdinalIgnoreCase))
-                {
-                    stat = candidate;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static ScenarioStationStatSnapshot BuildStat(ObjectPlacement placement, string name, string label, float fallback, float min, float max, float step, string detail)
-        {
-            float value = ScenarioPropertyBag.GetFloat(placement != null ? placement.CustomProperties : null, StatKey(name), fallback);
-            return new ScenarioStationStatSnapshot
-            {
-                Name = name,
-                Label = label,
-                Value = ClampFloat(value, min, max),
-                MinValue = min,
-                MaxValue = max,
-                Step = step,
-                HasOverride = placement != null && !string.IsNullOrEmpty(ScenarioPropertyBag.GetString(placement.CustomProperties, StatKey(name))),
-                Detail = detail
-            };
-        }
-
         private static int GetUpgradeIndex(Obj_Base obj, UpgradeObject.PathEnum path, FieldInfo arrayField)
         {
             int maxIndex = 0;
@@ -641,21 +696,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return null;
         }
 
-        private static bool RemoveProperty(List<ScenarioProperty> properties, string key)
-        {
-            for (int i = properties != null ? properties.Count - 1 : -1; i >= 0; i--)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                {
-                    properties.RemoveAt(i);
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         private static void UpdatePowerFlow()
         {
             if (PowerManager.Instance != null)
@@ -688,43 +728,5 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return value;
         }
 
-        private static string FormatFloat(float value)
-        {
-            return value.ToString("0.###", CultureInfo.InvariantCulture);
-        }
-    }
-
-    internal sealed class ScenarioStationUpgradeSnapshot
-    {
-        public ScenarioStationUpgradeSnapshot()
-        {
-            Paths = new List<ScenarioStationUpgradePathSnapshot>();
-            Stats = new List<ScenarioStationStatSnapshot>();
-        }
-
-        public string ObjectType { get; set; }
-        public int Level { get; set; }
-        public List<ScenarioStationUpgradePathSnapshot> Paths { get; private set; }
-        public List<ScenarioStationStatSnapshot> Stats { get; private set; }
-    }
-
-    internal sealed class ScenarioStationUpgradePathSnapshot
-    {
-        public string Name { get; set; }
-        public int Level { get; set; }
-        public int CurrentLevel { get; set; }
-        public int MaxLevel { get; set; }
-    }
-
-    internal sealed class ScenarioStationStatSnapshot
-    {
-        public string Name { get; set; }
-        public string Label { get; set; }
-        public float Value { get; set; }
-        public float MinValue { get; set; }
-        public float MaxValue { get; set; }
-        public float Step { get; set; }
-        public bool HasOverride { get; set; }
-        public string Detail { get; set; }
     }
 }

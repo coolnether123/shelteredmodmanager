@@ -42,6 +42,24 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                     "Pinned row did not lead scenario rows in " + modes[i] + " mode.", result);
             }
 
+            List<ScenarioBookRowModel> rowsWithArchive = BuildRows();
+            rowsWithArchive.Add(new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.OpenScenarioSaves,
+                Scenario = new ScenarioCatalogEntry
+                {
+                    ScenarioId = "unlimited-surrounded",
+                    BaseGameMode = ScenarioBaseGameMode.Surrounded
+                },
+                Title = "Surrounded - Unlimited Saves"
+            });
+            IList<ScenarioBookRowModel> archiveOrder = ScenarioLibraryOrganizer.Order(
+                rowsWithArchive,
+                ScenarioLibrarySortMode.Name,
+                reloaded);
+            Assert(Id(archiveOrder, archiveOrder.Count - 1) == "unlimited-surrounded",
+                "Unlimited vanilla archives were mixed into installed custom scenario sorting.", result);
+
             string relative = ScenarioLibraryOrganizer.RelativePlayed(
                 new DateTime(2026, 7, 11, 10, 0, 0, DateTimeKind.Utc),
                 new DateTime(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc));
@@ -53,7 +71,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             DateTime baseline = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
             return new List<ScenarioBookRowModel>
             {
-                new ScenarioBookRowModel { Kind = ScenarioBookRowKind.OpenInstallScenarios, Title = "tool" },
+                new ScenarioBookRowModel { Kind = ScenarioBookRowKind.Type, Title = "tool" },
                 Row("old-play", "Alpha", baseline, baseline.AddDays(9), baseline.AddDays(1), 20),
                 Row("new-play", "Bravo", baseline.AddDays(8), baseline.AddDays(8), baseline.AddDays(7), 10),
                 Row("unknown", "Zulu", null, baseline.AddDays(10), null, 30)

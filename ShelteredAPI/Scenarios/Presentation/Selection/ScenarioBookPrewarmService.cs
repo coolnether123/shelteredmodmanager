@@ -173,7 +173,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
             _catalogTimer.Start();
             _catalogStartVersion = ScenarioBookBrowserDataSource.SharedSnapshotVersion;
 
-            IScenarioSelectionCatalogService catalog = ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>();
+            IScenarioSelectionCatalogService catalog = ScenarioRuntimeCompositionRoot.Resolve<IScenarioSelectionCatalogService>();
             ScenarioBookBrowserDataSource.BeginSharedRefreshAsync(catalog);
         }
 

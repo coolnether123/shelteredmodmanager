@@ -6,7 +6,6 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Conditions;
 using ShelteredAPI.Scenarios.Application.Effects;
 using ShelteredAPI.Scenarios.Application.Runtime;
-using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -305,7 +304,8 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
         {
             if (_executionLog == null || action == null)
                 return;
-            _executionLog.Record(action.Id, ScenarioTimelineCreatorText.ScheduledActionName(null, action), string.IsNullOrEmpty(action.ActionType) ? "Scheduled action" : action.ActionType, outcome, conditionSummary, detail);
+            string actionType = string.IsNullOrEmpty(action.ActionType) ? "Scheduled action" : action.ActionType;
+            _executionLog.Record(action.Id, string.IsNullOrEmpty(action.Id) ? actionType : action.Id, actionType, outcome, conditionSummary, detail);
         }
 
         private List<ScenarioScheduledActionDefinition> BuildActions(ScenarioDefinition definition)

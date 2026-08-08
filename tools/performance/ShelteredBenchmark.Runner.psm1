@@ -21,13 +21,19 @@ function Start-BenchmarkProcessSampler {
         Stop = $false
         Phase = 'startup'
         Rows = New-Object System.Collections.ArrayList
+        Ready = New-Object System.Threading.ManualResetEventSlim($false)
+        InitializationError = ''
     })
     $script = {
         param($TargetPid, $StartedAt, $Interval, $Shared)
         while (-not $Shared.Stop) {
             try {
                 $process = [Diagnostics.Process]::GetProcessById($TargetPid)
-                if ($process.HasExited) { break }
+                if ($process.HasExited) {
+                    $Shared.InitializationError = "Process $TargetPid exited before the sampler initialized."
+                    if (-not $Shared.Ready.IsSet) { $Shared.Ready.Set() }
+                    break
+                }
                 $now = [DateTimeOffset]::UtcNow
                 $row = [pscustomobject]@{
                     TimestampUtc = $now.ToString('o')
@@ -44,15 +50,38 @@ function Start-BenchmarkProcessSampler {
                     MainWindowTitle = $process.MainWindowTitle
                 }
                 [void]$Shared.Rows.Add($row)
+                if (-not $Shared.Ready.IsSet) { $Shared.Ready.Set() }
             }
-            catch { break }
+            catch {
+                $Shared.InitializationError = $_.Exception.Message
+                if (-not $Shared.Ready.IsSet) { $Shared.Ready.Set() }
+                break
+            }
             Start-Sleep -Milliseconds $Interval
         }
     }
     $powershell = [PowerShell]::Create()
     [void]$powershell.AddScript($script).AddArgument($ProcessId).AddArgument($ProcessStartUtc).AddArgument($IntervalMilliseconds).AddArgument($state)
-    $async = $powershell.BeginInvoke()
-    return [pscustomobject]@{ State = $state; PowerShell = $powershell; Async = $async }
+    $async = $null
+    try {
+        $async = $powershell.BeginInvoke()
+        if (-not $state.Ready.Wait(2000)) { throw "Process sampler initialization timed out for PID $ProcessId." }
+        if ($state.Rows.Count -eq 0) {
+            $reason = if ([string]::IsNullOrWhiteSpace([string]$state.InitializationError)) { 'no process sample was produced' } else { [string]$state.InitializationError }
+            throw "Process sampler initialization failed for PID $ProcessId`: $reason"
+        }
+        return [pscustomobject]@{ State = $state; PowerShell = $powershell; Async = $async }
+    }
+    catch {
+        $state.Stop = $true
+        if ($null -ne $async) {
+            try { $powershell.Stop() } catch { }
+            try { [void]$powershell.EndInvoke($async) } catch { }
+        }
+        $powershell.Dispose()
+        $state.Ready.Dispose()
+        throw
+    }
 }
 
 function Stop-BenchmarkProcessSampler {
@@ -60,7 +89,10 @@ function Stop-BenchmarkProcessSampler {
     param([Parameter(Mandatory = $true)]$Sampler)
     $Sampler.State.Stop = $true
     try { [void]$Sampler.PowerShell.EndInvoke($Sampler.Async) }
-    finally { $Sampler.PowerShell.Dispose() }
+    finally {
+        $Sampler.PowerShell.Dispose()
+        $Sampler.State.Ready.Dispose()
+    }
     return @($Sampler.State.Rows)
 }
 
@@ -90,16 +122,43 @@ function New-NativeWindowBitmap {
     if ($width -le 0 -or $height -le 0) { throw "Window has invalid dimensions ${width}x${height}." }
     $bitmap = New-Object Drawing.Bitmap $width, $height, ([Drawing.Imaging.PixelFormat]::Format24bppRgb)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    $rendered = $false
     try {
         $device = $graphics.GetHdc()
         try {
-            if (-not [ShelteredBenchmark.NativeWindow]::PrintWindow($Handle, $device, 2)) {
-                [void][ShelteredBenchmark.NativeWindow]::PrintWindow($Handle, $device, 0)
-            }
+            $rendered = [ShelteredBenchmark.NativeWindow]::PrintWindow($Handle, $device, 2)
         }
         finally { $graphics.ReleaseHdc($device) }
     }
     finally { $graphics.Dispose() }
+
+    # Some Unity/DWM combinations report success for PW_RENDERFULLCONTENT but
+    # return an entirely black surface. Retry with the classic PrintWindow mode
+    # before rejecting the sample so a transient compositor state cannot poison
+    # the complete readiness window.
+    $samplePoints = @(
+        @(0.1, 0.1), @(0.5, 0.1), @(0.9, 0.1),
+        @(0.1, 0.5), @(0.5, 0.5), @(0.9, 0.5),
+        @(0.1, 0.9), @(0.5, 0.9), @(0.9, 0.9)
+    )
+    $hasVisiblePixel = $false
+    foreach ($point in $samplePoints) {
+        $pixel = $bitmap.GetPixel(
+            [math]::Min($width - 1, [math]::Floor($width * [double]$point[0])),
+            [math]::Min($height - 1, [math]::Floor($height * [double]$point[1])))
+        if ([math]::Max($pixel.R, [math]::Max($pixel.G, $pixel.B)) -gt 8) { $hasVisiblePixel = $true; break }
+    }
+    if (-not $rendered -or -not $hasVisiblePixel) {
+        $graphics = [Drawing.Graphics]::FromImage($bitmap)
+        try {
+            $graphics.Clear([Drawing.Color]::Black)
+            $device = $graphics.GetHdc()
+            try { $rendered = [ShelteredBenchmark.NativeWindow]::PrintWindow($Handle, $device, 0) }
+            finally { $graphics.ReleaseHdc($device) }
+        }
+        finally { $graphics.Dispose() }
+    }
+    if (-not $rendered) { $bitmap.Dispose(); throw 'PrintWindow failed in both capture modes.' }
     return $bitmap
 }
 
@@ -147,6 +206,11 @@ function Wait-NativeMenuReady {
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
     $firstWindowAt = $null
     $consecutiveMatches = 0
+    $captureAttempts = 0
+    $captureFailures = 0
+    $bestRmse = [double]::PositiveInfinity
+    $lastRmse = $null
+    $lastCaptureError = ''
     do {
         $Process.Refresh()
         if ($Process.HasExited) { throw "Game process exited with code $($Process.ExitCode) before menu readiness." }
@@ -155,12 +219,23 @@ function Wait-NativeMenuReady {
             if (-not [string]::IsNullOrWhiteSpace($ReferencePath) -and (Test-Path -LiteralPath $ReferencePath -PathType Leaf)) {
                 try {
                     $rmse = Get-NativeFrameRmse -Handle $Process.MainWindowHandle -ReferencePath $ReferencePath
+                    $captureAttempts++
+                    $lastRmse = $rmse
+                    if ($rmse -lt $bestRmse) { $bestRmse = $rmse }
                     if ($rmse -le $RmseThreshold) { $consecutiveMatches++ } else { $consecutiveMatches = 0 }
                     if ($consecutiveMatches -ge 3) {
-                        return [pscustomobject]@{ Method = 'native-reference-frame'; Rmse = $rmse; ObservedAtUtc = [DateTimeOffset]::UtcNow.ToString('o') }
+                        return [pscustomobject]@{
+                            Method = 'native-reference-frame'; Rmse = $rmse; BestRmse = $bestRmse
+                            CaptureAttempts = $captureAttempts; CaptureFailures = $captureFailures
+                            ObservedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+                        }
                     }
                 }
-                catch { $consecutiveMatches = 0 }
+                catch {
+                    $captureFailures++
+                    $lastCaptureError = $_.Exception.Message
+                    $consecutiveMatches = 0
+                }
             }
             elseif (([DateTimeOffset]::UtcNow - $firstWindowAt).TotalSeconds -ge $FallbackDelaySeconds) {
                 return [pscustomobject]@{ Method = 'window-delay-fallback'; Rmse = $null; ObservedAtUtc = [DateTimeOffset]::UtcNow.ToString('o') }
@@ -168,7 +243,9 @@ function Wait-NativeMenuReady {
         }
         Start-Sleep -Milliseconds $PollMilliseconds
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
-    throw "Native menu readiness timed out after $TimeoutSeconds seconds."
+    $bestText = if ([double]::IsPositiveInfinity($bestRmse)) { 'none' } else { [string]$bestRmse }
+    $lastText = if ($null -eq $lastRmse) { 'none' } else { [string]$lastRmse }
+    throw "Native menu readiness timed out after $TimeoutSeconds seconds (attempts=$captureAttempts, failures=$captureFailures, bestRmse=$bestText, lastRmse=$lastText, threshold=$RmseThreshold, lastCaptureError='$lastCaptureError')."
 }
 
 function Start-NativeMenuReadyProbe {
@@ -272,25 +349,336 @@ function Get-PhaseProcessSummaries {
 
 function Stop-BenchmarkGameProcess {
     [CmdletBinding()]
-    param([AllowNull()][Diagnostics.Process]$Process)
+    param(
+        [AllowNull()][Diagnostics.Process]$Process,
+        [AllowNull()][Nullable[DateTimeOffset]]$ExpectedStartUtc
+    )
     if ($null -eq $Process) { return }
+    $canDispose = $false
     try {
-        $Process.Refresh()
-        if ($Process.HasExited) { return }
-        [void]$Process.CloseMainWindow()
-        if (-not $Process.WaitForExit(5000)) {
-            Stop-Process -Id $Process.Id -Force -ErrorAction Stop
-            if (-not $Process.WaitForExit(5000)) { throw "Process $($Process.Id) remained alive after forced termination." }
+        $current = Get-Process -Id $Process.Id -ErrorAction SilentlyContinue
+        if ($null -eq $current) { $canDispose = $true; return }
+        if ($null -ne $ExpectedStartUtc) {
+            $actualStart = [DateTimeOffset]$current.StartTime.ToUniversalTime()
+            if ([math]::Abs(($actualStart - $ExpectedStartUtc).TotalSeconds) -ge 1) {
+                throw "Refusing to stop reused PID $($Process.Id)."
+            }
         }
+        [void]$current.CloseMainWindow()
+        if (-not $current.WaitForExit(5000)) {
+            Stop-Process -Id $current.Id -Force -ErrorAction Stop
+            if (-not $current.WaitForExit(5000)) { throw "Process $($current.Id) remained alive after forced termination." }
+        }
+        $canDispose = $true
     }
-    finally { $Process.Dispose() }
+    finally { if ($canDispose) { $Process.Dispose() } }
 }
 
-function Copy-BenchmarkRuntimeLog {
+function New-BenchmarkDeploymentAbsenceTransaction {
     [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][string]$InstallRoot, [Parameter(Mandatory = $true)][string]$Destination)
-    $source = Join-Path $InstallRoot 'SMM\mod_manager.log'
-    if (Test-Path -LiteralPath $source -PathType Leaf) { Copy-Item -LiteralPath $source -Destination $Destination -Force }
+    param(
+        [Parameter(Mandatory = $true)]$Platform,
+        [Parameter(Mandatory = $true)]$Profile,
+        [Parameter(Mandatory = $true)][string]$ConfigRoot,
+        [Parameter(Mandatory = $true)][string]$InstallRoot,
+        [Parameter(Mandatory = $true)][string]$BackupRoot,
+        [Parameter(Mandatory = $true)][string]$ArtifactRoot
+    )
+
+    $absentRoles = @((Get-ObjectPropertyValue $Profile 'physicallyAbsentDeploymentRoles' @()) | ForEach-Object {
+        ([string]$_).Trim().ToLowerInvariant()
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($absentRoles.Count -eq 0) { return $null }
+
+    $gates = @(Get-ObjectPropertyValue $Platform 'hashGates' @())
+    $selectedGates = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($role in $absentRoles) {
+        $matches = @($gates | Where-Object { ([string](Get-ObjectPropertyValue $_ 'role' '')).ToLowerInvariant() -eq $role })
+        if ($matches.Count -ne 1) { throw "Physical-absence role '$role' must resolve to exactly one deployment hash gate." }
+        $selectedGates.Add($matches[0])
+    }
+
+    $preflightPath = Join-Path $ArtifactRoot 'physical_absence_preflight_hashes.json'
+    $verified = Test-BenchmarkDeploymentHashes -Gates $selectedGates.ToArray() -InstallRoot $InstallRoot `
+        -ConfigRoot $ConfigRoot -OutputPath $preflightPath
+    New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
+    $entries = New-Object 'System.Collections.Generic.List[object]'
+    $installPrefix = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\') + '\'
+    try {
+        for ($index = 0; $index -lt $selectedGates.Count; $index++) {
+            $gate = $selectedGates[$index]
+            $role = ([string](Get-ObjectPropertyValue $gate 'role' '')).ToLowerInvariant()
+            $relativePath = [string](Get-ObjectPropertyValue $gate 'deployedPath' '')
+            if ([IO.Path]::IsPathRooted($relativePath)) { throw "Physical-absence gate '$role' must use an install-relative deployedPath." }
+            $target = [IO.Path]::GetFullPath((Join-Path $InstallRoot $relativePath))
+            if (-not $target.StartsWith($installPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Physical-absence target '$target' escapes install '$InstallRoot'."
+            }
+            $backupPath = Join-Path $BackupRoot (($role -replace '[^A-Za-z0-9_.-]', '_') + '.dll.backup')
+            Copy-Item -LiteralPath $target -Destination $backupPath -Force
+            $originalHash = [string]$verified.Gates[$index].DeployedSha256
+            $backupHash = (Get-FileHash -LiteralPath $backupPath -Algorithm SHA256).Hash
+            if ($backupHash -ne $originalHash) { throw "Physical-absence backup hash mismatch for '$role'." }
+            $entry = [pscustomobject]@{
+                Role = $role; RelativePath = $relativePath; TargetPath = $target; BackupPath = $backupPath
+                OriginalSha256 = $originalHash; BackupSha256 = $backupHash; AbsentObserved = $false
+            }
+            $entries.Add($entry)
+            Remove-Item -LiteralPath $target -Force
+            $entry.AbsentObserved = -not (Test-Path -LiteralPath $target)
+            if (-not $entry.AbsentObserved) { throw "Physical-absence target '$target' still exists after removal." }
+        }
+    }
+    catch {
+        $failure = $_
+        $rollbackErrors = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($entry in @($entries.ToArray())) {
+            try {
+                Copy-Item -LiteralPath $entry.BackupPath -Destination $entry.TargetPath -Force
+                $restoredHash = (Get-FileHash -LiteralPath $entry.TargetPath -Algorithm SHA256).Hash
+                if ($restoredHash -ne [string]$entry.OriginalSha256) { throw 'rollback hash mismatch' }
+            }
+            catch { $rollbackErrors.Add("$($entry.Role): $($_.Exception.Message)") }
+        }
+        if ($rollbackErrors.Count -gt 0) {
+            throw "Physical-absence preparation failed: $($failure.Exception.Message) Rollback also failed: $($rollbackErrors.ToArray() -join '; ')"
+        }
+        throw $failure
+    }
+
+    $transaction = [pscustomobject]@{
+        InstallRoot = $InstallRoot; CreatedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+        Entries = $entries.ToArray(); Restored = $false
+    }
+    $transaction | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $ArtifactRoot 'physical_absence.json') -Encoding UTF8
+    return $transaction
+}
+
+function Restore-BenchmarkDeploymentAbsenceTransaction {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Transaction,
+        [Parameter(Mandatory = $true)][string]$ArtifactRoot
+    )
+    if ([bool]$Transaction.Restored) { return }
+    $rows = New-Object 'System.Collections.Generic.List[object]'
+    $errors = New-Object 'System.Collections.Generic.List[string]'
+    $archiveRoot = Join-Path $ArtifactRoot 'physical-absence-unexpected-after'
+    foreach ($entry in @($Transaction.Entries)) {
+        try {
+            $unexpectedHash = $null
+            if (Test-Path -LiteralPath $entry.TargetPath -PathType Leaf) {
+                $unexpectedHash = (Get-FileHash -LiteralPath $entry.TargetPath -Algorithm SHA256).Hash
+                New-Item -ItemType Directory -Path $archiveRoot -Force | Out-Null
+                Move-Item -LiteralPath $entry.TargetPath -Destination (Join-Path $archiveRoot ([IO.Path]::GetFileName([string]$entry.TargetPath))) -Force
+            }
+            $parent = Split-Path -Parent ([string]$entry.TargetPath)
+            if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+            Copy-Item -LiteralPath $entry.BackupPath -Destination $entry.TargetPath -Force
+            $restoredHash = (Get-FileHash -LiteralPath $entry.TargetPath -Algorithm SHA256).Hash
+            $ok = $restoredHash -eq [string]$entry.OriginalSha256
+            $rows.Add([pscustomobject]@{
+                Role = [string]$entry.Role; TargetPath = [string]$entry.TargetPath
+                ExpectedSha256 = [string]$entry.OriginalSha256; RestoredSha256 = $restoredHash
+                UnexpectedReplacementSha256 = $unexpectedHash; Ok = $ok
+            })
+            if (-not $ok) { throw "restored hash mismatch for '$($entry.Role)'" }
+        }
+        catch { $errors.Add("$($entry.Role): $($_.Exception.Message)") }
+    }
+    $rows.ToArray() | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $ArtifactRoot 'physical_absence_restore.json') -Encoding UTF8
+    if ($errors.Count -gt 0) { throw "Physical-absence restoration failed: $($errors.ToArray() -join '; ')" }
+    $Transaction.Restored = $true
+}
+
+function Start-ShelteredPlatformSession {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Platform,
+        [Parameter(Mandatory = $true)]$Profile,
+        [Parameter(Mandatory = $true)]$Config,
+        [Parameter(Mandatory = $true)][string]$StateRoot,
+        [Parameter(Mandatory = $true)][string]$ArtifactRoot,
+        [Parameter(Mandatory = $true)][string]$LeaseOwner,
+        [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][object[]]$InstallLocks,
+        [int]$ProcessIntervalMilliseconds = 100,
+        [AllowNull()][object[]]$ExistingEnabledIds,
+        [string]$DeploymentHashFileName = 'deployment_hash_gates.json',
+        [switch]$StartNativeReadiness
+    )
+
+    $platformName = [string]$Platform.name
+    $profileName = [string]$Profile.name
+    $installRoot = [IO.Path]::GetFullPath([string]$Platform.installRoot)
+    $isVanilla = ([string]$Profile.mode).ToLowerInvariant() -eq 'vanilla'
+    $harnessEnabled = [bool](Get-ObjectPropertyValue $Profile 'harness' (-not $isVanilla))
+    $session = [pscustomobject]@{
+        PlatformName = $platformName; ProfileName = $profileName; Platform = $Platform; Profile = $Profile
+        InstallRoot = $installRoot; Port = [int](Get-ObjectPropertyValue $Platform 'agentPort' 0)
+        LeaseOwner = $LeaseOwner; HarnessEnabled = $harnessEnabled; LeaseAcquired = $false
+        Snapshot = $null; SelectedModIds = @(); Process = $null; ProcessStartUtc = $null; Sampler = $null
+        NativeReadinessProbe = $null; ProcessStopped = $true; Restored = $false; Samples = @()
+        DeploymentAbsenceTransaction = $null
+        ReadinessMethod = ''; HarnessMenuReadyMs = $null; StartupMs = $null; ArtifactRoot = $ArtifactRoot; EventCursor = 0
+    }
+
+    try {
+        [void](Assert-BenchmarkInstallLockAuthorization -InstallRoot $installRoot -InstallLocks $InstallLocks)
+
+        $existingProcesses = @(Get-Process -Name ([string]$Platform.processName) -ErrorAction SilentlyContinue)
+        if ($existingProcesses.Count -gt 0) { throw "Refusing to launch because $platformName already has process(es): $($existingProcesses.Id -join ', ')." }
+
+        $session.Snapshot = New-InstallStateSnapshot -InstallRoot $installRoot -BackupRoot $StateRoot
+        $catalog = Get-InstalledModCatalog -InstallRoot $installRoot
+        $existingState = Get-LoadOrderState -InstallRoot $installRoot
+        $existingOrder = if ($null -ne $existingState) { @($existingState.order) } else { @() }
+        $enabled = if ($null -ne $ExistingEnabledIds) { @($ExistingEnabledIds) } else { @(Get-ObjectPropertyValue $Platform '_benchmarkEnabledIds' (Get-EnabledLoadOrderIds $existingState)) }
+        $coreIds = @((Get-ObjectPropertyValue $Config 'coreModIds' @('com.harmony.0harmony', 'coolnether123.shelteredagentinterface')) | ForEach-Object { [string]$_ })
+        $session.SelectedModIds = @(Resolve-ShelteredModProfile -Profile $Profile -Catalog $catalog -ExistingOrder $existingOrder -CoreModIds $coreIds -ExistingEnabledIds $enabled)
+
+        Set-DoorstopEnabled -InstallRoot $installRoot -Enabled (-not $isVanilla)
+        if (-not $isVanilla) {
+            Set-ShelteredLoadOrder -InstallRoot $installRoot -ModIds $session.SelectedModIds
+            Set-ShelteredManagerOptions -InstallRoot $installRoot -Overrides (Get-ObjectPropertyValue $Profile 'managerOptions' ([pscustomobject]@{}))
+        }
+        if ($harnessEnabled) {
+            $managerIniPath = Join-Path $installRoot 'SMM\bin\mod_manager.ini'
+            if (Test-Path -LiteralPath $managerIniPath -PathType Leaf) {
+                $managerIni = Get-Content -LiteralPath $managerIniPath -Raw
+                if ($managerIni -match '(?m)^AutoLoadSaveSlot=') {
+                    $managerIni = $managerIni -replace '(?m)^AutoLoadSaveSlot=.*$', 'AutoLoadSaveSlot=0'
+                }
+                else {
+                    $managerIni = $managerIni.TrimEnd([char[]]"`r`n") + "`r`nAutoLoadSaveSlot=0`r`n"
+                }
+                Set-Content -LiteralPath $managerIniPath -Value $managerIni -Encoding UTF8
+            }
+        }
+        $session.DeploymentAbsenceTransaction = New-BenchmarkDeploymentAbsenceTransaction -Platform $Platform -Profile $Profile `
+            -ConfigRoot ([string]$Config._configRoot) -InstallRoot $installRoot `
+            -BackupRoot (Join-Path $StateRoot 'deployment-absence-before') -ArtifactRoot $ArtifactRoot
+        if ($harnessEnabled) {
+            $absentRoles = @((Get-ObjectPropertyValue $Profile 'physicallyAbsentDeploymentRoles' @()) | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() })
+            $activeGates = @((Get-ObjectPropertyValue $Platform 'hashGates' @()) | Where-Object {
+                $absentRoles -notcontains ([string](Get-ObjectPropertyValue $_ 'role' '')).ToLowerInvariant()
+            })
+            [void](Test-BenchmarkDeploymentHashes -Gates $activeGates -InstallRoot $installRoot `
+                -ConfigRoot ([string]$Config._configRoot) -OutputPath (Join-Path $ArtifactRoot $DeploymentHashFileName))
+        }
+
+        $executablePath = Join-Path $installRoot ([string]$Platform.executable)
+        $arguments = @((Get-ObjectPropertyValue $Platform 'launchArguments' @()) | ForEach-Object { [string]$_ })
+        $session.Process = Start-Process -FilePath $executablePath -WorkingDirectory $installRoot -ArgumentList $arguments -PassThru
+        $session.ProcessStartUtc = [DateTimeOffset]$session.Process.StartTime.ToUniversalTime()
+        $session.ProcessStopped = $false
+        [pscustomobject]@{ Pid = $session.Process.Id; ProcessName = [string]$Platform.processName; ExecutablePath = $executablePath; StartTimeUtc = $session.ProcessStartUtc.ToString('o') } |
+            ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $ArtifactRoot 'owned_process.json') -Encoding UTF8
+        $session.Sampler = Start-BenchmarkProcessSampler -ProcessId $session.Process.Id -ProcessStartUtc $session.ProcessStartUtc -IntervalMilliseconds $ProcessIntervalMilliseconds
+
+        if ($StartNativeReadiness) {
+            $reference = [string](Get-ObjectPropertyValue $Platform 'vanillaMenuReferenceImage' '')
+            if (-not [string]::IsNullOrWhiteSpace($reference)) { $reference = Resolve-ConfiguredPath -Path $reference -BasePath ([string]$Config._configRoot) }
+            $sampling = Get-ObjectPropertyValue $Config 'sampling'
+            $session.NativeReadinessProbe = Start-NativeMenuReadyProbe -ProcessId $session.Process.Id -ReferencePath $reference `
+                -RmseThreshold ([double](Get-ObjectPropertyValue $Platform 'vanillaMenuRmseThreshold' 15)) `
+                -FallbackDelaySeconds ([int](Get-ObjectPropertyValue $Platform 'vanillaWindowDelaySeconds' 16)) `
+                -TimeoutSeconds ([int](Get-ObjectPropertyValue $sampling 'startupTimeoutSeconds' 120))
+        }
+        return $session
+    }
+    catch {
+        $failure = $_
+        $transactionErrors = New-Object 'System.Collections.Generic.List[string]'
+        try {
+            foreach ($cleanupError in @(Stop-ShelteredPlatformSession -Session $session)) {
+                $transactionErrors.Add([string]$cleanupError)
+            }
+        }
+        catch { $transactionErrors.Add("Session stop failed: $($_.Exception.Message)") }
+        try { Restore-ShelteredPlatformSession -Session $session }
+        catch { $transactionErrors.Add("Install restoration failed: $($_.Exception.Message)") }
+        if ($transactionErrors.Count -gt 0) {
+            throw "Platform session startup failed: $($failure.Exception.Message) Transactional cleanup also failed: $($transactionErrors.ToArray() -join '; ')"
+        }
+        throw $failure
+    }
+}
+
+function Wait-ShelteredPlatformSessionReady {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Session,
+        [int]$TimeoutSeconds = 120,
+        [string]$MenuBlockersFileName = 'menu_blockers.json'
+    )
+    if ($Session.HarnessEnabled) {
+        if ($Session.Port -le 0) { throw "Harness profile '$($Session.ProfileName)' requires a positive agentPort for '$($Session.PlatformName)'." }
+        $bind = Wait-ShelteredHarness -Port $Session.Port -TimeoutSeconds $TimeoutSeconds
+        $bind | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $Session.ArtifactRoot 'harness_bind_status.json') -Encoding UTF8
+        [void](Acquire-ShelteredHarnessLease -Port $Session.Port -Owner $Session.LeaseOwner)
+        $Session.LeaseAcquired = $true
+        [void](Enable-ShelteredBackgroundRun -Port $Session.Port)
+        $menu = Wait-HarnessMenuReady -Port $Session.Port -MenuReadyRegex ([string](Get-ObjectPropertyValue $Session.Platform 'menuReadyRegex' 'MenuScene')) -TimeoutSeconds $TimeoutSeconds
+        $menu | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $Session.ArtifactRoot 'menu_status.json') -Encoding UTF8
+        $Session.HarnessMenuReadyMs = [math]::Round(([DateTimeOffset]::UtcNow - $Session.ProcessStartUtc).TotalMilliseconds, 1)
+        Dismiss-ShelteredBenchmarkMenuBlockers -Port $Session.Port | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath (Join-Path $Session.ArtifactRoot $MenuBlockersFileName) -Encoding UTF8
+    }
+
+    if ($null -ne $Session.NativeReadinessProbe) {
+        # Complete the same Wait-NativeMenuReady gate used by vanilla; its probe
+        # starts at process launch so harness setup cannot delay observation.
+        $readiness = Complete-NativeMenuReadyProbe -Probe $Session.NativeReadinessProbe
+        $Session.NativeReadinessProbe = $null
+        $readiness | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Session.ArtifactRoot 'native_menu_readiness.json') -Encoding UTF8
+        $Session.ReadinessMethod = if ($Session.HarnessEnabled) { "harness-status+$($readiness.Method)" } else { $readiness.Method }
+        $Session.StartupMs = [math]::Round(([DateTimeOffset]::Parse([string]$readiness.ObservedAtUtc) - $Session.ProcessStartUtc).TotalMilliseconds, 1)
+    }
+    elseif ($Session.HarnessEnabled) {
+        $Session.ReadinessMethod = 'harness-status'
+        $Session.StartupMs = $Session.HarnessMenuReadyMs
+    }
+    if ($null -ne $Session.Sampler) { $Session.Sampler.State.Phase = 'menu-idle' }
+    return $Session
+}
+
+function Stop-ShelteredPlatformSession {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)]$Session)
+    $errors = New-Object 'System.Collections.Generic.List[string]'
+    if ($null -ne $Session.NativeReadinessProbe) {
+        try { Stop-NativeMenuReadyProbe -Probe $Session.NativeReadinessProbe } catch { $errors.Add("Readiness cleanup failed: $($_.Exception.Message)") }
+        $Session.NativeReadinessProbe = $null
+    }
+    if ($Session.LeaseAcquired) {
+        try { [void](Release-ShelteredHarnessLease -Port $Session.Port -Owner $Session.LeaseOwner); $Session.LeaseAcquired = $false }
+        catch { $errors.Add("Lease release failed: $($_.Exception.Message)") }
+    }
+    if (-not $Session.ProcessStopped) {
+        try { Stop-BenchmarkGameProcess -Process $Session.Process -ExpectedStartUtc $Session.ProcessStartUtc; $Session.ProcessStopped = $true }
+        catch { $errors.Add("Process close failed: $($_.Exception.Message)") }
+    }
+    if ($null -ne $Session.Sampler) {
+        try { $Session.Samples = @(Stop-BenchmarkProcessSampler -Sampler $Session.Sampler); $Session.Sampler = $null }
+        catch { $errors.Add("Sampler cleanup failed: $($_.Exception.Message)") }
+    }
+    return $errors.ToArray()
+}
+
+function Restore-ShelteredPlatformSession {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)]$Session)
+    if ($Session.Restored -or $null -eq $Session.Snapshot) { return }
+    if (-not $Session.ProcessStopped) { throw "Refusing to restore '$($Session.InstallRoot)' while its owned process is still active." }
+    $errors = New-Object 'System.Collections.Generic.List[string]'
+    try { Restore-InstallStateSnapshot -Snapshot $Session.Snapshot }
+    catch { $errors.Add("Install configuration: $($_.Exception.Message)") }
+    if ($null -ne $Session.DeploymentAbsenceTransaction) {
+        try { Restore-BenchmarkDeploymentAbsenceTransaction -Transaction $Session.DeploymentAbsenceTransaction -ArtifactRoot $Session.ArtifactRoot }
+        catch { $errors.Add($_.Exception.Message) }
+    }
+    if ($errors.Count -gt 0) { throw "Platform restoration left residual differences: $($errors.ToArray() -join '; ')" }
+    $Session.Restored = $true
 }
 
 function Invoke-ShelteredBenchmarkCase {
@@ -303,6 +691,7 @@ function Invoke-ShelteredBenchmarkCase {
         [Parameter(Mandatory = $true)][string]$CaseRoot,
         [Parameter(Mandatory = $true)][int]$Iteration,
         [Parameter(Mandatory = $true)][string]$RunId,
+        [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][object[]]$InstallLocks,
         [string]$ExecutionMode = 'serial',
         [string]$ComparisonLane = ''
     )
@@ -329,14 +718,11 @@ function Invoke-ShelteredBenchmarkCase {
     $minimumFpsCoverage = [double](Get-ObjectPropertyValue $sampling 'minimumFpsCoveragePercent' 70) / 100.0
     $idleDuration = [int](Get-ObjectPropertyValue $sampling 'vanillaIdleSeconds' $fpsDuration)
     $leaseOwner = "sheltered-benchmark-$RunId-$platformName-$profileName-$Iteration"
-    $snapshot = $null
+    $session = $null
     $environment = $null
     $process = $null
-    $processStart = $null
     $sampler = $null
-    $nativeReadinessProbe = $null
     $samples = @()
-    $leaseAcquired = $false
     $selected = @()
     $readinessMethod = ''
     $harnessMenuReadyMs = $null
@@ -351,78 +737,22 @@ function Invoke-ShelteredBenchmarkCase {
     $cleanupErrors = New-Object 'System.Collections.Generic.List[string]'
     $startedAt = [DateTimeOffset]::UtcNow
     try {
-        $snapshot = New-InstallStateSnapshot -InstallRoot $installRoot -BackupRoot $stateRoot
-        $catalog = Get-InstalledModCatalog -InstallRoot $installRoot
-        $existingState = Get-LoadOrderState -InstallRoot $installRoot
-        $existingOrder = if ($null -ne $existingState) { @($existingState.order) } else { @() }
-        $existingEnabled = @(Get-ObjectPropertyValue $Platform '_benchmarkEnabledIds' (Get-EnabledLoadOrderIds $existingState))
-        $coreIds = @((Get-ObjectPropertyValue $Config 'coreModIds' @('com.harmony.0harmony', 'coolnether123.shelteredagentinterface')) | ForEach-Object { [string]$_ })
-        $selected = @(Resolve-ShelteredModProfile -Profile $Profile -Catalog $catalog -ExistingOrder $existingOrder -CoreModIds $coreIds -ExistingEnabledIds $existingEnabled)
-        Set-DoorstopEnabled -InstallRoot $installRoot -Enabled (-not $isVanilla)
-        if (-not $isVanilla) {
-            Set-ShelteredLoadOrder -InstallRoot $installRoot -ModIds $selected
-            Set-ShelteredManagerOptions -InstallRoot $installRoot -Overrides (Get-ObjectPropertyValue $Profile 'managerOptions' ([pscustomobject]@{}))
-        }
-
-        if ($harnessEnabled) {
-            $hashGates = @(Get-ObjectPropertyValue $Platform 'hashGates' @())
-            [void](Test-BenchmarkDeploymentHashes -Gates $hashGates -InstallRoot $installRoot -ConfigRoot ([string]$Config._configRoot) -OutputPath (Join-Path $rawRoot 'deployment_hash_gates.json'))
-        }
-
+        $session = Start-ShelteredPlatformSession -Platform $Platform -Profile $Profile -Config $Config -StateRoot $stateRoot `
+            -ArtifactRoot $rawRoot -LeaseOwner $leaseOwner -InstallLocks $InstallLocks `
+            -ProcessIntervalMilliseconds $processInterval -StartNativeReadiness
+        $selected = @($session.SelectedModIds)
+        $process = $session.Process
+        $sampler = $session.Sampler
         $environment = Get-BenchmarkEnvironment -RepositoryRoot $RepositoryRoot -Platform $Platform -SelectedModIds $selected `
             -MutableModRelativePathPatterns $mutableModPathPatterns
         $environment | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $rawRoot 'environment.json') -Encoding UTF8
         $caseConfiguration = [pscustomobject]@{ Platform = $Platform; Profile = $Profile; ResolvedModIds = $selected; Iteration = $Iteration }
         $caseConfiguration | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $rawRoot 'case.json') -Encoding UTF8
 
-        $existingProcesses = @(Get-Process -Name ([string]$Platform.processName) -ErrorAction SilentlyContinue)
-        if ($existingProcesses.Count -gt 0) { throw "Refusing to launch because $platformName already has process(es): $($existingProcesses.Id -join ', ')." }
-        $executablePath = Join-Path $installRoot ([string]$Platform.executable)
-        $arguments = @((Get-ObjectPropertyValue $Platform 'launchArguments' @()) | ForEach-Object { [string]$_ })
-        $process = Start-Process -FilePath $executablePath -WorkingDirectory $installRoot -ArgumentList $arguments -PassThru
-        $processStart = [DateTimeOffset]$process.StartTime.ToUniversalTime()
-        [pscustomobject]@{
-            Pid = $process.Id
-            ProcessName = [string]$Platform.processName
-            ExecutablePath = $executablePath
-            StartTimeUtc = $processStart.ToString('o')
-        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $rawRoot 'owned_process.json') -Encoding UTF8
-        $sampler = Start-BenchmarkProcessSampler -ProcessId $process.Id -ProcessStartUtc $processStart -IntervalMilliseconds $processInterval
-
-        $reference = [string](Get-ObjectPropertyValue $Platform 'vanillaMenuReferenceImage' '')
-        if (-not [string]::IsNullOrWhiteSpace($reference)) {
-            $reference = Resolve-ConfiguredPath -Path $reference -BasePath ([string]$Config._configRoot)
-        }
-        $nativeReadinessProbe = Start-NativeMenuReadyProbe -ProcessId $process.Id -ReferencePath $reference `
-            -RmseThreshold ([double](Get-ObjectPropertyValue $Platform 'vanillaMenuRmseThreshold' 15)) `
-            -FallbackDelaySeconds ([int](Get-ObjectPropertyValue $Platform 'vanillaWindowDelaySeconds' 16)) `
-            -TimeoutSeconds $startupTimeout
-
-        if ($harnessEnabled) {
-            if ($port -le 0) { throw "Harness profile '$profileName' requires a positive agentPort for '$platformName'." }
-            $bindStatus = Wait-ShelteredHarness -Port $port -TimeoutSeconds $startupTimeout
-            $bindStatus | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $rawRoot 'harness_bind_status.json') -Encoding UTF8
-            [void](Acquire-ShelteredHarnessLease -Port $port -Owner $leaseOwner)
-            $leaseAcquired = $true
-            [void](Enable-ShelteredBackgroundRun -Port $port)
-            $menuStatus = Wait-HarnessMenuReady -Port $port -MenuReadyRegex ([string](Get-ObjectPropertyValue $Platform 'menuReadyRegex' 'MenuScene')) -TimeoutSeconds $startupTimeout
-            $menuStatus | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $rawRoot 'menu_status.json') -Encoding UTF8
-            $harnessMenuReadyMs = [math]::Round(([DateTimeOffset]::UtcNow - $processStart).TotalMilliseconds, 1)
-            # Complete the same Wait-NativeMenuReady gate used by vanilla; its
-            # polling started at launch so harness setup cannot delay observation.
-            $readiness = Complete-NativeMenuReadyProbe -Probe $nativeReadinessProbe
-            $nativeReadinessProbe = $null
-            $readiness | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $rawRoot 'native_menu_readiness.json') -Encoding UTF8
-            $readinessMethod = "harness-status+$($readiness.Method)"
-        }
-        else {
-            $readiness = Complete-NativeMenuReadyProbe -Probe $nativeReadinessProbe
-            $nativeReadinessProbe = $null
-            $readiness | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $rawRoot 'native_menu_readiness.json') -Encoding UTF8
-            $readinessMethod = $readiness.Method
-        }
-        $startupMs = [math]::Round(([DateTimeOffset]::Parse([string]$readiness.ObservedAtUtc) - $processStart).TotalMilliseconds, 1)
-        $sampler.State.Phase = 'menu-idle'
+        [void](Wait-ShelteredPlatformSessionReady -Session $session -TimeoutSeconds $startupTimeout)
+        $readinessMethod = $session.ReadinessMethod
+        $harnessMenuReadyMs = $session.HarnessMenuReadyMs
+        $startupMs = $session.StartupMs
 
         if ($harnessEnabled) {
             foreach ($probe in @(
@@ -496,26 +826,20 @@ function Invoke-ShelteredBenchmarkCase {
         $_ | Out-String | Set-Content -LiteralPath (Join-Path $rawRoot 'failure.txt') -Encoding UTF8
     }
     finally {
-        $processStopped = $null -eq $process
-        if ($null -ne $nativeReadinessProbe) { Stop-NativeMenuReadyProbe -Probe $nativeReadinessProbe; $nativeReadinessProbe = $null }
         try {
             if (-not $isVanilla -and $null -ne $process) {
-                Copy-BenchmarkRuntimeLog -InstallRoot $installRoot -Destination (Join-Path $rawRoot 'mod_manager.log')
+                $runtimeLog = Join-Path $installRoot 'SMM\mod_manager.log'
+                if (Test-Path -LiteralPath $runtimeLog -PathType Leaf) {
+                    Copy-Item -LiteralPath $runtimeLog -Destination (Join-Path $rawRoot 'mod_manager.log') -Force
+                }
             }
         }
         catch { $cleanupErrors.Add("Log copy failed: $($_.Exception.Message)") }
-        if ($leaseAcquired) {
-            try { [void](Release-ShelteredHarnessLease -Port $port -Owner $leaseOwner) }
-            catch { $cleanupErrors.Add("Lease release failed: $($_.Exception.Message)") }
-        }
-        try { Stop-BenchmarkGameProcess -Process $process; $processStopped = $true }
-        catch { $processStopped = $false; $cleanupErrors.Add("Process close failed: $($_.Exception.Message)") }
-        if ($null -ne $sampler) {
-            try {
-                $samples = @(Stop-BenchmarkProcessSampler -Sampler $sampler)
-                $samples | Export-Csv -LiteralPath (Join-Path $rawRoot 'process_samples.csv') -NoTypeInformation -Encoding UTF8
-            }
-            catch { $cleanupErrors.Add("Sampler cleanup failed: $($_.Exception.Message)") }
+        if ($null -ne $session) {
+            foreach ($cleanupError in @(Stop-ShelteredPlatformSession -Session $session)) { $cleanupErrors.Add([string]$cleanupError) }
+            $samples = @($session.Samples)
+            try { $samples | Export-Csv -LiteralPath (Join-Path $rawRoot 'process_samples.csv') -NoTypeInformation -Encoding UTF8 }
+            catch { $cleanupErrors.Add("Sample export failed: $($_.Exception.Message)") }
         }
         if ($null -ne $environment) {
             try {
@@ -525,12 +849,9 @@ function Invoke-ShelteredBenchmarkCase {
             }
             catch { $cleanupErrors.Add("FILE MANIFEST VERIFICATION FAILED: $($_.Exception.Message)") }
         }
-        if ($null -ne $snapshot) {
-            if ($processStopped) {
-                try { Restore-InstallStateSnapshot -Snapshot $snapshot }
-                catch { $cleanupErrors.Add("INSTALL RESTORATION FAILED: $($_.Exception.Message)") }
-            }
-            else { $cleanupErrors.Add('INSTALL RESTORATION SKIPPED because the launched process did not release its executable/configuration handles.') }
+        if ($null -ne $session) {
+            try { Restore-ShelteredPlatformSession -Session $session }
+            catch { $cleanupErrors.Add("INSTALL RESTORATION FAILED: $($_.Exception.Message)") }
         }
         if ($cleanupErrors.Count -gt 0) {
             $status = 'failed'
@@ -601,5 +922,6 @@ function Invoke-ShelteredBenchmarkCase {
 
 Export-ModuleMember -Function @(
     'Complete-NativeMenuReadyProbe', 'Get-NativeFrameRmse', 'Get-PhaseProcessSummaries', 'Invoke-ShelteredBenchmarkCase', 'New-NativeWindowBitmap',
-    'Start-BenchmarkProcessSampler', 'Start-NativeMenuReadyProbe', 'Stop-BenchmarkProcessSampler', 'Stop-NativeMenuReadyProbe', 'Wait-NativeMenuReady'
+    'Restore-ShelteredPlatformSession', 'Start-BenchmarkProcessSampler', 'Start-NativeMenuReadyProbe', 'Start-ShelteredPlatformSession',
+    'Stop-BenchmarkProcessSampler', 'Stop-NativeMenuReadyProbe', 'Stop-ShelteredPlatformSession', 'Wait-NativeMenuReady', 'Wait-ShelteredPlatformSessionReady'
 )

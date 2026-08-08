@@ -35,7 +35,9 @@
   },
   "fileIntegrity": {
     "mutableModRelativePathPatterns": [
-      "Data/change-intelligence/*"
+      "Data/change-intelligence/*",
+      "Data/cortex.settings.json",
+      "Data/cortex.workbench.json"
     ]
   },
   "platforms": [
@@ -95,6 +97,12 @@
           "role": "shelteredapi",
           "deployedPath": "SMM\\bin\\ShelteredAPI.dll",
           "sourcePath": "../../ShelteredAPI/obj/Release/ShelteredAPI.dll"
+        },
+        {
+          "name": "Sheltered Scenario Editor",
+          "role": "scenarioeditor",
+          "deployedPath": "SMM\\bin\\ShelteredScenarioEditor.dll",
+          "sourcePath": "../../ShelteredScenarioEditor/obj/Release/ShelteredScenarioEditor.dll"
         },
         {
           "name": "Sheltered Agent Interface",
@@ -162,6 +170,12 @@
           "sourcePath": "../../ShelteredAPI/obj/Release/ShelteredAPI.dll"
         },
         {
+          "name": "Sheltered Scenario Editor",
+          "role": "scenarioeditor",
+          "deployedPath": "SMM\\bin\\ShelteredScenarioEditor.dll",
+          "sourcePath": "../../ShelteredScenarioEditor/obj/Release/ShelteredScenarioEditor.dll"
+        },
+        {
           "name": "Sheltered Agent Interface",
           "role": "harness",
           "deployedPath": "mods\\Sheltered Agent Interface\\Assemblies\\Sheltered Agent Interface.dll",
@@ -180,6 +194,32 @@
       "scenarioTransition": false
     },
     {
+      "name": "smm-scenario-editor-absent",
+      "enabled": true,
+      "mode": "core",
+      "harness": true,
+      "executionMode": "parallel-platforms",
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "physicallyAbsentDeploymentRoles": [
+        "scenarioeditor"
+      ],
+      "managerOptions": {
+        "ShelteredScenarioEditor.Enabled": false
+      }
+    },
+    {
+      "name": "smm-scenario-editor-off",
+      "enabled": true,
+      "mode": "core",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "managerOptions": {
+        "ShelteredScenarioEditor.Enabled": false
+      }
+    },
+    {
       "name": "smm-core",
       "enabled": true,
       "mode": "core",
@@ -187,7 +227,7 @@
       "scenarioSelectionTransition": true,
       "scenarioTransition": true,
       "managerOptions": {
-        "ShelteredAPI.PatchCustomScenarioEditor": true
+        "ShelteredScenarioEditor.Enabled": true
       }
     },
     {
@@ -202,18 +242,7 @@
       "scenarioSelectionTransition": false,
       "scenarioTransition": false,
       "managerOptions": {
-        "ShelteredAPI.PatchCustomScenarioEditor": true
-      }
-    },
-    {
-      "name": "smm-custom-editor-off",
-      "enabled": true,
-      "mode": "core",
-      "harness": true,
-      "scenarioSelectionTransition": true,
-      "scenarioTransition": false,
-      "managerOptions": {
-        "ShelteredAPI.PatchCustomScenarioEditor": false
+        "ShelteredScenarioEditor.Enabled": true
       }
     },
     {
@@ -227,7 +256,7 @@
       "include": [],
       "exclude": [],
       "managerOptions": {
-        "ShelteredAPI.PatchCustomScenarioEditor": true
+        "ShelteredScenarioEditor.Enabled": true
       }
     },
     {
@@ -240,7 +269,25 @@
       "includeDependencies": true,
       "exclude": [],
       "managerOptions": {
-        "ShelteredAPI.PatchCustomScenarioEditor": true
+        "ShelteredScenarioEditor.Enabled": true
+      }
+    },
+    {
+      "name": "all-supported-mods",
+      "enabled": false,
+      "mode": "all",
+      "harness": true,
+      "scenarioSelectionTransition": true,
+      "scenarioTransition": true,
+      "includeDependencies": true,
+      "exclude": [
+        "com.plugin.harmony",
+        "com.Coolnether123.PluginConsole",
+        "com.plugin.debuggui",
+        "com.plugin.initializer"
+      ],
+      "managerOptions": {
+        "ShelteredScenarioEditor.Enabled": true
       }
     },
     {
@@ -256,7 +303,7 @@
       ],
       "exclude": [],
       "managerOptions": {
-        "ShelteredAPI.PatchCustomScenarioEditor": true
+        "ShelteredScenarioEditor.Enabled": true
       }
     },
     {
@@ -272,7 +319,7 @@
       ],
       "exclude": [],
       "managerOptions": {
-        "ShelteredAPI.PatchCustomScenarioEditor": true
+        "ShelteredScenarioEditor.Enabled": true
       }
     }
   ]

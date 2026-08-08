@@ -331,11 +331,6 @@ namespace ModAPI.Core
             catch { return null; }
         }
 
-        private string SafeAssemblyLocation(Assembly asm)
-        {
-            try { return asm.Location; } catch { return "<location unavailable>"; }
-        }
-
         /// <summary>
         /// Records whether the runtime is using modern SceneManager callbacks or legacy fallback.
         /// </summary>
@@ -1344,22 +1339,6 @@ namespace ModAPI.Core
         {
             try { return asm != null ? asm.Location : null; }
             catch (Exception ex) { MMLog.WarnOnce("PluginManager.SafeAssemblyPath", "Error getting assembly path: " + ex.Message); return null; }
-        }
-
-        private static string ProbeModRootFromAssembly(string asmPath)
-        {
-            if (string.IsNullOrEmpty(asmPath)) return null;
-            try
-            {
-                var dir = new DirectoryInfo(Path.GetDirectoryName(asmPath));
-                for (var cursor = dir; cursor != null; cursor = cursor.Parent)
-                {
-                    var aboutDir = Path.Combine(cursor.FullName, "About");
-                    if (Directory.Exists(aboutDir)) return cursor.FullName;
-                }
-            }
-            catch (Exception ex) { MMLog.WarnOnce("PluginManager.ProbeModRoot", "Error probing for mod root: " + ex.Message); }
-            return null;
         }
 
         private static IEnumerable<string> SafeEnumerateAssemblies(ModEntry entry)

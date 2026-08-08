@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-using UnityEngine;
 using ShelteredAPI.Content;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using UnityEngine;
 namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal enum ScenarioDependencyVerificationState
     {
@@ -140,16 +139,12 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         bool TryGetQuestInstance(int instanceId, out QuestInstance instance, out string reason);
         List<QuestInstance> GetCurrentQuests();
         bool TryFinishQuest(QuestInstance instance, bool success, out string reason);
+        bool TryAbandonQuest(QuestInstance instance, out string reason);
     }
 
     internal interface IScenarioQuestInstanceResolver
     {
         bool TryResolve(ScenarioRuntimeBinding binding, out QuestInstance instance, out string reason);
-    }
-
-    internal interface IScenarioWinLossConditionAdapter
-    {
-        bool TryCreateConditionRef(ScenarioDefinition definition, ScenarioRuntimeBinding binding, ConditionDef condition, out ScenarioConditionRef conditionRef, out string reason);
     }
 
     internal interface IScenarioWinLossOutcomeService
@@ -174,11 +169,6 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         public string ScenarioDisplayName { get; set; }
         public int DaysSurvived { get; set; }
         public string FulfilledConditionText { get; set; }
-    }
-
-    internal interface IScenarioAuthoringSessionContext
-    {
-        bool HasActiveSession { get; }
     }
 
     internal interface IScenarioScoreSnapshotService
@@ -219,45 +209,6 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
     {
         ScenarioApplyResult ApplyAll(ScenarioDefinition definition);
         ScenarioApplyResult ApplyAll(ScenarioDefinition definition, string scenarioFilePath);
-    }
-
-    internal interface IScenarioRuntimeDefinitionOverrideProvider
-    {
-        bool TryGetDefinitionOverride(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath);
-    }
-
-    internal interface IScenarioPlaytestOrchestrator
-    {
-        ScenarioApplyResult BeginPlaytest(ScenarioEditorSession session, string scenarioFilePath);
-        void EndPlaytest(ScenarioEditorSession session);
-    }
-
-    internal interface IScenarioEditorService
-    {
-        ScenarioEditorSession CurrentSession { get; }
-        ScenarioEditorSession EnterEditMode(ScenarioBaseGameMode baseMode);
-        ScenarioEditorSession LoadEditMode(string scenarioFilePath);
-        ScenarioValidationResult CommitChanges(string scenarioFilePath);
-        ScenarioApplyResult BeginPlaytest();
-        void EndPlaytest();
-        void ConvertToNormalSave();
-        void RequestRestart();
-        void CloseEditor(bool resumeGame);
-        void MaintainAuthoringPause();
-    }
-
-    internal interface IScenarioPauseService
-    {
-        bool OwnsPause { get; }
-        bool EnsurePaused(string reason);
-        void ReleasePause(string reason);
-        bool ShouldSuppressPauseMenu();
-        bool IsPauseMenuPanel(BasePanel panel);
-    }
-
-    internal interface IScenarioPlaytestUiService
-    {
-        void RestoreForPlaytest();
     }
 
     internal interface IScenarioRuntimeOrchestrator

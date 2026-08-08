@@ -1,8 +1,9 @@
 using UnityEngine;
+
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioGridSnapService
     {
-        public static bool TryGetCell(Vector3 worldPosition, out int gridX, out int gridY)
+        internal static bool TryGetCell(Vector3 worldPosition, out int gridX, out int gridY)
         {
             gridX = -1;
             gridY = -1;
@@ -11,7 +12,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return grid != null && grid.isInitialized && grid.WorldCoordsToCellCoords(worldPosition, out gridX, out gridY);
         }
 
-        public static bool TrySnapWorldPosition(Vector3 worldPosition, out int gridX, out int gridY, out Vector3 snappedWorldPosition)
+        internal static bool TrySnapWorldPosition(Vector3 worldPosition, out int gridX, out int gridY, out Vector3 snappedWorldPosition)
         {
             snappedWorldPosition = worldPosition;
             if (!TryGetCell(worldPosition, out gridX, out gridY))
@@ -21,7 +22,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return true;
         }
 
-        public static Vector3 GetCellCenterWorldPosition(int gridX, int gridY)
+        internal static Vector3 GetCellCenterWorldPosition(int gridX, int gridY)
         {
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
             if (grid == null)

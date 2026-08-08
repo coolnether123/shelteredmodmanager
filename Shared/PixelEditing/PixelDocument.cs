@@ -6,7 +6,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// Owns a rectangular, row-major RGBA pixel buffer without UI or image-codec dependencies.
     /// Pixel (0, 0) is the first four bytes in the buffer; hosts decide how that maps to screen space.
     /// </summary>
-    public sealed class PixelDocument
+    internal sealed class PixelDocument
     {
         private readonly int _width;
         private readonly int _height;

@@ -1,17 +1,16 @@
 using System.Collections.Generic;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     /// <summary>
-    /// The three top-level buckets the browser can show. Vanilla saves are
+    /// The two top-level buckets the runtime browser can show. Vanilla saves are
     /// scenario-keyed (Survival / Surrounded / Stasis each carry their own
     /// per-scenario save list). Modded covers published custom scenarios from
-    /// loaded mods. Draft covers scenario-authoring drafts in progress, so
-    /// new in-flight scenarios stay separated from already-published ones.
+    /// loaded mods. Authoring drafts belong to ShelteredScenarioEditor and are
+    /// deliberately absent from this installed-scenario runtime state.
     /// </summary>
     internal enum ScenarioBrowserSource
     {
         Vanilla = 0,
-        Modded = 1,
-        Draft = 2
+        Modded = 1
     }
 
     internal sealed class ScenarioBrowserState

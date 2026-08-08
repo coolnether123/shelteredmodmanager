@@ -5,7 +5,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Immutable rectangular pixel selection.
     /// </summary>
-    public struct PixelSelection : IEquatable<PixelSelection>
+    internal struct PixelSelection : IEquatable<PixelSelection>
     {
         private readonly int _x;
         private readonly int _y;

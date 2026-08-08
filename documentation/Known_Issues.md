@@ -5,7 +5,7 @@ This list is for SMM 2.0 release tracking.
 ## Release Scope
 
 - SMM 2.0 is the stable release line for the split ModAPI/ShelteredAPI contract.
-- Advanced custom scenario authoring is an opt-in preview and defaults off. Installed custom scenario browsing and playback remain available while authoring is disabled.
+- `ShelteredScenarioEditor.dll` is an optional preview component and defaults off under `ShelteredScenarioEditor.Enabled`. Installed custom scenario browsing and playback remain available while the editor is disabled or absent.
 - Nexus publish tools are experimental and hidden unless explicitly enabled.
 - Older 1.2.2 or 1.3 mods may require a 2.0 rebuild before they are safe for saves.
 
@@ -31,6 +31,6 @@ Bug reports should include:
 - SMM version.
 - Mod list and load order.
 - Save type and slot.
-- Whether the custom scenario editor was enabled.
+- Whether `ShelteredScenarioEditor.dll` was present and the value of `ShelteredScenarioEditor.Enabled`.
 - Reproduction steps.
 - `SMM\mod_manager.log`.

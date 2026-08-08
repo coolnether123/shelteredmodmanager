@@ -1,11 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
+using System.Reflection;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class VanillaScenarioRuntimeGateway : IVanillaScenarioRuntime
     {
+        private static readonly MethodInfo AddRemoveQuestInstancesMethod = typeof(QuestManager).GetMethod(
+            "AddRemoveQuestInstances_Recursive",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo PendingStagesField = typeof(QuestManager).GetField(
+            "m_pendingStages",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         public bool IsWorldReady(out string blockingReason)
         {
             return ScenarioWorldReady.Evaluate(out blockingReason);
@@ -132,6 +140,68 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             {
                 reason = "QuestManager failed while finishing QuestInstance " + instance.id.ToString() + ": " + ex.Message;
                 return false;
+            }
+        }
+
+        public bool TryAbandonQuest(QuestInstance instance, out string reason)
+        {
+            reason = null;
+            if (instance == null)
+            {
+                reason = "QuestInstance is null.";
+                return false;
+            }
+            if (QuestManager.instance == null)
+            {
+                reason = "QuestManager is not ready.";
+                return false;
+            }
+            if (AddRemoveQuestInstancesMethod == null)
+            {
+                reason = "QuestManager removal seam was not found.";
+                return false;
+            }
+
+            try
+            {
+                instance.CleanUp();
+                AddRemoveQuestInstancesMethod.Invoke(
+                    QuestManager.instance,
+                    new object[] { instance, false });
+                RemovePendingStagesRecursive(instance);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reason = "QuestManager failed while abandoning QuestInstance "
+                    + instance.id.ToString() + ": " + ex.Message;
+                return false;
+            }
+        }
+
+        private static void RemovePendingStagesRecursive(QuestInstance instance)
+        {
+            if (instance == null)
+                return;
+            RemovePendingStage(instance.id);
+            for (int i = 0; instance.subquests != null && i < instance.subquests.Count; i++)
+                RemovePendingStagesRecursive(instance.subquests[i]);
+        }
+
+        private static void RemovePendingStage(int instanceId)
+        {
+            IList pending = PendingStagesField != null && QuestManager.instance != null
+                ? PendingStagesField.GetValue(QuestManager.instance) as IList
+                : null;
+            for (int i = pending != null ? pending.Count - 1 : -1; i >= 0; i--)
+            {
+                object entry = pending[i];
+                FieldInfo instanceIdField = entry != null
+                    ? entry.GetType().GetField("instanceId", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    : null;
+                object value = instanceIdField != null ? instanceIdField.GetValue(entry) : null;
+                if (value is int && (int)value == instanceId)
+                    pending.RemoveAt(i);
             }
         }
     }

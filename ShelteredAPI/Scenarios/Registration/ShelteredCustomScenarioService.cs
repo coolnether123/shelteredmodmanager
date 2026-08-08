@@ -31,7 +31,7 @@ namespace ShelteredAPI.Scenarios.Registration{
 
         public static ShelteredCustomScenarioService Instance
         {
-            get { return ScenarioCompositionRoot.Resolve<ShelteredCustomScenarioService>(); }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<ShelteredCustomScenarioService>(); }
         }
 
         public event Action<CustomScenarioEventArgs> ScenarioRegistered

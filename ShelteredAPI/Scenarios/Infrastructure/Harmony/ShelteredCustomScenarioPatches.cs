@@ -12,7 +12,6 @@ using ModAPI.UI;
 using UnityEngine;
 
 using ShelteredAPI.Infrastructure;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
@@ -26,21 +25,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
     internal static class ShelteredCustomScenarioRuntimeState
     {
         private static int _lastLoggedBlockedUntilFrame = -1;
-        private static bool _customModeActive;
 
         public static bool IsSlotClickBlocked
         {
             get { return UIFlowGuard.IsSlotClickBlocked; }
         }
 
-        public static void SetCustomModeActive(bool active)
-        {
-            _customModeActive = active;
-        }
-
         public static bool ShouldBlockSlotInteraction(Component component)
         {
-            return UIFlowGuard.IsSlotClickBlocked || _customModeActive;
+            return UIFlowGuard.IsSlotClickBlocked;
         }
 
         public static void BlockSlotClicksBriefly()
@@ -111,27 +104,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
                 ___m_stasis_scoreLabelsRoot);
         }
 
-        [HarmonyPostfix]
-        [HarmonyPatch("Update")]
-        private static void UpdatePostfix(
-            ScenarioSelectionPanel __instance,
-            int ___m_selectedScenario,
-            UILabel ___m_scenarioNameLabel,
-            UILabel ___m_scenarioDescLabel,
-            UILabel ___m_scenarioHighScore,
-            GameObject ___m_stasis_scoreLabelsRoot,
-            SlotSelectionPanel ___selectionPanel)
-        {
-            Controller.HandleUpdate(
-                __instance,
-                ___m_selectedScenario,
-                ___m_scenarioNameLabel,
-                ___m_scenarioDescLabel,
-                ___m_scenarioHighScore,
-                ___m_stasis_scoreLabelsRoot,
-                ___selectionPanel);
-        }
-
         [HarmonyPrefix]
         [HarmonyPatch("OnScenarioChosen")]
         private static bool OnScenarioChosenPrefix(
@@ -151,17 +123,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         private static bool OnCancelPrefix(ScenarioSelectionPanel __instance, List<UIButton> ___m_scenarioButtons)
         {
             return Controller.HandleCancel(__instance, ___m_scenarioButtons);
-        }
-
-        [HarmonyPrefix]
-        [HarmonyPatch("OnExtra1")]
-        private static bool OnExtra1Prefix(ScenarioSelectionPanel __instance)
-        {
-            SlotSelectionPanel selectionPanel = __instance != null ? __instance.selectionPanel : null;
-            if (Controller.TryPromptDeleteScenarioSaveSlot(__instance, selectionPanel, -1))
-                return false;
-
-            return true;
         }
 
         [HarmonyPostfix]
@@ -185,7 +146,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         {
             try
             {
-                ScenarioCompositionRoot.Resolve<IScenarioRuntimeOrchestrator>().UpdatePendingScenarioSpawn();
+                ScenarioRuntimeCompositionRoot.Resolve<IScenarioRuntimeOrchestrator>().UpdatePendingScenarioSpawn();
             }
             catch (Exception ex)
             {
@@ -234,18 +195,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             if (currentPage != 0)
                 return;
 
-            bool draftCancelled = false;
             SaveManager.SaveType[] startupSaveTypes = GetScenarioStartupSaveTypes();
             for (int i = 0; i < startupSaveTypes.Length; i++)
-            {
-                if (ClearQueuedStartupSave(startupSaveTypes[i]))
-                    draftCancelled = true;
-            }
-
-            // Guard covers the edge case where a draft was queued but no save target was
-            // registered yet (e.g. the UI flow was interrupted before QueueNewGameSaveTarget ran).
-            if (!draftCancelled)
-                ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Customisation was cancelled before the scenario world started.");
+                ClearQueuedStartupSave(startupSaveTypes[i]);
 
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
         }
@@ -262,123 +214,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             };
         }
 
-        private static bool ClearQueuedStartupSave(SaveManager.SaveType saveType)
+        private static void ClearQueuedStartupSave(SaveManager.SaveType saveType)
         {
-            PlatformSaveProxy.Target pendingTarget;
-            if (!PlatformSaveProxy.TryGetNextSave(saveType, out pendingTarget) || pendingTarget == null)
-                return false;
+            SaveRuntimeState.Target pendingTarget;
+            if (!SaveRuntimeState.TryGetPendingSave(saveType, out pendingTarget) || pendingTarget == null)
+                return;
 
-            IScenarioSaveLibrary saveLibrary = ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>();
+            IScenarioSaveLibrary saveLibrary = ScenarioRuntimeCompositionRoot.Resolve<IScenarioSaveLibrary>();
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Customisation cancelled before game start. Clearing queued startup save. scenarioId="
-                + pendingTarget.scenarioId + " saveId=" + pendingTarget.saveId + " saveType=" + saveType + ".");
+                + pendingTarget.ScenarioId + " saveId=" + pendingTarget.SaveId + " saveType=" + saveType + ".");
 
-            bool isDraftStartup = string.Equals(
-                pendingTarget.scenarioId,
-                ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
-                StringComparison.OrdinalIgnoreCase);
-
-            if (isDraftStartup)
-                ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Customisation was cancelled before the scenario world started.");
-            else if (!string.IsNullOrEmpty(pendingTarget.scenarioId)
-                && !string.Equals(pendingTarget.scenarioId, "Standard", StringComparison.OrdinalIgnoreCase))
-                saveLibrary.Delete(pendingTarget.scenarioId, pendingTarget.saveId);
+            if (!string.IsNullOrEmpty(pendingTarget.ScenarioId)
+                && !string.Equals(pendingTarget.ScenarioId, "Standard", StringComparison.OrdinalIgnoreCase))
+                saveLibrary.Delete(pendingTarget.ScenarioId, pendingTarget.SaveId);
 
             saveLibrary.ClearQueuedNewGameSave(saveType);
-            return isDraftStartup;
-        }
-    }
-
-    [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringGlobalUiIsolation",
-        TargetBehavior = "Global gameplay hotkeys do not steal focus while scenario authoring owns the live shelter scene.",
-        FailureMode = "Pause/map/clipboard hotkeys can still open vanilla panels during authoring pause.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring global UI isolation patch host.",
-        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
-        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
-        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = false,
-        ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.EditorDeferred)]
-    internal static class ScenarioAuthoringGlobalUiIsolationPatches
-    {
-        [HarmonyPatch(typeof(UI_InputListener), "UpdateManager")]
-        [HarmonyPrefix]
-        private static bool UpdateManagerPrefix()
-        {
-            if (!ScenarioAuthoringRuntimeGuards.ShouldSuppressGlobalGameplayUi())
-                return true;
-
-            return false;
-        }
-    }
-
-    [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringPauseOwnership",
-        TargetBehavior = "Scenario authoring owns pause without allowing the vanilla pause panel/menu stack to reopen.",
-        FailureMode = "Authoring pause can route back through the vanilla pause flow and reopen the pause menu panel.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring pause ownership patch host.",
-        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
-        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
-        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = false,
-        ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.EditorDeferred)]
-    internal static class ScenarioAuthoringPauseOwnershipPatches
-    {
-        [HarmonyPatch(typeof(PauseManager), "Pause")]
-        [HarmonyPrefix]
-        private static bool PausePrefix()
-        {
-            if (!ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
-                return true;
-
-            ScenarioAuthoringPauseService.Instance.EnsurePaused("Vanilla pause request intercepted while scenario authoring owned the shelter scene.");
-            return false;
-        }
-
-        [HarmonyPatch(typeof(PauseManager), "Resume")]
-        [HarmonyPrefix]
-        private static bool ResumePrefix()
-        {
-            if (!ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
-                return true;
-
-            if (ScenarioAuthoringPauseService.Instance.HandleVanillaResumeRequest())
-                return false;
-
-            MMLog.WriteInfo("[ScenarioAuthoringPause] Ignored vanilla resume request while scenario authoring owned the pause state.");
-            return false;
-        }
-
-        [HarmonyPatch(typeof(UIPanelManager), "PushPanel", new[] { typeof(BasePanel) })]
-        [HarmonyPrefix]
-        private static bool PushPanelPrefix(UIPanelManager __instance, BasePanel panel)
-        {
-            if (IsDuplicateTutorialPopupPush(__instance, panel))
-            {
-                MMLog.WriteInfo("[ScenarioSetupFlow] Suppressed duplicate tutorial popup push while setup flow was advancing.");
-                return false;
-            }
-
-            if (!ScenarioAuthoringPauseService.Instance.ShouldSuppressPauseMenu())
-                return true;
-
-            if (!ScenarioAuthoringPauseService.Instance.IsPauseMenuPanel(panel))
-                return true;
-
-            MMLog.WriteInfo("[ScenarioAuthoringPause] Suppressed UIPanelManager.PushPanel for the vanilla pause menu while authoring.");
-            return false;
-        }
-
-        private static bool IsDuplicateTutorialPopupPush(UIPanelManager panelManager, BasePanel panel)
-        {
-            if (panelManager == null || panel == null)
-                return false;
-            if (!(panel is TutorialPopupPanel))
-                return false;
-
-            try { return panelManager.IsPanelOnStack(panel); }
-            catch { return false; }
         }
     }
 
@@ -537,35 +387,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         }
     }
 
-    [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringSimulationFreeze",
-        TargetBehavior = "Scenario authoring keeps Sheltered's simulation and game clock frozen even when the vanilla pause panel is hidden.",
-        FailureMode = "The editor hides the pause menu, but shelter actors and in-game time keep advancing.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring simulation freeze patch host.",
-        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
-        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
-        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = false,
-        ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.EditorDeferred)]
-    internal static class ScenarioAuthoringSimulationFreezePatches
-    {
-        [HarmonyPatch(typeof(UIPanelManager), nameof(UIPanelManager.timePaused), MethodType.Getter)]
-        [HarmonyPostfix]
-        private static void TimePausedGetterPostfix(ref bool __result)
-        {
-            if (ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
-                __result = true;
-        }
-
-        [HarmonyPatch(typeof(GameTime), "Update")]
-        [HarmonyPrefix]
-        private static bool GameTimeUpdatePrefix()
-        {
-            return !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation()
-                && !ScenarioAuthoringRuntimeGuards.IsOpeningCutscenePreviewActive();
-        }
-    }
 
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredScenarioDefinitionApply",
         TargetBehavior = "Active scenario definitions are applied after save load once the Sheltered world is ready.",
@@ -580,7 +401,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         {
             try
             {
-                ScenarioCompositionRoot.Resolve<IScenarioRuntimeOrchestrator>().UpdateActiveScenarioApply();
+                ScenarioRuntimeCompositionRoot.Resolve<IScenarioRuntimeOrchestrator>().UpdateActiveScenarioApply();
             }
             catch (Exception ex)
             {
@@ -598,7 +419,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
     {
         private static ScenarioFutureSurvivorRecruitBindingService BindingService
         {
-            get { return ScenarioCompositionRoot.ResolveRuntime<ScenarioFutureSurvivorRecruitBindingService>(); }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<ScenarioFutureSurvivorRecruitBindingService>(); }
         }
 
         [HarmonyPatch(typeof(NpcVisitManager), "CreateNpcVisitor")]
@@ -692,12 +513,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         [HarmonyPrefix]
         private static bool SaveSlotButtonClickPrefix(SaveSlotButton __instance)
         {
-            if (UICamera.currentTouchID == -2 && ShelteredScenarioSelectionBrowserController.Instance.TryPromptDeleteScenarioSaveSlot(__instance))
-            {
-                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Handled custom scenario save-slot right-click.");
-                return false;
-            }
-
             bool allowed = !ShelteredCustomScenarioRuntimeState.ShouldBlockSlotInteraction(__instance);
             if (!allowed)
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SaveSlotButton.OnClick during guarded UI click.");
@@ -709,13 +524,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         TargetBehavior = "Dynamically spawned scenario survivors wait for their vanilla UI_Character binding before warning UI updates run.",
         FailureMode = "A newly spawned survivor can throw UI_CharacterInfo.Update NullReferenceException during its first frame.",
         RollbackStrategy = "Disable the Scenarios patch domain or remove the dynamic family UI readiness patch host.",
-        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
-        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
-        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
-        ManagerToggleDefault = false,
-        ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.EditorDeferred)]
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class ScenarioDynamicFamilyUiReadinessPatches
     {
         [HarmonyPatch(typeof(UI_CharacterInfo), "Update")]

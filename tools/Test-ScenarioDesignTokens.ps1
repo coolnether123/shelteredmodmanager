@@ -2,24 +2,24 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$palettePath = Join-Path $repo 'ShelteredAPI\Scenarios\Presentation\UiKit\Theme\ScenarioUiPalette.cs'
-$stylePath = Join-Path $repo 'ShelteredAPI\Scenarios\Presentation\UiKit\ScenarioUiStyleSheet.cs'
+$palettePath = Join-Path $repo 'ShelteredScenarioEditor\Presentation\UiKit\Theme\ScenarioUiPalette.cs'
+$stylePath = Join-Path $repo 'ShelteredScenarioEditor\Presentation\UiKit\ScenarioUiStyleSheet.cs'
 $palette = Get-Content -LiteralPath $palettePath -Raw
 $styles = Get-Content -LiteralPath $stylePath -Raw
 
 $expected = [ordered]@{
-    SurfacePage='35, 23, 45'; SurfaceCard='209, 198, 165'; SurfaceCardHover='229, 217, 184'
-    SurfaceCardSelected='169, 162, 115'; SurfaceInset='190, 180, 155'; SurfaceChrome='90, 55, 28'
-    SurfaceDisabled='198, 190, 167'; SurfaceViewport='22, 18, 15'; DepthShadow='22, 18, 15'
-    BorderDefault='89, 88, 88'; BorderStrong='74, 41, 33'; BorderHighlight='234, 224, 195'
-    BorderFocus='209, 102, 202'; TextPrimary='32, 30, 30'; TextSecondary='89, 88, 88'
-    TextMuted='122, 95, 72'; TextInverse='234, 224, 195'; TextInverseMuted='194, 194, 194'
-    TextDisabled='122, 95, 72'; AccentGold='156, 120, 52'; SemanticReady='137, 245, 116'
-    SemanticReadyStrong='75, 180, 60'; SemanticWarning='219, 192, 134'; SemanticWarningStrong='156, 120, 52'
-    SemanticError='250, 148, 143'; SemanticErrorStrong='197, 54, 46'; SemanticInfo='144, 153, 161'
-    SemanticInfoStrong='102, 140, 163'; ControlPressed='122, 95, 72'; WorkspaceStory='145, 73, 70'
-    WorkspaceCast='147, 96, 124'; WorkspaceSupplies='88, 123, 66'; WorkspaceMap='66, 102, 136'
-    WorkspaceTest='127, 145, 145'; WorkspacePublish='156, 120, 52'
+    SurfacePage='23, 26, 28'; SurfaceCard='36, 40, 43'; SurfaceCardHover='45, 51, 55'
+    SurfaceCardSelected='58, 52, 40'; SurfaceInset='17, 20, 22'; SurfaceChrome='30, 35, 38'
+    SurfaceDisabled='42, 46, 48'; SurfaceViewport='13, 15, 16'; DepthShadow='7, 8, 9'
+    BorderDefault='75, 83, 88'; BorderStrong='113, 123, 128'; BorderHighlight='170, 178, 181'
+    BorderFocus='214, 168, 75'; TextPrimary='241, 238, 230'; TextSecondary='195, 199, 200'
+    TextMuted='150, 157, 159'; TextInverse='241, 238, 230'; TextInverseMuted='174, 181, 183'
+    TextDisabled='105, 113, 117'; TextOnAccent='23, 19, 10'; AccentGold='214, 168, 75'
+    SemanticReady='37, 76, 56'; SemanticReadyStrong='63, 140, 98'; SemanticWarning='91, 67, 30'
+    SemanticWarningStrong='154, 107, 36'; SemanticError='90, 41, 39'; SemanticErrorStrong='168, 71, 64'
+    SemanticInfo='38, 69, 85'; SemanticInfoStrong='57, 123, 153'; ControlPressed='20, 23, 25'
+    WorkspaceStory='113, 62, 52'; WorkspaceCast='94, 70, 103'; WorkspaceSupplies='72, 90, 53'
+    WorkspaceMap='61, 88, 112'; WorkspaceTest='62, 98, 97'; WorkspacePublish='115, 90, 39'
 }
 
 foreach ($entry in $expected.GetEnumerator()) {
@@ -31,5 +31,7 @@ if ($palette -notmatch 'return new Color32\(red, green, blue, 255\)') { throw 'O
 if ($palette -notmatch 'SurfaceScrim.*new Color32\(0, 0, 0, 184\)') { throw 'SurfaceScrim must be the exact #000000B8 token.' }
 if ($styles -match 'WithPanelOpacity|WithRaisedOpacity|WithActiveOpacity') { throw 'Material style construction must not apply legacy opacity helpers.' }
 if ($styles -notmatch 'Texture2D card = ProceduralTextureLibrary\.MaterialSurface\(MaterialSurfaceTier\.RaisedCard') { throw 'Card material must use the opaque raised-card generator.' }
+if ($styles -notmatch 'ButtonEmphasized = BuildButton\(gold, warning, pressed, p\.TextOnAccent, p\.TextPrimary, p\.TextPrimary') { throw 'Emphasized buttons must use the dedicated readable text-on-accent token.' }
+if ($styles -notmatch 'TabActive = BuildButton\(gold, pressed, pressed, p\.TextOnAccent, p\.TextPrimary, p\.TextPrimary') { throw 'Active tabs must use the dedicated readable text-on-accent token.' }
 
 Write-Host "PASS: Scenario design tokens are byte-exact; all material tokens, including card, are alpha 255."

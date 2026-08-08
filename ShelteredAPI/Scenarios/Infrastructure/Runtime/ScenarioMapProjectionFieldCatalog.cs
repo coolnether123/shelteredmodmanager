@@ -2,22 +2,11 @@ using System;
 using System.Reflection;
 
 using ShelteredAPI.Scenarios.Domain.Map;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Public;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 {
-    internal sealed class ScenarioMapProjectionField
-    {
-        public string Group { get; set; }
-        public string Field { get; set; }
-        public bool AppliesInGame { get; set; }
-        internal ScenarioMapEncounterProjectionAction Apply { get; set; }
-
-        public string StatusText
-        {
-            get { return AppliesInGame ? "Applies in game" : "Saved with the scenario; not yet applied in game"; }
-        }
-    }
-
     internal delegate bool ScenarioMapEncounterProjectionAction(
         MapRegion region,
         MapEncounterTableDefinition table,

@@ -6,6 +6,7 @@ using UnityEngine;
 using ModAPI.Core;
 using ModAPI.InputServices;
 using ShelteredAPI.Saves;
+using ShelteredAPI.UI;
 using ShelteredAPI.UI.Compatibility;
 
 namespace ShelteredAPI.Saves.Paging
@@ -17,7 +18,6 @@ namespace ShelteredAPI.Saves.Paging
     internal class SaveDetailsWindow : MonoBehaviour
     {
         private static GameObject _instance;
-        private static Texture2D _whiteTexture;
 
         /// <summary>
         /// Text and policy settings for the save or scenario verification dialog.
@@ -136,39 +136,16 @@ namespace ShelteredAPI.Saves.Paging
                 return;
             }
             
-            // Create shared white texture
-            if (_whiteTexture == null)
-            {
-                _whiteTexture = new Texture2D(2, 2);
-                for (int x = 0; x < 2; x++)
-                    for (int y = 0; y < 2; y++)
-                        _whiteTexture.SetPixel(x, y, Color.white);
-                _whiteTexture.Apply();
-            }
-
-            var root = new GameObject("SaveDetailsWindow");
-            root.transform.SetParent(panel.transform, false);
-            root.layer = panel.gameObject.layer;
-            root.transform.localPosition = Vector3.zero;
-            root.transform.localScale = Vector3.one;
+            var root = NguiModalPrimitives.CreateRoot(panel, "SaveDetailsWindow");
             
             _instance = root;
 
-            // Get font
-            UIFont uiFont = null;
-            Font ttfFont = null;
-            var sampleLabel = UnityEngine.Object.FindObjectOfType<UILabel>();
-            if (sampleLabel != null)
-            {
-                uiFont = sampleLabel.bitmapFont;
-                ttfFont = sampleLabel.trueTypeFont;
-            }
-            if (uiFont == null && ttfFont == null)
-                ttfFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            UIFontCache.SeedFromGameObject(panel.gameObject, "SaveDetailsWindow");
+            UIFontCache.FontResult fonts = UIFontCache.GetFonts();
 
             // Create the window
             var win = root.AddComponent<SaveDetailsWindow>();
-            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, uiFont, ttfFont, options ?? new VerificationWindowOptions());
+            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, fonts.Bitmap, fonts.TTF, options ?? new VerificationWindowOptions());
         }
 
         private void BuildFullUI(Transform root, SaveEntry entry, SlotManifest manifest, 
@@ -180,13 +157,13 @@ namespace ShelteredAPI.Saves.Paging
             int layer = root.gameObject.layer;
             
             // === DARK OVERLAY ===
-            CreateTexturedBox(root, "DarkOverlay", Vector3.zero, 3000, 3000, 
+            NguiModalPrimitives.CreateBox(root, "DarkOverlay", Vector3.zero, 3000, 3000,
                 new Color(0f, 0f, 0f, 0.85f), 0, true);
             
             // === WINDOW BACKGROUND ===
-            CreateTexturedBox(root, "WindowBackground", Vector3.zero, 
+            NguiModalPrimitives.CreateBox(root, "WindowBackground", Vector3.zero,
                 WINDOW_WIDTH, WINDOW_HEIGHT, new Color(0.15f, 0.12f, 0.1f, 0.98f), 10, false);
-            CreateTexturedBox(root, "WindowBorder", Vector3.zero, 
+            NguiModalPrimitives.CreateBox(root, "WindowBorder", Vector3.zero,
                 WINDOW_WIDTH + 4, WINDOW_HEIGHT + 4, new Color(0.5f, 0.4f, 0.3f, 1f), 9, false);
 
             // Text colors
@@ -195,7 +172,7 @@ namespace ShelteredAPI.Saves.Paging
             Color titleColor = COLOR_HEADER;
             
             // === HEADER ===
-            var titleLabel = CreateLabel(root, "Title", options.Title ?? "MOD VERIFICATION",
+            var titleLabel = NguiModalPrimitives.CreateLabel(root, "Title", options.Title ?? "MOD VERIFICATION",
                 new Vector3(0, WINDOW_HEIGHT/2 - 70, 0), 32, titleColor, uiFont, ttfFont, 100);
             titleLabel.alignment = NGUIText.Alignment.Center;
             
@@ -208,15 +185,15 @@ namespace ShelteredAPI.Saves.Paging
                 int days = entry?.saveInfo?.daysSurvived ?? 0;
                 subtitleText = $"Family: \"{familyName}\" - Day {days}";
             }
-            var subtitleLabel = CreateLabel(root, "Subtitle", subtitleText,
+            var subtitleLabel = NguiModalPrimitives.CreateLabel(root, "Subtitle", subtitleText,
                 new Vector3(0, WINDOW_HEIGHT/2 - 105, 0), 22, secondaryTextColor, uiFont, ttfFont, 100);
             subtitleLabel.alignment = NGUIText.Alignment.Center;
             
             // === CLOSE [X] BUTTON ===
             // Positioned according to new width
-            var closeBtn = CreateButton(root, "CloseBtn", "CLOSE", 
-                new Vector3(WINDOW_WIDTH/2 - 80, WINDOW_HEIGHT/2 - 60, 0), 
-                20, primaryTextColor, uiFont, ttfFont, 100, 40, () => {
+            NguiModalPrimitives.CreateButton(root, "CloseBtn", "CLOSE",
+                new Vector3(WINDOW_WIDTH/2 - 80, WINDOW_HEIGHT/2 - 60, 0),
+                100, 40, 20, uiFont, ttfFont, new Color(0.44f, 0.32f, 0.24f, 1f), primaryTextColor, () => {
                     onCancel?.Invoke();
                     Close();
                 });
@@ -230,16 +207,16 @@ namespace ShelteredAPI.Saves.Paging
             // === COLUMN HEADERS ===
             int headerY = WINDOW_HEIGHT/2 - 160;
             
-            CreateLabel(root, "ActiveHeader", "ACTIVE",
+            NguiModalPrimitives.CreateLabel(root, "ActiveHeader", "ACTIVE",
                 new Vector3(-WINDOW_WIDTH/4, headerY, 0), 24, titleColor, uiFont, ttfFont, 100)
                 .alignment = NGUIText.Alignment.Center;
             
-            CreateLabel(root, "SavedHeader", options.SavedColumnHeader ?? "SAVE FILE",
+            NguiModalPrimitives.CreateLabel(root, "SavedHeader", options.SavedColumnHeader ?? "SAVE FILE",
                 new Vector3(WINDOW_WIDTH/4, headerY, 0), 24, titleColor, uiFont, ttfFont, 100)
                 .alignment = NGUIText.Alignment.Center;
             
             // Divider line
-            CreateTexturedBox(root, "HeaderDivider", new Vector3(0, headerY - 25, 0),
+            NguiModalPrimitives.CreateBox(root, "HeaderDivider", new Vector3(0, headerY - 25, 0),
                 WINDOW_WIDTH - 200, 2, new Color(0, 0, 0, 0.2f), 50, false);
             
             var warnings = BuildMissingModWarnings(savedMods, comparison, discovered);
@@ -286,13 +263,13 @@ namespace ShelteredAPI.Saves.Paging
                         case SaveVerification.ModCompareStatus.VersionDiff: iconPrefix = STATUS_VERSION_DIFF; break;
                     }
 
-                    var nameLabel = CreateLabel(rowGO.transform, "ActiveName", $"{iconPrefix} {mod.Name}{suffix}",
+                    var nameLabel = NguiModalPrimitives.CreateLabel(rowGO.transform, "ActiveName", $"{iconPrefix} {mod.Name}{suffix}",
                         new Vector3(-WINDOW_WIDTH/4, 0, 0), 18, color, uiFont, ttfFont, 100);
                     nameLabel.alignment = NGUIText.Alignment.Center;
                     nameLabel.width = COLUMN_WIDTH;
                     nameLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
 
-                    var verLabel = CreateLabel(rowGO.transform, "ActiveVersion", $"   v{mod.Version}",
+                    var verLabel = NguiModalPrimitives.CreateLabel(rowGO.transform, "ActiveVersion", $"   v{mod.Version}",
                         new Vector3(-WINDOW_WIDTH/4, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
                     verLabel.alignment = NGUIText.Alignment.Center;
                     verLabel.width = COLUMN_WIDTH;
@@ -321,7 +298,7 @@ namespace ShelteredAPI.Saves.Paging
                     var diskMod = discovered.Find(d => d != null && string.Equals(d.Id, saved.modId, StringComparison.OrdinalIgnoreCase));
                     string displayName = diskMod != null ? diskMod.Name : saved.modId;
 
-                    var savedName = CreateLabel(rowGO.transform, "SavedName", $"{icon} {displayName}{suffix}",
+                    var savedName = NguiModalPrimitives.CreateLabel(rowGO.transform, "SavedName", $"{icon} {displayName}{suffix}",
                         new Vector3(WINDOW_WIDTH/4, 0, 0), 18, color, uiFont, ttfFont, 100);
                     savedName.alignment = NGUIText.Alignment.Center;
                     savedName.width = COLUMN_WIDTH;
@@ -330,7 +307,7 @@ namespace ShelteredAPI.Saves.Paging
                     string verText = compareStatus == SaveVerification.ModCompareStatus.VersionDiff && status != null
                         ? $"   (required: v{saved.version}, active: v{status.activeVersion})"
                         : (string.IsNullOrEmpty(saved.version) ? "   any version" : $"   v{saved.version}");
-                    var savedVer = CreateLabel(rowGO.transform, "SavedVersion", verText,
+                    var savedVer = NguiModalPrimitives.CreateLabel(rowGO.transform, "SavedVersion", verText,
                         new Vector3(WINDOW_WIDTH/4, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
                     savedVer.alignment = NGUIText.Alignment.Center;
                     savedVer.width = COLUMN_WIDTH;
@@ -354,14 +331,14 @@ namespace ShelteredAPI.Saves.Paging
             
             if (warnings.Count > 0)
             {
-                var warnHeader = CreateLabel(root, "WarningHeader", STATUS_WARNING + " WARNINGS FROM MISSING MODS:",
+                var warnHeader = NguiModalPrimitives.CreateLabel(root, "WarningHeader", STATUS_WARNING + " WARNINGS FROM MISSING MODS:",
                     new Vector3(0, warningY, 0), 18, COLOR_MISSING, uiFont, ttfFont, 100);
                 warnHeader.alignment = NGUIText.Alignment.Center;
                 
                 // Red background box
                 int boxHeight = 100;
                 int boxWidth = WINDOW_WIDTH - 60;
-                CreateTexturedBox(root, "WarningBg", new Vector3(0, warningY - 60, 0),
+                NguiModalPrimitives.CreateBox(root, "WarningBg", new Vector3(0, warningY - 60, 0),
                     boxWidth, boxHeight, new Color(0.3f, 0.1f, 0.1f, 0.8f), 40, true);
                 
                 // Scrollable container with clipping
@@ -379,7 +356,7 @@ namespace ShelteredAPI.Saves.Paging
                 // Construct the warning label within the scrollable area
                 string warningText = string.Join("\n", warnings.ToArray());
                 // Local Z -1 to be slightly in front of the panel just in case
-                var warnLabel = CreateLabel(warnClippedGO.transform, "WarningText", warningText,
+                var warnLabel = NguiModalPrimitives.CreateLabel(warnClippedGO.transform, "WarningText", warningText,
                     new Vector3(0, 0, -1), 15, COLOR_TEXT, uiFont, ttfFont, 120);
                 
                 warnLabel.alignment = NGUIText.Alignment.Center;
@@ -426,13 +403,11 @@ namespace ShelteredAPI.Saves.Paging
             int absoluteSlot = entry?.absoluteSlot ?? 0; 
             bool canRecoverUnknown = options.AllowUnknownRecovery && hasUnknownState && onLoadAnyway != null && absoluteSlot > 0;
              
-            var reloadBtn = CreateButton(root, "ReloadBtn", "AUTO-LOAD MODS",
-                new Vector3(-WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 240, 45,
+            NguiModalPrimitives.CreateButton(root, "ReloadBtn", "AUTO-LOAD MODS",
+                new Vector3(-WINDOW_WIDTH/4, buttonY, 0), 240, 45, 18, uiFont, ttfFont,
+                canReload ? requestedBrown : new Color(0.25f, 0.2f, 0.15f, 1f),
+                canReload ? Color.white : COLOR_SUBTEXT,
                 canReload ? (Action)(() => CreateRestartRequest(absoluteSlot, manifest, entry)) : null);
-            
-            // Apply requested color to background
-            var reloadTex = reloadBtn.GetComponent<UITexture>();
-            if (reloadTex != null) reloadTex.color = canReload ? requestedBrown : new Color(0.25f, 0.2f, 0.15f, 1f);
 
             if (!canReload)
             {
@@ -440,7 +415,7 @@ namespace ShelteredAPI.Saves.Paging
                                 allMatch ? "(Already matching)" : 
                                 (hasVersionDiff || hasExtra) && !hasMissing ? "(Minor differences)" :
                                 "(Some mods missing)";
-                CreateLabel(root, "ReloadHint", reason,
+                NguiModalPrimitives.CreateLabel(root, "ReloadHint", reason,
                     new Vector3(-WINDOW_WIDTH/4, buttonY - 30, 0), 12, secondaryTextColor, uiFont, ttfFont, 100)
                     .alignment = NGUIText.Alignment.Center;
             }
@@ -482,14 +457,13 @@ namespace ShelteredAPI.Saves.Paging
                 ? (canRecoverUnknown ? "(Rebuild manifest from current mods)" : options.UnknownBlockedHint)
                 : (allMatch ? options.MatchLoadHint : (mismatchBlocked ? options.BlockedLoadHint : options.MismatchLoadHint));
              
-            var loadBtn = CreateButton(root, "LoadBtn", loadButtonText,
-                new Vector3(WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 200, 45,
+            NguiModalPrimitives.CreateButton(root, "LoadBtn", loadButtonText,
+                new Vector3(WINDOW_WIDTH/4, buttonY, 0), 200, 45, 18, uiFont, ttfFont,
+                canLoad ? requestedBrown : new Color(0.25f, 0.2f, 0.15f, 1f),
+                canLoad ? Color.white : COLOR_SUBTEXT,
                 loadButtonAction);
-
-            var loadTex = loadBtn.GetComponent<UITexture>();
-            if (loadTex != null) loadTex.color = canLoad ? requestedBrown : new Color(0.25f, 0.2f, 0.15f, 1f);
             
-            CreateLabel(root, "LoadHint", loadHintText,
+            NguiModalPrimitives.CreateLabel(root, "LoadHint", loadHintText,
                 new Vector3(WINDOW_WIDTH/4, buttonY - 30, 0), 12, secondaryTextColor, uiFont, ttfFont, 100)
                 .alignment = NGUIText.Alignment.Center;
             
@@ -514,7 +488,7 @@ namespace ShelteredAPI.Saves.Paging
                 statusText = "Scenario cannot start: " + statusText;
 
             Color statusColor = hasUnknownState ? COLOR_MISSING : (allMatch ? COLOR_MATCH : (hasMissing ? COLOR_MISSING : COLOR_VERSION_DIFF));
-            var statusLabel = CreateLabel(root, "Status", statusText,
+            var statusLabel = NguiModalPrimitives.CreateLabel(root, "Status", statusText,
                 new Vector3(0, -WINDOW_HEIGHT/2 + 20, 0), 16, statusColor, uiFont, ttfFont, 100);
             statusLabel.alignment = NGUIText.Alignment.Center;
         }
@@ -549,31 +523,6 @@ namespace ShelteredAPI.Saves.Paging
             }
         }
         
-        // === UI HELPER METHODS ===
-        
-        private GameObject CreateTexturedBox(Transform parent, string name, Vector3 pos, int w, int h, Color color, int depth, bool addCollider)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.layer = parent.gameObject.layer;
-            go.transform.localPosition = pos;
-            
-            var tex = go.AddComponent<UITexture>();
-            tex.mainTexture = _whiteTexture;
-            tex.width = w;
-            tex.height = h;
-            tex.depth = depth;
-            tex.color = color;
-            
-            if (addCollider)
-            {
-                var col = go.AddComponent<BoxCollider>();
-                col.size = new Vector3(w, h, 1);
-            }
-            
-            return go;
-        }
-
         private GameObject CreateClippedViewport(Transform parent, string name, Vector3 pos, int width, int height, int depth, Vector2 clipSoftness)
         {
             var go = new GameObject(name);
@@ -688,77 +637,6 @@ namespace ShelteredAPI.Saves.Paging
             public SaveVerification.ModCompareEntry Comparison;
             public SaveVerification.ModCompareStatus ActiveStatus;
             public SaveVerification.ModCompareStatus SavedStatus;
-        }
-        
-        private UILabel CreateLabel(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int depth)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.layer = parent.gameObject.layer;
-            go.transform.localPosition = pos;
-            
-            var label = go.AddComponent<UILabel>();
-            label.text = text;
-            label.fontSize = fontSize;
-            label.color = color;
-            label.depth = depth;
-            label.overflowMethod = UILabel.Overflow.ResizeFreely;
-            label.bitmapFont = uiFont;
-            label.trueTypeFont = ttfFont;
-            
-            return label;
-        }
-        
-        private GameObject CreateButton(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int w, int h, Action onClick)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.layer = parent.gameObject.layer;
-            go.transform.localPosition = pos;
-            
-            // Background
-            var bg = go.AddComponent<UITexture>();
-            bg.mainTexture = _whiteTexture;
-            bg.width = w;
-            bg.height = h;
-            bg.depth = 100;
-            bg.color = new Color(0.44f, 0.32f, 0.24f, 1f); // RGB: 113, 82, 62 default
-            
-            // Label (child)
-            var labelGo = new GameObject("Label");
-            labelGo.transform.SetParent(go.transform, false);
-            labelGo.layer = go.layer;
-            
-            var label = labelGo.AddComponent<UILabel>();
-            label.text = text;
-            label.fontSize = fontSize;
-            label.color = color;
-            label.depth = 101;
-            label.overflowMethod = UILabel.Overflow.ResizeFreely;
-            label.alignment = NGUIText.Alignment.Center;
-            label.bitmapFont = uiFont;
-            label.trueTypeFont = ttfFont;
-            
-            // Collider
-            var col = go.AddComponent<BoxCollider>();
-            col.size = new Vector3(w, h, 1);
-            
-            // Button
-            var btn = go.AddComponent<UIButton>();
-            btn.tweenTarget = go;
-            
-            if (onClick != null)
-            {
-                EventDelegate.Set(btn.onClick, () => onClick());
-            }
-            else
-            {
-                btn.isEnabled = false;
-                bg.color = new Color(0.15f, 0.12f, 0.1f, 1f);
-                label.color = COLOR_SUBTEXT;
-            }
-            
-            return go;
         }
         
         private void Close()

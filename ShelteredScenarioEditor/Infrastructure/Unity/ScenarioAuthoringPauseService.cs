@@ -1,0 +1,350 @@
+using ModAPI.Core;
+using System;
+using System.Reflection;
+using UnityEngine;
+
+using ShelteredScenarioEditor.Application.Runtime;
+using ShelteredScenarioEditor.Composition;
+namespace ShelteredScenarioEditor.Infrastructure.Unity{
+    internal sealed class ScenarioAuthoringPauseService : IScenarioPauseService
+    {
+        private static readonly FieldInfo PauseCountField = typeof(PauseManager).GetField("m_pauseCount", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo TimePausedField = typeof(PauseManager).GetField("m_timePaused", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo PreviousTimescaleField = typeof(PauseManager).GetField("m_previousTimescale", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo OnPauseField = typeof(PauseManager).GetField("OnPause", BindingFlags.Static | BindingFlags.NonPublic);
+        private static readonly FieldInfo OnResumeField = typeof(PauseManager).GetField("OnResume", BindingFlags.Static | BindingFlags.NonPublic);
+        private bool _ownsPause;
+        private bool _ownsInjectedPauseDepth;
+        private bool _pauseMenuExplicitlyOpened;
+        private bool _loggedTimeScaleRestore;
+        private float _authoringPauseStartedAt;
+        private string _lastOwnerReason;
+
+        public static ScenarioAuthoringPauseService Instance
+        {
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringPauseService>(); }
+        }
+
+        public bool OwnsPause
+        {
+            get { return _ownsPause; }
+        }
+
+        internal ScenarioAuthoringPauseService()
+        {
+        }
+
+        public bool EnsurePaused(string reason)
+        {
+            PauseManager pauseManager = ResolvePauseManager();
+            if (pauseManager == null)
+                return false;
+
+            SuppressPauseMenu(pauseManager, "EnsurePaused");
+            if (_ownsPause)
+            {
+                return MaintainOwnedPause(pauseManager);
+            }
+
+            _authoringPauseStartedAt = RealTime.time;
+            _lastOwnerReason = reason;
+            _ownsInjectedPauseDepth = !PauseManager.isPaused;
+            if (_ownsInjectedPauseDepth)
+            {
+                if (!TryEnterAuthoringPause(pauseManager))
+                {
+                    _ownsInjectedPauseDepth = false;
+                    _authoringPauseStartedAt = 0f;
+                    _lastOwnerReason = null;
+                    MMLog.WriteWarning("[ScenarioAuthoringPause] Failed to engage authoring pause. Reason="
+                        + (reason ?? "unspecified") + ".");
+                    return false;
+                }
+            }
+            else if (Time.timeScale != 0f)
+            {
+                Time.timeScale = 0f;
+            }
+
+            _ownsPause = true;
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Authoring pause engaged without opening the vanilla pause menu. Reason="
+                + (reason ?? "unspecified") + ", injectedPauseDepth=" + _ownsInjectedPauseDepth + ".");
+            return true;
+        }
+
+        public void ReleasePause(string reason)
+        {
+            if (!_ownsPause)
+                return;
+
+            PauseManager pauseManager = ResolvePauseManager();
+            if (pauseManager == null)
+            {
+                if (_ownsInjectedPauseDepth && Time.timeScale == 0f)
+                {
+                    Time.timeScale = 1f;
+                    MMLog.WriteWarning("[ScenarioAuthoringPause] PauseManager unavailable during controlled release; restored owned Time.timeScale to "
+                        + Time.timeScale + ". Reason=" + (reason ?? "unspecified") + ".");
+                }
+                else
+                {
+                    MMLog.WriteWarning("[ScenarioAuthoringPause] PauseManager unavailable during controlled release; authoring did not own an injected pause depth, so Time.timeScale remains "
+                        + Time.timeScale + ". Reason=" + (reason ?? "unspecified") + ".");
+                }
+
+                _ownsPause = false;
+                _ownsInjectedPauseDepth = false;
+                _pauseMenuExplicitlyOpened = false;
+                _loggedTimeScaleRestore = false;
+                _authoringPauseStartedAt = 0f;
+                _lastOwnerReason = null;
+                return;
+            }
+
+            _pauseMenuExplicitlyOpened = false;
+            SuppressPauseMenu(pauseManager, "ReleasePause");
+            bool remainingPauseState = PauseManager.isPaused;
+            if (_ownsInjectedPauseDepth)
+            {
+                remainingPauseState = TryExitAuthoringPause(pauseManager);
+            }
+
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Authoring pause released. Reason="
+                + (reason ?? "unspecified") + ", previousReason=" + (_lastOwnerReason ?? "unspecified")
+                + ", remainingPauseState=" + remainingPauseState + ".");
+            _ownsPause = false;
+            _ownsInjectedPauseDepth = false;
+            _pauseMenuExplicitlyOpened = false;
+            _loggedTimeScaleRestore = false;
+            _authoringPauseStartedAt = 0f;
+            _lastOwnerReason = null;
+        }
+
+        public void ReleasePauseForRunningSimulation(string reason)
+        {
+            ReleasePause(reason);
+
+            // A shelter scene transition can engage authoring pause while Unity's
+            // loading flow already has Time.timeScale at zero. In that case the
+            // owned pause depth is released correctly, but PauseManager restores
+            // the captured zero scale and the new world's initialization never
+            // advances (notably ExpeditionMap in Stasis). These callers explicitly
+            // require a running simulation, so normalize only when no pause owner
+            // remains.
+            if (!PauseManager.isPaused && Time.timeScale <= 0f)
+            {
+                Time.timeScale = 1f;
+                MMLog.WriteInfo("[ScenarioAuthoringPause] Restored running simulation after controlled authoring release. Reason="
+                    + (reason ?? "unspecified") + ".");
+            }
+        }
+
+        public bool ShouldSuppressPauseMenu()
+        {
+            return _ownsPause && !_pauseMenuExplicitlyOpened && ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation();
+        }
+
+        public bool IsPauseMenuPanel(BasePanel panel)
+        {
+            PauseManager pauseManager = ResolvePauseManager();
+            return pauseManager != null && panel != null && ReferenceEquals(panel, pauseManager.pauseMenuPanel);
+        }
+
+        public bool OpenPauseMenu(string reason)
+        {
+            PauseManager pauseManager = ResolvePauseManager();
+            if (pauseManager == null)
+                return false;
+
+            if (!ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
+            {
+                PauseManager.Pause();
+                return true;
+            }
+
+            if (!_ownsPause && !EnsurePaused(reason))
+                return false;
+
+            UIPanelManager panelManager = UIPanelManager.instance;
+            BasePanel pauseMenu = pauseManager.pauseMenuPanel;
+            if (panelManager == null || pauseMenu == null)
+            {
+                MMLog.WarnOnce("ScenarioAuthoringPause.OpenPauseMenu.Unavailable",
+                    "Cannot open the vanilla pause menu because the panel manager or pause menu panel was unavailable.");
+                return false;
+            }
+
+            _pauseMenuExplicitlyOpened = true;
+            if (!panelManager.IsPanelOnStack(pauseMenu))
+                panelManager.PushPanel(pauseMenu);
+            else if (!pauseMenu.IsShowing())
+                pauseMenu.gameObject.SetActive(true);
+
+            Time.timeScale = 0f;
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Opened the vanilla pause menu while keeping scenario authoring pause ownership. Reason="
+                + (reason ?? "unspecified") + ".");
+            return true;
+        }
+
+        public bool HandleVanillaResumeRequest()
+        {
+            if (!_pauseMenuExplicitlyOpened || !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
+                return false;
+
+            PauseManager pauseManager = ResolvePauseManager();
+            UIPanelManager panelManager = UIPanelManager.instance;
+            BasePanel pauseMenu = pauseManager != null ? pauseManager.pauseMenuPanel : null;
+            if (panelManager != null && pauseMenu != null && panelManager.IsPanelOnStack(pauseMenu))
+                panelManager.PopPanel(pauseMenu);
+
+            if (pauseMenu != null && pauseMenu.IsShowing())
+                pauseMenu.gameObject.SetActive(false);
+
+            _pauseMenuExplicitlyOpened = false;
+            Time.timeScale = 0f;
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Closed the explicitly opened pause menu without resuming scenario authoring.");
+            return true;
+        }
+
+        private static PauseManager ResolvePauseManager()
+        {
+            PauseManager manager = UnityEngine.Object.FindObjectOfType<PauseManager>();
+            if (manager == null)
+                MMLog.WarnOnce("ScenarioAuthoringPause.ResolvePauseManager", "PauseManager was not available when authoring pause was requested.");
+            return manager;
+        }
+
+        private bool MaintainOwnedPause(PauseManager pauseManager)
+        {
+            RefreshExplicitPauseMenuState(pauseManager);
+            SuppressPauseMenu(pauseManager, "MaintainOwnedPause");
+            if (!PauseManager.isPaused && _ownsInjectedPauseDepth)
+            {
+                if (!TryEnterAuthoringPause(pauseManager))
+                    return false;
+            }
+
+            if (Time.timeScale != 0f)
+            {
+                Time.timeScale = 0f;
+                if (!_loggedTimeScaleRestore)
+                {
+                    _loggedTimeScaleRestore = true;
+                    MMLog.WriteInfo("[ScenarioAuthoringPause] Restored frozen simulation while authoring remained active.");
+                }
+            }
+            else
+            {
+                _loggedTimeScaleRestore = false;
+            }
+
+            return true;
+        }
+
+        private void RefreshExplicitPauseMenuState(PauseManager pauseManager)
+        {
+            if (!_pauseMenuExplicitlyOpened)
+                return;
+
+            UIPanelManager panelManager = UIPanelManager.instance;
+            BasePanel pauseMenu = pauseManager != null ? pauseManager.pauseMenuPanel : null;
+            bool isOpen = pauseMenu != null
+                && ((panelManager != null && panelManager.IsPanelOnStack(pauseMenu)) || pauseMenu.IsShowing());
+            if (!isOpen)
+                _pauseMenuExplicitlyOpened = false;
+        }
+
+        private static bool TryEnterAuthoringPause(PauseManager pauseManager)
+        {
+            if (pauseManager == null || PauseCountField == null || TimePausedField == null || PreviousTimescaleField == null)
+                return false;
+
+            int pauseCount = GetPauseCount(pauseManager);
+            if (pauseCount == 0)
+                PreviousTimescaleField.SetValue(pauseManager, Time.timeScale);
+
+            PauseCountField.SetValue(pauseManager, pauseCount + 1);
+            TimePausedField.SetValue(pauseManager, RealTime.time);
+            Time.timeScale = 0f;
+
+            PauseManager.PauseEvent onPause = OnPauseField != null
+                ? OnPauseField.GetValue(null) as PauseManager.PauseEvent
+                : null;
+            if (onPause != null)
+                onPause();
+
+            return PauseManager.isPaused;
+        }
+
+        private bool TryExitAuthoringPause(PauseManager pauseManager)
+        {
+            if (pauseManager == null || PauseCountField == null || TimePausedField == null || PreviousTimescaleField == null)
+                return PauseManager.isPaused;
+
+            int pauseCount = Math.Max(0, GetPauseCount(pauseManager) - 1);
+            PauseCountField.SetValue(pauseManager, pauseCount);
+            if (pauseCount > 0)
+            {
+                Time.timeScale = 0f;
+                return true;
+            }
+
+            float previousTimescale = GetPreviousTimescale(pauseManager);
+            Time.timeScale = previousTimescale;
+            PreviousTimescaleField.SetValue(pauseManager, 1f);
+
+            PauseManager.ResumeEvent onResume = OnResumeField != null
+                ? OnResumeField.GetValue(null) as PauseManager.ResumeEvent
+                : null;
+            if (onResume != null)
+            {
+                float timePaused = RealTime.time - GetPausedAt(pauseManager);
+                onResume(timePaused);
+            }
+
+            TimePausedField.SetValue(pauseManager, 0f);
+            return PauseManager.isPaused;
+        }
+
+        private void SuppressPauseMenu(PauseManager pauseManager, string context)
+        {
+            if (pauseManager == null)
+                return;
+
+            if (_pauseMenuExplicitlyOpened)
+                return;
+
+            UIPanelManager panelManager = UIPanelManager.instance;
+            BasePanel pauseMenu = pauseManager.pauseMenuPanel;
+            if (pauseMenu != null && panelManager != null && panelManager.IsPanelOnStack(pauseMenu))
+            {
+                panelManager.PopPanel(pauseMenu);
+                MMLog.WriteInfo("[ScenarioAuthoringPause] Removed vanilla pause menu panel during authoring. Context=" + context + ".");
+            }
+
+            if (pauseMenu != null && pauseMenu.IsShowing())
+                pauseMenu.gameObject.SetActive(false);
+        }
+
+        private static int GetPauseCount(PauseManager pauseManager)
+        {
+            return PauseCountField != null
+                ? (int)PauseCountField.GetValue(pauseManager)
+                : 0;
+        }
+
+        private static float GetPausedAt(PauseManager pauseManager)
+        {
+            return TimePausedField != null
+                ? Convert.ToSingle(TimePausedField.GetValue(pauseManager))
+                : RealTime.time;
+        }
+
+        private static float GetPreviousTimescale(PauseManager pauseManager)
+        {
+            return PreviousTimescaleField != null
+                ? Convert.ToSingle(PreviousTimescaleField.GetValue(pauseManager))
+                : 1f;
+        }
+    }
+}

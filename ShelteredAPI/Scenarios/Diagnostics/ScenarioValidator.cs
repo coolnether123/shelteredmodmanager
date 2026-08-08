@@ -84,7 +84,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
         public ScenarioValidationResult Validate(ScenarioDefinition definition, string scenarioFilePath)
         {
-            return _pipeline.ValidateLegacy(definition, scenarioFilePath);
+            return _pipeline.ValidateResult(definition, scenarioFilePath);
         }
 
         private void ValidateDependencies(ScenarioDefinition definition, ScenarioValidationResult result)
@@ -1094,9 +1094,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
             public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
             {
-                ScenarioValidationResult legacy = new ScenarioValidationResult();
-                _owner.ValidateDependencies(definition, legacy);
-                CopyIssues(legacy, summary);
+                ScenarioValidationResult validationResult = new ScenarioValidationResult();
+                _owner.ValidateDependencies(definition, validationResult);
+                CopyIssues(validationResult, summary);
             }
         }
 
@@ -1120,12 +1120,12 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 ValidateConditions(winLoss != null ? winLoss.LossConditions : null, "failure", summary);
             }
 
-            private static void ValidateConditions(List<ConditionDef> conditions, string label, ValidationSummary summary)
+            private static void ValidateConditions(List<ScenarioConditionRef> conditions, string label, ValidationSummary summary)
             {
                 HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; conditions != null && i < conditions.Count; i++)
                 {
-                    ConditionDef condition = conditions[i];
+                    ScenarioConditionRef condition = conditions[i];
                     string scope = "[Victory] " + label + " condition #" + i.ToString(CultureInfo.InvariantCulture);
                     if (condition == null)
                     {
@@ -1139,61 +1139,58 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     else if (!ids.Add(id))
                         summary.AddError("win_loss.condition.duplicate", "[Victory] " + label + " condition id is duplicated: " + id);
 
-                    ScenarioWinLossConditionDescriptor descriptor;
-                    if (!ScenarioWinLossConditionSupport.TryGetDescriptor(condition.Type, out descriptor))
-                    {
-                        summary.AddError("win_loss.condition.unsupported_type", scope + " uses unsupported condition type '" + (condition.Type ?? string.Empty) + "'.");
-                        continue;
-                    }
-
-                    ValidateDescriptorFields(condition, descriptor, scope, summary);
+                    ValidateConditionFields(condition, scope, summary);
                 }
             }
 
-            private static void ValidateDescriptorFields(
-                ConditionDef condition,
-                ScenarioWinLossConditionDescriptor descriptor,
-                string scope,
-                ValidationSummary summary)
+            private static void ValidateConditionFields(ScenarioConditionRef condition, string scope, ValidationSummary summary)
             {
-                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Time)
+                if (condition.Kind == ScenarioConditionKind.SurviveDays)
                 {
-                    int day = ScenarioPropertyBag.GetInt(condition.Properties, "day", ScenarioPropertyBag.GetInt(condition.Properties, "days", 0));
-                    int hour = ScenarioPropertyBag.GetInt(condition.Properties, "hour", 0);
-                    int minute = ScenarioPropertyBag.GetInt(condition.Properties, "minute", 0);
-                    if (day <= 0 || hour < 0 || hour > 23 || minute < 0 || minute > 59)
+                    if (condition.Quantity <= 0)
+                        summary.AddError("win_loss.condition.quantity", scope + " survive-day quantity must be greater than zero.");
+                    if (condition.Time != null && (condition.Time.Hour < 0 || condition.Time.Hour > 23 || condition.Time.Minute < 0 || condition.Time.Minute > 59))
+                        summary.AddError("win_loss.condition.invalid_time", scope + " has invalid hour/minute values.");
+                    return;
+                }
+
+                if (condition.Kind == ScenarioConditionKind.TimeReached)
+                {
+                    if (condition.Time == null || condition.Time.Day <= 0 || condition.Time.Hour < 0 || condition.Time.Hour > 23 || condition.Time.Minute < 0 || condition.Time.Minute > 59)
                         summary.AddError("win_loss.condition.invalid_time", scope + " has invalid day/hour/minute values.");
                     return;
                 }
 
-                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Quantity)
+                if (condition.Kind == ScenarioConditionKind.ItemQuantityAvailable)
                 {
-                    string itemId = ScenarioPropertyBag.FirstString(condition.Properties, "itemId", "targetId");
-                    int quantity = ScenarioPropertyBag.GetInt(condition.Properties, "quantity", 1);
-                    if (TrimToNull(itemId) == null)
-                        summary.AddError("win_loss.condition.item_required", scope + " requires an itemId property.");
-                    if (quantity <= 0)
+                    if (TrimToNull(condition.TargetId) == null)
+                        summary.AddError("win_loss.condition.item_required", scope + " requires an item target id.");
+                    if (condition.Quantity <= 0)
                         summary.AddError("win_loss.condition.quantity", scope + " quantity must be greater than zero.");
                     return;
                 }
 
-                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Flag)
+                if (condition.Kind == ScenarioConditionKind.ScenarioFlagSet)
                 {
-                    string flagId = ScenarioPropertyBag.FirstString(condition.Properties, "flagId", "targetId");
-                    if (TrimToNull(flagId) == null)
-                        summary.AddError("win_loss.condition.flag_required", scope + " requires a flagId property.");
+                    if (TrimToNull(condition.FlagId ?? condition.TargetId) == null)
+                        summary.AddError("win_loss.condition.flag_required", scope + " requires a flag id.");
                     return;
                 }
 
-                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Target)
+                if (condition.Kind == ScenarioConditionKind.QuestActive
+                    || condition.Kind == ScenarioConditionKind.QuestCompleted
+                    || condition.Kind == ScenarioConditionKind.QuestFailed
+                    || condition.Kind == ScenarioConditionKind.SurvivorPresent
+                    || condition.Kind == ScenarioConditionKind.BunkerExpansionUnlocked
+                    || condition.Kind == ScenarioConditionKind.TechnologyUnlocked
+                    || condition.Kind == ScenarioConditionKind.CustomTrigger)
                 {
-                    string target = ScenarioPropertyBag.FirstString(condition.Properties, "questId", "survivorId", "name", "bunkerExpansionId", "technologyId", "triggerId", "targetId");
-                    if (TrimToNull(target) == null)
-                        summary.AddError("win_loss.condition.target_required", scope + " requires a target id property.");
+                    if (TrimToNull(condition.TargetId) == null)
+                        summary.AddError("win_loss.condition.target_required", scope + " requires a target id.");
                 }
             }
 
-            private static int Count(List<ConditionDef> conditions)
+            private static int Count(List<ScenarioConditionRef> conditions)
             {
                 return conditions != null ? conditions.Count : 0;
             }
@@ -1259,9 +1256,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
         {
             public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
             {
-                ScenarioValidationResult legacy = new ScenarioValidationResult();
-                ValidateAssets(definition, scenarioFilePath, legacy);
-                CopyIssues(legacy, summary);
+                ScenarioValidationResult validationResult = new ScenarioValidationResult();
+                ValidateAssets(definition, scenarioFilePath, validationResult);
+                CopyIssues(validationResult, summary);
             }
         }
 
@@ -1269,9 +1266,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
         {
             public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
             {
-                ScenarioValidationResult legacy = new ScenarioValidationResult();
-                ValidateScenarioCharacters(definition, legacy);
-                CopyIssues(legacy, summary);
+                ScenarioValidationResult validationResult = new ScenarioValidationResult();
+                ValidateScenarioCharacters(definition, validationResult);
+                CopyIssues(validationResult, summary);
             }
         }
 
@@ -1279,9 +1276,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
         {
             public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
             {
-                ScenarioValidationResult legacy = new ScenarioValidationResult();
-                ValidateFamily(definition, scenarioFilePath, legacy);
-                CopyIssues(legacy, summary);
+                ScenarioValidationResult validationResult = new ScenarioValidationResult();
+                ValidateFamily(definition, scenarioFilePath, validationResult);
+                CopyIssues(validationResult, summary);
             }
         }
 
@@ -1289,9 +1286,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
         {
             public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
             {
-                ScenarioValidationResult legacy = new ScenarioValidationResult();
-                ValidateInventory(definition, legacy);
-                CopyIssues(legacy, summary);
+                ScenarioValidationResult validationResult = new ScenarioValidationResult();
+                ValidateInventory(definition, validationResult);
+                CopyIssues(validationResult, summary);
             }
         }
 
@@ -1299,9 +1296,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
         {
             public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
             {
-                ScenarioValidationResult legacy = new ScenarioValidationResult();
-                ValidateBunker(definition, legacy);
-                CopyIssues(legacy, summary);
+                ScenarioValidationResult validationResult = new ScenarioValidationResult();
+                ValidateBunker(definition, validationResult);
+                CopyIssues(validationResult, summary);
             }
         }
 
@@ -1309,9 +1306,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
         {
             public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
             {
-                ScenarioValidationResult legacy = new ScenarioValidationResult();
-                ValidateQuests(definition, legacy);
-                CopyIssues(legacy, summary);
+                ScenarioValidationResult validationResult = new ScenarioValidationResult();
+                ValidateQuests(definition, validationResult);
+                CopyIssues(validationResult, summary);
             }
         }
 
@@ -1328,9 +1325,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     continue;
 
                 if (issue.Severity == ScenarioIssueSeverity.Error)
-                    target.AddError("legacy.error", issue.Message);
+                    target.AddError("validation.error", issue.Message);
                 else
-                    target.AddWarning("legacy.warning", issue.Message);
+                    target.AddWarning("validation.warning", issue.Message);
             }
         }
 

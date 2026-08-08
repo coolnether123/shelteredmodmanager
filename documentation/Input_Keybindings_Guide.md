@@ -86,7 +86,7 @@ Because bindings are global preferences, do not encode save-slot-specific behavi
 
 ShelteredAPI maps vanilla `PlatformInput.InputButton` and `PlatformInput.MenuInputButton` values to registered actions and patches `PlatformInput_PC` button/axis reads. This makes vanilla controls and mod controls share the same registry, conflict policy, and persistence path.
 
-Scenario authoring can temporarily own gameplay input. During that mode, ShelteredAPI blocks gameplay buttons and axes that would otherwise interfere with editor interactions.
+The optional scenario editor can temporarily own gameplay input. Editor-owned patches perform that blocking while an authoring session is active; ShelteredAPI's ordinary input implementation does not contain an editor-state branch.
 
 ## Runtime Tuning
 

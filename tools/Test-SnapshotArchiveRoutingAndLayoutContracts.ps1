@@ -91,7 +91,11 @@ if (-not $queueMethod.Success) {
 Assert-Contains `
     "custom snapshot uses source transport save type" `
     $queueMethod.Value `
-    'PlatformSaveProxy\.SetNextLoad\(\s*session\.SourceTransportSaveType'
+    'SaveRuntimeState\.QueueLoad\(\s*session\.SourceTransportSaveType'
+Assert-NotContains `
+    "custom snapshot load does not bypass runtime state owner" `
+    $queueMethod.Value `
+    'PlatformSaveProxy\.SetNextLoad\('
 Assert-Contains `
     "custom snapshot uses source transport slot" `
     $queueMethod.Value `

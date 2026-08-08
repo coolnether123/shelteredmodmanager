@@ -1,4 +1,5 @@
-using Manager.Core.Models;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Manager.Core.Services
 {
@@ -6,6 +7,7 @@ namespace Manager.Core.Services
     {
         internal string ApiKey;
         internal string BearerToken;
+        internal string RateLimitScope;
 
         internal bool IsConfigured
         {
@@ -14,7 +16,22 @@ namespace Manager.Core.Services
 
         internal static NexusRequestCredential FromApiKey(string apiKey)
         {
-            return new NexusRequestCredential { ApiKey = apiKey ?? string.Empty };
+            string normalized = apiKey ?? string.Empty;
+            if (string.IsNullOrEmpty(normalized))
+                return new NexusRequestCredential { ApiKey = normalized, RateLimitScope = "api:anonymous" };
+
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] digest = sha256.ComputeHash(Encoding.UTF8.GetBytes(normalized));
+                var builder = new StringBuilder(digest.Length * 2);
+                for (int i = 0; i < digest.Length; i++)
+                    builder.Append(digest[i].ToString("x2"));
+                return new NexusRequestCredential
+                {
+                    ApiKey = normalized,
+                    RateLimitScope = "api:" + builder.ToString()
+                };
+            }
         }
     }
 

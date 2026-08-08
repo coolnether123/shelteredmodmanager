@@ -31,6 +31,11 @@ namespace ShelteredAPI.UI.FieldManual.Layout
             return true;
         }
 
+        public void SetCurrentPage(int pageIndex)
+        {
+            _currentPageIndex = Mathf.Clamp(pageIndex, 0, _pageCount - 1);
+        }
+
         public void Reset()
         {
             _currentPageIndex = 0;

@@ -329,16 +329,7 @@ namespace ShelteredAPI.UI.Internal
                 if (listener == null) continue;
                 try
                 {
-                    listener.onSubmit = null;
-                    listener.onClick = null;
-                    listener.onDoubleClick = null;
-                    listener.onHover = null;
-                    listener.onPress = null;
-                    listener.onSelect = null;
-                    listener.onScroll = null;
-                    listener.onDrag = null;
-                    listener.onDrop = null;
-                    listener.onKey = null;
+                    ClearEventListenerDelegates(listener);
                     cleared++;
                 }
                 catch (Exception ex)
@@ -348,6 +339,23 @@ namespace ShelteredAPI.UI.Internal
             }
 
             return cleared;
+        }
+
+        internal static void ClearEventListenerDelegates(UIEventListener listener)
+        {
+            if (listener == null)
+                return;
+
+            listener.onSubmit = null;
+            listener.onClick = null;
+            listener.onDoubleClick = null;
+            listener.onHover = null;
+            listener.onPress = null;
+            listener.onSelect = null;
+            listener.onScroll = null;
+            listener.onDrag = null;
+            listener.onDrop = null;
+            listener.onKey = null;
         }
 
         private static int ClearButtonHandlers(GameObject root, bool includeChildren, IList<string> warnings)

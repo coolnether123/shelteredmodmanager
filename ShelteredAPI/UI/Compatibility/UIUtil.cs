@@ -182,16 +182,7 @@ namespace ShelteredAPI.UI.Compatibility
             foreach (var listener in cloneGO.GetComponentsInChildren<UIEventListener>(true))
             {
                 if (listener == null) continue;
-                listener.onSubmit = null;
-                listener.onClick = null;
-                listener.onDoubleClick = null;
-                listener.onHover = null;
-                listener.onPress = null;
-                listener.onSelect = null;
-                listener.onScroll = null;
-                listener.onDrag = null;
-                listener.onDrop = null;
-                listener.onKey = null;
+                ShelteredAPI.UI.Internal.UIExtensionService.ClearEventListenerDelegates(listener);
                 listener.enabled = false;
                 UnityEngine.Object.Destroy(listener);
             }
@@ -239,6 +230,7 @@ namespace ShelteredAPI.UI.Compatibility
                 UnityEngine.Object.Destroy(collider);
             }
         }
+
 
         public static T CloneAndReposition<T>(T template, Vector3 localOffset, Transform parent = null) where T : Component
         {

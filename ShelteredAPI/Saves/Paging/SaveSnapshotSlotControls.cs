@@ -28,9 +28,6 @@ namespace ShelteredAPI.Saves.Paging
         private static readonly Dictionary<SaveSlotButton, GameObject> Buttons =
             new Dictionary<SaveSlotButton, GameObject>();
         private static string _lastDiagnosticsSignature;
-        private static Texture2D _whiteTexture;
-        private static UIFont _cachedUIFont;
-        private static Font _cachedTTFFont;
 
         public static void UpdateButtons(SlotSelectionPanel panel)
         {
@@ -48,9 +45,6 @@ namespace ShelteredAPI.Saves.Paging
             HideAll();
             if (panel == null || SaveSnapshotBrowserState.IsActive(panel))
                 return;
-
-            CacheFonts(panel);
-            EnsureWhiteTexture();
 
             Dictionary<string, int> snapshotCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             if (visibleSaves == null)
@@ -192,9 +186,11 @@ namespace ShelteredAPI.Saves.Paging
 
             UIPanel parentPanel = NGUITools.FindInParents<UIPanel>(slotButton.gameObject);
             int baseDepth = UIUtil.ComputeSafeDepth(parentPanel, 55);
+            UIFontCache.SeedFromGameObject(panel.gameObject, "SaveSnapshotSlotControls");
+            UIFontCache.FontResult fonts = UIFontCache.GetFonts();
 
             UITexture background = button.AddComponent<UITexture>();
-            background.mainTexture = _whiteTexture;
+            background.mainTexture = UIUtil.WhiteTexture;
             background.width = ButtonWidth;
             background.height = ButtonHeight;
             background.depth = baseDepth;
@@ -206,8 +202,8 @@ namespace ShelteredAPI.Saves.Paging
             labelGo.layer = button.layer;
 
             UILabel label = labelGo.AddComponent<UILabel>();
-            label.bitmapFont = _cachedUIFont;
-            label.trueTypeFont = _cachedTTFFont;
+            label.bitmapFont = fonts.Bitmap;
+            label.trueTypeFont = fonts.TTF;
             label.fontSize = 15;
             label.depth = baseDepth + 5;
             label.color = LabelRestColor;
@@ -268,30 +264,6 @@ namespace ShelteredAPI.Saves.Paging
             MMLog.WriteInfo("[SnapshotButtons] " + diagnostics);
         }
 
-        private static void CacheFonts(SlotSelectionPanel panel)
-        {
-            if (_cachedUIFont != null || _cachedTTFFont != null || panel == null)
-                return;
-
-            UILabel label = panel.GetComponentInChildren<UILabel>();
-            if (label != null)
-            {
-                _cachedUIFont = label.bitmapFont;
-                _cachedTTFFont = label.trueTypeFont;
-            }
-        }
-
-        private static void EnsureWhiteTexture()
-        {
-            if (_whiteTexture != null)
-                return;
-
-            _whiteTexture = new Texture2D(2, 2);
-            for (int x = 0; x < 2; x++)
-                for (int y = 0; y < 2; y++)
-                    _whiteTexture.SetPixel(x, y, Color.white);
-            _whiteTexture.Apply();
-        }
     }
 
     internal sealed class SnapshotArchiveHoverVisual : MonoBehaviour

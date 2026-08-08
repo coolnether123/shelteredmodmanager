@@ -44,7 +44,7 @@ Startup timing values:
 - `MenuCritical`: applied at first main menu show before menu interactions
 - `SaveFlowCritical`: applied before slot selection, load, save, or save/quit flow proceeds
 - `GameplayDeferred`: applied before session/gameplay bootstrap
-- `EditorDeferred`: applied when custom scenario authoring is enabled/opened
+- `EditorDeferred`: reserved for patches owned by the optional `ShelteredScenarioEditor.dll`, applied only when the editor is enabled/opened
 - `DebugDeferred`: applied only when diagnostics/debug patching is enabled
 
 ## Registration rules

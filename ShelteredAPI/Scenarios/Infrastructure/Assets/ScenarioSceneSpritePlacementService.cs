@@ -13,7 +13,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
         public static ScenarioSceneSpritePlacementService Instance
         {
-            get { return ScenarioCompositionRoot.Resolve<ScenarioSceneSpritePlacementService>(); }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<ScenarioSceneSpritePlacementService>(); }
         }
 
         internal ScenarioSceneSpritePlacementService(

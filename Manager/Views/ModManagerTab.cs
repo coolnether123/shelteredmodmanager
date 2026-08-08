@@ -948,21 +948,6 @@ namespace Manager.Views
             return true;
         }
 
-        private static DateTime? ConvertUnixDate(int unixDate)
-        {
-            if (unixDate <= 0)
-                return null;
-
-            try
-            {
-                return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(unixDate);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         private void NotifyNexusSync(int mappedMods, int updateCount, string errorMessage)
         {
             if (NexusSyncCompleted != null)

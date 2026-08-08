@@ -4,7 +4,7 @@ using System.IO;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
-using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Definitions{
     internal sealed class ScenarioCatalogPathStamp
@@ -70,10 +70,11 @@ namespace ShelteredAPI.Scenarios.Definitions{
     /// <summary>
     /// Indexes Sheltered scenario.xml files from each loaded mod's Scenarios folder.
     /// </summary>
-    internal sealed class ScenarioCatalog
+    internal sealed class ScenarioCatalog : IScenarioDefinitionCatalog
     {
         private readonly IScenarioModFolderSource _modFolderSource;
         private readonly ScenarioDefinitionSerializer _serializer;
+        private readonly string _userScenarioPackagesRoot;
         private readonly object _sync = new object();
         private Dictionary<string, ScenarioInfo> _byId = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
         private Dictionary<string, ScenarioCatalogPathStamp> _watchedDirectories = new Dictionary<string, ScenarioCatalogPathStamp>(StringComparer.OrdinalIgnoreCase);
@@ -82,20 +83,29 @@ namespace ShelteredAPI.Scenarios.Definitions{
         private bool _scanned;
 
         public ScenarioCatalog()
-            : this(new ModRegistryScenarioModFolderSource(), new ScenarioDefinitionSerializer())
+            : this(new ModRegistryScenarioModFolderSource(), new ScenarioDefinitionSerializer(), ModApiPaths.ScenarioPackagesRoot)
         {
         }
 
         public ScenarioCatalog(IScenarioModFolderSource modFolderSource, ScenarioDefinitionSerializer serializer)
+            : this(modFolderSource, serializer, null)
+        {
+        }
+
+        internal ScenarioCatalog(
+            IScenarioModFolderSource modFolderSource,
+            ScenarioDefinitionSerializer serializer,
+            string userScenarioPackagesRoot)
         {
             _modFolderSource = modFolderSource;
             _serializer = serializer ?? new ScenarioDefinitionSerializer();
+            _userScenarioPackagesRoot = userScenarioPackagesRoot;
         }
 
         public void Refresh()
         {
             ScenarioModFolder[] folders = _modFolderSource != null ? _modFolderSource.GetLoadedModFolders() : new ScenarioModFolder[0];
-            Dictionary<string, string> roots = BuildScenarioRoots(folders);
+            Dictionary<string, string> roots = BuildScenarioRoots(folders, _userScenarioPackagesRoot);
 
             lock (_sync)
             {
@@ -136,12 +146,6 @@ namespace ShelteredAPI.Scenarios.Definitions{
                     {
                         string filePath = ScenarioCatalogDiskStamp.NormalizePath(discoveredDefinitions[i]);
                         files[filePath] = ScenarioCatalogDiskStamp.ReadFile(filePath);
-                        if (IsAuthoringDraftScenarioFile(filePath))
-                        {
-                            MMLog.WriteInfo("[ScenarioCatalog] Skipping authoring draft scenario file outside playable catalog: " + filePath);
-                            continue;
-                        }
-
                         TryAddScenario(next, filePath, root.Value);
                     }
                 }
@@ -249,7 +253,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
             return true;
         }
 
-        private static Dictionary<string, string> BuildScenarioRoots(ScenarioModFolder[] folders)
+        private static Dictionary<string, string> BuildScenarioRoots(
+            ScenarioModFolder[] folders,
+            string userScenarioPackagesRoot)
         {
             Dictionary<string, string> roots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; folders != null && i < folders.Length; i++)
@@ -259,6 +265,11 @@ namespace ShelteredAPI.Scenarios.Definitions{
                     continue;
 
                 roots[ScenarioCatalogDiskStamp.NormalizePath(Path.Combine(folder.RootPath, "Scenarios"))] = folder.ModId;
+            }
+
+            if (!string.IsNullOrEmpty(userScenarioPackagesRoot))
+            {
+                roots[ScenarioCatalogDiskStamp.NormalizePath(userScenarioPackagesRoot)] = "modapi.user-scenarios";
             }
 
             return roots;
@@ -275,28 +286,5 @@ namespace ShelteredAPI.Scenarios.Definitions{
             return string.Compare(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool IsAuthoringDraftScenarioFile(string filePath)
-        {
-            if (string.IsNullOrEmpty(filePath))
-                return false;
-
-            try
-            {
-                string fullPath = Path.GetFullPath(filePath);
-                string marker = Path.DirectorySeparatorChar
-                    + ScenarioAuthoringDraftRepository.DraftStorageScenarioId
-                    + Path.DirectorySeparatorChar;
-                if (fullPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase) < 0)
-                    return false;
-
-                string parent = Path.GetFileName(Path.GetDirectoryName(fullPath));
-                return !string.IsNullOrEmpty(parent)
-                    && parent.StartsWith("Slot_", StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                return filePath.IndexOf(ScenarioAuthoringDraftRepository.DraftStorageScenarioId, StringComparison.OrdinalIgnoreCase) >= 0;
-            }
-        }
     }
 }

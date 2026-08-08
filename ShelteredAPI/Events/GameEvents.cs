@@ -9,7 +9,6 @@ using ShelteredAPI.Saves.Backups;
 using ShelteredAPI.Saves.Runtime;
 
 
-using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Events
 {
     /// <summary>
@@ -376,7 +375,7 @@ namespace ShelteredAPI.Events
                 SaveEntry scopedEntry;
                 SaveEntry customEntry = SaveRuntimeState.TryGetCurrentSaveOperation(out operationType, out scopedEntry)
                     ? scopedEntry
-                    : PlatformSaveProxy.ActiveCustomSave;
+                    : SaveRuntimeState.ActiveCustomSave;
                 if (customEntry == null)
                     return;
 

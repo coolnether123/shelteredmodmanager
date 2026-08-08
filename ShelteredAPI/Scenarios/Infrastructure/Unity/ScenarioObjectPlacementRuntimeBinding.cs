@@ -2,17 +2,20 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ShelteredAPI.Hooks;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioObjectPlacementRuntimeBinding : MonoBehaviour
     {
+        private const float PlacementMatchTolerance = 0.15f;
         private static readonly List<ScenarioObjectPlacementRuntimeBinding> Bindings = new List<ScenarioObjectPlacementRuntimeBinding>();
 
         public string ScenarioObjectId;
         public string RuntimeBindingKey;
         public Obj_Base Object;
         public int PlacementIndex = -1;
+        public int GridX = -1;
+        public int GridY = -1;
 
         public static ScenarioObjectPlacementRuntimeBinding Attach(GameObject target, ObjectPlacement placement, Obj_Base obj, int placementIndex)
         {
@@ -27,6 +30,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             binding.RuntimeBindingKey = placement.RuntimeBindingKey;
             binding.Object = obj;
             binding.PlacementIndex = placementIndex;
+            binding.GridX = ScenarioPropertyBag.GetInt(
+                placement.CustomProperties,
+                ScenarioPlacementDefinitions.PropertyGridX,
+                -1);
+            binding.GridY = ScenarioPropertyBag.GetInt(
+                placement.CustomProperties,
+                ScenarioPlacementDefinitions.PropertyGridY,
+                -1);
             Register(binding);
             return binding;
         }
@@ -77,11 +88,40 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             for (int i = 0; worldObjects != null && i < worldObjects.Count; i++)
             {
                 Obj_Base candidate = worldObjects[i];
-                if (candidate != null && ScenarioBunkerDraftService.MatchesPlacement(placement, candidate))
+                if (MatchesPlacement(placement, candidate))
                     return candidate;
             }
 
             return null;
+        }
+
+        private static bool MatchesPlacement(ObjectPlacement placement, Obj_Base candidate)
+        {
+            ScenarioObjectPlacementRuntimeBinding binding = candidate.GetComponent<ScenarioObjectPlacementRuntimeBinding>();
+            if (binding != null)
+            {
+                if (!string.IsNullOrEmpty(binding.ScenarioObjectId)
+                    && string.Equals(placement.ScenarioObjectId, binding.ScenarioObjectId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (!string.IsNullOrEmpty(binding.RuntimeBindingKey)
+                    && string.Equals(placement.RuntimeBindingKey, binding.RuntimeBindingKey, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            string sourceObjectId = ScenarioPropertyBag.GetString(
+                placement.CustomProperties,
+                ScenarioPlacementDefinitions.PropertySourceObjectId);
+            if (candidate.objectId > 0
+                && !string.IsNullOrEmpty(sourceObjectId)
+                && string.Equals(sourceObjectId, candidate.objectId.ToString(), StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (placement.Position == null
+                || !string.Equals(placement.DefinitionReference, candidate.GetObjectType().ToString(), StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            Vector3 position = new Vector3(placement.Position.X, placement.Position.Y, placement.Position.Z);
+            return Vector3.Distance(candidate.transform.position, position) <= PlacementMatchTolerance;
         }
 
         public static void ApplyActiveState(string idOrBindingKey, bool active)
