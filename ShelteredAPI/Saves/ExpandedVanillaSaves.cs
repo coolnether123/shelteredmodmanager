@@ -28,6 +28,8 @@ namespace ShelteredAPI.Saves
         public static SaveEntry Get(string saveId) => _registry.GetSave(saveId);
         public static SaveEntry GetBySlot(int absoluteSlot) => _registry.GetSaveBySlot(absoluteSlot);
         public static SaveEntry Overwrite(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes) => _registry.OverwriteSave(saveId, opts, xmlBytes);
+
+        internal static void InvalidateCache() => _registry.InvalidateCache();
         
         internal static void UpdateManifest(int absoluteSlot, SaveInfo info) => _registry.UpdateSlotManifest(absoluteSlot, info);
 

@@ -257,7 +257,7 @@ namespace ShelteredAPI.Saves
         /// <summary>
         /// Invalidates the entry cache, forcing re-discovery on next access.
         /// </summary>
-        private void InvalidateCache()
+        internal void InvalidateCache()
         {
             lock (_lock)
             {
@@ -1045,7 +1045,8 @@ namespace ShelteredAPI.Saves
                     + comparison.SlotNumber + ": " + error);
             }
 
-            SaveEntry entry = new SaveRegistryCore(scenarioId).GetSaveBySlot(comparison.SlotNumber);
+            ExpandedVanillaSaves.InvalidateCache();
+            SaveEntry entry = ExpandedVanillaSaves.GetBySlot(comparison.SlotNumber);
             MMLog.WriteInfo("[VanillaMirror] Wrote Standard Slot_" + comparison.SlotNumber
                 + " from vanilla " + comparison.SaveType
                 + ". reason=" + (reason ?? "unspecified") + ".");
