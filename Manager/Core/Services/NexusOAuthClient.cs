@@ -14,7 +14,20 @@ namespace Manager.Core.Services
     /// </summary>
     internal sealed class NexusOAuthClient
     {
+        private readonly string _tokenEndpoint;
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
+
+        internal NexusOAuthClient()
+            : this(NexusOAuthConfiguration.TokenEndpoint)
+        {
+        }
+
+        internal NexusOAuthClient(string tokenEndpoint)
+        {
+            _tokenEndpoint = string.IsNullOrEmpty(tokenEndpoint)
+                ? NexusOAuthConfiguration.TokenEndpoint
+                : tokenEndpoint;
+        }
 
         internal NexusOAuthTokenSet ExchangeAuthorizationCode(
             string authorizationCode,
@@ -47,13 +60,11 @@ namespace Manager.Core.Services
             try
             {
                 byte[] body = Encoding.UTF8.GetBytes(NexusOAuthProtocol.BuildFormEncoded(fields));
-                var request = (HttpWebRequest)WebRequest.Create(NexusOAuthConfiguration.TokenEndpoint);
+                var request = (HttpWebRequest)WebRequest.Create(_tokenEndpoint);
                 request.Method = "POST";
                 request.ContentType = "application/x-www-form-urlencoded";
                 request.Accept = "application/json";
-                request.UserAgent = Core.AppVersionInfo.UserAgent;
-                request.Headers["Application-Name"] = Core.AppVersionInfo.ApplicationName;
-                request.Headers["Application-Version"] = Core.AppVersionInfo.NexusHeader;
+                NexusRequestHeaders.ApplyApplicationHeaders(request);
                 request.ContentLength = body.Length;
                 request.Timeout = 15000;
                 request.ReadWriteTimeout = 15000;
@@ -131,6 +142,14 @@ namespace Manager.Core.Services
                 using (Stream stream = response != null ? response.GetResponseStream() : null)
                 using (var reader = stream != null ? new StreamReader(stream) : null)
                 {
+                    if (response != null && (int)response.StatusCode == 429)
+                    {
+                        string retryAfter = response.Headers["Retry-After"];
+                        return !string.IsNullOrEmpty(retryAfter)
+                            ? "Nexus OAuth token request was rate limited. Retry after " + retryAfter + "."
+                            : "Nexus OAuth token request was rate limited. Wait and try again.";
+                    }
+
                     string json = reader != null ? reader.ReadToEnd() : string.Empty;
                     var data = _serializer.DeserializeObject(json) as Dictionary<string, object>;
                     if (data != null)

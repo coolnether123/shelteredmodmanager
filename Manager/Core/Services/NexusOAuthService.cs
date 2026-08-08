@@ -15,6 +15,7 @@ namespace Manager.Core.Services
         private readonly SettingsService _settingsService;
         private readonly NexusOAuthClient _client;
         private AppSettings _settings;
+        private string _oauthRateLimitScope = "oauth-session:" + Guid.NewGuid().ToString("N");
 
         internal NexusOAuthService(SettingsService settingsService, AppSettings settings)
         {
@@ -37,6 +38,17 @@ namespace Manager.Core.Services
         {
             lock (_sync)
             {
+                NexusOAuthTokenSet currentTokens = _settings != null ? _settings.NexusOAuthTokens : null;
+                NexusOAuthTokenSet nextTokens = settings != null ? settings.NexusOAuthTokens : null;
+                string currentIdentity = currentTokens != null && currentTokens.HasRefreshToken
+                    ? currentTokens.RefreshToken
+                    : (currentTokens != null ? currentTokens.AccessToken : string.Empty);
+                string nextIdentity = nextTokens != null && nextTokens.HasRefreshToken
+                    ? nextTokens.RefreshToken
+                    : (nextTokens != null ? nextTokens.AccessToken : string.Empty);
+                if (!string.Equals(currentIdentity, nextIdentity, StringComparison.Ordinal))
+                    _oauthRateLimitScope = "oauth-session:" + Guid.NewGuid().ToString("N");
+
                 _settings = settings;
             }
         }
@@ -80,6 +92,7 @@ namespace Manager.Core.Services
                 }
 
                 _settings.NexusOAuthTokens = tokens;
+                _oauthRateLimitScope = "oauth-session:" + Guid.NewGuid().ToString("N");
                 PersistSettings();
             }
             return true;
@@ -93,6 +106,7 @@ namespace Manager.Core.Services
                     return;
 
                 _settings.NexusOAuthTokens.Clear();
+                _oauthRateLimitScope = "oauth-session:" + Guid.NewGuid().ToString("N");
                 PersistSettings();
             }
         }
@@ -108,7 +122,11 @@ namespace Manager.Core.Services
                 NexusOAuthTokenSet tokens = _settings.NexusOAuthTokens;
                 if (tokens != null && tokens.IsAccessTokenUsable(DateTime.UtcNow, RefreshBuffer))
                 {
-                    return new NexusRequestCredential { BearerToken = tokens.AccessToken };
+                    return new NexusRequestCredential
+                    {
+                        BearerToken = tokens.AccessToken,
+                        RateLimitScope = _oauthRateLimitScope
+                    };
                 }
 
                 if (tokens != null && tokens.HasRefreshToken && NexusOAuthConfiguration.IsRegistered)
@@ -121,7 +139,11 @@ namespace Manager.Core.Services
                         _settings.NexusOAuthTokens = refreshed;
                         PersistSettings();
                         errorMessage = null;
-                        return new NexusRequestCredential { BearerToken = refreshed.AccessToken };
+                        return new NexusRequestCredential
+                        {
+                            BearerToken = refreshed.AccessToken,
+                            RateLimitScope = _oauthRateLimitScope
+                        };
                     }
                 }
 
