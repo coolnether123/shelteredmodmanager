@@ -37,6 +37,8 @@ All Nexus clients share one credential provider. It:
 
 Request headers always include the application name, version, and user agent. OAuth requests use `Authorization: Bearer`; the fallback uses `APIKEY`.
 
+The v1, v2 GraphQL, and v3 clients share credential-scoped rate-limit state inside the active Nexus service. They consume the hourly and daily remaining-request response headers, reserve known capacity across concurrent requests, and stop locally when Nexus reports an exhausted quota. OAuth token-endpoint throttling is handled separately and preserves `Retry-After` guidance rather than mixing user-service limits into API quota state.
+
 ## Security boundaries
 
 - No client secret is present because installed desktop applications cannot keep one confidential.
@@ -55,3 +57,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\Test-NexusOAuthContrac
 ```
 
 The contract test exercises PKCE construction, callback acceptance/rejection, DPAPI round-tripping, loopback binding, protected storage, bearer headers, refresh behavior, public-client constraints, and UI wiring without requiring a live client ID.
+
+The Nexus Manager contract suite also runs a local HTTP behavior harness that verifies exact application-header values, credential isolation, concurrent quota reservations, stale-response handling, UTC resets, HTTP 429 behavior, and presigned-request isolation.
