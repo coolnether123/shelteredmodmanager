@@ -53,6 +53,12 @@ Every Nexus API request includes:
 - `Application-Version: 2.0.0`
 - `User-Agent: ShelteredModManager/2.0.0`
 
+## Rate-limit handling
+
+SMM reads the Nexus `X-RL-Hourly-Remaining` and `X-RL-Daily-Remaining` response headers for v1, v2 GraphQL, and v3 API requests. Quotas are isolated by credential, concurrent requests reserve known remaining capacity before sending, and out-of-order responses cannot restore stale capacity. When a quota is exhausted, SMM stops issuing API requests for that credential until the applicable UTC hour or day rolls over. Server `Date` values are used to associate responses with the correct quota window when available.
+
+HTTP 429 responses produce an actionable user-facing error. Reservations are restored only for failures that prove the request did not reach Nexus, such as DNS, connection, or TLS negotiation failures without an HTTP response. Presigned upload requests remain outside this handling and never receive Nexus authentication or application-identification headers.
+
 ## Suggested review cases
 
 - Valid, invalid, and revoked personal API keys.
