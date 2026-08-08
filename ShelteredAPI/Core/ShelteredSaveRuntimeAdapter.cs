@@ -31,7 +31,7 @@ namespace ShelteredAPI.Core
                 return CreateContext(operationEntry);
 
             SaveManager.SaveType currentType = ResolveCurrentSaveType();
-            PlatformSaveProxy.Target pending;
+            SaveRuntimeState.Target pending;
             if (currentType != SaveManager.SaveType.Invalid
                 && currentType != SaveManager.SaveType.GlobalData
                 && SaveRuntimeState.TryGetPendingSave(currentType, out pending)
@@ -65,7 +65,7 @@ namespace ShelteredAPI.Core
 
         public void ResetRuntimeState()
         {
-            PlatformSaveProxy.ResetStatus();
+            SaveRuntimeStatus.ResetQuitSaveCompleted();
         }
 
         public string GetQuitHeartbeatDetail()
@@ -94,13 +94,13 @@ namespace ShelteredAPI.Core
             return new ModSaveContext(slotPath, entry.absoluteSlot, scopeId, entry.id, entry);
         }
 
-        private static SaveEntry ResolveEntry(PlatformSaveProxy.Target target)
+        private static SaveEntry ResolveEntry(SaveRuntimeState.Target target)
         {
-            if (target == null || string.IsNullOrEmpty(target.saveId))
+            if (target == null || string.IsNullOrEmpty(target.SaveId))
                 return null;
 
-            string scopeId = SaveStorageRouter.NormalizeScenarioId(target.scenarioId);
-            return SaveStorageRouter.Get(scopeId, target.saveId);
+            string scopeId = SaveStorageRouter.NormalizeScenarioId(target.ScenarioId);
+            return SaveStorageRouter.Get(scopeId, target.SaveId);
         }
 
         private static SaveManager.SaveType ResolveCurrentSaveType()

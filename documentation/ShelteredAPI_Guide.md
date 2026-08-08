@@ -1,6 +1,6 @@
 # When To Use ShelteredAPI (v2.0)
 
-`ShelteredAPI.dll` is the game-facing layer for mods that operate on Sheltered content, saves, runtime UI/input, gameplay events, actors/characters, or scenarios. Use [Core ModAPI Basics](ModAPI_Developer_Guide.md) first for a plugin that only needs neutral framework behavior.
+`ShelteredAPI.dll` is the game-facing layer for mods that operate on Sheltered content, saves, runtime UI/input, gameplay events, actors/characters, or scenarios. The optional `ShelteredScenarioEditor.dll` is an application component, not a mod SDK dependency. Use [Core ModAPI Basics](ModAPI_Developer_Guide.md) first for a plugin that only needs neutral framework behavior.
 
 Assembly choices and the typed-escape-hatch rule are defined once in the canonical [assembly boundary](README.md#assembly-boundary-canonical). Exact method/type shapes belong in [API Signatures Reference](API_Signatures_Reference.md).
 
@@ -32,6 +32,7 @@ Assembly choices and the typed-escape-hatch rule are defined once in the canonic
 - Use the content facade for item IDs and injection rather than assuming Sheltered enum iteration will recognize custom items.
 - Use `ShelteredMap.Current` for generated expedition-map facts; scenario map DTOs describe authored scenario content and are not a live runtime snapshot.
 - Register runtime features from plugin lifecycle methods, normally `Start(...)`, rather than constructors.
+- Never reference `ShelteredScenarioEditor.dll` from a mod. Scenario definitions, registration, validation, runtime operations, and save APIs required by mod developers remain in ShelteredAPI.
 
 ## Targeted Vanilla UI Helpers
 
@@ -89,13 +90,13 @@ Existing 2.0 names that predate these rules remain supported, including `SaveEnt
 | Map-marker/expedition-actor snapshots and support bundles | API preview / diagnostics | Use copied facts for integrations and reports; do not treat them as mutable game state. |
 | Player queue snapshots and conservative restore | API preview | Queue capacity is observed metadata, not framework-owned policy. |
 | Runtime UI, stores, item reservations/assignments, and cooking stations | API preview | Expect small API or behavior adjustments within the 2.0 line. |
-| Custom scenario browser, XML/code registration, runtime, and scoring snapshots | Supported 2.0 surface | Installed scenario playback remains available when the authoring preview is disabled. |
-| In-game custom scenario authoring workspace | Preview, opt-in | Defaults off; enable it only while creating or testing scenario drafts and use disposable saves for authoring playtests. |
+| Installed-scenario browser, XML/code registration, runtime, and scoring snapshots | Supported 2.0 ShelteredAPI surface | Installed scenario playback remains available when the editor DLL is absent or disabled. |
+| In-game custom scenario editor | Separate optional preview assembly | Defaults off under `ShelteredScenarioEditor.Enabled`; enable it only while creating or testing drafts and use disposable saves for playtests. |
 
 Back up saves before testing any save-changing behavior or preview authoring workflow. The stable release status applies even when a particular facade is documented.
 
 ## Stable Surface Versus Internals
 
-Mods should call documented facades and exchange their public DTOs. Serializers, catalog services, storage repositories, runtime binding services, NGUI implementations, patch hosts, and manager adapters are implementation detail and may change without becoming supported mod entry points.
+Mods should call documented facades and exchange their public DTOs. Serializers, catalog services, storage repositories, runtime binding services, NGUI implementations, patch hosts, manager adapters, and every type in `ShelteredScenarioEditor.dll` are implementation detail and may change without becoming supported mod entry points.
 
 For loader/runtime ownership details, use [ModAPI Architecture Guide](ModAPI_Architecture_guide.md). For the completed implementation split and verifier history, use [ModAPI/ShelteredAPI Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md).

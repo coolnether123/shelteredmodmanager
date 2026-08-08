@@ -99,7 +99,7 @@ namespace ShelteredAPI.Harmony
 
                 HidePanelsForKeybindOpen(sourcePanel, source);
                 MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Opening ModAPI keybinds from " + source + ".");
-                ShelteredKeybindsUI.Show();
+                ShelteredUI.ShowShelteredKeybinds();
                 return false;
             }
             catch (Exception ex)

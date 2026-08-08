@@ -37,6 +37,7 @@ namespace Manager.Core.Services
         private readonly NexusV3RestClient _v3Client;
         private readonly string _apiKey;
         private readonly INexusCredentialProvider _credentialProvider;
+        private readonly NexusRateLimitTracker _rateLimits;
         private readonly object _cacheLock = new object();
         private readonly Dictionary<string, CacheEntry<NexusRemoteMod>> _modCache = new Dictionary<string, CacheEntry<NexusRemoteMod>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteMod>>> _latestCache = new Dictionary<string, CacheEntry<List<NexusRemoteMod>>>(StringComparer.OrdinalIgnoreCase);
@@ -66,8 +67,9 @@ namespace Manager.Core.Services
         {
             _apiKey = apiKey ?? string.Empty;
             _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(_apiKey);
-            _v2Client = new NexusGraphQlClient(_credentialProvider);
-            _v3Client = new NexusV3RestClient(_credentialProvider);
+            _rateLimits = new NexusRateLimitTracker();
+            _v2Client = new NexusGraphQlClient(_credentialProvider, _rateLimits, null);
+            _v3Client = new NexusV3RestClient(_credentialProvider, _rateLimits, null);
         }
 
         public void ClearCachedResponses()
@@ -485,6 +487,8 @@ namespace Manager.Core.Services
             out string errorMessage)
         {
             errorMessage = null;
+            NexusRateLimitTracker.Lease rateLimitLease = null;
+            bool requestSubmitted = false;
             try
             {
                 string url = BuildLegacyUrl(relativePath, query);
@@ -509,12 +513,19 @@ namespace Manager.Core.Services
                         return null;
                     }
                 }
+
+                string credentialScope = credential != null ? credential.RateLimitScope : string.Empty;
+                if (!_rateLimits.TryAcquire(credentialScope, out rateLimitLease, out errorMessage))
+                    return null;
+
                 NexusRequestHeaders.ApplyJsonHeaders(request, credential);
 
+                requestSubmitted = true;
                 using (var response = (HttpWebResponse)request.GetResponse())
                 using (Stream stream = response.GetResponseStream())
                 using (StreamReader reader = stream != null ? new StreamReader(stream) : null)
                 {
+                    _rateLimits.Observe(response, rateLimitLease);
                     string json = reader != null ? reader.ReadToEnd() : string.Empty;
                     if (string.IsNullOrEmpty(json))
                         return new Dictionary<string, object>();
@@ -537,25 +548,34 @@ namespace Manager.Core.Services
             }
             catch (WebException ex)
             {
-                var response = ex.Response as HttpWebResponse;
-                if (response != null)
+                if (NexusRequestFailurePolicy.IsDefinitelyUnsent(ex))
+                    _rateLimits.Release(rateLimitLease);
+
+                using (var response = ex.Response as HttpWebResponse)
                 {
-                    if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    if (response != null)
                     {
-                        errorMessage = "Unauthorized Nexus request. Sign in again or check the legacy API key.";
-                        return null;
-                    }
+                        _rateLimits.Observe(response, rateLimitLease);
+                        if (response.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            errorMessage = "Unauthorized Nexus request. Sign in again or check the legacy API key.";
+                            return null;
+                        }
 
-                    if (response.StatusCode == HttpStatusCode.Forbidden)
-                    {
-                        errorMessage = "Nexus denied this request for the current account, file, or app.";
-                        return null;
-                    }
+                        if (response.StatusCode == HttpStatusCode.Forbidden)
+                        {
+                            errorMessage = "Nexus denied this request for the current account, file, or app.";
+                            return null;
+                        }
 
-                    if ((int)response.StatusCode == 429)
-                    {
-                        errorMessage = "Nexus rate limited the request. Wait and try again.";
-                        return null;
+                        if ((int)response.StatusCode == 429)
+                        {
+                            if (!_rateLimits.TryGetBlockingMessage(
+                                rateLimitLease != null ? rateLimitLease.CredentialScope : string.Empty,
+                                out errorMessage))
+                                errorMessage = "Nexus rate limited the request. Wait and try again.";
+                            return null;
+                        }
                     }
                 }
 
@@ -564,6 +584,8 @@ namespace Manager.Core.Services
             }
             catch (Exception ex)
             {
+                if (!requestSubmitted)
+                    _rateLimits.Release(rateLimitLease);
                 errorMessage = "Nexus request failed: " + ex.Message;
                 return null;
             }

@@ -941,13 +941,16 @@ namespace ShelteredAPI.Saves.Paging{
             if (session.SourceIsVanilla || snapshot.IsVanilla)
             {
                 SaveProtectionPatches.LoadGamePatch._forceLoad = true;
-                slotToLoad = SlotPagingScope.SaveTypeToSlotNumber(snapshot.SaveType != SaveManager.SaveType.Invalid
-                    ? snapshot.SaveType
-                    : session.SourceVanillaSaveType);
+                VanillaSaveRoute snapshotRoute;
+                slotToLoad = VanillaSaveRouting.TryGetRoute(
+                    snapshot.SaveType != SaveManager.SaveType.Invalid ? snapshot.SaveType : session.SourceVanillaSaveType,
+                    out snapshotRoute)
+                    ? snapshotRoute.VanillaSlotNumber
+                    : 1;
             }
             else
             {
-                PlatformSaveProxy.SetNextLoad(
+                SaveRuntimeState.QueueLoad(
                     session.SourceTransportSaveType,
                     snapshot.ScenarioId,
                     snapshot.SaveId);
@@ -1121,7 +1124,7 @@ namespace ShelteredAPI.Saves.Paging{
                     var created = scope.Create(new SaveCreateOptions { name = "New Game", absoluteSlot = absoluteSlot });
                     if (created != null)
                     {
-                        PlatformSaveProxy.SetNextSave(virtualSaveType, scope.StorageScenarioId, created.id);
+                        SaveRuntimeState.QueueSave(virtualSaveType, scope.StorageScenarioId, created.id);
                         SaveManager.instance.SetCurrentSlot(scope.GetTransportSlotNumber(chosenSlotIndex));
                     }
 
@@ -1164,7 +1167,7 @@ namespace ShelteredAPI.Saves.Paging{
 
         private static void QueueCustomLoad(Traverse panelTraverse, int chosenSlotIndex, SlotPagingScope scope, SaveManager.SaveType virtualSaveType, SaveEntry entry)
         {
-            PlatformSaveProxy.SetNextLoad(virtualSaveType, scope.StorageScenarioId, entry.id);
+            SaveRuntimeState.QueueLoad(virtualSaveType, scope.StorageScenarioId, entry.id);
             ApplyDifficultySettings(entry.saveInfo);
 
             var loadingGraphic = panelTraverse.Field("m_loadingGraphic").GetValue<GameObject>();

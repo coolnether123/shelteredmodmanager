@@ -1,7 +1,6 @@
 using System;
 using HarmonyLib;
 using ModAPI.Core;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Presentation.Runtime;
@@ -15,78 +14,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         bool TryPresent(ScenarioEndGamePresentation presentation, out string reason);
     }
 
-    internal sealed class ScenarioAuthoringSessionContext : IScenarioAuthoringSessionContext
-    {
-        public bool HasActiveSession
-        {
-            get
-            {
-                ScenarioEditorController editor = ScenarioEditorController.Instance;
-                return editor != null && editor.CurrentSession != null;
-            }
-        }
-    }
-
-    internal sealed class ScenarioEndGamePresenter : IScenarioEndGamePresenter
-    {
-        private readonly IScenarioAuthoringSessionContext _context;
-        private readonly IScenarioEndGamePresentationTarget _playtestPresenter;
-        private readonly IScenarioEndGamePresentationTarget _installedPresenter;
-
-        public ScenarioEndGamePresenter(
-            IScenarioAuthoringSessionContext context,
-            IScenarioEndGamePresentationTarget playtestPresenter,
-            IScenarioEndGamePresentationTarget installedPresenter)
-        {
-            _context = context;
-            _playtestPresenter = playtestPresenter;
-            _installedPresenter = installedPresenter;
-        }
-
-        public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
-        {
-            return _context != null && _context.HasActiveSession
-                ? _playtestPresenter.TryPresent(presentation, out reason)
-                : _installedPresenter.TryPresent(presentation, out reason);
-        }
-
-        public void ResetForNewRun()
-        {
-            if (_playtestPresenter != null)
-                _playtestPresenter.ResetForNewRun();
-            if (_installedPresenter != null)
-                _installedPresenter.ResetForNewRun();
-        }
-    }
-
-    internal sealed class ScenarioPlaytestEndGamePresenter : IScenarioEndGamePresentationTarget
-    {
-        public void ResetForNewRun() { }
-
-        public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
-        {
-            try
-            {
-                ScenarioEditorController editor = ScenarioEditorController.Instance;
-                if (editor == null || editor.CurrentSession == null)
-                {
-                    reason = "No active authoring session was available for the playtest ending.";
-                    return false;
-                }
-
-                editor.EndPlaytest();
-                reason = null;
-                return true;
-            }
-            catch (Exception ex)
-            {
-                reason = "Authoring return could not be completed: " + ex.Message;
-                return false;
-            }
-        }
-    }
-
-    internal sealed class ScenarioInstalledEndGamePresenter : IScenarioEndGamePresentationTarget
+    internal sealed class ScenarioInstalledEndGamePresenter : IScenarioEndGamePresentationTarget, IScenarioEndGamePresenter
     {
         public void ResetForNewRun()
         {

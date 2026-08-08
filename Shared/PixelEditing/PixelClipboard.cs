@@ -5,7 +5,7 @@ namespace ShelteredModManager.Shared.PixelEditing
     /// <summary>
     /// Holds a detached pixel region that can be pasted across editor sessions.
     /// </summary>
-    public sealed class PixelClipboard
+    internal sealed class PixelClipboard
     {
         private PixelDocument _content;
 

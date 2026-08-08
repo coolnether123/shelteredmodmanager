@@ -6,7 +6,6 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 using ShelteredAPI.Content;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;

@@ -365,13 +365,4 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
         }
     }
 
-    internal sealed class ScenarioStoryFlowIssue
-    {
-        public ScenarioIssueSeverity Severity { get; set; }
-        public string Code { get; set; }
-        public string Message { get; set; }
-        public int StageIndex { get; set; }
-        public string StageId { get; set; }
-        public int IntercomIndex { get; set; }
-    }
 }

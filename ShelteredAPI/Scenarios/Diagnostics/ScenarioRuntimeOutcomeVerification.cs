@@ -3,11 +3,13 @@ using ShelteredAPI.Scenarios.Application.Effects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Shared;
+using ShelteredAPI.Saves;
 
 namespace ShelteredAPI.Scenarios.Diagnostics
 {
@@ -15,12 +17,12 @@ namespace ShelteredAPI.Scenarios.Diagnostics
     {
         internal static void Verify(ScenarioValidationResult result)
         {
-            VerifyPresenterSelection(result);
             VerifyInstalledPresenterModeBranching(result);
             VerifyVictoryPresentationText(result);
             VerifyPerRunResetContract(result);
             VerifyRetryableEffectContract(result);
             VerifyAuthoredVisitorPriorityContract(result);
+            VerifyMissingDefinitionRefreshRetry(result);
         }
 
         private static void VerifyPerRunResetContract(ScenarioValidationResult result)
@@ -45,29 +47,6 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 "Separate starts of the same installed scenario must receive separate runtime journal scopes.", result);
         }
 
-        private static void VerifyPresenterSelection(ScenarioValidationResult result)
-        {
-            StubSessionContext context = new StubSessionContext();
-            StubPlaytestPresenter playtest = new StubPlaytestPresenter();
-            StubInstalledPresenter installed = new StubInstalledPresenter();
-            ScenarioEndGamePresenter presenter = new ScenarioEndGamePresenter(context, playtest, installed);
-            ScenarioEndGamePresentation presentation = new ScenarioEndGamePresentation
-            {
-                Success = true,
-                BaseGameMode = ScenarioBaseGameMode.Survival
-            };
-            string reason;
-
-            context.HasSession = true;
-            Assert(presenter.TryPresent(presentation, out reason) && playtest.Calls == 1 && installed.Calls == 0,
-                "Active authoring sessions must select the return-to-editor ending presenter.", result);
-
-            context.HasSession = false;
-            presentation.Success = false;
-            Assert(presenter.TryPresent(presentation, out reason) && playtest.Calls == 1 && installed.Calls == 1,
-                "Installed scenario runs must select the vanilla game-over ending presenter.", result);
-        }
-
         private static void VerifyInstalledPresenterModeBranching(ScenarioValidationResult result)
         {
             Assert(ScenarioInstalledEndGamePresenter.UsesScenarioVictoryPanel(true, ScenarioBaseGameMode.Survival),
@@ -82,8 +61,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
         private static void VerifyVictoryPresentationText(ScenarioValidationResult result)
         {
             ScenarioDefinition definition = new ScenarioDefinition { DisplayName = "Ten Day Trial" };
-            ConditionDef condition = new ConditionDef { Id = "win_1", Type = "surviveDays" };
-            ScenarioPropertyBag.Set(condition.Properties, "days", "10");
+            ScenarioConditionRef condition = new ScenarioConditionRef { Id = "win_1", Kind = ScenarioConditionKind.SurviveDays, Quantity = 10 };
             Assert(ScenarioWinLossOutcomeService.BuildFulfilledConditionText(definition, condition) == "Survived for 10 days.",
                 "Victory presentation must describe the fulfilled authored condition.", result);
             ScenarioEndGamePresentation presentation = ScenarioWinLossOutcomeService.BuildPresentation(definition, condition, true);
@@ -128,40 +106,53 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             ScenarioWorldEventRuntimeState.Bind(null);
         }
 
+        private static void VerifyMissingDefinitionRefreshRetry(ScenarioValidationResult result)
+        {
+            const string scenarioId = "verification.catalog-retry";
+            RefreshableDefinitionCatalog innerCatalog = new RefreshableDefinitionCatalog(scenarioId);
+            ScenarioRuntimeOrchestrator orchestrator = null;
+            ScenarioDefinitionCatalogRefreshCoordinator catalog = new ScenarioDefinitionCatalogRefreshCoordinator(
+                innerCatalog,
+                delegate { return orchestrator; });
+            ScenarioRuntimeDefinitionResolver definitionResolver = new ScenarioRuntimeDefinitionResolver(catalog);
+            CountingScenarioApplier applier = new CountingScenarioApplier();
+            VerificationRuntimeBindingService bindings = new VerificationRuntimeBindingService(
+                new ScenarioRuntimeBinding
+                {
+                    ScenarioId = scenarioId,
+                    VersionApplied = "1.0.0",
+                    IsActive = true,
+                    RunId = "catalog-retry-run"
+                });
+
+            orchestrator = new ScenarioRuntimeOrchestrator(
+                new EmptyScenarioLifecycle(),
+                new EmptyScenarioRegistry(),
+                new MatchingDependencyVerifier(),
+                new UnusedDefinitionFactory(),
+                definitionResolver,
+                bindings,
+                applier,
+                new EmptySpriteSwapEngine(),
+                new EmptySceneSpritePlacementEngine(),
+                new ReadyVanillaScenarioRuntime());
+
+            orchestrator.UpdateActiveScenarioApply();
+            int attemptsWhileMissing = innerCatalog.LoadAttempts;
+            orchestrator.UpdateActiveScenarioApply();
+            Assert(applier.ApplyCount == 0 && attemptsWhileMissing == 1 && innerCatalog.LoadAttempts == attemptsWhileMissing,
+                "Missing definition was not retained as a blocked runtime apply pending catalog refresh.", result);
+
+            catalog.RefreshDefinitionCatalog();
+            Assert(innerCatalog.CatalogRevision == 1 && innerCatalog.LoadAttempts == attemptsWhileMissing + 1
+                && applier.ApplyCount == 1,
+                "Catalog refresh did not cause the blocked active binding to retry and apply.", result);
+        }
+
         private static void Assert(bool condition, string message, ScenarioValidationResult result)
         {
             if (!condition)
                 result.AddError(message);
-        }
-
-        private sealed class StubSessionContext : IScenarioAuthoringSessionContext
-        {
-            public bool HasSession;
-            public bool HasActiveSession { get { return HasSession; } }
-        }
-
-        private sealed class StubPlaytestPresenter : IScenarioEndGamePresentationTarget
-        {
-            public int Calls;
-            public void ResetForNewRun() { }
-            public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
-            {
-                Calls++;
-                reason = null;
-                return true;
-            }
-        }
-
-        private sealed class StubInstalledPresenter : IScenarioEndGamePresentationTarget
-        {
-            public int Calls;
-            public void ResetForNewRun() { }
-            public bool TryPresent(ScenarioEndGamePresentation presentation, out string reason)
-            {
-                Calls++;
-                reason = null;
-                return true;
-            }
         }
 
         private sealed class StubRetryableHandler : IScenarioRetryableEffectHandler
@@ -183,6 +174,155 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 retryable = true;
                 return false;
             }
+        }
+
+        private sealed class RefreshableDefinitionCatalog : IScenarioDefinitionCatalogService
+        {
+            private readonly string _scenarioId;
+            private bool _available;
+
+            public RefreshableDefinitionCatalog(string scenarioId)
+            {
+                _scenarioId = scenarioId;
+            }
+
+            public int CatalogRevision { get; private set; }
+            public int LoadAttempts { get; private set; }
+
+            public void RefreshDefinitionCatalog()
+            {
+                _available = true;
+                CatalogRevision++;
+            }
+
+            public ScenarioInfo[] ListDefinitions()
+            {
+                return new ScenarioInfo[0];
+            }
+
+            public ScenarioValidationResult ValidateDefinition(string scenarioId)
+            {
+                ScenarioDefinition ignoredDefinition;
+                string ignoredPath;
+                ScenarioValidationResult validation;
+                TryLoadDefinition(scenarioId, out ignoredDefinition, out ignoredPath, out validation);
+                return validation;
+            }
+
+            public bool TryLoadDefinition(
+                string scenarioId,
+                out ScenarioDefinition definition,
+                out string scenarioFilePath,
+                out ScenarioValidationResult validation)
+            {
+                LoadAttempts++;
+                definition = null;
+                scenarioFilePath = null;
+                validation = new ScenarioValidationResult();
+                if (!_available || !string.Equals(_scenarioId, scenarioId, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    validation.AddError("Scenario definition is not indexed.");
+                    return false;
+                }
+
+                definition = new ScenarioDefinition { Id = _scenarioId, Version = "1.0.0" };
+                scenarioFilePath = "verification-scenario.xml";
+                return true;
+            }
+        }
+
+        private sealed class VerificationRuntimeBindingService : IScenarioRuntimeBindingService
+        {
+            private ScenarioRuntimeBinding _binding;
+
+            public VerificationRuntimeBindingService(ScenarioRuntimeBinding binding)
+            {
+                _binding = binding;
+            }
+
+            public ScenarioRuntimeBinding CurrentBinding { get { return _binding; } }
+            public int CurrentRevision { get { return 1; } }
+            public void EnsureHooked() { }
+            public void SetBinding(ScenarioRuntimeBinding binding) { _binding = binding; }
+            public void ConvertToNormalSave() { if (_binding != null) _binding.IsConvertedToNormalSave = true; }
+            public ScenarioRuntimeBinding GetActiveBindingForStartup() { return _binding; }
+        }
+
+        private sealed class CountingScenarioApplier : IScenarioApplier
+        {
+            public int ApplyCount { get; private set; }
+            public ScenarioApplyResult ApplyAll(ScenarioDefinition definition) { return ApplyAll(definition, null); }
+            public ScenarioApplyResult ApplyAll(ScenarioDefinition definition, string scenarioFilePath)
+            {
+                ApplyCount++;
+                return new ScenarioApplyResult();
+            }
+        }
+
+        private sealed class EmptySpriteSwapEngine : IScenarioSpriteSwapEngine
+        {
+            public void Activate(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result) { }
+            public void Update() { }
+            public void Clear(string reason) { }
+        }
+
+        private sealed class EmptySceneSpritePlacementEngine : IScenarioSceneSpritePlacementEngine
+        {
+            public int Activate(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result) { return 0; }
+            public void Clear(string reason) { }
+        }
+
+        private sealed class EmptyScenarioLifecycle : ICustomScenarioLifecycleService
+        {
+            public CustomScenarioState CurrentState { get { return CustomScenarioState.None(); } }
+            public bool MarkSelected(string scenarioId) { return false; }
+            public bool MarkSpawned(string scenarioId) { return false; }
+            public void ClearState() { }
+        }
+
+        private sealed class EmptyScenarioRegistry : ICustomScenarioRegistry
+        {
+            public bool TryGet(string scenarioId, out CustomScenarioInfo scenario) { scenario = null; return false; }
+            public CustomScenarioInfo[] List() { return new CustomScenarioInfo[0]; }
+        }
+
+        private sealed class MatchingDependencyVerifier : IScenarioDependencyVerifier
+        {
+            public SlotManifest CreateDependencyManifest(CustomScenarioInfo info) { return null; }
+            public ScenarioDependencyVerificationState VerifyDependencies(CustomScenarioInfo info)
+            {
+                return ScenarioDependencyVerificationState.Match;
+            }
+        }
+
+        private sealed class UnusedDefinitionFactory : IScenarioDefinitionFactory
+        {
+            public bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage)
+            {
+                definition = null;
+                errorMessage = "Not used by runtime-apply verification.";
+                return false;
+            }
+
+            public bool TryCreateScenarioDef(string scenarioId, CustomScenarioBuildContext context, out ScenarioDef definition, out string errorMessage)
+            {
+                definition = null;
+                errorMessage = "Not used by runtime-apply verification.";
+                return false;
+            }
+
+            public ScenarioDef BuildScenarioDefFromDefinition(string scenarioId) { return null; }
+        }
+
+        private sealed class ReadyVanillaScenarioRuntime : IVanillaScenarioRuntime
+        {
+            public bool IsWorldReady(out string blockingReason) { blockingReason = null; return true; }
+            public bool TrySpawnScenario(ScenarioDef definition, out QuestInstance instance, out string reason) { instance = null; reason = null; return false; }
+            public bool TryStartQuest(string questId, out string reason) { reason = null; return false; }
+            public bool TryGetQuestInstance(int instanceId, out QuestInstance instance, out string reason) { instance = null; reason = null; return false; }
+            public System.Collections.Generic.List<QuestInstance> GetCurrentQuests() { return new System.Collections.Generic.List<QuestInstance>(); }
+            public bool TryFinishQuest(QuestInstance instance, bool success, out string reason) { reason = null; return false; }
+            public bool TryAbandonQuest(QuestInstance instance, out string reason) { reason = null; return false; }
         }
     }
 }

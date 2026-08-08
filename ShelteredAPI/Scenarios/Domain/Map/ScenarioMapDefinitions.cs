@@ -2,11 +2,6 @@ using System.Collections.Generic;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Domain.Map{
-    internal static class ScenarioMapTerrainModes
-    {
-        public const string GeneratedBlend = "GeneratedBlend";
-    }
-
     /// <summary>
     /// Top-level authored world-map data for a scenario.
     /// Locations, routes, loot, and encounter tables are neutral data until the game runtime projects them onto Sheltered's map.

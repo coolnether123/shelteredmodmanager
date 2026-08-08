@@ -15,7 +15,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             message = null;
             try
             {
-                IScenarioTriggerRuntimeService service = ScenarioCompositionRoot.Resolve<IScenarioTriggerRuntimeService>();
+                IScenarioTriggerRuntimeService service = ScenarioRuntimeCompositionRoot.Resolve<IScenarioTriggerRuntimeService>();
                 return service != null && service.Fire(triggerId, source, out message);
             }
             catch (Exception ex)

@@ -36,6 +36,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return false;
             }
 
+            if (ScreenFade.instance != null && ScreenFade.instance.IsFading())
+            {
+                blockingReason = "The scene transition fade is still active.";
+                return false;
+            }
+
             if (CutsceneManager.Instance != null && CutsceneManager.Instance.CutSceneActive)
             {
                 blockingReason = "A cutscene is still active.";

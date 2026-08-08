@@ -4,6 +4,34 @@ This is the signature lookup sheet for public APIs present in the current repo. 
 
 Use this file for type names and method shapes only. For setup, assembly selection, stability rules, and task workflows, start with the [Documentation Index](README.md) and its canonical [assembly boundary](README.md#assembly-boundary-canonical).
 
+## Manager runtime options
+
+```csharp
+namespace ModAPI.Core
+{
+    public static class ManagerBooleanOptions
+    {
+        public static void RegisterBooleanOption(ManagerBooleanOptionDefinition definition);
+        public static bool GetBool(string id, bool fallback);
+        public static void SetBool(string id, bool value);
+    }
+
+    public sealed class ManagerBooleanOptionDefinition
+    {
+        public string Id;
+        public string Owner;
+        public string Label;
+        public string Description;
+        public bool DefaultValue;
+        public bool RequiresRestart;
+        public int SortOrder;
+    }
+}
+```
+
+The persisted JSON file and record DTOs are internal. Mods use `ManagerBooleanOptions`; they do not edit
+`manager_options.json` directly.
+
 ## Signature Map
 
 | Area | Section |
@@ -29,7 +57,7 @@ Use this file for type names and method shapes only. For setup, assembly selecti
 | Compatibility exports | [Save Manifest / Support Bundle](#save-manifest--support-bundle-smm-20) |
 | Documentation contract | [Documentation Model](#documentation-model-smm-20) |
 
-> Status note: runtime UI/store/cooking signatures and the advanced in-game custom scenario authoring workspace are preview surfaces. Custom scenario registration, playback, runtime bindings, and scoring snapshots are supported 2.0 surfaces. See the linked task guides before publishing against preview areas.
+> Status note: runtime UI/store/cooking signatures are preview surfaces. Custom scenario registration, XML/code authoring, playback, runtime bindings, and scoring snapshots are supported ShelteredAPI 2.0 surfaces. The advanced in-game editor is a separate optional preview assembly and is not a mod API dependency. See the linked task guides before publishing against preview areas.
 - Shared SMM 2.0 naming and DTO rules are defined in [ShelteredAPI Guide: Shared Facade Conventions](ShelteredAPI_Guide.md#shared-facade-conventions).
 
 ## Plugin Lifecycle (`ModAPI.Core`)
@@ -1287,10 +1315,9 @@ public sealed class ScenarioValidationResult
     public void AddWarning(string message);
 }
 
-// ShelteredAPI.Scenarios Sheltered scenario authoring/runtime pack
+// ShelteredAPI.Scenarios public XML authoring and scenario runtime API
 public static class ShelteredScenarios
 {
-    public static ICustomScenarioService Service { get; }
     public static CustomScenarioRegistrationResult Register(IShelteredCustomScenario scenario);
     public static CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration);
     public static bool Unregister(string scenarioId);
@@ -1315,25 +1342,282 @@ public static class ShelteredScenarios
 public static class ShelteredScenarioAuthoring
 {
     public const string DefaultFileName = "scenario.xml";
+    public const string DefaultTitle = "Untitled Scenario";
+    public const string DefaultAuthor = "unknown";
+    public const string DefaultVersion = "0.1.0";
+    public const string GeneratedBlendTerrainId = "GeneratedBlend";
+    public const string EmptyStartingCastWarning = "No starting survivors.";
+    public const string EmptyStartingCastDisabledReason = "No starting survivors. Add a starting survivor in Cast before playtest can begin.";
+    public const string UnsavedDraftPlayDisabledReason = "Save draft before testing.";
+    public const string ValidationUnavailablePlayDisabledReason = "Validation is unavailable. Open Publish and refresh checks before playtest.";
     public static ScenarioDefinition CreateDefinition();
     public static ScenarioDefinition CreateDefinition(ScenarioBaseGameMode baseGameMode);
+    public static string BumpVersion(string version, bool minor);
+    public static string[] GetKnownMapIconIds();
+    public static bool IsKnownMapIconId(string iconId);
+    public static ScenarioActorRef ResolveFutureSurvivorActorReference(FutureSurvivorDefinition survivor);
     public static ScenarioDefinition LoadDefinition(string filePath);
+    public static bool TryLoadDefinitionWithRecovery(string filePath, out ScenarioDefinition definition, out string recoveryMessage, out bool recovered);
+    public static ScenarioInfo LoadDefinitionInfo(string filePath, string ownerModId);
     public static ScenarioDefinition FromXml(string xml);
     public static void SaveDefinition(ScenarioDefinition definition, string filePath);
     public static string ToXml(ScenarioDefinition definition);
     public static ScenarioValidationResult ValidateDefinition(ScenarioDefinition definition, string scenarioFilePath);
+    public static ScenarioDefinitionReferenceIndex IndexDefinition(ScenarioDefinition definition);
+    public static ScenarioDefinitionReferenceIndex IndexDefinition(TriggersAndEventsDefinition triggersAndEvents);
+    public static ScenarioStoryFlowIssue[] AnalyzeStoryFlow(ScenarioDefinition definition);
+    public static bool HasStartingSurvivor(ScenarioDefinition definition);
+    public static bool CanStartPlay(ScenarioDefinition definition, out string reason);
+    public static ScenarioMapProjectionField[] GetMapEncounterProjectionFields();
+    public static bool TryCompileTrigger(TriggerDef trigger, int index, out ScenarioScheduledActionDefinition action, out string reason);
+    public static bool IsManualTrigger(TriggerDef trigger);
     public static ScenarioValidationResult ValidateXmlDefinition(string scenarioId);
     public static bool TryLoadXmlDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation);
-    public static ScenarioValidationResult RunFrameworkVerification();
+    public static int AssignMissingActorReferences(ScenarioDefinition definition);
+    public static ScenarioActorRef EnsureStartingMemberActorReference(ScenarioDefinition definition, FamilyMemberConfig member, int memberIndex);
+    public static ScenarioActorRef EnsureFutureSurvivorActorReference(ScenarioDefinition definition, FutureSurvivorDefinition survivor, int survivorIndex);
+    public static ScenarioActorRef CreateLiveFamilyMemberActorReference(FamilyMember member);
+}
+
+public sealed class ScenarioDefinitionReferenceIndex
+{
+    public bool HasGate(string id);
+    public bool HasTrigger(string id);
+    public bool HasQuest(string id);
+    public bool HasCondition(string id);
+    public bool HasExpansion(string id);
+    public bool HasObject(string id);
+    public bool HasFutureSurvivor(string id);
+    public bool HasFamilySurvivor(string id);
+}
+
+public sealed class ScenarioStoryFlowIssue
+{
+    public ScenarioIssueSeverity Severity { get; set; }
+    public string Code { get; set; }
+    public string Message { get; set; }
+    public int StageIndex { get; set; }
+    public string StageId { get; set; }
+    public int IntercomIndex { get; set; }
+}
+
+public sealed class ScenarioMapProjectionField
+{
+    public string Group { get; }
+    public string Field { get; }
+    public bool AppliesInGame { get; }
+    public string StatusText { get; }
 }
 
 public static class ShelteredScenarioRuntime
 {
+    public static string GetTransformPath(Transform transform);
+    public static bool TryResolveRuntimeSpriteTarget(string targetPath, ScenarioSpriteTargetComponentKind preferredKind, out ScenarioRuntimeSpriteTarget target);
+    public static bool TryResolveRuntimeSpriteTarget(Transform transform, ScenarioSpriteTargetComponentKind preferredKind, out ScenarioRuntimeSpriteTarget target);
+    public static IScenarioPreviewSession BeginPreview(ScenarioDefinition definition, string scenarioFilePath);
+    public static bool IsWorldReady(out string blockingReason);
+    public static bool IsShelterSceneActive();
+    public static bool TryGetShelterGridCell(Vector3 worldPosition, out int gridX, out int gridY);
+    public static Vector3 GetShelterGridCellCenter(int gridX, int gridY);
+    public static string CreateRuntimeSpriteKey(Sprite sprite);
+    public static string CreateRuntimeSpriteKey(Texture2D texture, string spriteName);
+    public static ScenarioMapLootEntrySnapshot[] PlanMapLoot(ScenarioDefinition definition, MapLocationDefinition location, MapLootTableDefinition table);
+    public static ScenarioMapLootEntrySnapshot[] PlanMapLoot(ScenarioDefinition definition, MapLocationDefinition location, MapLootTableDefinition table, int masterSeed);
+    public static Sprite ResolveSpriteAsset(ScenarioDefinition definition, string packRoot, string spriteId, string relativePath, string runtimeSpriteKey, string contextLabel);
+    public static void InvalidateSpriteAssets();
+    public static void RegisterRuntimeSprite(string runtimeSpriteKey, Sprite sprite);
+    public static bool TryFindRuntimeSprite(string runtimeSpriteKey, out Sprite sprite);
+    public static Sprite CreateAndRegisterRuntimeSprite(Texture2D texture, string spriteName);
+    public static bool TryApplyRuntimeSprite(string targetPath, ScenarioSpriteTargetComponentKind targetKind, Sprite sprite);
+    public static bool ApplyConfiguredAppearance(ScenarioDefinition definition, string scenarioFilePath, FamilyMemberConfig config, FamilyMember member, out string message);
+    public static void ResolveConfiguredAppearanceColors(FamilyMemberAppearanceConfig appearance, out Color hair, out Color skin, out Color shirt, out Color pants);
+    public static bool TryLaunchScenarioWorld(ScenarioWorldLaunchRequest request, out string message);
+    public static bool TryCompleteScenarioWorldLaunch(string expectedSceneName, string targetLabel);
+    public static bool TryReturnToMainMenu(out string message);
+    public static bool TryGetRuntimeIdentity(GameObject gameObject, out ScenarioRuntimeIdentity identity);
+    public static bool TryGetRuntimeIdentity(Component component, out ScenarioRuntimeIdentity identity);
     public static bool FireTrigger(string triggerId);
     public static bool FireTrigger(string triggerId, string source, out string message);
     public static ScenarioScoreSnapshot GetScoreSnapshot();
     public static void SetScoreSnapshot(ScenarioScoreSnapshot snapshot);
     public static void ClearScoreSnapshot();
+}
+
+// Coarse, process-local runtime-preview boundary used by the optional editor.
+// The owner must Dispose the session; there is no separate EndPreview API.
+public interface IScenarioPreviewSession : IDisposable
+{
+    ScenarioPreviewResult StartResult { get; }
+    ScenarioPreviewResult Refresh(ScenarioDefinition definition, ScenarioPreviewRefreshScope scope);
+    bool RestartWorld(ScenarioWorldLaunchRequest request, out string error);
+    ScenarioRuntimeSnapshot CaptureRuntimeState();
+    void SetExecutionLogging(bool enabled);
+    ScenarioRuntimeExecutionEntrySnapshot[] CaptureExecutionLog(int maximumEntries);
+    bool TryFireRuntimeElement(string elementId, out string message);
+    bool TryGetMinutesUntilNextAuthoredEvent(int maximumMinutes, out int minutes);
+    void NotifyGameTimeChanged();
+    bool TryPreviewRuntimeSpriteFrame(string targetPath, ScenarioSpriteTargetComponentKind targetKind, Sprite sprite);
+    bool TryPlayRuntimeSpriteAnimation(string targetPath, ScenarioSpriteTargetComponentKind targetKind, Sprite[] frames, float[] durations, float speed);
+    void StopRuntimeSpriteAnimation(string targetPath, ScenarioSpriteTargetComponentKind targetKind);
+    void CaptureRuntimeObjectState(Obj_Base source, ObjectPlacement destination);
+    bool IsStationObject(Obj_Base obj);
+    void CaptureStationUpgradeState(Obj_Base source, ObjectPlacement destination);
+    ScenarioStationUpgradeSnapshot GetStationUpgradeSnapshot(Obj_Base obj, ObjectPlacement placement);
+    bool TryChangeStationObjectLevel(Obj_Base obj, ObjectPlacement placement, int delta, out string message);
+    bool TryChangeStationUpgradeLevel(Obj_Base obj, ObjectPlacement placement, string pathName, int delta, out string message);
+    bool TryChangeStationStat(Obj_Base obj, ObjectPlacement placement, string statName, float delta, out string message);
+    bool TryClearStationStat(Obj_Base obj, ObjectPlacement placement, string statName, out string message);
+}
+
+[Flags]
+public enum ScenarioPreviewRefreshScope
+{
+    None = 0,
+    World = 1,
+    SpriteSwaps = 2,
+    ScenePlacements = 4,
+    MapProjection = 8,
+    SceneAssets = SpriteSwaps | ScenePlacements,
+    All = World | SceneAssets | MapProjection
+}
+
+public sealed class ScenarioWorldLaunchRequest
+{
+    public string StorageScenarioId { get; set; }
+    public SaveEntry StartupSave { get; set; }
+    public SaveManager.SaveType SaveType { get; set; }
+    public string TargetLabel { get; set; }
+    public ScenarioBaseGameMode BaseGameMode { get; set; }
+    public ScenarioDefinition Definition { get; set; }
+}
+
+public enum ScenarioRuntimeIdentityKind
+{
+    None = 0,
+    SceneSpritePlacement = 1,
+    ObjectPlacement = 2
+}
+
+public sealed class ScenarioRuntimeIdentity
+{
+    public ScenarioRuntimeIdentityKind Kind { get; }
+    public string PlacementId { get; }
+    public string ScenarioObjectId { get; }
+    public string RuntimeBindingKey { get; }
+    public int GridX { get; }
+    public int GridY { get; }
+}
+
+public sealed class ScenarioRuntimeSpriteTarget
+{
+    public string TargetPath { get; }
+    public Transform Transform { get; }
+    public ScenarioSpriteTargetComponentKind Kind { get; }
+    public SpriteRenderer SpriteRenderer { get; }
+    public UI2DSprite Ui2DSprite { get; }
+    public ParticleSystemRenderer ParticleRenderer { get; }
+    public bool IsAlive { get; }
+    public Sprite CurrentSprite { get; }
+    public string SpriteName { get; }
+    public string TextureName { get; }
+}
+
+public sealed class ScenarioStationUpgradeSnapshot
+{
+    public string ObjectType { get; }
+    public int Level { get; }
+    public int MinLevel { get; }
+    public int MaxLevel { get; }
+    public ScenarioStationUpgradePathSnapshot[] Paths { get; }
+    public ScenarioStationStatSnapshot[] Stats { get; }
+}
+
+public sealed class ScenarioStationUpgradePathSnapshot
+{
+    public string Name { get; }
+    public int Level { get; }
+    public int CurrentLevel { get; }
+    public int MaxLevel { get; }
+}
+
+public sealed class ScenarioStationStatSnapshot
+{
+    public string Name { get; }
+    public string Label { get; }
+    public float Value { get; }
+    public float MinValue { get; }
+    public float MaxValue { get; }
+    public float Step { get; }
+    public bool HasOverride { get; }
+    public string Detail { get; }
+}
+
+public sealed class ScenarioPreviewResult
+{
+    public bool Started { get; }
+    public int RuntimeRevision { get; }
+    public int FamilyChanges { get; }
+    public int InventoryChanges { get; }
+    public int BunkerChanges { get; }
+    public int TriggerChanges { get; }
+    public int ConditionChanges { get; }
+    public int SpriteSwapChanges { get; }
+    public int MapChanges { get; }
+    public int ScenePlacementChanges { get; }
+    public string[] Messages { get; }
+}
+
+public sealed class ScenarioRuntimeSnapshot
+{
+    public string ScenarioId { get; }
+    public string ScenarioVersion { get; }
+    public string RuntimeBindingId { get; }
+    public string Outcome { get; }
+    public string OutcomeConditionId { get; }
+    public int LastProcessedDay { get; }
+    public int LastProcessedHour { get; }
+    public int LastProcessedMinute { get; }
+    public ScenarioRuntimeActionSnapshot[] Actions { get; }
+    public ScenarioRuntimeFlagSnapshot[] Flags { get; }
+}
+
+public sealed class ScenarioRuntimeActionSnapshot
+{
+    public string ActionKey { get; }
+    public string ActionType { get; }
+    public int Day { get; }
+    public int Hour { get; }
+    public int Minute { get; }
+    public string Status { get; }
+    public string Message { get; }
+}
+
+public sealed class ScenarioRuntimeFlagSnapshot
+{
+    public string Id { get; }
+    public string Value { get; }
+}
+
+public sealed class ScenarioRuntimeExecutionEntrySnapshot
+{
+    public int Day { get; }
+    public int Hour { get; }
+    public int Minute { get; }
+    public string ElementId { get; }
+    public string DisplayName { get; }
+    public string Kind { get; }
+    public string Outcome { get; }
+    public string ConditionSummary { get; }
+    public string Detail { get; }
+    public string PlainLanguage { get; }
+}
+
+public sealed class ScenarioMapLootEntrySnapshot
+{
+    public string ItemId { get; }
+    public int Quantity { get; }
+    public bool Hidden { get; }
+    public string HiddenUnlockItemId { get; }
 }
 
 public interface IShelteredCustomScenario

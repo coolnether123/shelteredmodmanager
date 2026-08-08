@@ -32,7 +32,6 @@ namespace ShelteredAPI.Core
         public const string ActorSerialization = "ShelteredAPI.ActorSerialization";
         public const string ActorAuthoringCapabilities = "ShelteredAPI.ActorAuthoringCapabilities";
         public const string CustomScenarios = "ShelteredAPI.CustomScenarios";
-        public const string ScenarioAuthoring = "ShelteredAPI.ScenarioAuthoring";
     }
 
     /// <summary>

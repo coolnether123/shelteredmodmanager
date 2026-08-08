@@ -89,7 +89,7 @@ namespace ShelteredAPI.Scenarios.Public{
 
         public CustomScenarioRegistration ToRegistration()
         {
-            return ShelteredScenarioRegistration.FromScenario(this);
+            return ShelteredScenarios.FromScenario(this);
         }
 
         public CustomScenarioRegistrationResult Register()

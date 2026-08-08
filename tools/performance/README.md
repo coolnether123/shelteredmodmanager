@@ -10,10 +10,12 @@ The default matrix is:
 | Profile | Doorstop | Harness | Custom editor | Mods | Navigation |
 |---|---:|---:|---:|---|---|
 | vanilla | off | no | no | none | startup/menu reference |
+| smm-scenario-editor-absent | on | yes | DLL physically absent | Harmony + agent | menu → scenario panel → installed custom book |
+| smm-scenario-editor-off | on | yes | off | Harmony + agent | menu → scenario panel → installed custom book |
 | smm-native | on | no | on | Harmony only | startup/menu reference |
 | smm-core | on | yes | on | Harmony + agent | menu → scenario panel → custom book |
-| smm-custom-editor-off | on | yes | off | Harmony + agent | menu → scenario panel |
 | enabled-mods | on | yes | on | mods enabled before the suite plus core | configurable |
+| all-supported-mods | on | yes | on | every valid manifest except archived ModAPI v1 diagnostic plugins | configurable |
 | all-mods | on | yes | on | every valid installed manifest | menu → scenario panel → custom book |
 | explicit-example | on | yes | on | include set plus dependencies/core | configurable |
 
@@ -22,9 +24,9 @@ This Unity build pauses when unfocused, making simultaneous vanilla startup meas
 `-ParallelPlatforms` is an explicitly separate functional/hotspot stress lane: instrumented Steam and
 Epic cases can run concurrently because the runner acquires each harness lease and enables
 Application.runInBackground, but their startup values must not be compared to serial vanilla values.
-The short Main Menu to Scenario Selection segment uses a cross-process mutex because its hybrid
-fallback may need the one Windows foreground/cursor. Startup, idle sampling, and non-native phases
-remain concurrent across the two platform installs.
+Main-menu, scenario-selection, custom-book, and editor navigation use semantic in-process Unity/NGUI
+actions. Harness sessions disable manager-driven save auto-load after snapshotting configuration, run
+without foreground activation or cursor movement, and remain concurrent across both platform installs.
 Instrumented cases preserve `HarnessMenuReadyMs` as the semantic startup milestone, then pass the
 same stable native reference-frame gate as vanilla before recording `StartupMs`. Comparisons in the
 aggregate report therefore use the common native milestone.
@@ -36,14 +38,19 @@ Validation and a non-mutating resolved plan:
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -ValidateOnly
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -DryRun
 
-Live runs use the enabled build hook to rebuild the manager and harness once, then deploy the exact
-same managed artifacts to both storefronts. The harness is compiled against Steam's older Unity
+Live runs use the enabled build hook to rebuild the manager, ShelteredAPI, the standalone
+ShelteredScenarioEditor, and harness once, then deploy the exact same managed artifacts to both
+storefronts. The harness and editor are compiled against Steam's older Unity
 surface as the compatibility floor. Use `-SkipBuild` only when the installed binaries already match
 every configured deployment hash gate.
 
 Canonical matched-serial three-run matrix:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile vanilla,smm-native,smm-core,smm-custom-editor-off,all-mods -Iterations 3 -MatchedSerial
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile vanilla,smm-scenario-editor-off,smm-native,smm-core,all-mods -Iterations 3 -MatchedSerial
+
+Concurrent optional-editor lifecycle matrix (functional/stress evidence, not canonical vanilla timing):
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile smm-scenario-editor-absent,smm-scenario-editor-off,smm-core -Iterations 3 -ParallelPlatforms -RunLabel editor-lifecycle
 
 Parallel functional/hotspot lane (never use its vanilla deltas as canonical):
 
@@ -91,8 +98,15 @@ An all-mod run is deliberately literal. If incompatible installed mods fail disc
 retained as a failure with its exact mod set and copied SMM log. Put known exclusions in the profile
 instead of silently changing what “all” means.
 
-managerOptions maps existing Boolean option IDs to run values. Unknown IDs fail the case rather than
-creating an option the installed build does not understand.
+managerOptions maps existing Boolean option IDs to run values. The editor uses the single canonical
+`ShelteredScenarioEditor.Enabled` ID and deliberately has no retired-ID alias or migration path.
+Unknown IDs fail the case rather than creating an option the installed build does not understand.
+The physical-absence profile removes only the deployment role `scenarioeditor` through the suite's
+snapshotted mutation/restore boundary. The editor-off profile keeps the DLL deployed and sets its option
+false. Both precede editor-on profiles and still open the installed custom-scenario book: disabling or
+physically removing the editor must not disable ShelteredAPI scenario discovery/playback. Run all three
+profiles on Steam and Epic concurrently for lifecycle acceptance, then use matched serial runs for
+publishable startup/FPS comparisons.
 
 ## Build and preparation
 
@@ -135,10 +149,14 @@ Instrumented profiles also record:
 - /scenario-book/open, projected /scenario-book/rows, and route envelopes;
 - automatic status, health, events, flow-state, Scenario UI-tree, and framebuffer capture when a semantic route fails;
 - startup-scoped and whole-case resource metrics plus CSV/JSON CPU, working-set, private-memory, thread, and handle summaries for every phase;
-- client screenshots with user-context-preservation response headers;
+- foreground-free Unity framebuffer screenshots; automated captures never activate a game window or touch the desktop cursor;
 - the final SMM/mod_manager.log.
 - parsed StartupTiming rows plus a top-20 hotspot JSON file (parent and child timings are labeled as
   nested and must not be summed).
+
+Before native menu matching, instrumented profiles dismiss the known read-only Mod Verification
+window through the harness's foreground-free `/activate` route and record the decision in
+`menu_blockers.json`. This closes the overlay only; it never selects Auto-Load Mods or Load Anyway.
 
 Time.smoothDeltaTime is a Unity loop-rate stall detector, not presented/display FPS. Samples whose
 harness request takes at least 100 ms are excluded from the FPS summary by default.
@@ -186,8 +204,9 @@ sample counts, startup min/median/max, aggregate and individual
 views.
 
 environment.json fingerprints the game executable, native and managed Doorstop, ModAPI,
-ShelteredAPI, load order, every immutable selected mod DLL/JSON, Git commit/branch/status/diff hash, and
-system hardware. It is the build-number and binary-identity authority for the case.
+ShelteredAPI, ShelteredScenarioEditor when present, load order, every immutable selected mod DLL/JSON,
+Git commit/branch/status/diff hash, and system hardware. It is the build-number and binary-identity
+authority for the case.
 
 ## Restoration and coordination
 
@@ -201,13 +220,20 @@ The snapshot records whether each file existed. Cleanup runs from finally, close
 process, releases its lease, copies the rotating SMM log, and restores or removes each tracked file.
 Existing game processes cause a hard refusal; the runner never adopts or kills an unrelated session.
 
-Before any snapshot, a named mutex is acquired for every selected install and held through the final
-suite restore. A second runner targeting Steam or Epic is refused. Restore copies are SHA-256 checked
+Before any snapshot, the parent runner acquires a named mutex for every selected install and holds it
+until every worker is drained and the final suite restore completes. Core emits a parent-issued,
+serializable authorization envelope for parallel workers; it proves the issuing PID is alive and the
+mutex remains unavailable, while the parent lifecycle invariant guarantees that the issuer remains its
+holder. A session cannot snapshot, configure, or launch an install outside that envelope.
+A second runner targeting Steam or Epic is refused. Existing-process preflight also completes before the
+case snapshot or any install mutation. Restore copies are SHA-256 checked
 against their snapshots; residual differences are a hard failure. The launched process must terminate
 and release its handle before case restore, and the suite performs a second no-live-process gate before
-restoring the pre-build/preparation state.
+restoring the pre-build/preparation state. If startup fails, the initiating error and every stop/restore
+error are reported together rather than hiding rollback failures.
 
-Instrumented cases also hard-gate ModAPI, ShelteredAPI, and harness deployment hashes before launch.
+Instrumented cases also hard-gate ModAPI, ShelteredAPI, ShelteredScenarioEditor, and harness deployment
+hashes before launch.
 Each hash gate compares the deployed file to its configured source build (or a fixed SHA-256). A stale,
 missing, or unconfigured binary fails before the game starts and leaves deployment_hash_gates.json as
 evidence. Build and deploy current binaries before a live run; the example deliberately does not hide
@@ -228,20 +254,28 @@ one install.
 Run without launching Sheltered:
 
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Test-ShelteredBenchmarkContracts.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ScenarioEditorAssemblyBoundary.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ShelteredScenarioEditorContracts.ps1
 
 The contracts cover configuration failures, discovery/dependency order, load-order isolation,
 targeted Doorstop/options mutation, restoration of existing and absent files, harness URI escaping,
-FPS filtering, process sampling, and report generation.
+FPS filtering, process sampling, report generation, editor/API dependency direction, optional packaging,
+and the editor's default-off lifecycle.
 
 ## Extending the suite
 
 Keep collection separate from interpretation:
 
-- ShelteredBenchmark.Core.psm1 owns configuration, profiles, state, fingerprints, sampling summaries,
-  command hooks, and reports.
+- ShelteredBenchmark.Core.psm1 owns configuration, profiles, install locks and worker authorization,
+  state, fingerprints, sampling summaries, command hooks, and reports.
 - ShelteredBenchmark.Harness.psm1 owns route probes, screenshots, transitions, and loop-rate samples.
-- ShelteredBenchmark.Runner.psm1 composes phases and cleanup for one install/profile case.
+- ShelteredBenchmark.Runner.psm1 owns the platform session lifecycle (snapshot, targeted configuration,
+  launch, readiness, lease, PID-identified stop, and restore) and composes benchmark phases for one case.
 - Invoke-ShelteredBenchmark.ps1 owns selection, parallel scheduling, build hooks, and aggregation.
+
+The stability campaign consumes the same session lifecycle. Session start and readiness are separate
+operations so Steam and Epic can both be launched before either storefront is awaited. Benchmark FPS,
+transition work, stress actions, and mutable save/Cortex snapshots remain workload-specific.
 
 New helpers should represent reusable responsibilities. The paired sampler and native-frame helpers
 are intentionally isolated despite one orchestration caller: they own resource lifetimes and are

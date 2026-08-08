@@ -7,6 +7,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "VerificationSupport.psm1") -Force
 
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -115,18 +116,6 @@ $ShelteredPathTerms = @(
     "NGUI"
 )
 
-function ConvertTo-RepoRelativePath {
-    param([string]$Path)
-
-    $fullPath = (Resolve-Path -LiteralPath $Path).Path
-    $root = $RepoRoot.TrimEnd([char]'\', [char]'/')
-    if (-not $fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Path '$fullPath' is not under repo root '$root'."
-    }
-
-    return $fullPath.Substring($root.Length).TrimStart([char]'\', [char]'/') -replace "\\", "/"
-}
-
 function New-BoundaryFinding {
     param(
         [string]$Rule,
@@ -145,7 +134,7 @@ function New-BoundaryFinding {
 
 function New-Key {
     param($Finding)
-    return "{0}`t{1}`t{2}" -f $Finding.Rule, $Finding.Path, $Finding.Symbol
+    return ConvertTo-VerificationTsvLine -Values @($Finding.Rule, $Finding.Path, $Finding.Symbol)
 }
 
 function Get-SourceFiles {
@@ -191,7 +180,7 @@ function Get-CurrentFindings {
     }
 
     [xml]$projectXml = Get-Content -LiteralPath $ModApiProject -Raw
-    $projectRelativePath = ConvertTo-RepoRelativePath $ModApiProject
+    $projectRelativePath = ConvertTo-RepositoryRelativePath -Path $ModApiProject -RepositoryRoot $RepoRoot
     foreach ($reference in $projectXml.GetElementsByTagName("Reference")) {
         $include = [string]$reference.GetAttribute("Include")
         $simpleInclude = ($include -split ",")[0].Trim()
@@ -206,7 +195,7 @@ function Get-CurrentFindings {
     $namespacePattern = "(?m)^\s*namespace\s+([A-Za-z0-9_.]+)"
 
     foreach ($file in Get-SourceFiles) {
-        $relativePath = ConvertTo-RepoRelativePath $file.FullName
+        $relativePath = ConvertTo-RepositoryRelativePath -Path $file.FullName -RepositoryRoot $RepoRoot
         $text = Get-Content -LiteralPath $file.FullName -Raw
 
         Add-MatchFindings -Findings $findings -Rule "source-symbol" -RelativePath $relativePath -Text $text -Pattern $gamePattern
@@ -251,49 +240,23 @@ function Get-CurrentFindings {
 
 function ConvertTo-TsvLine {
     param($Finding)
-    return "{0}`t{1}`t{2}`t{3}" -f $Finding.Rule, $Finding.Path, $Finding.Symbol, $Finding.Count
+    return ConvertTo-VerificationTsvLine -Values @($Finding.Rule, $Finding.Path, $Finding.Symbol, $Finding.Count)
 }
 
 function Read-Baseline {
-    if (-not (Test-Path -LiteralPath $BaselinePath)) {
-        throw "Missing baseline file: $BaselinePath. Run with -ListCurrent to print the current baseline candidates."
-    }
-
     $baseline = @{}
-    $lineNumber = 0
-    foreach ($line in Get-Content -LiteralPath $BaselinePath) {
-        $lineNumber += 1
-        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) {
-            continue
-        }
-
-        $parts = $line -split "`t"
-        if ($parts.Length -lt 5) {
-            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Expected 5 tab-separated fields including a non-empty justification."
-        }
-
-        if ($parts.Length -gt 5) {
-            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Expected 5 tab-separated fields."
-        }
-
-        if ([string]::IsNullOrWhiteSpace($parts[4])) {
-            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Boundary exceptions require an explicit justification."
-        }
-
+    $rows = Import-VerificationTsvBaseline -Path $BaselinePath -DataColumnCount 4 -KeyColumnIndexes @(0, 1, 2) `
+        -JustificationRequirement 'Boundary exceptions require an explicit justification.' `
+        -MissingFileGuidance 'Run with -ListCurrent to print the current baseline candidates.'
+    foreach ($key in $rows.Keys) {
+        $parts = @($rows[$key].Fields)
         $count = 0
         if (-not [int]::TryParse($parts[3], [ref]$count)) {
-            throw "Invalid count on baseline line $lineNumber in '$BaselinePath': '$($parts[3])'."
+            throw "Invalid count on baseline line $($rows[$key].LineNumber) in '$BaselinePath': '$($parts[3])'."
         }
-
         $entry = New-BoundaryFinding -Rule $parts[0] -Path $parts[1] -Symbol $parts[2] -Count $count
-        $key = New-Key $entry
-        if ($baseline.ContainsKey($key)) {
-            throw "Duplicate baseline entry on line ${lineNumber}: $key"
-        }
-
         $baseline[$key] = $entry
     }
-
     return $baseline
 }
 

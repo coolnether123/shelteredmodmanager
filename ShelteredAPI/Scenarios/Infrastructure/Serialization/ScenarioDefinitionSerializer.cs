@@ -6,6 +6,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Bunker;
@@ -21,7 +22,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
     /// XML serializer for persistent scenario definitions. It uses System.Xml only so it
     /// works under the .NET 3.5 runtime used by the Sheltered mod stack.
     /// </summary>
-    internal class ScenarioDefinitionSerializer
+    internal class ScenarioDefinitionSerializer : IScenarioDefinitionSerializer
     {
         public const string DefaultFileName = "scenario.xml";
 
@@ -363,7 +364,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
-            IScenarioSectionSerializer<ScenarioAuthorTestChecklist> checklistSerializer = new AuthorTestChecklistScenarioSectionSerializer();
 
             XmlElement meta = Child(root, "Meta");
             definition.Id = ReadText(meta, "Id");
@@ -413,7 +413,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             gateSerializer.Read(Child(root, "Gates"), definition.Gates);
             scheduledSerializer.Read(Child(root, "ScheduledActions"), definition.ScheduledActions);
             definition.Journal = ReadJournal(Child(root, "Journal"));
-            definition.AuthorTestChecklist = checklistSerializer.Read(Child(root, "AuthorTestChecklist"));
             return definition;
         }
 
@@ -925,8 +924,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             if (element == null)
                 return result;
 
-            ReadConditions(Child(element, "WinConditions"), "Condition", result.WinConditions);
-            ReadConditions(Child(element, "LossConditions"), "Condition", result.LossConditions);
+            ReadConditionRefs(Child(element, "WinConditions"), result.WinConditions);
+            ReadConditionRefs(Child(element, "LossConditions"), result.LossConditions);
             return result;
         }
 
@@ -1220,7 +1219,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
-            IScenarioSectionSerializer<ScenarioAuthorTestChecklist> checklistSerializer = new AuthorTestChecklistScenarioSectionSerializer();
 
             writer.WriteStartElement("Meta");
             WriteElement(writer, "Id", definition.Id);
@@ -1283,7 +1281,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             gateSerializer.Write(writer, definition.Gates);
             scheduledSerializer.Write(writer, definition.ScheduledActions);
             WriteJournal(writer, definition.Journal);
-            checklistSerializer.Write(writer, definition.AuthorTestChecklist);
 
             writer.WriteEndElement();
             writer.WriteEndDocument();
@@ -1753,8 +1750,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 value = new WinLossConditionsDefinition();
 
             writer.WriteStartElement("WinLossConditions");
-            WriteConditions(writer, "WinConditions", value.WinConditions);
-            WriteConditions(writer, "LossConditions", value.LossConditions);
+            WriteConditionRefs(writer, "WinConditions", value.WinConditions);
+            WriteConditionRefs(writer, "LossConditions", value.LossConditions);
             writer.WriteEndElement();
         }
 
@@ -2564,44 +2561,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 ScenarioActorXmlSerializer.WriteActorRef(writer, effect.ActorRef);
                 WriteProperties(writer, "Properties", effect.Properties);
                 writer.WriteEndElement();
-            }
-            writer.WriteEndElement();
-        }
-
-        private static void ReadConditions(XmlElement parent, string elementName, System.Collections.Generic.List<ConditionDef> target)
-        {
-            if (parent == null)
-                return;
-
-            XmlNodeList nodes = parent.GetElementsByTagName(elementName);
-            for (int i = 0; i < nodes.Count; i++)
-            {
-                XmlElement conditionElement = nodes[i] as XmlElement;
-                if (conditionElement == null)
-                    continue;
-
-                ConditionDef condition = new ConditionDef();
-                condition.Id = AttributeOrChild(conditionElement, "id", "Id");
-                condition.Type = AttributeOrChild(conditionElement, "type", "Type");
-                ReadProperties(Child(conditionElement, "Properties"), condition.Properties);
-                target.Add(condition);
-            }
-        }
-
-        private static void WriteConditions(XmlWriter writer, string parentName, System.Collections.Generic.List<ConditionDef> conditions)
-        {
-            writer.WriteStartElement(parentName);
-            if (conditions != null)
-            {
-                for (int i = 0; i < conditions.Count; i++)
-                {
-                    ConditionDef condition = conditions[i];
-                    writer.WriteStartElement("Condition");
-                    WriteAttribute(writer, "id", condition.Id);
-                    WriteAttribute(writer, "type", condition.Type);
-                    WriteProperties(writer, "Properties", condition.Properties);
-                    writer.WriteEndElement();
-                }
             }
             writer.WriteEndElement();
         }

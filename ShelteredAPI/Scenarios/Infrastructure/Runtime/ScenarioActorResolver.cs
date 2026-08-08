@@ -7,6 +7,7 @@ using UnityEngine;
 
 using ShelteredAPI.Actors;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
@@ -57,7 +58,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 if (survivor == null)
                     continue;
 
-                ScenarioActorRef actorRef = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+                ScenarioActorRef actorRef = ScenarioFutureSurvivorActorReference.Resolve(survivor);
                 if (actorRef == null)
                 {
                     actorRef = BuildUnusedFutureSurvivorRef(definition, survivor, i);
@@ -65,8 +66,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 }
 
                 survivor.ActorRef = actorRef;
-                if (survivor.Survivor != null)
-                    survivor.Survivor.ActorRef = actorRef;
             }
 
             return assigned;
@@ -86,13 +85,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (survivor == null)
                 return null;
 
-            ScenarioActorRef actorRef = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+            ScenarioActorRef actorRef = ScenarioFutureSurvivorActorReference.Resolve(survivor);
             if (actorRef == null)
                 actorRef = BuildUnusedFutureSurvivorRef(definition, survivor, survivorIndex);
 
             survivor.ActorRef = actorRef;
-            if (survivor.Survivor != null)
-                survivor.Survivor.ActorRef = actorRef;
             return actorRef;
         }
 
@@ -120,7 +117,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         {
             ScenarioActorRef actorRef = member != null && member.ActorRef != null
                 ? member.ActorRef
-                : BuildLegacyStartingMemberRef(definition, member, memberIndex);
+                : BuildStartingMemberRef(definition, member, memberIndex);
 
             return Resolve(definition, actorRef, member, member != null ? member.ActorComponents : null, null);
         }
@@ -129,9 +126,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         {
             ScenarioActorRef actorRef = null;
             if (survivor != null)
-                actorRef = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+                actorRef = ScenarioFutureSurvivorActorReference.Resolve(survivor);
             if (actorRef == null)
-                actorRef = BuildLegacyFutureSurvivorRef(definition, survivor, survivorIndex);
+                actorRef = BuildFutureSurvivorRef(definition, survivor, survivorIndex);
 
             List<ScenarioActorComponentDefinition> components = survivor != null && survivor.ActorComponents != null
                 ? survivor.ActorComponents
@@ -144,7 +141,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         {
             ScenarioActorRef actorRef = npc != null && npc.ActorRef != null
                 ? npc.ActorRef
-                : BuildLegacyNpcRef(definition, npc, npcIndex);
+                : BuildNpcRef(definition, npc, npcIndex);
 
             return Resolve(definition, actorRef, null, npc != null ? npc.ActorComponents : null, npc);
         }
@@ -235,9 +232,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (actorRef == null || string.IsNullOrEmpty(actorRef.BindingKey))
                 return false;
 
-            bool stableCastBinding = string.Equals(actorRef.BindingType, ScenarioCastBindingType, StringComparison.OrdinalIgnoreCase);
-            bool legacyFamilyBinding = string.Equals(actorRef.BindingType, "FamilyMember", StringComparison.OrdinalIgnoreCase);
-            if (!stableCastBinding && !legacyFamilyBinding)
+            if (!string.Equals(actorRef.BindingType, ScenarioCastBindingType, StringComparison.OrdinalIgnoreCase))
                 return false;
 
             try
@@ -247,37 +242,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 if (members == null)
                     return false;
 
-                if (stableCastBinding)
-                {
-                    int marker = actorRef.BindingKey.LastIndexOf(":start:", StringComparison.OrdinalIgnoreCase);
-                    int index;
-                    if (marker < 0
-                        || !int.TryParse(actorRef.BindingKey.Substring(marker + 7), out index)
-                        || index < 0
-                        || index >= members.Count)
-                        return false;
+                int marker = actorRef.BindingKey.LastIndexOf(":start:", StringComparison.OrdinalIgnoreCase);
+                int index;
+                if (marker < 0
+                    || !int.TryParse(actorRef.BindingKey.Substring(marker + 7), out index)
+                    || index < 0
+                    || index >= members.Count)
+                    return false;
 
-                    member = members[index];
-                    return member != null;
-                }
-
-                for (int i = 0; i < members.Count; i++)
-                {
-                    FamilyMember candidate = members[i];
-                    if (candidate == null)
-                        continue;
-
-                    string fullName = JoinName(candidate.firstName, candidate.lastName);
-                    if (string.Equals(actorRef.BindingKey, candidate.firstName, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(actorRef.BindingKey, fullName, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(actorRef.DisplayNameFallback, fullName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        member = candidate;
-                        return true;
-                    }
-                }
-
-                return false;
+                member = members[index];
+                return member != null;
             }
             catch (Exception ex)
             {
@@ -630,11 +604,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         private ScenarioActorRef BuildUnusedStartingMemberRef(ScenarioDefinition definition, FamilyMemberConfig member, int preferredIndex)
         {
             int candidateIndex = Math.Max(0, preferredIndex);
-            ScenarioActorRef candidate = BuildLegacyStartingMemberRef(definition, member, candidateIndex);
+            ScenarioActorRef candidate = BuildStartingMemberRef(definition, member, candidateIndex);
             while (StartingRefExists(definition, candidate, member))
             {
                 candidateIndex++;
-                candidate = BuildLegacyStartingMemberRef(definition, member, candidateIndex);
+                candidate = BuildStartingMemberRef(definition, member, candidateIndex);
             }
             return candidate;
         }
@@ -642,16 +616,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         private ScenarioActorRef BuildUnusedFutureSurvivorRef(ScenarioDefinition definition, FutureSurvivorDefinition survivor, int preferredIndex)
         {
             int candidateIndex = Math.Max(0, preferredIndex);
-            ScenarioActorRef candidate = BuildLegacyFutureSurvivorRef(definition, survivor, candidateIndex);
+            string baseId = survivor != null && !string.IsNullOrEmpty(survivor.Id)
+                ? survivor.Id
+                : "future_" + candidateIndex.ToString();
+            if (survivor != null)
+                survivor.Id = baseId;
+
+            ScenarioActorRef candidate = BuildFutureSurvivorRef(definition, survivor, candidateIndex);
+            int collisionSuffix = 2;
             while (FutureRefExists(definition, candidate, survivor))
             {
-                string originalId = survivor != null ? survivor.Id : null;
-                if (survivor != null)
-                    survivor.Id = (string.IsNullOrEmpty(originalId) ? "future" : originalId) + "_" + (candidateIndex + 1).ToString();
                 candidateIndex++;
-                candidate = BuildLegacyFutureSurvivorRef(definition, survivor, candidateIndex);
                 if (survivor != null)
-                    survivor.Id = originalId;
+                    survivor.Id = baseId + "_" + (collisionSuffix++).ToString();
+                candidate = BuildFutureSurvivorRef(definition, survivor, candidateIndex);
             }
             return candidate;
         }
@@ -677,7 +655,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 if (survivor == null || ReferenceEquals(survivor, exceptSurvivor))
                     continue;
 
-                ScenarioActorRef existing = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+                ScenarioActorRef existing = ScenarioFutureSurvivorActorReference.Resolve(survivor);
                 if (ActorRefsEqual(existing, actorRef))
                     return true;
             }
@@ -776,7 +754,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                     && actorRef.BindingType.StartsWith("sheltered.scenario.", StringComparison.OrdinalIgnoreCase));
         }
 
-        private static ScenarioActorRef BuildLegacyStartingMemberRef(ScenarioDefinition definition, FamilyMemberConfig member, int memberIndex)
+        private static ScenarioActorRef BuildStartingMemberRef(ScenarioDefinition definition, FamilyMemberConfig member, int memberIndex)
         {
             string domain = ResolveScenarioDomain(definition);
             string key = domain + ":start:" + Math.Max(0, memberIndex).ToString();
@@ -791,7 +769,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             };
         }
 
-        private static ScenarioActorRef BuildLegacyFutureSurvivorRef(ScenarioDefinition definition, FutureSurvivorDefinition survivor, int survivorIndex)
+        private static ScenarioActorRef BuildFutureSurvivorRef(ScenarioDefinition definition, FutureSurvivorDefinition survivor, int survivorIndex)
         {
             string domain = ResolveScenarioDomain(definition);
             string id = survivor != null && !string.IsNullOrEmpty(survivor.Id)
@@ -808,7 +786,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             };
         }
 
-        private static ScenarioActorRef BuildLegacyNpcRef(ScenarioDefinition definition, ScenarioNpcDefinition npc, int npcIndex)
+        private static ScenarioActorRef BuildNpcRef(ScenarioDefinition definition, ScenarioNpcDefinition npc, int npcIndex)
         {
             string domain = ResolveScenarioDomain(definition);
             string id = npc != null && !string.IsNullOrEmpty(npc.CharacterId)

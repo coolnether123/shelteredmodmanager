@@ -75,8 +75,6 @@ namespace ModAPI.Core
         public const string ShelteredRecipeLootMutation = "GameRuntime.ShelteredRecipeLootMutation";
         /// <summary>Custom scenario registration and catalog service.</summary>
         public const string CustomScenarios = "GameRuntime.CustomScenarios";
-        /// <summary>Scenario authoring service.</summary>
-        public const string ScenarioAuthoring = "GameRuntime.ScenarioAuthoring";
     }
 
     /// <summary>

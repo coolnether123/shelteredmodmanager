@@ -146,7 +146,7 @@ namespace ShelteredAPI.Harmony
                 }
 
                 SaveManager.SaveType transportSaveType = (SaveManager.SaveType)(targetIndex + 1);
-                PlatformSaveProxy.SetNextSave(transportSaveType, "Standard", created.id);
+                SaveRuntimeState.QueueSave(transportSaveType, "Standard", created.id);
                 if (SaveManager.instance != null)
                     SaveManager.instance.SetCurrentSlot(targetIndex + 1);
 

@@ -24,7 +24,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 {
                     XmlElement memberElement = memberNodes[i] as XmlElement;
                     if (memberElement != null)
-                        setup.Members.Add(ReadFamilyMember(memberElement));
+                        setup.Members.Add(ReadFamilyMember(memberElement, true));
                 }
             }
 
@@ -48,7 +48,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     if (survivorElement != null)
                     {
                         XmlElement nestedMember = ScenarioXmlSerializerUtil.Child(survivorElement, "Member");
-                        survivor.Survivor = ReadFamilyMember(nestedMember ?? survivorElement);
+                        survivor.Survivor = ReadFamilyMember(nestedMember ?? survivorElement, false);
                     }
                     setup.FutureSurvivors.Add(survivor);
                 }
@@ -67,7 +67,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteStartElement("Members");
             for (int i = 0; i < value.Members.Count; i++)
             {
-                WriteFamilyMember(writer, "Member", value.Members[i]);
+                WriteFamilyMember(writer, "Member", value.Members[i], true);
             }
             writer.WriteEndElement();
 
@@ -84,22 +84,25 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 ScenarioActorXmlSerializer.WriteActorRef(writer, survivor.ActorRef);
                 ScenarioActorXmlSerializer.WriteActorComponents(writer, survivor.ActorComponents);
                 ScenarioXmlSerializerUtil.WriteScheduleTime(writer, "Arrival", survivor.Arrival);
-                WriteFamilyMember(writer, "Survivor", survivor.Survivor);
+                WriteFamilyMember(writer, "Survivor", survivor.Survivor, false);
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
             writer.WriteEndElement();
         }
 
-        private static FamilyMemberConfig ReadFamilyMember(XmlElement memberElement)
+        private static FamilyMemberConfig ReadFamilyMember(XmlElement memberElement, bool includeActorIdentity)
         {
             FamilyMemberConfig member = new FamilyMemberConfig();
             if (memberElement == null)
                 return member;
 
             member.Name = ScenarioXmlSerializerUtil.ReadText(memberElement, "Name");
-            member.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(memberElement);
-            ScenarioActorXmlSerializer.ReadActorComponents(memberElement, member.ActorComponents);
+            if (includeActorIdentity)
+            {
+                member.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(memberElement);
+                ScenarioActorXmlSerializer.ReadActorComponents(memberElement, member.ActorComponents);
+            }
             member.Gender = ScenarioXmlSerializerUtil.ReadEnum(memberElement, "Gender", ScenarioGender.Any);
             XmlElement age = ScenarioXmlSerializerUtil.Child(memberElement, "Age");
             if (age != null)
@@ -227,15 +230,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             texturePath = ScenarioXmlSerializerUtil.AttributeOrChild(element, "path", "Path");
         }
 
-        private static void WriteFamilyMember(XmlWriter writer, string elementName, FamilyMemberConfig member)
+        private static void WriteFamilyMember(XmlWriter writer, string elementName, FamilyMemberConfig member, bool includeActorIdentity)
         {
             if (member == null)
                 member = new FamilyMemberConfig();
 
             writer.WriteStartElement(elementName);
             ScenarioXmlSerializerUtil.WriteElement(writer, "Name", member.Name);
-            ScenarioActorXmlSerializer.WriteActorRef(writer, member.ActorRef);
-            ScenarioActorXmlSerializer.WriteActorComponents(writer, member.ActorComponents);
+            if (includeActorIdentity)
+            {
+                ScenarioActorXmlSerializer.WriteActorRef(writer, member.ActorRef);
+                ScenarioActorXmlSerializer.WriteActorComponents(writer, member.ActorComponents);
+            }
             ScenarioXmlSerializerUtil.WriteElement(writer, "Gender", member.Gender.ToString());
             writer.WriteStartElement("Age");
             ScenarioXmlSerializerUtil.WriteNullableElement(writer, "Exact", member.ExactAge);

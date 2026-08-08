@@ -1,32 +1,31 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using ModAPI.UI;
 using ModAPI.Core;
-using ShelteredAPI.UI.FieldManual.Animations;
-using ShelteredAPI.UI.FieldManual.Panels;
-using UnityEngine;
-using ShelteredAPI.Scenarios.Application.Authoring;
+using ModAPI.UI;
+using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
-namespace ShelteredAPI.Scenarios.Presentation.Selection{
+using ShelteredAPI.UI.FieldManual.Animations;
+using ShelteredAPI.UI.FieldManual.Panels;
+using UnityEngine;
+
+namespace ShelteredAPI.Scenarios.Presentation.Selection
+{
+    /// <summary>
+    /// Runtime browser for installed custom scenarios and their saves. The optional
+    /// editor owns every authoring and package-management surface.
+    /// </summary>
     internal sealed class ScenarioBookBrowserPanel : MonoBehaviour
     {
-        // Four full-height rows fit without exposing a clipped fifth row that
-        // looks scrollable even though this surface uses explicit paging.
         internal const int RowsPerPage = 4;
-        internal const int LibraryRowsPerPage = 6;
+        internal const int LibraryRowsPerPage = 4;
         internal const int SaveRowsPerPage = 4;
         private const int OverlayDepth = 50200;
         private const string OverlayName = "ShelteredAPI_ScenarioBookBrowser";
 
         private static GameObject _instance;
-
-        internal static bool IsShowing
-        {
-            get { return _instance != null && _instance.activeInHierarchy; }
-        }
 
         private ScenarioBrowserPanelAdapter _adapter;
         private ScenarioBookBrowserDataSource _dataSource;
@@ -35,7 +34,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private FieldManualBookPageTurn _pageTurn;
         private GameObject _pageFlipRoot;
         private ScenarioBookBrowserViewKind _view = ScenarioBookBrowserViewKind.Types;
-        private ScenarioBookType _selectedType = ScenarioBookType.Draft;
+        private ScenarioBookType _selectedType = ScenarioBookType.Published;
         private ScenarioCatalogEntry _selectedScenario;
         private List<ScenarioBookRowModel> _rows = new List<ScenarioBookRowModel>();
         private int _pageIndex;
@@ -45,64 +44,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private bool _deletePromptActive;
         private List<Collider> _deletePromptDisabledColliders;
         private ScenarioBrowserPanelAdapter.ScenarioBrowserSuppressionHandle _underlyingSuppression;
-        private ScenarioBookDraftFactsModel _draftFactsCache;
-        private ScenarioCatalogEntry _draftFactsCacheScenario;
-        private ScenarioPackageImportService _importService;
-        private readonly object _importServiceSync = new object();
         private string _statusText;
+
+        internal static bool IsShowing
+        {
+            get { return _instance != null && _instance.activeInHierarchy; }
+        }
 
         private IScenarioSelectionCatalogService Catalog
         {
-            get { return ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>(); }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<IScenarioSelectionCatalogService>(); }
         }
 
         private IScenarioSaveLibrary SaveLibrary
         {
-            get { return ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>(); }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<IScenarioSaveLibrary>(); }
         }
 
         private ScenarioLaunchCoordinator LaunchCoordinator
         {
-            get { return ScenarioCompositionRoot.Resolve<ScenarioLaunchCoordinator>(); }
-        }
-
-        private ScenarioDraftMetadataEditService DraftMetadataEditService
-        {
-            get { return ScenarioCompositionRoot.Resolve<ScenarioDraftMetadataEditService>(); }
-        }
-
-        private IScenarioDefinitionSerializer DefinitionSerializer
-        {
-            get { return ScenarioCompositionRoot.Resolve<IScenarioDefinitionSerializer>(); }
-        }
-
-        private IScenarioDefinitionValidator DefinitionValidator
-        {
-            get { return ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>(); }
-        }
-
-        private IScenarioDefinitionCatalogService DefinitionCatalog
-        {
-            get { return ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>(); }
-        }
-
-        private ScenarioPackageImportService ImportService
-        {
-            get
-            {
-                lock (_importServiceSync)
-                {
-                    if (_importService == null)
-                    {
-                        _importService = new ScenarioPackageImportService(
-                            DefinitionSerializer,
-                            DefinitionValidator,
-                            DefinitionCatalog);
-                    }
-
-                    return _importService;
-                }
-            }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<ScenarioLaunchCoordinator>(); }
         }
 
         public static void Show(ScenarioSelectionPanel panel)
@@ -112,31 +73,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             if (_instance != null)
             {
-                // A previous close can still be pending Unity destruction. Hide
-                // that root synchronously so it cannot masquerade as this browser.
                 _instance.SetActive(false);
                 Destroy(_instance);
                 _instance = null;
             }
 
-            // Texture and catalog data are warmed independently. Build the live
-            // NGUI hierarchy only when it is needed so widgets always register
-            // against the current active UI root and overlay panel.
             GameObject root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
             ScenarioBookBrowserPanel browser = root.AddComponent<ScenarioBookBrowserPanel>();
             browser.PrepareVisual(root);
-
             _instance = root;
             browser._adapter = new ScenarioBrowserPanelAdapter(panel);
             browser.Initialise(root);
         }
 
-        /// <summary>
-        /// Routes the vanilla scenario-selection cancel seam into the live book when
-        /// it owns the foreground.  The book suppresses that panel's input while it
-        /// is open, so letting cancel continue to vanilla would leave the overlay
-        /// orphaned behind a changed menu state.
-        /// </summary>
         internal static bool TryHandleCancel()
         {
             if (_instance == null || !_instance.activeInHierarchy)
@@ -159,33 +108,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (browser == null || browser._adapter == null || browser._adapter.Panel != panel)
                 return;
 
-            // ScenarioSelectionPanel.OnDestroy means there is nothing valid to
-            // restore. Retaining either object would let this book's later
-            // OnDestroy call SetActive(true) on the outgoing scene hierarchy.
             browser._underlyingSuppression = null;
             browser._adapter = null;
         }
 
         private void Initialise(GameObject root)
         {
-            // Block vanilla interaction immediately, but keep its chrome visible
-            // underneath the higher-depth book until the overlay has completed a
-            // render. This avoids exposing the raw menu background during the swap.
             _adapter.SetInputEnabled(false);
             IScenarioSaveLibrary saveLibrary = SaveLibrary;
-            _dataSource = new ScenarioBookBrowserDataSource(
-                Catalog,
-                saveLibrary,
-                delegate { return ImportService; });
+            _dataSource = new ScenarioBookBrowserDataSource(Catalog, saveLibrary);
             _actions = new ScenarioBookBrowserActionService(
                 _adapter,
                 delegate { return LaunchCoordinator; },
-                saveLibrary,
-                delegate { return DraftMetadataEditService; },
-                delegate { return ImportService; });
+                saveLibrary);
 
             PrepareVisual(root);
-
             StartDataRefresh("Loading scenarios...", false);
             StartCoroutine(SuppressUnderlyingAfterFirstRender());
         }
@@ -208,15 +145,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private IEnumerator SuppressUnderlyingAfterFirstRender()
         {
-            // NGUI submits newly-created widgets later in the current frame. Wait
-            // until that render has happened; the vanilla book remains beneath the
-            // overlay at depth 50200 for this first frame instead of disappearing.
             yield return new WaitForEndOfFrame();
-
-            if (_isClosing || _adapter == null || _renderer == null)
-                yield break;
-
-            _underlyingSuppression = _adapter.SuppressUnderlyingChrome();
+            if (!_isClosing && _adapter != null && _renderer != null)
+                _underlyingSuppression = _adapter.SuppressUnderlyingChrome();
         }
 
         private void Update()
@@ -225,21 +156,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             ApplyDataRefreshIfReady();
-
             if (_renderer != null)
                 _renderer.HandleSearchInput(HandleSearchFilterChanged);
-
             if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
             {
                 BackOrClose();
                 return;
             }
-
-            HandlePageInput();
-        }
-
-        private void HandlePageInput()
-        {
             if (_pageTurn != null)
                 _pageTurn.HandlePageInput(GetPageCount(), null, ChangePage);
         }
@@ -248,17 +171,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             if (_view == ScenarioBookBrowserViewKind.Types)
             {
-                if (!CanChangePage(delta))
-                    return;
-
+                if (!CanChangePage(delta)) return;
                 CommitPageChange(delta);
-                RenderCurrentPageWithoutAnimation();
+                RenderCurrentView(false);
                 return;
             }
 
             int targetPage = ResolveTargetPageIndex(delta);
             PreparePage(targetPage);
-
             if (_pageTurn != null)
             {
                 _pageTurn.TryTurn(
@@ -268,42 +188,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     _renderer != null ? _renderer.PageLabelRoot : null,
                     CanChangePage,
                     CommitPageChange,
-                    RenderCurrentPageWithoutAnimation);
+                    delegate { RenderCurrentView(false); });
                 return;
             }
 
-            if (!CanChangePage(delta))
-                return;
-
+            if (!CanChangePage(delta)) return;
             CommitPageChange(delta);
-            RenderCurrentPageWithoutAnimation();
+            RenderCurrentView(false);
         }
 
         private bool CanChangePage(int delta)
         {
             if (_view == ScenarioBookBrowserViewKind.Saves && GetPageCount() > 1)
                 return delta != 0;
-
-            if (delta < 0)
-                return _pageIndex > 0;
-            if (delta > 0)
-                return _pageIndex + 1 < GetPageCount();
-
+            if (delta < 0) return _pageIndex > 0;
+            if (delta > 0) return _pageIndex + 1 < GetPageCount();
             return false;
         }
 
         private int ResolveTargetPageIndex(int delta)
         {
             int pageCount = GetPageCount();
-            if (pageCount <= 0)
-                return 0;
-
+            if (pageCount <= 0) return 0;
             if (_view == ScenarioBookBrowserViewKind.Saves && pageCount > 1)
             {
                 int wrapped = (_pageIndex + delta) % pageCount;
                 return wrapped < 0 ? wrapped + pageCount : wrapped;
             }
-
             return Mathf.Clamp(_pageIndex + delta, 0, pageCount - 1);
         }
 
@@ -313,70 +224,48 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_view == ScenarioBookBrowserViewKind.Saves && pageCount > 1)
             {
                 _pageIndex = (_pageIndex + delta) % pageCount;
-                if (_pageIndex < 0)
-                    _pageIndex += pageCount;
+                if (_pageIndex < 0) _pageIndex += pageCount;
                 return;
             }
-
             _pageIndex = Mathf.Clamp(_pageIndex + delta, 0, pageCount - 1);
-        }
-
-        private void RenderCurrentPageWithoutAnimation()
-        {
-            RenderCurrentView(false);
         }
 
         private void RenderCurrentView(bool animate)
         {
+            if (_dataSource == null || _renderer == null)
+                return;
+
             try
             {
                 _rows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario, GetSearchFilter());
                 _pageIndex = Mathf.Clamp(_pageIndex, 0, GetPageCount() - 1);
                 ClearPreparedPagesWhenScopeChanged();
-
-                if (_view == ScenarioBookBrowserViewKind.DraftDetails)
+                int pageCount = GetPageCount();
+                string cacheKey = BuildPageCacheKey(_pageIndex);
+                if (!animate && _renderer.TryRenderPreparedPage(cacheKey, _pageIndex, pageCount))
                 {
-                    _renderer.RenderDraftEditor(
-                        BuildDraftEditorModel(),
-                        _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
-                        _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
-                        HandleDraftDetailsSaved,
-                        HandleDraftOpenRequested,
-                        HandleDraftDuplicateRequested,
-                        HandleExportFolderRequested,
-                        HandleDraftDeleteRequested);
+                    PrepareAdjacentPages();
+                    return;
                 }
-                else
-                {
-                    int pageCount = GetPageCount();
-                    ScenarioBookPlayStatsModel playStats = BuildCurrentPlayStats();
-                    string cacheKey = BuildPageCacheKey(_pageIndex);
-                    if (!animate && _renderer.TryRenderPreparedPage(cacheKey, _pageIndex, pageCount))
-                    {
-                        PrepareAdjacentPages();
-                        return;
-                    }
 
-                    _renderer.Render(
-                        _view,
-                        _selectedScenario,
-                        playStats,
-                        _rows,
-                        _pageIndex,
-                        pageCount,
-                        _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
-                        _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
-                        _dataSource.LibrarySortMode,
-                        HandleRowSelected,
-                        HandleDeleteSelected);
-                }
+                _renderer.Render(
+                    _view,
+                    _selectedScenario,
+                    BuildCurrentPlayStats(),
+                    _rows,
+                    _pageIndex,
+                    pageCount,
+                    _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
+                    _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
+                    _dataSource.LibrarySortMode,
+                    HandleRowSelected,
+                    HandleDeleteSelected);
 
                 if (animate && _pageTurn != null && _pageTurn.PageTransition != null)
                 {
                     _pageTurn.PageTransition.Play(_renderer.ContentRoot);
                     _pageTurn.PageTransition.Play(_renderer.PageLabelRoot);
                 }
-
                 PrepareAdjacentPages();
             }
             catch (Exception ex)
@@ -390,26 +279,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void HandleRowSelected(ScenarioBookRowModel row)
         {
+            if (_deletePromptActive || row == null)
+                return;
+
             try
             {
-                if (_deletePromptActive)
-                    return;
-
-                if (row == null)
-                    return;
-
-                // A locked package can still be inspected. Only its play/load
-                // actions are refused; selecting it remains useful and honest.
                 if (row.IsLocked && row.Kind != ScenarioBookRowKind.Scenario)
                 {
                     SetStatus("Scenario is locked by missing or mismatched dependencies.");
                     return;
                 }
-
-                MMLog.WriteInfo("[ScenarioBookBrowser] Row selected. kind=" + row.Kind
-                    + " type=" + row.Type
-                    + " scenario=" + (row.Scenario != null ? row.Scenario.ScenarioId : "<none>")
-                    + " save=" + (row.Save != null ? row.Save.id : "<none>"));
 
                 switch (row.Kind)
                 {
@@ -427,150 +306,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     case ScenarioBookRowKind.OpenScenarioSaves:
                         OpenSelectedScenarioSaves(row.Scenario);
                         break;
-                    case ScenarioBookRowKind.OpenDraft:
-                        RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(row.Scenario, out status); });
-                        break;
-                    case ScenarioBookRowKind.CreateDraft:
-                        RunLaunchAction(delegate(out string status) { return _actions.CreateDraftInteractive(out status); });
-                        break;
-                    case ScenarioBookRowKind.DuplicateDraft:
-                        HandleDuplicateSelected(row);
-                        break;
-                    case ScenarioBookRowKind.DeleteDraft:
-                        HandleDeleteSelected(row);
-                        break;
-                    case ScenarioBookRowKind.RecoveryResume:
-                        RunBrowserAction(delegate(out string status) { return _actions.ResumeRecovery(row, out status); });
-                        break;
-                    case ScenarioBookRowKind.RecoveryCleanup:
-                        HandleRecoveryCleanupSelected(row);
-                        break;
                     case ScenarioBookRowKind.LoadSave:
                         RunLaunchAction(delegate(out string status) { return _actions.LoadSave(row.Scenario, row.Save, out status); });
-                        break;
-                    case ScenarioBookRowKind.OpenInstallScenarios:
-                        OpenInstallScenarios();
-                        break;
-                    case ScenarioBookRowKind.OpenScenarioDownloadsFolder:
-                        OpenDownloadsFolder();
-                        break;
-                    case ScenarioBookRowKind.InstallPackage:
-                        InstallPackage(row.ImportCandidate);
-                        break;
-                    case ScenarioBookRowKind.UninstallPackage:
-                        UninstallPackage(row.ImportCandidate);
                         break;
                 }
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[ScenarioBookBrowser] Row action failed. kind="
-                    + (row != null ? row.Kind.ToString() : "<null>") + ": " + ex);
+                MMLog.WriteWarning("[ScenarioBookBrowser] Row action failed. kind=" + row.Kind + ": " + ex);
                 SetStatus("Scenario action failed: " + ex.Message);
             }
         }
 
         private void HandleDeleteSelected(ScenarioBookRowModel row)
         {
-            if (_deletePromptActive)
+            if (_deletePromptActive || row == null || row.Kind != ScenarioBookRowKind.LoadSave
+                || row.Scenario == null || row.Save == null)
                 return;
 
-            if (row == null || (row.Kind == ScenarioBookRowKind.LoadSave && (row.Scenario == null || row.Save == null)))
-                return;
-
-            string message;
-            bool localize;
-            if (row.Kind == ScenarioBookRowKind.DeleteDraft)
+            BeginConfirmation("Text.UI.DeleteSave", true, delegate
             {
-                BeginDraftDeleteConfirmation(row.Scenario);
-                return;
-            }
-            else
-            {
-                message = "Text.UI.DeleteSave";
-                localize = true;
-            }
-
-            BeginConfirmation(message, localize, delegate
-            {
-                string status = null;
-                bool deleted = false;
-                try
-                {
-                    deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
-                }
-                catch (Exception ex)
-                {
-                    status = "Delete failed: " + ex.Message;
-                    MMLog.WriteWarning("[ScenarioBookBrowser] Delete action threw: " + ex.Message);
-                }
-
+                string status;
+                bool deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
                 SetStatus(status);
-                if (deleted)
-                {
-                    _dataSource.InvalidateSaveRows(row.Scenario.StorageScenarioId);
-                    _dataSource.BeginSaveRowsRefreshAsync(row.Scenario);
-                    StartDataRefresh("Refreshing scenarios...");
-                }
+                if (!deleted)
+                    return;
+                _dataSource.InvalidateSaveRows(row.Scenario.StorageScenarioId);
+                _dataSource.BeginSaveRowsRefreshAsync(row.Scenario);
+                StartDataRefresh("Refreshing scenarios...");
             });
         }
 
-        private void HandleDuplicateSelected(ScenarioBookRowModel row)
-        {
-            if (_deletePromptActive || row == null || row.Scenario == null)
-                return;
-
-            ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(row.Scenario);
-            string draftName = Safe(row.Scenario.DisplayName, row.Scenario.ScenarioId);
-            BeginConfirmation(ScenarioBookDraftFacts.BuildDuplicateMessage(draftName, facts), false, delegate
-            {
-                string status = null;
-                bool changed = false;
-                try
-                {
-                    ModAPI.Scenarios.ScenarioInfo duplicate;
-                    changed = _actions.DuplicateDraft(row.Scenario, out duplicate, out status);
-                }
-                catch (Exception ex)
-                {
-                    status = "Duplicate failed: " + ex.Message;
-                    MMLog.WriteWarning("[ScenarioBookBrowser] Duplicate action threw: " + ex.Message);
-                }
-
-                SetStatus(status);
-                if (changed)
-                    StartDataRefresh("Refreshing scenarios...");
-            });
-        }
-
-        private void HandleRecoveryCleanupSelected(ScenarioBookRowModel row)
-        {
-            if (_deletePromptActive || row == null)
-                return;
-
-            BeginConfirmation("Clear this leftover redirect?\nNo save or draft files are deleted.", false, delegate
-            {
-                string status = null;
-                bool cleared = false;
-                try
-                {
-                    cleared = _actions.CleanupRecovery(row, out status);
-                }
-                catch (Exception ex)
-                {
-                    status = "Recovery cleanup failed: " + ex.Message;
-                    MMLog.WriteWarning("[ScenarioBookBrowser] Recovery cleanup action threw: " + ex.Message);
-                }
-
-                SetStatus(status);
-                if (cleared)
-                    StartDataRefresh("Refreshing scenarios...");
-            });
-        }
-
-        // Shared two-step confirmation used by delete, duplicate, and rename so every
-        // destructive/identity change goes through the same input-guard and
-        // click-release protection.
         private void BeginConfirmation(string message, bool localize, Action onConfirmed)
         {
             if (_deletePromptActive)
@@ -597,10 +363,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             UIFlowGuard.BlockSlotClicksToggle(true);
             UIFlowGuard.BlockSlotClicksForFrames(2);
-
             try
             {
-                MMLog.WriteInfo("[ScenarioBookBrowser] Confirmation close resolved. response=" + response + ".");
                 if (response == 1 && onConfirmed != null)
                     onConfirmed();
             }
@@ -623,39 +387,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _deletePromptActive = false;
         }
 
-        private ScenarioBookDraftFactsModel ResolveDraftFactsFor(ScenarioCatalogEntry scenario)
-        {
-            if (scenario == null)
-                return null;
-
-            if (_draftFactsCache != null && ReferenceEquals(_draftFactsCacheScenario, scenario))
-                return _draftFactsCache;
-
-            try
-            {
-                if (_dataSource != null)
-                    _dataSource.BeginDraftFactsRefreshAsync(scenario);
-                return ScenarioBookDraftFacts.BuildImmediateDetailFacts(scenario);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ScenarioBookBrowser] Draft facts resolution failed: " + ex.Message);
-                return null;
-            }
-        }
-
         private void DisableBrowserCollidersForDeletePrompt()
         {
             RestoreBrowserCollidersAfterDeletePrompt();
             _deletePromptDisabledColliders = new List<Collider>();
-
             Collider[] colliders = GetComponentsInChildren<Collider>(true);
             for (int i = 0; colliders != null && i < colliders.Length; i++)
             {
                 Collider collider = colliders[i];
-                if (collider == null || !collider.enabled)
-                    continue;
-
+                if (collider == null || !collider.enabled) continue;
                 collider.enabled = false;
                 _deletePromptDisabledColliders.Add(collider);
             }
@@ -665,14 +405,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             if (_deletePromptDisabledColliders == null)
                 return;
-
             for (int i = 0; i < _deletePromptDisabledColliders.Count; i++)
             {
                 Collider collider = _deletePromptDisabledColliders[i];
-                if (collider != null)
-                    collider.enabled = true;
+                if (collider != null) collider.enabled = true;
             }
-
             _deletePromptDisabledColliders = null;
         }
 
@@ -688,12 +425,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _selectedType = type;
             _selectedScenario = null;
             _selectedScenarioOpenedDirectlyFromType = false;
-
             ScenarioCatalogEntry singleScenario;
-            // A mode card may contain only its vanilla entry. Do not turn that
-            // card into an implicit vanilla launch/detail route: published
-            // packages must remain explicit, title-bearing rows in the book.
-            if (type != ScenarioBookType.Draft
+            if (type != ScenarioBookType.Published
                 && _dataSource.TryGetSingleScenarioForType(type, out singleScenario)
                 && singleScenario.Source == ScenarioCatalogSource.Modded)
             {
@@ -709,44 +442,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             RenderCurrentView(true);
         }
 
-        private void OpenInstallScenarios()
-        {
-            _selectedScenario = null;
-            _view = ScenarioBookBrowserViewKind.InstallScenarios;
-            _pageIndex = 0;
-            ClearPreparedPages();
-            SetStatus("Looking for downloaded scenarios...");
-            _dataSource.BeginImportRefreshAsync();
-            RenderCurrentView(true);
-        }
-
-        private void OpenDownloadsFolder()
-        {
-            string status;
-            _actions.OpenScenarioDownloadsFolder(out status);
-            SetStatus(status);
-        }
-
-        private void InstallPackage(ScenarioPackageImportCandidate candidate)
-        {
-            string status;
-            bool installed = _actions.InstallPackage(candidate, out status);
-            SetStatus(status);
-            if (!installed)
-                return;
-
-            _dataSource.InvalidateCatalogSnapshot();
-            _dataSource.BeginRefreshAsync();
-            _dataSource.BeginImportRefreshAsync();
-            ClearPreparedPages();
-            RenderCurrentView(false);
-        }
-
         private void HandleLibrarySortChanged(ScenarioLibrarySortMode mode)
         {
             if (_view != ScenarioBookBrowserViewKind.Types || _dataSource == null)
                 return;
-
             _dataSource.SetLibrarySortMode(mode);
             _pageIndex = 0;
             ClearPreparedPages();
@@ -755,12 +454,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void HandleLibraryPinToggled(ScenarioBookRowModel row)
         {
-            if (_view != ScenarioBookBrowserViewKind.Types
-                || _dataSource == null
-                || row == null
-                || row.Scenario == null)
+            if (_view != ScenarioBookBrowserViewKind.Types || _dataSource == null
+                || row == null || row.Scenario == null)
                 return;
-
             bool pinned = _dataSource.ToggleLibraryPin(row.Scenario.ScenarioId);
             SetStatus(pinned ? "Pinned to the top of the library." : "Removed from pinned scenarios.");
             _pageIndex = 0;
@@ -768,34 +464,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             RenderCurrentView(false);
         }
 
-        private void UninstallPackage(ScenarioPackageImportCandidate candidate)
-        {
-            if (candidate == null || !candidate.IsAlreadyInstalled)
-                return;
-
-            BeginConfirmation(_actions.BuildUninstallConfirmation(candidate), false, delegate
-            {
-                string status;
-                bool uninstalled = _actions.UninstallPackage(candidate, out status);
-                SetStatus(status);
-                if (!uninstalled)
-                    return;
-
-                _dataSource.InvalidateCatalogSnapshot();
-                _dataSource.BeginRefreshAsync();
-                _dataSource.BeginImportRefreshAsync();
-                ClearPreparedPages();
-                RenderCurrentView(false);
-            });
-        }
-
         private void SelectScenario(ScenarioCatalogEntry scenario)
         {
             if (scenario == null)
                 return;
-
             _selectedScenario = scenario;
-            InvalidateDraftFactsCache();
             if (_view == ScenarioBookBrowserViewKind.Types)
             {
                 _dataSource.BeginSaveRowsRefreshAsync(scenario);
@@ -804,29 +477,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 RenderCurrentView(false);
                 return;
             }
-
-            _view = scenario.Source == ScenarioCatalogSource.Draft
-                ? ScenarioBookBrowserViewKind.DraftDetails
-                : ScenarioBookBrowserViewKind.Saves;
-            _pageIndex = 0;
-            ClearPreparedPages();
-            if (_view == ScenarioBookBrowserViewKind.Saves)
-            {
-                _dataSource.BeginSaveRowsRefreshAsync(scenario);
-                SetStatus("Loading saves...");
-            }
-            else
-            {
-                SetStatus(null);
-            }
-            RenderCurrentView(true);
+            OpenSelectedScenarioSaves(scenario);
         }
 
         private void OpenSelectedScenarioSaves(ScenarioCatalogEntry scenario)
         {
             if (scenario == null)
                 return;
-
             _selectedScenario = scenario;
             _view = ScenarioBookBrowserViewKind.Saves;
             _pageIndex = 0;
@@ -836,217 +493,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             RenderCurrentView(true);
         }
 
-        private ScenarioBookDraftEditorModel BuildDraftEditorModel()
-        {
-            return new ScenarioBookDraftEditorModel
-            {
-                Scenario = _selectedScenario,
-                DraftId = _selectedScenario != null ? Safe(_selectedScenario.ScenarioId, string.Empty) : string.Empty,
-                DisplayName = _selectedScenario != null ? Safe(_selectedScenario.DisplayName, _selectedScenario.ScenarioId) : string.Empty,
-                Description = _selectedScenario != null ? (_selectedScenario.Description ?? string.Empty) : string.Empty,
-                Facts = GetSelectedDraftFacts()
-            };
-        }
-
-        // The click frame publishes cheap facts immediately. Full filesystem,
-        // deserialization, and validation facts are versioned through the data source.
-        private ScenarioBookDraftFactsModel GetSelectedDraftFacts()
-        {
-            if (_selectedScenario == null)
-                return null;
-
-            if (_draftFactsCache != null && ReferenceEquals(_draftFactsCacheScenario, _selectedScenario))
-                return _draftFactsCache;
-
-            _draftFactsCache = ScenarioBookDraftFacts.BuildImmediateDetailFacts(_selectedScenario);
-            _draftFactsCacheScenario = _selectedScenario;
-            if (_dataSource != null)
-                _dataSource.BeginDraftFactsRefreshAsync(_selectedScenario);
-            return _draftFactsCache;
-        }
-
-        private void InvalidateDraftFactsCache()
-        {
-            _draftFactsCache = null;
-            _draftFactsCacheScenario = null;
-            if (_dataSource != null)
-                _dataSource.InvalidateDraftFactsRefresh();
-        }
-
-        private void HandleDraftDetailsSaved(ScenarioBookDraftEditorModel model)
-        {
-            if (model == null)
-                return;
-
-            bool isRename = _selectedScenario != null
-                && !string.IsNullOrEmpty(model.DraftId)
-                && !string.Equals(model.DraftId, _selectedScenario.ScenarioId, StringComparison.OrdinalIgnoreCase);
-
-            if (isRename)
-            {
-                ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(_selectedScenario);
-                string draftName = Safe(_selectedScenario.DisplayName, _selectedScenario.ScenarioId);
-                BeginConfirmation(ScenarioBookDraftFacts.BuildRenameMessage(draftName, model.DraftId, facts), false, delegate
-                {
-                    ApplyDraftDetailsSaved(model);
-                });
-                return;
-            }
-
-            ApplyDraftDetailsSaved(model);
-        }
-
-        private void ApplyDraftDetailsSaved(ScenarioBookDraftEditorModel model)
-        {
-            if (model == null)
-                return;
-
-            ModAPI.Scenarios.ScenarioInfo updatedInfo;
-            string status;
-            if (!_actions.UpdateDraftMetadata(_selectedScenario, model.DraftId, model.DisplayName, model.Description, out updatedInfo, out status))
-            {
-                SetStatus(status);
-                return;
-            }
-
-            if (_selectedScenario != null && updatedInfo != null)
-            {
-                _selectedScenario.ScenarioId = updatedInfo.Id;
-                _selectedScenario.DisplayName = updatedInfo.DisplayName;
-                _selectedScenario.Description = model.Description;
-                _selectedScenario.Version = updatedInfo.Version;
-                _selectedScenario.OwnerModId = updatedInfo.OwnerModId;
-            }
-
-            InvalidateDraftFactsCache();
-            StartDataRefresh("Refreshing draft details...");
-            ClearPreparedPages();
-            SetStatus(status);
-            RenderCurrentView(false);
-        }
-
-        private void HandleDraftOpenRequested()
-        {
-            RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(_selectedScenario, out status); });
-        }
-
-        private void HandleDraftDuplicateRequested()
-        {
-            if (_selectedScenario == null)
-                return;
-
-            ModAPI.Scenarios.ScenarioInfo duplicate;
-            string status;
-            if (!_actions.DuplicateDraft(_selectedScenario, out duplicate, out status) || duplicate == null)
-            {
-                SetStatus(status);
-                return;
-            }
-
-            ScenarioCatalogEntry source = _selectedScenario;
-            _selectedScenario = new ScenarioCatalogEntry
-            {
-                ScenarioId = duplicate.Id,
-                StorageScenarioId = duplicate.Id,
-                Source = ScenarioCatalogSource.Draft,
-                LaunchMode = ScenarioLaunchMode.AuthoringDraft,
-                BaseGameMode = source.BaseGameMode,
-                DefaultSaveType = source.DefaultSaveType,
-                DisplayName = duplicate.DisplayName,
-                Description = source.Description,
-                Version = duplicate.Version,
-                Author = source.Author,
-                OwnerModId = duplicate.OwnerModId,
-                CanStart = true
-            };
-            InvalidateDraftFactsCache();
-            StartDataRefresh("Refreshing duplicated draft...");
-            SetStatus(status);
-            RenderCurrentView(false);
-        }
-
-        private void HandleExportFolderRequested()
-        {
-            ScenarioBookDraftFactsModel facts = GetSelectedDraftFacts();
-            string status;
-            _actions.OpenExportFolder(facts != null ? facts.LastExportRoot : null, out status);
-            SetStatus(status);
-        }
-
-        private void HandleDraftDeleteRequested()
-        {
-            BeginDraftDeleteConfirmation(_selectedScenario);
-        }
-
-        private void BeginDraftDeleteConfirmation(ScenarioCatalogEntry scenario)
-        {
-            if (_deletePromptActive || scenario == null)
-                return;
-
-            MMLog.WriteInfo("[ScenarioBookBrowser] Draft delete confirmation opened. draft='" + scenario.ScenarioId + "'.");
-
-            ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(scenario);
-            string draftName = Safe(scenario.DisplayName, scenario.ScenarioId);
-            bool localize;
-            string message = ScenarioBookDraftFacts.BuildDeleteMessage(draftName, facts);
-            localize = false;
-            BeginConfirmation(message, localize, delegate
-            {
-                MMLog.WriteInfo("[ScenarioBookBrowser] Draft delete confirmation accepted. draft='" + scenario.ScenarioId + "'.");
-                string status;
-                bool deleted = _actions.DeleteDraft(scenario, out status);
-                MMLog.WriteInfo("[ScenarioBookBrowser] Draft delete callback completed. draft='" + scenario.ScenarioId
-                    + "' deleted=" + deleted + " status='" + status + "'.");
-                SetStatus(status);
-                if (deleted)
-                {
-                    if (ReferenceEquals(_selectedScenario, scenario))
-                        BackOrClose();
-                    StartDataRefresh("Refreshing scenarios...");
-                }
-            });
-        }
-
         private void RunLaunchAction(ScenarioBookLaunchAction action)
         {
-            if (action == null)
-                return;
-
+            if (action == null) return;
             string status;
             if (!action(out status))
             {
                 SetStatus(status);
                 return;
             }
-
-            // A successful launch starts the loading transition synchronously.  Do not
-            // reactivate the vanilla selection panel after that point: Unity may already
-            // be destroying it as part of the scene handoff.
             Close(false);
-        }
-
-        private void RunBrowserAction(ScenarioBookLaunchAction action)
-        {
-            if (action == null)
-                return;
-
-            string status;
-            bool changed = action(out status);
-            SetStatus(status);
-            if (changed)
-            {
-                StartDataRefresh("Refreshing scenarios...");
-            }
         }
 
         private void BackOrClose()
         {
-            if (_view == ScenarioBookBrowserViewKind.Saves || _view == ScenarioBookBrowserViewKind.DraftDetails)
+            if (_view == ScenarioBookBrowserViewKind.Saves)
             {
-                InvalidateDraftFactsCache();
                 bool returnToLibrary = _selectedType == ScenarioBookType.Published || _selectedScenarioOpenedDirectlyFromType;
-                if (_view == ScenarioBookBrowserViewKind.DraftDetails)
-                    _selectedScenario = null;
                 _view = returnToLibrary ? ScenarioBookBrowserViewKind.Types : ScenarioBookBrowserViewKind.Scenarios;
                 _selectedScenarioOpenedDirectlyFromType = false;
                 _pageIndex = 0;
@@ -1055,8 +518,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 RenderCurrentView(true);
                 return;
             }
-
-            if (_view == ScenarioBookBrowserViewKind.Scenarios || _view == ScenarioBookBrowserViewKind.InstallScenarios)
+            if (_view == ScenarioBookBrowserViewKind.Scenarios)
             {
                 _view = ScenarioBookBrowserViewKind.Types;
                 _selectedScenario = null;
@@ -1066,90 +528,48 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 RenderCurrentView(true);
                 return;
             }
-
             Close();
         }
 
-        private void Close()
-        {
-            Close(true);
-        }
+        private void Close() { Close(true); }
 
         private void Close(bool restoreUnderlyingPanel)
         {
-            if (_isClosing)
-                return;
-
+            if (_isClosing) return;
             _isClosing = true;
-            // The static reference can be cleared by a deferred prior teardown.
-            // This component's root is the authoritative object that must leave
-            // the hierarchy before renderer disposal releases its visible chrome.
             GameObject root = gameObject;
             GameObject overlay = root.transform.parent != null ? root.transform.parent.gameObject : root;
             _instance = null;
-            if (_dataSource != null)
-                _dataSource.CancelRefreshes();
+            if (_dataSource != null) _dataSource.CancelRefreshes();
             if (restoreUnderlyingPanel)
             {
                 StartCoroutine(CloseAfterUnderlyingFirstRender(root, overlay));
                 return;
             }
-            else
-            {
-                // The selection panel is being unloaded.  Its suppressed chrome
-                // must stay suppressed: restoring it from OnDestroy would call
-                // SetActive(true) while Unity is destroying the old scene.
-                _underlyingSuppression = null;
-                _adapter = null;
-            }
-            // EnsureOverlayPanel owns the named UI Root/ShelteredAPI_ScenarioBookBrowser
-            // parent. Hiding only this child leaves an active empty overlay that the
-            // harness and the next hub click can mistake for a live book.
-            overlay.SetActive(false);
-            if (_renderer != null)
-            {
-                _renderer.Dispose();
-                _renderer = null;
-            }
 
+            _underlyingSuppression = null;
+            _adapter = null;
+            overlay.SetActive(false);
+            if (_renderer != null) { _renderer.Dispose(); _renderer = null; }
             Destroy(root);
         }
 
         private IEnumerator CloseAfterUnderlyingFirstRender(GameObject root, GameObject overlay)
         {
             RestoreUnderlyingPanel();
-
-            // NGUI reactivation is submitted later in this frame. Retain the custom
-            // book through the end-of-frame render so no raw menu background appears
-            // between restoring vanilla chrome and removing this overlay.
             yield return new WaitForEndOfFrame();
-
             overlay.SetActive(false);
-            if (_renderer != null)
-            {
-                _renderer.Dispose();
-                _renderer = null;
-            }
-
+            if (_renderer != null) { _renderer.Dispose(); _renderer = null; }
             Destroy(root);
         }
 
         private void OnDestroy()
         {
-            if (_deletePromptActive)
-                ReleaseDeletePromptGuard();
-
-            if (_dataSource != null)
-                _dataSource.CancelRefreshes();
+            if (_deletePromptActive) ReleaseDeletePromptGuard();
+            if (_dataSource != null) _dataSource.CancelRefreshes();
             RestoreUnderlyingPanel();
-            if (_renderer != null)
-            {
-                _renderer.Dispose();
-                _renderer = null;
-            }
-
-            if (_instance == gameObject)
-                _instance = null;
+            if (_renderer != null) { _renderer.Dispose(); _renderer = null; }
+            if (_instance == gameObject) _instance = null;
         }
 
         private void RestoreUnderlyingPanel()
@@ -1161,26 +581,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     _underlyingSuppression.Restore();
                     _underlyingSuppression = null;
                 }
-
                 if (_adapter != null)
                 {
                     _adapter.SetInputEnabled(true);
-                    // OnDestroy can follow Close in the same frame.  Clearing this
-                    // reference makes restoration one-shot, avoiding SetActive while
-                    // the vanilla panel is being torn down during a launch transition.
                     _adapter = null;
                 }
             }
-            catch
-            {
-            }
+            catch { }
         }
 
         private int GetPageCount()
         {
-            if (_view == ScenarioBookBrowserViewKind.DraftDetails)
-                return 1;
-
             int rowCount = Math.Max(1, _rows != null ? _rows.Count : 0);
             if (_view == ScenarioBookBrowserViewKind.Types)
             {
@@ -1189,130 +600,77 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
             if (_view == ScenarioBookBrowserViewKind.Saves)
                 return Math.Max(1, (rowCount + SaveRowsPerPage - 1) / SaveRowsPerPage);
-
             return Math.Max(1, (rowCount + RowsPerPage - 1) / RowsPerPage);
         }
 
         private void PrepareAdjacentPages()
         {
             int pageCount = GetPageCount();
-            if (_renderer == null || pageCount <= 1
-                || _view == ScenarioBookBrowserViewKind.DraftDetails
-                || _view == ScenarioBookBrowserViewKind.Types)
+            if (_renderer == null || pageCount <= 1 || _view == ScenarioBookBrowserViewKind.Types)
                 return;
-
-            if (CanChangePage(1))
-                PreparePage(ResolveTargetPageIndex(1));
-            if (CanChangePage(-1))
-                PreparePage(ResolveTargetPageIndex(-1));
+            if (CanChangePage(1)) PreparePage(ResolveTargetPageIndex(1));
+            if (CanChangePage(-1)) PreparePage(ResolveTargetPageIndex(-1));
         }
 
         private void PreparePage(int pageIndex)
         {
-            if (_renderer == null || _view == ScenarioBookBrowserViewKind.DraftDetails)
-                return;
-
+            if (_renderer == null) return;
             int pageCount = GetPageCount();
-            if (pageCount <= 1 || pageIndex < 0 || pageIndex >= pageCount)
-                return;
-
+            if (pageCount <= 1 || pageIndex < 0 || pageIndex >= pageCount) return;
             _renderer.PreparePage(
-                BuildPageCacheKey(pageIndex),
-                _view,
-                _selectedScenario,
-                BuildCurrentPlayStats(),
-                _rows,
-                pageIndex,
-                pageCount,
+                BuildPageCacheKey(pageIndex), _view, _selectedScenario, BuildCurrentPlayStats(),
+                _rows, pageIndex, pageCount,
                 _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
                 _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
-                HandleRowSelected,
-                HandleDeleteSelected);
+                HandleRowSelected, HandleDeleteSelected);
         }
 
         private void ClearPreparedPagesWhenScopeChanged()
         {
             string scopeKey = BuildRenderScopeKey();
-            if (string.Equals(_lastRenderScopeKey, scopeKey, StringComparison.Ordinal))
-                return;
-
+            if (string.Equals(_lastRenderScopeKey, scopeKey, StringComparison.Ordinal)) return;
             ClearPreparedPages();
             _lastRenderScopeKey = scopeKey;
         }
 
         private void ClearPreparedPages()
         {
-            if (_renderer != null)
-                _renderer.ClearPreparedPages();
+            if (_renderer != null) _renderer.ClearPreparedPages();
             _lastRenderScopeKey = null;
         }
 
-        private void StartDataRefresh(string status)
-        {
-            StartDataRefresh(status, true);
-        }
+        private void StartDataRefresh(string status) { StartDataRefresh(status, true); }
 
         private void StartDataRefresh(string status, bool invalidateSharedSnapshot)
         {
-            if (_dataSource == null)
-                return;
-
+            if (_dataSource == null) return;
             ClearPreparedPages();
             bool hasWarmSnapshot = !invalidateSharedSnapshot && _dataSource.HasAppliedCatalogSnapshot;
             SetStatus(hasWarmSnapshot ? null : status);
-            if (invalidateSharedSnapshot)
-                _dataSource.InvalidateCatalogSnapshot();
+            if (invalidateSharedSnapshot) _dataSource.InvalidateCatalogSnapshot();
             _dataSource.BeginRefreshAsync(!invalidateSharedSnapshot);
-            if (_renderer != null)
-                RenderCurrentView(false);
+            if (_renderer != null) RenderCurrentView(false);
         }
 
         private void ApplyDataRefreshIfReady()
         {
-            if (_dataSource == null)
-                return;
-
+            if (_dataSource == null) return;
             bool changed = _dataSource.ApplyLatestSnapshot();
             changed = _dataSource.ApplyLatestSaveRows() || changed;
-            string importError;
-            bool importChanged = _dataSource.ApplyLatestImportScan(out importError);
-            changed = importChanged || changed;
-            ScenarioCatalogEntry factsScenario;
-            ScenarioBookDraftFactsModel facts;
-            if (_dataSource.ApplyLatestDraftFacts(out factsScenario, out facts))
-            {
-                if (facts != null && ReferenceEquals(factsScenario, _selectedScenario))
-                {
-                    _draftFactsCache = facts;
-                    _draftFactsCacheScenario = factsScenario;
-                    changed = true;
-                }
-            }
-            if (!changed)
-                return;
-
+            if (!changed) return;
             ClearPreparedPages();
-            string error = !string.IsNullOrEmpty(importError) ? importError : _dataSource.LastRefreshError;
-            if (!string.IsNullOrEmpty(error))
-                SetStatus("Scenario refresh failed: " + error);
-            else if (IsTransientStatus(_statusText))
-                SetStatus(null);
+            string error = _dataSource.LastRefreshError;
+            if (!string.IsNullOrEmpty(error)) SetStatus("Scenario refresh failed: " + error);
+            else if (IsTransientStatus(_statusText)) SetStatus(null);
             RenderCurrentView(false);
         }
 
         private ScenarioBookPlayStatsModel BuildCurrentPlayStats()
         {
-            if ((_view != ScenarioBookBrowserViewKind.Saves && _view != ScenarioBookBrowserViewKind.Types)
-                || _selectedScenario == null
-                || _dataSource == null)
+            if (_selectedScenario == null || _dataSource == null)
                 return null;
-
             IList<ScenarioBookRowModel> statRows = _dataSource.BuildRows(
-                ScenarioBookBrowserViewKind.Saves,
-                _selectedType,
-                _selectedScenario,
-                null);
-
+                ScenarioBookBrowserViewKind.Saves, _selectedType, _selectedScenario, null);
             return ScenarioBookPlayStatsBuilder.Build(_selectedScenario, statRows);
         }
 
@@ -1322,16 +680,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             for (int i = 0; rows != null && i < rows.Count; i++)
             {
                 ScenarioBookRowModel row = rows[i];
-                if (row != null && row.Kind != ScenarioBookRowKind.Type && row.Kind != ScenarioBookRowKind.OpenInstallScenarios)
-                    count++;
+                if (row != null && row.Kind != ScenarioBookRowKind.Type) count++;
             }
             return count;
         }
 
-        private string BuildPageCacheKey(int pageIndex)
-        {
-            return BuildRenderScopeKey() + "|page=" + pageIndex;
-        }
+        private string BuildPageCacheKey(int pageIndex) { return BuildRenderScopeKey() + "|page=" + pageIndex; }
 
         private string BuildRenderScopeKey()
         {
@@ -1344,35 +698,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private string GetSearchFilter()
         {
-            // The draft editor is a form rather than a list. Every list view,
-            // including a scenario's save archive, uses the same visible filter.
-            if (_view == ScenarioBookBrowserViewKind.DraftDetails)
-                return string.Empty;
-
             return _renderer != null ? _renderer.SearchFilter : string.Empty;
         }
 
         private void SetStatus(string value)
         {
             _statusText = value;
-            if (!string.IsNullOrEmpty(value))
-                MMLog.WriteInfo("[ScenarioBookBrowser] Status: " + value);
-            if (_renderer != null)
-                _renderer.SetStatus(value);
+            if (!string.IsNullOrEmpty(value)) MMLog.WriteInfo("[ScenarioBookBrowser] Status: " + value);
+            if (_renderer != null) _renderer.SetStatus(value);
         }
 
         private static bool IsTransientStatus(string value)
         {
-            if (string.IsNullOrEmpty(value))
-                return false;
-            return value.StartsWith("Loading ", StringComparison.Ordinal)
-                || value.StartsWith("Looking ", StringComparison.Ordinal)
-                || value.StartsWith("Refreshing ", StringComparison.Ordinal);
-        }
-
-        private static string Safe(string value, string fallback)
-        {
-            return string.IsNullOrEmpty(value) ? (fallback ?? string.Empty) : value;
+            return !string.IsNullOrEmpty(value)
+                && (value.StartsWith("Loading ", StringComparison.Ordinal)
+                    || value.StartsWith("Refreshing ", StringComparison.Ordinal));
         }
 
         private delegate bool ScenarioBookLaunchAction(out string status);

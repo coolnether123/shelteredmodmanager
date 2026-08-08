@@ -1,5 +1,4 @@
 using ShelteredAPI.Core;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -9,6 +8,11 @@ namespace ShelteredAPI.Scenarios.Composition{
     {
         public static void AddScenarioRuntimeModule(this ServiceCollection services)
         {
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioRuntimeDefinitionResolver(
+                    resolver.Get<IScenarioDefinitionCatalogService>());
+            });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioSpriteSwapPlanner(resolver.Get<IScenarioSpriteAssetResolver>());
@@ -30,16 +34,6 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpritePlacementRuntimeFactory(); });
             services.AddSingleton<IScenarioSceneSpritePlacementEngine>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioSceneSpritePlacementService>(); });
             services.AddSingleton<IScenarioApplier>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioApplyCoordinator>(); });
-            services.AddSingleton<IScenarioPlaytestOrchestrator>(delegate(IServiceResolver resolver)
-            {
-                return new ScenarioPlaytestOrchestrator(
-                    resolver.Get<IScenarioApplier>(),
-                    resolver.Get<IScenarioRuntimeBindingService>(),
-                    resolver.Get<IScenarioPauseService>(),
-                    resolver.Get<ScenarioAuthorTestChecklistService>(),
-                    resolver.Get<IVanillaScenarioRuntime>(),
-                    resolver.Get<IScenarioPlaytestUiService>());
-            });
             services.AddScenarioRuntime();
             services.AddSingleton<IScenarioRuntimeOrchestrator>(delegate(IServiceResolver resolver)
             {
@@ -48,9 +42,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ICustomScenarioRegistry>(),
                     resolver.Get<IScenarioDependencyVerifier>(),
                     resolver.Get<IScenarioDefinitionFactory>(),
-                    resolver.Get<IScenarioDefinitionCatalogService>(),
+                    resolver.Get<ScenarioRuntimeDefinitionResolver>(),
                     resolver.Get<IScenarioRuntimeBindingService>(),
-                    resolver.Get<IScenarioRuntimeDefinitionOverrideProvider>(),
                     resolver.Get<IScenarioApplier>(),
                     resolver.Get<IScenarioSpriteSwapEngine>(),
                     resolver.Get<IScenarioSceneSpritePlacementEngine>(),

@@ -13,7 +13,8 @@ $assemblies = @(
     (Join-Path $managedRoot 'Assembly-CSharp.dll'),
     (Join-Path $repoRoot 'mods\0Harmony\Assemblies\0Harmony.dll'),
     (Join-Path $repoRoot 'Dist\SMM\ModAPI.dll'),
-    (Join-Path $repoRoot 'Dist\SMM\bin\ShelteredAPI.dll')
+    (Join-Path $repoRoot 'Dist\SMM\bin\ShelteredAPI.dll'),
+    (Join-Path $repoRoot 'Dist\SMM\bin\ShelteredScenarioEditor.dll')
 )
 
 foreach ($assemblyPath in $assemblies) {
@@ -23,9 +24,9 @@ foreach ($assemblyPath in $assemblies) {
     [void][Reflection.Assembly]::LoadFrom($assemblyPath)
 }
 
-$shelteredApi = [Reflection.Assembly]::LoadFrom((Join-Path $repoRoot 'Dist\SMM\bin\ShelteredAPI.dll'))
-$verificationType = $shelteredApi.GetType(
-    'ShelteredAPI.Scenarios.Diagnostics.ScenarioWorkspaceRoutingVerification',
+$scenarioEditor = [Reflection.Assembly]::LoadFrom((Join-Path $repoRoot 'Dist\SMM\bin\ShelteredScenarioEditor.dll'))
+$verificationType = $scenarioEditor.GetType(
+    'ShelteredScenarioEditor.Diagnostics.ScenarioWorkspaceRoutingVerification',
     $true,
     $false)
 $runMethod = $verificationType.GetMethod(
@@ -40,8 +41,8 @@ if ($errors.Count -gt 0) {
     throw ("Scenario workspace routing verification failed:`n - " + ($errors -join "`n - "))
 }
 
-$mapVerificationType = $shelteredApi.GetType(
-    'ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioMapWorkspaceVerification',
+$mapVerificationType = $scenarioEditor.GetType(
+    'ShelteredScenarioEditor.Presentation.Authoring.Shell.ScenarioMapWorkspaceVerification',
     $true,
     $false)
 $mapRunMethod = $mapVerificationType.GetMethod(

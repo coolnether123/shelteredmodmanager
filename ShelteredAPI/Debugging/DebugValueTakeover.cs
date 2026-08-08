@@ -6,7 +6,6 @@ using ModAPI.Reflection;
 
 using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
-using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Debugging
 {
     /// <summary>

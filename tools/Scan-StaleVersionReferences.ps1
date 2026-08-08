@@ -6,6 +6,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "VerificationSupport.psm1") -Force
 
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -25,14 +26,6 @@ $patterns = @(
 $excludeDirectoryPattern = "\\(\.git|\.vs|bin|obj|packages|artifacts|Release|Decompiled)\\"
 $excludeFilePattern = "\.(dll|exe|pdb|zip|png|jpg|jpeg|gif|ico|pdf)$"
 $regex = [regex]::new(($patterns -join "|"), [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-
-function ConvertTo-RepoRelativePath {
-    param([string]$Path)
-
-    $fullPath = (Resolve-Path -LiteralPath $Path).Path
-    $root = $RepoRoot.TrimEnd([char]'\', [char]'/')
-    return $fullPath.Substring($root.Length).TrimStart([char]'\', [char]'/') -replace "\\", "/"
-}
 
 function Get-Classification {
     param([string]$RelativePath, [string]$Line)
@@ -83,7 +76,7 @@ Get-ChildItem -LiteralPath $RepoRoot -Recurse -File |
     Sort-Object FullName |
     ForEach-Object {
         $path = $_.FullName
-        $relative = ConvertTo-RepoRelativePath $path
+        $relative = ConvertTo-RepositoryRelativePath -Path $path -RepositoryRoot $RepoRoot
         $lineNumber = 0
 
         foreach ($line in Get-Content -LiteralPath $path) {

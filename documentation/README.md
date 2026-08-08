@@ -53,6 +53,8 @@ This is the canonical mod-author rule for the SMM 2.0 assembly split. Other guid
 Rules:
 
 - `ModAPI.dll` owns neutral contracts. `ShelteredAPI.dll` owns Sheltered integrations and supplies game-specific runtime implementations behind neutral contracts.
+- `ShelteredScenarioEditor.dll` is an optional downstream application component. Mods never reference it; XML/code scenario authoring remains available through ShelteredAPI.
+- The runtime dependency direction is `ShelteredScenarioEditor -> ShelteredAPI -> ModAPI`. ShelteredAPI must build and run when the editor DLL is absent.
 - Prefer public facades such as `ShelteredContent`, `ShelteredSaves`, `ShelteredEvents`, `ShelteredInput`, `ShelteredRuntimeUI`, `ShelteredActors`, `ShelteredCharacters`, `ShelteredScenarios`, `ShelteredMap`, and `ShelteredMapMarkers`.
 - Treat implementation services, serializers, patch hosts, repositories, and controllers as internal even if their source is visible.
 - A typed Sheltered escape hatch is appropriate only when a facade explicitly exposes a vanilla type for deliberate game-object integration, for example `FindFamilyMember(...)`. Do not make raw vanilla types the default data model for ordinary mod logic.
@@ -84,11 +86,11 @@ These surfaces are useful after a first plugin is working. Preview or experiment
 | Focused UI clone/bind/color/lifecycle helpers | API preview | [`ShelteredUI` signatures](API_Signatures_Reference.md#ui-extensions-smm-20) |
 | Expedition map context, generation intent, markers, and actor projections | API preview | [`ShelteredMap` signatures](API_Signatures_Reference.md#expedition-map-context-smm-20) and [`ShelteredMapMarkers` signatures](API_Signatures_Reference.md#map-markers-smm-20) |
 | Player queue snapshots, conservative restore, and change notification | API preview | [`ShelteredQueues` signatures](API_Signatures_Reference.md#player-queues-smm-20) |
-| Custom scenario XML/code registration, playback, runtime triggers, and scoring snapshots | Supported 2.0 surface; in-game authoring workspace is an opt-in preview | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
+| Custom scenario XML/code registration, installed-scenario browsing, playback, runtime triggers, and scoring snapshots | Supported 2.0 ShelteredAPI surface; the separate in-game editor is an optional preview | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
 | Spine settings UI | Supported | [Spine Settings Guide](Spine_Settings_Guide.md) |
 | Patch metadata, conflict reports, and cooperative patching | Current neutral API | [Patch Governance](Patch_Governance.md) |
 | Save manifests and structured support-bundle capture | API preview / support tooling | [`ShelteredSupportBundle` signatures](API_Signatures_Reference.md#save-manifest--support-bundle-smm-20) |
-| Loader and runtime internals | Maintainer/advanced | [Architecture Guide](ModAPI_Architecture_guide.md) and [Project Map](ModAPI_Documentation.md) |
+| Loader and runtime internals | Maintainer/advanced | [Architecture Ownership Guide](Architecture_Ownership_Guide.md), [ModAPI Architecture Guide](ModAPI_Architecture_guide.md), and [Project Map](ModAPI_Documentation.md) |
 
 Services should be treated as public authoring surfaces only when they appear in a guide and the signature reference.
 
@@ -98,6 +100,7 @@ Services should be treated as public authoring surfaces only when they appear in
 |------|----------|
 | Exact public type and method signatures | [API Signatures Reference](API_Signatures_Reference.md) |
 | Sheltered facade selection | [ShelteredAPI Guide](ShelteredAPI_Guide.md) |
+| Canonical internal owners and extension rules | [Architecture Ownership Guide](Architecture_Ownership_Guide.md) |
 | Module ownership and runtime design | [ModAPI Project Map](ModAPI_Documentation.md) |
 | Internal boundary/refactor record | [ModAPI/ShelteredAPI Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md) |
 

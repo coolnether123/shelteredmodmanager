@@ -17,7 +17,7 @@ namespace ShelteredAPI.Saves.Runtime
 
         internal bool Load(SaveManager.SaveType type)
         {
-            PlatformSaveProxy.Target nextLoadTarget;
+            SaveRuntimeState.Target nextLoadTarget;
             if (SaveRuntimeState.TryGetPendingLoad(type, out nextLoadTarget) && nextLoadTarget != null)
             {
                 return LoadCustomTarget(type, nextLoadTarget);
@@ -45,12 +45,12 @@ namespace ShelteredAPI.Saves.Runtime
             return _inner.PlatformGetLoadedData(out data);
         }
 
-        private bool LoadCustomTarget(SaveManager.SaveType type, PlatformSaveProxy.Target target)
+        private bool LoadCustomTarget(SaveManager.SaveType type, SaveRuntimeState.Target target)
         {
             try
             {
-                string scenarioId = SaveStorageRouter.NormalizeScenarioId(target.scenarioId);
-                string saveId = target.saveId;
+                string scenarioId = SaveStorageRouter.NormalizeScenarioId(target.ScenarioId);
+                string saveId = target.SaveId;
 
                 SaveEntry entry = SaveStorageRouter.Get(scenarioId, saveId);
                 if (entry == null)

@@ -10,6 +10,7 @@ using ShelteredAPI.UI.Internal.Spine;
 using ModAPI.Spine;
 using ShelteredAPI.UI.Compatibility.Settings;
 using ShelteredAPI.UI.FieldManual.Animations;
+using ShelteredAPI.UI.FieldManual.Layout;
 using ShelteredAPI.UI.FieldManual.Panels;
 using ShelteredAPI.UI.FieldManual.Widgets;
 using ShelteredAPI.UI.Spine;
@@ -61,7 +62,7 @@ namespace ShelteredAPI.UI.Compatibility
         // State
         private List<List<GameObject>> _pages = new List<List<GameObject>>();
         private readonly List<string> _pageLabels = new List<string>();
-        private int _currentPageIndex = 0;
+        private readonly PanelPageState _pageState = new PanelPageState();
         private int? _pageIndexBeforeSearch;
         private bool _isRebuilding = false;
         private bool _isClosing = false;
@@ -384,16 +385,16 @@ namespace ShelteredAPI.UI.Compatibility
         private bool CanChangePage(int delta)
         {
             if (delta < 0)
-                return _currentPageIndex > 0;
+                return _pageState.CanGoPrevious;
             if (delta > 0)
-                return _currentPageIndex < _pages.Count - 1;
+                return _pageState.CanGoNext;
 
             return false;
         }
 
         private void CommitPageChange(int delta)
         {
-            _currentPageIndex = Mathf.Clamp(_currentPageIndex + delta, 0, Mathf.Max(0, _pages.Count - 1));
+            _pageState.MoveBy(delta);
         }
 
         private void BuildMenu(UIFont uiFont, Font ttfFont, bool keepPage = false)
@@ -497,7 +498,7 @@ namespace ShelteredAPI.UI.Compatibility
             }
             else
             {
-                bool useWideKeybindLayout = ShouldUseWideKeybindLayout(visible, allDefs);
+                bool useWideKeybindLayout = ModSettingsKeybindLayout.ShouldUseWideKeybindLayout(visible, allDefs);
                 if (useWideKeybindLayout)
                 {
                     // Keybind rows are wide; use a single-column layout and fewer rows per page
@@ -510,8 +511,9 @@ namespace ShelteredAPI.UI.Compatibility
                 }
             }
 
-            if (!keepPage) _currentPageIndex = 0;
-            else _currentPageIndex = Mathf.Clamp(_currentPageIndex, 0, Mathf.Max(0, _pages.Count - 1));
+            _pageState.SetPageCount(_pages.Count);
+            if (!keepPage)
+                _pageState.Reset();
 
             UpdatePageVisibility();
             }
@@ -519,11 +521,6 @@ namespace ShelteredAPI.UI.Compatibility
             {
                 _isRebuilding = false;
             }
-        }
-
-        private static bool ShouldUseWideKeybindLayout(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs)
-        {
-            return ModSettingsKeybindLayout.ShouldUseWideKeybindLayout(visibleItems, allDefs);
         }
 
         private void BuildPresetCycleWidget(UIFont uiFont, Font ttfFont, object settings, List<SettingDefinition> allDefs)
@@ -611,11 +608,6 @@ namespace ShelteredAPI.UI.Compatibility
                 BuildMenu(uiFont, ttfFont, true);
         }
 
-        private void UpdateCurrentPresetState(object settings, List<SettingDefinition> allDefs)
-        {
-            _presetController.UpdateCurrentPresetState(settings, allDefs);
-        }
-
         private void CreatePaginatedGrid(
             List<SettingDefinition> visibleItems,
             List<SettingDefinition> allDefs,
@@ -633,7 +625,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (rowHeight <= 0) rowHeight = ROW_HEIGHT;
 
             var hierarchy = new SettingsHierarchy(allDefs);
-            var displayEntries = BuildDisplayEntries(visibleItems, allDefs, useWideKeybindLayout);
+            var displayEntries = ModSettingsKeybindLayout.BuildDisplayEntries(visibleItems, allDefs, useWideKeybindLayout);
 
             var pagedEntries = BuildSectionedDisplayEntryPages(displayEntries, itemsPerPage);
             ModSettingsKeybindWidgetBuilder keybindBuilder = useWideKeybindLayout ? CreateKeybindWidgetBuilder(data) : null;
@@ -685,7 +677,7 @@ namespace ShelteredAPI.UI.Compatibility
                     float y = startY - (row * rowHeight);
 
                     GameObject widget;
-                    bool isSectionHeader = IsSectionHeaderEntry(entry);
+                    bool isSectionHeader = ModSettingsKeybindLayout.IsSectionHeaderEntry(entry);
 
                     if (useWideKeybindLayout && isSectionHeader)
                     {
@@ -748,13 +740,8 @@ namespace ShelteredAPI.UI.Compatibility
                 COLOR_SUBTEXT,
                 CreateLabel,
                 CreateButton,
-                ApplySettingValue,
+                ModSettingsKeybindRuntime.ApplySettingValue,
                 OnSettingChanged);
-        }
-
-        private List<ModSettingsKeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, bool pairKeybinds)
-        {
-            return ModSettingsKeybindLayout.BuildDisplayEntries(visibleItems, allDefs, pairKeybinds);
         }
 
         private sealed class SettingsPageSegment
@@ -831,7 +818,7 @@ namespace ShelteredAPI.UI.Compatibility
                 if (entry == null || entry.Primary == null)
                     continue;
 
-                if (IsSectionHeaderEntry(entry))
+                if (ModSettingsKeybindLayout.IsSectionHeaderEntry(entry))
                 {
                     current = new SettingsSection(GetEntryTitle(entry), entry, true);
                     sections.Add(current);
@@ -857,7 +844,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (isSearching)
             {
                 if (!_pageIndexBeforeSearch.HasValue)
-                    _pageIndexBeforeSearch = _currentPageIndex;
+                    _pageIndexBeforeSearch = _pageState.CurrentPageIndex;
 
                 BuildMenu(_activeBitmapFont, _activeTtfFont, true);
                 return;
@@ -865,7 +852,7 @@ namespace ShelteredAPI.UI.Compatibility
 
             if (_pageIndexBeforeSearch.HasValue)
             {
-                _currentPageIndex = _pageIndexBeforeSearch.Value;
+                _pageState.SetCurrentPage(_pageIndexBeforeSearch.Value);
                 _pageIndexBeforeSearch = null;
             }
 
@@ -916,7 +903,7 @@ namespace ShelteredAPI.UI.Compatibility
                 return "Settings";
 
             string label = SpineWidgetRuntime.GetLabel(entry.Primary);
-            if (!string.IsNullOrEmpty(label) && IsSectionHeaderEntry(entry))
+            if (!string.IsNullOrEmpty(label) && ModSettingsKeybindLayout.IsSectionHeaderEntry(entry))
                 return label;
 
             if (!string.IsNullOrEmpty(entry.Primary.Category))
@@ -938,23 +925,13 @@ namespace ShelteredAPI.UI.Compatibility
                 : normalizedTitle;
         }
 
-        private static bool IsSectionHeaderEntry(ModSettingsKeybindDisplayEntry entry)
-        {
-            return ModSettingsKeybindLayout.IsSectionHeaderEntry(entry);
-        }
-
-        private static bool ApplySettingValue(SettingDefinition def, object settingsObject, object newValue)
-        {
-            return ModSettingsKeybindRuntime.ApplySettingValue(def, settingsObject, newValue);
-        }
-
         public void RefreshDependents(string changedId)
         {
              var provider = _currentMod.SettingsProvider;
              var settings = provider.GetSettingsObject();
              var allDefs = provider.GetSettings().ToList();
              // _currentMod.SettingsProvider.LoadSettings(); // Don't reload, we just changed it in memory!
-             UpdateCurrentPresetState(settings, allDefs);
+             _presetController.UpdateCurrentPresetState(settings, allDefs);
              
               // Refresh UI states
               var fonts = UIFontCache.GetFonts();
@@ -972,7 +949,7 @@ namespace ShelteredAPI.UI.Compatibility
             var provider = _currentMod.SettingsProvider;
             var allDefs = provider.GetSettings().ToList();
             
-            UpdateCurrentPresetState(settings, allDefs);
+            _presetController.UpdateCurrentPresetState(settings, allDefs);
             
             // Re-draw just the preset widget to reflect the name change (e.g. to CUSTOM)
             var fonts = UIFontCache.GetFonts();
@@ -988,7 +965,7 @@ namespace ShelteredAPI.UI.Compatibility
         private void UpdatePageVisibility()
         {
             for (int i = 0; i < _pages.Count; i++) {
-                bool active = (i == _currentPageIndex);
+                bool active = (i == _pageState.CurrentPageIndex);
                 foreach (var go in _pages[i]) go.SetActive(active);
             }
 
@@ -1000,20 +977,20 @@ namespace ShelteredAPI.UI.Compatibility
                 _pagingLabel.text = GetCurrentPageLabel();
             }
             if (_pageNavigator != null)
-                _pageNavigator.UpdateState(_currentPageIndex, showPaging ? _pages.Count : 1);
+                _pageNavigator.UpdateState(_pageState.CurrentPageIndex, showPaging ? _pages.Count : 1);
         }
 
         private string GetCurrentPageLabel()
         {
             if (_pageLabels != null
-                && _currentPageIndex >= 0
-                && _currentPageIndex < _pageLabels.Count
-                && !string.IsNullOrEmpty(_pageLabels[_currentPageIndex]))
+                && _pageState.CurrentPageIndex >= 0
+                && _pageState.CurrentPageIndex < _pageLabels.Count
+                && !string.IsNullOrEmpty(_pageLabels[_pageState.CurrentPageIndex]))
             {
-                return _pageLabels[_currentPageIndex];
+                return _pageLabels[_pageState.CurrentPageIndex];
             }
 
-            return (_currentPageIndex + 1) + "/" + Math.Max(1, _pages.Count);
+            return (_pageState.CurrentPageIndex + 1) + "/" + Math.Max(1, _pages.Count);
         }
 
 

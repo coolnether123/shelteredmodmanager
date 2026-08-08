@@ -102,7 +102,8 @@ Remove-ForbiddenRuntimeAssemblies (Join-Path $distSmm 'bin')
 
 $modApiOutput = Join-Path $repoRoot "ModAPI\obj\$Configuration\ModAPI.dll"
 $shelteredApiOutput = Join-Path $repoRoot "ShelteredAPI\obj\$Configuration\ShelteredAPI.dll"
-foreach ($required in @($distSmm, $modApiOutput, $shelteredApiOutput, $harnessProject)) {
+$scenarioEditorOutput = Join-Path $repoRoot "ShelteredScenarioEditor\obj\$Configuration\ShelteredScenarioEditor.dll"
+foreach ($required in @($distSmm, $modApiOutput, $shelteredApiOutput, $scenarioEditorOutput, $harnessProject)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Required build input is missing: $required" }
 }
 
@@ -149,9 +150,22 @@ foreach ($target in $selectedTargets) {
 
     $deploymentRows.Add((Copy-VerifiedArtifact $modApiOutput (Join-Path $targetSmm 'ModAPI.dll')))
     $deploymentRows.Add((Copy-VerifiedArtifact $shelteredApiOutput (Join-Path $targetSmm 'bin\ShelteredAPI.dll')))
-    foreach ($pdb in @([IO.Path]::ChangeExtension($modApiOutput, '.pdb'), [IO.Path]::ChangeExtension($shelteredApiOutput, '.pdb'))) {
+    $deploymentRows.Add((Copy-VerifiedArtifact $scenarioEditorOutput (Join-Path $targetSmm 'bin\ShelteredScenarioEditor.dll')))
+    foreach ($pdb in @(
+        [IO.Path]::ChangeExtension($modApiOutput, '.pdb'),
+        [IO.Path]::ChangeExtension($shelteredApiOutput, '.pdb'),
+        [IO.Path]::ChangeExtension($scenarioEditorOutput, '.pdb')
+    )) {
         if (Test-Path -LiteralPath $pdb) {
-            $relative = if ($pdb -like '*ShelteredAPI*') { 'bin\ShelteredAPI.pdb' } else { 'ModAPI.pdb' }
+            $relative = if ($pdb -like '*ShelteredScenarioEditor*') {
+                'bin\ShelteredScenarioEditor.pdb'
+            }
+            elseif ($pdb -like '*ShelteredAPI*') {
+                'bin\ShelteredAPI.pdb'
+            }
+            else {
+                'ModAPI.pdb'
+            }
             $deploymentRows.Add((Copy-VerifiedArtifact $pdb (Join-Path $targetSmm $relative)))
         }
     }

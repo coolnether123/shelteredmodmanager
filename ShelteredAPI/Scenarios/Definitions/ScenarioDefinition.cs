@@ -26,9 +26,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
         Stasis = 2
     }
 
-    internal static class ScenarioBaseFamilyChoices
+    /// <summary>Stable values accepted by <see cref="ScenarioDefinition.BaseFamilyChoice"/>.</summary>
+    public static class ScenarioBaseFamilyChoices
     {
+        /// <summary>Keep the cast already present in the selected base-mode world.</summary>
         public const string KeepCurrentCast = "KeepCurrentCast";
+        /// <summary>Restore the default family supplied by the selected base mode.</summary>
         public const string UseBaseDefaultFamily = "UseBaseDefaultFamily";
     }
 
@@ -103,7 +106,6 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Journal = new JournalDefinition();
             Conversations = new ScenarioConversationAuthoringDefinition();
             VanillaSuppression = new ScenarioVanillaSuppressionDefinition();
-            AuthorTestChecklist = new ScenarioAuthorTestChecklist();
         }
 
         public string Id { get; set; }
@@ -112,12 +114,15 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public string Goal { get; set; }
         public string Author { get; set; }
         public string Version { get; set; }
-        internal string Credits { get; set; }
-        internal List<string> Tags { get; private set; }
+        /// <summary>Optional attribution or licensing credits included with the scenario package.</summary>
+        public string Credits { get; set; }
+        /// <summary>Searchable author-defined labels serialized with the scenario.</summary>
+        public List<string> Tags { get; private set; }
         public List<string> Dependencies { get; private set; }
         public List<ScenarioModDependencyDefinition> ModDependencies { get; private set; }
         public ScenarioBaseGameMode BaseGameMode { get; set; }
-        internal string BaseFamilyChoice { get; set; }
+        /// <summary>Stable family-source choice used when starting or reloading the authored base mode.</summary>
+        public string BaseFamilyChoice { get; set; }
         public long? SeedOverride { get; set; }
         public ScenarioSelectionRulesDefinition SelectionRules { get; set; }
         public List<ScenarioNpcDefinition> ScenarioCharacters { get; private set; }
@@ -134,13 +139,13 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public ScenarioScoringDefinition Scoring { get; set; }
         public AssetReferencesDefinition AssetReferences { get; set; }
         public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
-        internal ScenarioBackendWorldsDefinition BackendWorlds { get; set; }
+        /// <summary>Advanced authored state for alternate Sheltered world backends.</summary>
+        public ScenarioBackendWorldsDefinition BackendWorlds { get; set; }
         public List<ScenarioGateDefinition> Gates { get; private set; }
         public List<ScenarioScheduledActionDefinition> ScheduledActions { get; private set; }
         public JournalDefinition Journal { get; set; }
         public ScenarioConversationAuthoringDefinition Conversations { get; set; }
         public ScenarioVanillaSuppressionDefinition VanillaSuppression { get; set; }
-        internal ScenarioAuthorTestChecklist AuthorTestChecklist { get; set; }
     }
 
     /// <summary>Player setup flow used when a published custom scenario starts.</summary>
@@ -340,7 +345,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public float DelaySeconds { get; set; }
     }
 
-    internal sealed class ScenarioBackendWorldsDefinition
+    /// <summary>Authored bunker/world state keyed by Sheltered base mode.</summary>
+    public sealed class ScenarioBackendWorldsDefinition
     {
         public ScenarioBackendWorldsDefinition()
         {
@@ -374,7 +380,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         }
     }
 
-    internal sealed class ScenarioBackendWorldDefinition
+    /// <summary>Authored bunker and scene-placement state for one Sheltered base mode.</summary>
+    public sealed class ScenarioBackendWorldDefinition
     {
         public ScenarioBackendWorldDefinition()
         {
@@ -1008,12 +1015,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
     {
         public WinLossConditionsDefinition()
         {
-            WinConditions = new List<ConditionDef>();
-            LossConditions = new List<ConditionDef>();
+            WinConditions = new List<ScenarioConditionRef>();
+            LossConditions = new List<ScenarioConditionRef>();
         }
 
-        public List<ConditionDef> WinConditions { get; private set; }
-        public List<ConditionDef> LossConditions { get; private set; }
+        public List<ScenarioConditionRef> WinConditions { get; private set; }
+        public List<ScenarioConditionRef> LossConditions { get; private set; }
     }
 
     /// <summary>
@@ -1187,22 +1194,6 @@ namespace ShelteredAPI.Scenarios.Definitions{
     }
 
     /// <summary>
-    /// Legacy/extensible condition definition used by win/loss and quest authoring.
-    /// Newer scenario gates should prefer <see cref="ScenarioConditionRef"/>.
-    /// </summary>
-    public class ConditionDef
-    {
-        public ConditionDef()
-        {
-            Properties = new List<ScenarioProperty>();
-        }
-
-        public string Id { get; set; }
-        public string Type { get; set; }
-        public List<ScenarioProperty> Properties { get; private set; }
-    }
-
-    /// <summary>
     /// Custom sprite, icon, patch, swap, and scene-sprite references used by a scenario.
     /// Paths are mod-relative unless a runtime sprite key is supplied.
     /// </summary>
@@ -1223,12 +1214,16 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public List<SpritePatchDefinition> SpritePatches { get; private set; }
         public List<SpriteSwapRule> SpriteSwaps { get; private set; }
         public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
-        internal List<ScenarioAssetCreditDefinition> AssetCredits { get; private set; }
+        /// <summary>Credits associated with authored scenario assets.</summary>
+        public List<ScenarioAssetCreditDefinition> AssetCredits { get; private set; }
     }
 
-    internal sealed class ScenarioAssetCreditDefinition
+    /// <summary>Attribution text associated with one scenario-relative asset path.</summary>
+    public sealed class ScenarioAssetCreditDefinition
     {
+        /// <summary>Scenario-package-relative asset path.</summary>
         public string RelativePath { get; set; }
+        /// <summary>Human-readable creator, license, or attribution text.</summary>
         public string Credit { get; set; }
     }
 

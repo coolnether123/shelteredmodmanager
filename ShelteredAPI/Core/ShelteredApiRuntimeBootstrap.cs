@@ -7,22 +7,20 @@ using ModAPI.Actors;
 using ModAPI.InputServices;
 using ModAPI.Scenarios;
 using ShelteredAPI.Actors;
+using ShelteredAPI.Actors.Authoring;
 using ShelteredAPI.Content;
 using ShelteredAPI.Content.Packs;
 using ShelteredAPI.Debugging;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
 using ShelteredAPI.Storage;
-using ShelteredAPI.Scenarios;
 using UnityEngine;
 
 
 using ShelteredAPI.Harmony;
 using ShelteredAPI.Saves;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
-using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Core
 {
     /// <summary>
@@ -45,16 +43,7 @@ namespace ShelteredAPI.Core
 
                 MeasureStartupPhase("ShelteredAPI ShelteredUnityLogNormalizers.Register", ShelteredUnityLogNormalizers.Register);
                 MeasureStartupPhase("ShelteredAPI ContentPackRuntimeBootstrap.EnsureSubscribed", ContentPackRuntimeBootstrap.EnsureSubscribed);
-                MeasureStartupPhase("ShelteredAPI ScenarioCompositionRoot.EnsureRuntimeInitialized", ScenarioCompositionRoot.EnsureRuntimeInitialized);
-                MeasureStartupPhase("ShelteredAPI ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle", ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle);
-                if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
-                {
-                    MMLog.WriteInfo("[ShelteredApiRuntimeBootstrap] Custom scenario editor runtime hooks are deferred until authoring opens.");
-                }
-                else
-                {
-                    MMLog.WriteInfo("[ShelteredApiRuntimeBootstrap] Custom scenario editor runtime hooks are disabled by manager option.");
-                }
+                MeasureStartupPhase("ShelteredAPI ScenarioRuntimeCompositionRoot.EnsureInitialized", ScenarioRuntimeCompositionRoot.EnsureInitialized);
                 ShelteredAPI.Harmony.ShelteredDeferredPatchTriggers.ApplyDebugDeferred("ShelteredAPI runtime diagnostics enabled");
                 MeasureStartupPhase("ShelteredAPI ShelteredVanillaInputActions.EnsureRegistered", ShelteredVanillaInputActions.EnsureRegistered);
                 MeasureStartupPhase("ShelteredAPI ShelteredKeybindsProvider.EnsureLoaded", ShelteredKeybindsProvider.Instance.EnsureLoaded);
@@ -153,29 +142,16 @@ namespace ShelteredAPI.Core
             RegisterApi(ShelteredApiAliasIds.ActorEvents, (IActorEvents)actors);
             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
             RegisterApi(ShelteredApiAliasIds.ActorSerialization, (IActorSerializationService)actors);
-            IActorAuthoringCapabilityRegistry actorAuthoringCapabilities = new ScenarioActorAuthoringCapabilityRegistry();
-            if (ScenarioFeatureToggles.IsDevActorAuthoringProviderEnabled())
-                actorAuthoringCapabilities.RegisterProvider(new ScenarioDevActorAuthoringCapabilityProvider());
+            IActorAuthoringCapabilityRegistry actorAuthoringCapabilities = new ActorAuthoringCapabilityRegistry();
             RegisterApi(GameRuntimeApiIds.ActorAuthoringCapabilities, actorAuthoringCapabilities);
             RegisterApi(ShelteredApiAliasIds.ActorAuthoringCapabilities, actorAuthoringCapabilities);
 
-            ICustomScenarioService customScenarios = ScenarioCompositionRoot.ResolveRuntime<ICustomScenarioService>();
-            ScenarioCompositionRoot.ResolveRuntime<IScenarioRuntimeBindingService>().EnsureHooked();
+            ICustomScenarioService customScenarios = ScenarioRuntimeCompositionRoot.Resolve<ICustomScenarioService>();
+            ScenarioRuntimeCompositionRoot.Resolve<IScenarioRuntimeBindingService>().EnsureHooked();
             RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
             RegisterApi(ShelteredApiAliasIds.CustomScenarios, customScenarios);
 
         }
-
-        internal static void EnsureAuthoringApiRegistered()
-        {
-            if (!ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
-                return;
-
-            IScenarioAuthoringBackend scenarioAuthoring = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
-            RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);
-            RegisterApi(ShelteredApiAliasIds.ScenarioAuthoring, scenarioAuthoring);
-        }
-
         internal static void EnsureSaveProtectionPatches()
         {
             lock (Sync)

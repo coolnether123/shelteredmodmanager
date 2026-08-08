@@ -4,13 +4,9 @@ using ModAPI.Harmony;
 using ModAPI.InputActions;
 using ShelteredAPI.Input;
 using ShelteredAPI.Debugging;
-using ShelteredAPI.Scenarios;
 using UnityEngine;
 
 
-using ShelteredAPI.Hooks;
-using ShelteredAPI.Scenarios.Composition;
-using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Harmony
 {
     /// <summary>
@@ -192,20 +188,6 @@ namespace ShelteredAPI.Harmony
                 return true;
             }
 
-            if (TryResolveAuthoringVanillaInteractionButton(button, state, ref result))
-                return true;
-
-            bool allowAuthoringVanillaInteract = ShouldAllowAuthoringVanillaInteractButton(button);
-
-            // Scenario authoring uses the same mouse buttons as Sheltered's world controls.
-            // If those buttons leak into vanilla gameplay, selecting a target also issues
-            // move/orders to survivors. Keep the editor in exclusive control until playtest.
-            if (!allowAuthoringVanillaInteract && ScenarioAuthoringRuntimeGuards.ShouldBlockGameplayButton(button))
-            {
-                result = false;
-                return true;
-            }
-
             InputBinding binding;
             if (!ShelteredVanillaInputActions.TryGetBinding(button, out binding))
                 return false;
@@ -221,63 +203,11 @@ namespace ShelteredAPI.Harmony
                 || button == PlatformInput.InputButton.GoHere)
             {
                 result = Evaluate(binding, state) && UICamera.hoveredObject == null;
-                NotifyAuthoringVanillaInteractionButton(button, state, result);
                 return true;
             }
 
             result = Evaluate(binding, state);
-            NotifyAuthoringVanillaInteractionButton(button, state, result);
             return true;
-        }
-
-        private static bool ShouldAllowAuthoringVanillaInteractButton(PlatformInput.InputButton button)
-        {
-            if (button != PlatformInput.InputButton.Interact)
-                return false;
-
-            try
-            {
-                ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
-                return service != null && service.CanStartWorldInteraction();
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool TryResolveAuthoringVanillaInteractionButton(PlatformInput.InputButton button, KeyState state, ref bool result)
-        {
-            try
-            {
-                ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
-                if (service == null)
-                    return false;
-
-                return service.TryResolveSyntheticLeftInteract(
-                    button,
-                    state == KeyState.Down,
-                    state == KeyState.Up,
-                    state == KeyState.Held,
-                    out result);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static void NotifyAuthoringVanillaInteractionButton(PlatformInput.InputButton button, KeyState state, bool result)
-        {
-            try
-            {
-                ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
-                if (service != null)
-                    service.NotifyGameplayButtonResult(button, state == KeyState.Up, result);
-            }
-            catch
-            {
-            }
         }
 
         private static bool TryResolveMenuButton(PlatformInput.MenuInputButton button, KeyState state, ref bool result)
@@ -343,12 +273,6 @@ namespace ShelteredAPI.Harmony
                 return true;
             }
 
-            if (ScenarioAuthoringRuntimeGuards.ShouldBlockGameplayAxis(axis))
-            {
-                result = 0f;
-                return true;
-            }
-
             float resolved;
             if (!ShelteredTouchpadInputRouter.TryGetGameplayAxis(axis, raw, out resolved))
                 return false;
@@ -360,12 +284,6 @@ namespace ShelteredAPI.Harmony
         private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
         {
             if (ShelteredFeedbackInputEnabler.IsOverlayVisible)
-            {
-                result = 0f;
-                return true;
-            }
-
-            if (ScenarioAuthoringRuntimeGuards.ShouldBlockMenuAxis(axis))
             {
                 result = 0f;
                 return true;

@@ -405,15 +405,15 @@ namespace ShelteredAPI.Core
                     context.AbsoluteSlot = SaveRuntimeState.ActiveCustomSave.absoluteSlot;
                 }
 
-                PlatformSaveProxy.Target pending;
+                SaveRuntimeState.Target pending;
                 if (!SaveRuntimeState.TryGetPendingLoad(type, out pending) || pending == null)
                     return context;
 
                 context.IsCustom = true;
-                context.ScenarioId = string.IsNullOrEmpty(pending.scenarioId) ? "Standard" : pending.scenarioId;
+                context.ScenarioId = string.IsNullOrEmpty(pending.ScenarioId) ? "Standard" : pending.ScenarioId;
                 var pendingEntry = string.Equals(context.ScenarioId, "Standard", StringComparison.OrdinalIgnoreCase)
-                    ? ShelteredAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
-                    : ShelteredAPI.Saves.ScenarioSaves.GetTrustedRegistry(context.ScenarioId).GetSave(pending.saveId);
+                    ? ShelteredAPI.Saves.ExpandedVanillaSaves.Get(pending.SaveId)
+                    : ShelteredAPI.Saves.ScenarioSaves.GetTrustedRegistry(context.ScenarioId).GetSave(pending.SaveId);
                 if (pendingEntry != null)
                 {
                     context.AbsoluteSlot = pendingEntry.absoluteSlot;

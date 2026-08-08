@@ -54,6 +54,10 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw "Nexus OAuth contract checks failed ($LASTEXITCODE)." }
     & (Join-Path $PSScriptRoot 'Test-ManagerSelfUpdate.ps1') -RepoRoot $repoRoot
     if ($LASTEXITCODE -ne 0) { throw "Manager self-update tests failed ($LASTEXITCODE)." }
+    & (Join-Path $PSScriptRoot 'Test-ScenarioEditorAssemblyBoundary.ps1') -RepoRoot $repoRoot
+    if ($LASTEXITCODE -ne 0) { throw "Scenario editor assembly-boundary checks failed ($LASTEXITCODE)." }
+    & (Join-Path $PSScriptRoot 'Test-ShelteredScenarioEditorContracts.ps1') -RepoRoot $repoRoot
+    if ($LASTEXITCODE -ne 0) { throw "Scenario editor lifecycle checks failed ($LASTEXITCODE)." }
 }
 
 $distSmm = Join-Path $repoRoot 'Dist\SMM'
@@ -76,6 +80,8 @@ $smmWhitelist = @(
     'bin\Doorstop.dll',
     'bin\ShelteredAPI.dll',
     'bin\ShelteredAPI.xml',
+    'bin\ShelteredScenarioEditor.dll',
+    'bin\ShelteredScenarioEditor.xml',
     'Doorstop\x86\winhttp.dll',
     'Doorstop\x64\winhttp.dll'
 )
@@ -84,6 +90,11 @@ $contractRequired = @(
     'bin\ShelteredAPI.dll','bin\Doorstop.dll','bin\0Harmony.dll',
     'Doorstop\x86\winhttp.dll','Doorstop\x64\winhttp.dll'
 )
+
+# The scenario editor ships in the complete archive but remains an optional
+# runtime extension. Do not add it to ManagerPackageContract/contractRequired:
+# ShelteredAPI and custom scenario playback must remain valid without it.
+$optionalPackageFiles = @('bin\ShelteredScenarioEditor.dll')
 
 $smmStage = Join-Path $stageRoot 'SMM'
 $excluded = New-Object System.Collections.Generic.List[string]
@@ -112,6 +123,11 @@ if (-not (Test-Path -LiteralPath $harmonyTarget)) {
 foreach ($required in $contractRequired) {
     if (-not (Test-Path -LiteralPath (Join-Path $smmStage $required))) {
         throw "Package contract violation: required file '$required' missing from staged SMM."
+    }
+}
+foreach ($optionalPackageFile in $optionalPackageFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $smmStage $optionalPackageFile))) {
+        throw "Complete package is missing optional component '$optionalPackageFile'."
     }
 }
 $unexpectedBinaries = $excluded | Where-Object { $_ -match '\.(exe|dll)$' -and $_ -notmatch '\.pdb$' -and $_ -notmatch '^bin\\(decompiler|_nxm_inbox)\\' }

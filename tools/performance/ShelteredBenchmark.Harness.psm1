@@ -117,6 +117,39 @@ function Enable-ShelteredBackgroundRun {
     } -TimeoutSeconds 10
 }
 
+function Dismiss-ShelteredBenchmarkMenuBlockers {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][int]$Port)
+
+    $closePath = 'UI Root/ModAPI_SaveDetailsWindow/SaveDetailsWindow/CloseBtn'
+    $ui = Invoke-ShelteredHarnessRequest -Port $Port -Route '/ui' -Query @{
+        filter = 'ModAPI_SaveDetailsWindow'; inactive = 'false'; components = 'false'; limit = '200'
+    } -TimeoutSeconds 10
+    $closeButton = @($ui.objects | Where-Object {
+        [string]$_.path -eq $closePath -and [bool]$_.activeInHierarchy
+    }) | Select-Object -First 1
+    if ($null -eq $closeButton) {
+        return [pscustomobject]@{ Observed = $false; Dismissed = $false; Path = $closePath; Reason = 'not-visible' }
+    }
+
+    $activation = Invoke-ShelteredHarnessRequest -Port $Port -Route '/activate' -Query @{ path = $closePath } -TimeoutSeconds 10
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds(5)
+    do {
+        $remaining = Invoke-ShelteredHarnessRequest -Port $Port -Route '/ui' -Query @{
+            filter = 'ModAPI_SaveDetailsWindow'; inactive = 'false'; components = 'false'; limit = '200'
+        } -TimeoutSeconds 10
+        $stillVisible = @($remaining.objects | Where-Object {
+            [string]$_.path -eq $closePath -and [bool]$_.activeInHierarchy
+        }).Count -gt 0
+        if (-not $stillVisible) {
+            return [pscustomobject]@{ Observed = $true; Dismissed = $true; Path = $closePath; Reason = ''; Activation = $activation }
+        }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTimeOffset]::UtcNow -lt $deadline)
+
+    throw "Known benchmark menu blocker '$closePath' remained visible after activation."
+}
+
 function Save-ShelteredHarnessScreenshot {
     [CmdletBinding()]
     param(
@@ -124,13 +157,26 @@ function Save-ShelteredHarnessScreenshot {
         [Parameter(Mandatory = $true)][string]$Path,
         [ValidateSet('framebuffer', 'client', 'window')][string]$Mode = 'client'
     )
-    $query = @{ activate = 'true'; preserve = 'true' }
+    # Screenshot evidence must never disturb the desktop. Unity framebuffer
+    # capture runs in-process and does not need the Sheltered HWND foregrounded.
+    # Explicit false values also prevent a future harness default from silently
+    # turning stress/benchmark captures into focus-stealing operations.
+    $query = @{ activate = 'false'; preserve = 'true' }
     if ($Mode -ne 'framebuffer') { $query.mode = $Mode }
     $uri = Resolve-HarnessUri -Port $Port -Route '/screenshot' -Query $query
     $response = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec 30 -OutFile $Path -PassThru
     $headers = [ordered]@{}
     foreach ($key in $response.Headers.Keys) { $headers[[string]$key] = [string]$response.Headers[$key] }
     $headers | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($Path + '.headers.json') -Encoding UTF8
+    $signature = @(Get-Content -LiteralPath $Path -Encoding Byte -TotalCount 8)
+    $isPng = $signature.Count -eq 8 -and
+        $signature[0] -eq 0x89 -and $signature[1] -eq 0x50 -and $signature[2] -eq 0x4E -and $signature[3] -eq 0x47 -and
+        $signature[4] -eq 0x0D -and $signature[5] -eq 0x0A -and $signature[6] -eq 0x1A -and $signature[7] -eq 0x0A
+    if (-not $isPng) {
+        $errorPath = $Path + '.error.json'
+        Move-Item -LiteralPath $Path -Destination $errorPath -Force
+        throw "Harness screenshot response was not a PNG. Response retained at '$errorPath'."
+    }
     return [pscustomobject]@{ Path = $Path; Length = (Get-Item -LiteralPath $Path).Length; Headers = $headers }
 }
 
@@ -234,26 +280,6 @@ function Measure-ShelteredScenarioTransition {
     return $result
 }
 
-function Wait-ShelteredUiPath {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)][int]$Port,
-        [Parameter(Mandatory = $true)][string]$Path,
-        [int]$TimeoutSeconds = 45
-    )
-    $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
-    do {
-        $response = Invoke-ShelteredHarnessRequest -Port $Port -Route '/ui' -Query @{ filter = $Path; inactive = 'true'; limit = 20 } -TimeoutSeconds 5
-        $objectsProperty = $response.PSObject.Properties['objects']
-        if ($null -ne $objectsProperty) {
-            $match = @($objectsProperty.Value | Where-Object { $_.path -eq $Path -and $_.activeInHierarchy } | Select-Object -First 1)
-            if ($match.Count) { return $match[0] }
-        }
-        Start-Sleep -Milliseconds 25
-    } while ([DateTimeOffset]::UtcNow -lt $deadline)
-    throw "Timed out waiting for active UI path '$Path'."
-}
-
 function Measure-ShelteredScenarioSelectionTransition {
     [CmdletBinding()]
     param(
@@ -316,8 +342,8 @@ function Measure-ShelteredScenarioSelectionTransition {
 }
 
 Export-ModuleMember -Function @(
-    'Acquire-ShelteredHarnessLease', 'Enable-ShelteredBackgroundRun', 'Get-SmoothFpsSummary',
+    'Acquire-ShelteredHarnessLease', 'Dismiss-ShelteredBenchmarkMenuBlockers', 'Enable-ShelteredBackgroundRun', 'Get-SmoothFpsSummary',
     'Invoke-ShelteredHarnessRequest', 'Measure-ShelteredScenarioSelectionTransition', 'Measure-ShelteredScenarioTransition', 'Measure-ShelteredSmoothFps',
     'Release-ShelteredHarnessLease', 'Resolve-HarnessUri', 'Save-ShelteredHarnessJson',
-    'Save-ShelteredHarnessScreenshot', 'Test-HarnessMenuReady', 'Wait-HarnessMenuReady', 'Wait-ShelteredHarness', 'Wait-ShelteredUiPath'
+    'Save-ShelteredHarnessScreenshot', 'Test-HarnessMenuReady', 'Wait-HarnessMenuReady', 'Wait-ShelteredHarness'
 )

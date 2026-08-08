@@ -21,7 +21,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private const int RowPanelHeight = 68;
         private const int SaveListRowHeight = 68;
         private const int SaveCardHeight = 60;
-        private const int DraftInputWidth = 430;
         private const float ReferenceContentWidth = 1080f;
         private const float ReferenceContentHeight = 490f;
         private const int LibraryToolRowHeight = 52;
@@ -60,9 +59,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private GameObject _sortMenuRoot;
         private ScenarioLibrarySortMode _librarySortMode;
         private bool _evaluateSortMenuClose;
-        private UIInput _draftIdInput;
-        private UIInput _draftNameInput;
-        private UIInput _draftDescriptionInput;
         private UILabel _statusLabel;
 
         public ScenarioBookBrowserRenderer(
@@ -139,9 +135,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     SearchBarY,
                     0f);
             _pagedList.Clear();
-            _draftIdInput = null;
-            _draftNameInput = null;
-            _draftDescriptionInput = null;
             SetNavigatorMode(view);
             if (view == ScenarioBookBrowserViewKind.Types)
             {
@@ -247,35 +240,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _preparedPages.Clear();
         }
 
-        public void RenderDraftEditor(
-            ScenarioBookDraftEditorModel model,
-            string headerTitle,
-            string headerDetail,
-            Action<ScenarioBookDraftEditorModel> save,
-            Action openDraft,
-            Action duplicateDraft,
-            Action openExportFolder,
-            Action deleteDraft)
-        {
-            if (_pagedList == null)
-                return;
-
-            SetSearchVisible(false);
-            SetSortVisible(false, ScenarioLibrarySortMode.PinnedFirst);
-            SetNavigatorMode(ScenarioBookBrowserViewKind.DraftDetails);
-            _pagedList.Clear();
-            _draftIdInput = null;
-            _draftNameInput = null;
-            _draftDescriptionInput = null;
-
-            _pagedList.AddRow(BuildHeader(_pagedList.ContentRoot, headerTitle, headerDetail), HeaderHeight);
-            _pagedList.AddRow(BuildDraftEditor(_pagedList.ContentRoot, model, save, openDraft, duplicateDraft, openExportFolder, deleteDraft), 390);
-            _pagedList.Layout(6);
-
-            if (_navigator != null)
-                _navigator.UpdateState(0, 1);
-        }
-
         public void SetStatus(string value)
         {
             if (_statusLabel != null)
@@ -374,8 +338,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _chrome.Regions.ContentRoot,
                 "ScenarioLibrarySortDropdown",
                 new Vector3(SortButtonX, SearchBarY - 39f, 0f));
+            UIPanel pagePanel = _pagedList.Viewport.GetComponent<UIPanel>();
+            UIPanel sortMenuPanel = _sortMenuRoot.AddComponent<UIPanel>();
+            sortMenuPanel.depth = pagePanel.depth + 1;
+            sortMenuPanel.clipping = UIDrawCall.Clipping.None;
 
             ScenarioLibrarySortMode[] modes = (ScenarioLibrarySortMode[])Enum.GetValues(typeof(ScenarioLibrarySortMode));
+            int menuHeight = modes.Length * 34 + 4;
+            _ui.CreateQuad(
+                _sortMenuRoot,
+                "ScenarioLibrarySortDropdownOpaqueBacking",
+                _chrome.Textures.Paper(188, menuHeight),
+                new Vector3(0f, -((modes.Length - 1) * 17f), 0f),
+                188,
+                menuHeight,
+                Color.white,
+                _ui.NextDepth());
             for (int i = 0; i < modes.Length; i++)
             {
                 ScenarioLibrarySortMode option = modes[i];
@@ -571,7 +549,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private int LibraryFont(int referenceSize)
         {
-            return LibraryMetric(referenceSize);
+            return Mathf.Max(LibraryMetric(referenceSize), Mathf.RoundToInt(referenceSize * 0.9f));
         }
 
         private void RenderLibrary(
@@ -601,13 +579,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             List<ScenarioBookRowModel> tools = new List<ScenarioBookRowModel>();
             List<ScenarioBookRowModel> scenarios = new List<ScenarioBookRowModel>();
+            List<ScenarioBookRowModel> unlimitedArchives = new List<ScenarioBookRowModel>();
             for (int i = 0; rows != null && i < rows.Count; i++)
             {
                 ScenarioBookRowModel row = rows[i];
                 if (row == null)
                     continue;
-                if (row.Kind == ScenarioBookRowKind.Type || row.Kind == ScenarioBookRowKind.OpenInstallScenarios)
+                if (row.Kind == ScenarioBookRowKind.Type)
                     tools.Add(row);
+                else if (row.Kind == ScenarioBookRowKind.OpenScenarioSaves)
+                    unlimitedArchives.Add(row);
                 else
                     scenarios.Add(row);
             }
@@ -615,29 +596,60 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             bool searching = !string.IsNullOrEmpty(SearchFilter);
             if (!searching)
             {
-                BuildSectionLabel(spread, "LibraryToolsLabel", "TOOLS", -520f, 217f, LeftPageWidth - 18, LibraryFont(13));
+                BuildSectionLabel(spread, "LibraryToolsLabel", "BROWSE BY MODE", -520f, 217f, LeftPageWidth - 18, LibraryFont(13));
                 for (int i = 0; i < tools.Count; i++)
                     BuildLibraryToolRow(spread, tools[i], i, 181f - (i * LibraryMetric(54)), select);
             }
 
-            float scenarioLabelY = searching ? 217f : 90f;
-            float scenarioStartY = searching ? 172f : 45f;
-            BuildSectionLabel(spread, "LibraryScenariosLabel", "SCENARIOS", -520f, scenarioLabelY, LeftPageWidth - 18, LibraryFont(13));
+            List<ScenarioBookRowModel> libraryRows = new List<ScenarioBookRowModel>();
+            libraryRows.AddRange(scenarios);
+            libraryRows.AddRange(unlimitedArchives);
             int start = Math.Max(0, pageIndex) * ScenarioBookBrowserPanel.LibraryRowsPerPage;
-            int end = Math.Min(scenarios.Count, start + ScenarioBookBrowserPanel.LibraryRowsPerPage);
+            int end = Math.Min(libraryRows.Count, start + ScenarioBookBrowserPanel.LibraryRowsPerPage);
+            List<ScenarioBookRowModel> pageScenarios = new List<ScenarioBookRowModel>();
+            List<ScenarioBookRowModel> pageArchives = new List<ScenarioBookRowModel>();
             for (int i = start; i < end; i++)
-                BuildLibraryScenarioRow(spread, scenarios[i], i, scenarioStartY - ((i - start) * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
+            {
+                ScenarioBookRowModel row = libraryRows[i];
+                if (row != null && row.Kind == ScenarioBookRowKind.OpenScenarioSaves)
+                    pageArchives.Add(row);
+                else
+                    pageScenarios.Add(row);
+            }
 
-            if (scenarios.Count == 0)
+            float sectionLabelY = searching
+                ? 217f
+                : 181f - ((Math.Max(1, tools.Count) - 1) * LibraryMetric(54))
+                    - ((LibraryMetric(LibraryToolRowHeight) - LibraryMetric(4)) * 0.5f)
+                    - LibraryMetric(18);
+            BuildSectionLabel(spread, "LibraryScenariosLabel", "INSTALLED CUSTOM SCENARIOS", -520f, sectionLabelY, LeftPageWidth - 18, LibraryFont(13));
+            float rowY = sectionLabelY - LibraryMetric(45);
+            if (pageScenarios.Count == 0 && pageIndex == 0)
             {
                 BuildLibraryScenarioRow(spread, new ScenarioBookRowModel
                 {
                     Kind = ScenarioBookRowKind.Empty,
                     Title = string.IsNullOrEmpty(SearchFilter) ? "No custom scenarios installed" : "No matching scenarios",
                     Detail = string.IsNullOrEmpty(SearchFilter)
-                        ? "Use Install Downloads to add one to this library."
+                        ? "Install a custom scenario mod to add one to this library."
                         : "Try a title, author, or base-mode search."
-                }, 0, scenarioStartY, selectedScenario, select);
+                }, 0, rowY, selectedScenario, select);
+                rowY -= LibraryMetric(LibraryScenarioRowHeight);
+            }
+            else
+            {
+                for (int i = 0; i < pageScenarios.Count; i++)
+                    BuildLibraryScenarioRow(spread, pageScenarios[i], start + i, rowY - (i * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
+                rowY -= pageScenarios.Count * LibraryMetric(LibraryScenarioRowHeight);
+            }
+
+            if (pageArchives.Count > 0)
+            {
+                sectionLabelY = rowY - LibraryMetric(12);
+                BuildSectionLabel(spread, "LibraryUnlimitedArchivesLabel", "UNLIMITED VANILLA SAVE ARCHIVES", -520f, sectionLabelY, LeftPageWidth - 18, LibraryFont(13));
+                rowY = sectionLabelY - LibraryMetric(45);
+                for (int i = 0; i < pageArchives.Count; i++)
+                    BuildLibraryScenarioRow(spread, pageArchives[i], start + pageScenarios.Count + i, rowY - (i * LibraryMetric(LibraryScenarioRowHeight)), selectedScenario, select);
             }
 
             if (selectedScenario == null)
@@ -655,22 +667,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (pageIndex > 0)
             {
                 _chrome.Buttons.Build(root, "PreviousScenarios", "<",
-                    new Vector3(-250f, 90f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(-1); });
+                    new Vector3(-250f, -205f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(-1); });
             }
             _ui.CreateLabel(root, "PageLabel", (pageIndex + 1).ToString() + "/" + pageCount.ToString(),
-                new Vector3(-205f, 90f, 0f), LibraryFont(13), _chrome.Palette.InkFaded,
+                new Vector3(-205f, -205f, 0f), LibraryFont(13), _chrome.Palette.InkFaded,
                 48, 22, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
             if (pageIndex + 1 < pageCount)
             {
                 _chrome.Buttons.Build(root, "NextScenarios", ">",
-                    new Vector3(-160f, 90f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(1); });
+                    new Vector3(-160f, -205f, 0f), 38, 30, LibraryFont(17), delegate { _changePage(1); });
             }
         }
 
         private void BuildLibraryToolRow(GameObject parent, ScenarioBookRowModel row, int index, float y, Action<ScenarioBookRowModel> select)
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookRow_Tool_" + index.ToString(), new Vector3(LeftPageX, y, 0f));
-            Color rest = new Color(0.42f, 0.34f, 0.22f, 0.28f);
+            Color rest = new Color(0.42f, 0.34f, 0.22f, 0.38f);
             UITexture background = _ui.CreateQuad(root, "Background", _chrome.Textures.White, Vector3.zero,
                 LeftPageWidth, LibraryMetric(LibraryToolRowHeight) - LibraryMetric(4), rest, _ui.NextDepth());
             _ui.CreateQuad(root, "Edge", _chrome.Textures.White, new Vector3(-232f, 0f, 0f),
@@ -683,7 +695,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 new Vector3(210f, 9f, 0f), LibraryFont(15), _chrome.Palette.StampRed,
                 90, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
             UILabel detail = _ui.CreateLabel(root, "Detail", row.Detail,
-                new Vector3(-214f, -14f, 0f), LibraryFont(13), _chrome.Palette.InkFaded,
+                new Vector3(-214f, -14f, 0f), LibraryFont(14), _chrome.Palette.GraphitePencil,
                 400, 20, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             detail.overflowMethod = UILabel.Overflow.ShrinkContent;
             if (select != null)
@@ -706,6 +718,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             rowPayload.Pinned = row != null && row.IsPinned;
             bool selected = row != null && row.Scenario != null && ReferenceEquals(row.Scenario, selectedScenario);
             Color rest = selected ? new Color(0.38f, 0.29f, 0.18f, 0.34f) : BookSelectionRowStyle.Background(row != null && row.IsLocked);
+            if (!selected && (row == null || !row.IsLocked))
+                rest.a = 0.42f;
             UITexture background = _ui.CreateQuad(root, "Background", _chrome.Textures.White, Vector3.zero,
                 LeftPageWidth, LibraryMetric(LibraryScenarioRowHeight) - LibraryMetric(3), rest, _ui.NextDepth());
             _ui.CreateQuad(root, "Edge", _chrome.Textures.White, new Vector3(-232f, 0f, 0f),
@@ -716,7 +730,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 300, 23, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel detail = _ui.CreateLabel(root, "Detail", row != null ? row.Detail : string.Empty,
-                new Vector3(-214f, -13f, 0f), LibraryFont(12), _chrome.Palette.InkFaded,
+                new Vector3(-214f, -13f, 0f), LibraryFont(13), _chrome.Palette.GraphitePencil,
                 380, 19, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             detail.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel badge = _ui.CreateLabel(root, "Badge", row != null ? row.Badge : string.Empty,
@@ -778,7 +792,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 RightPageWidth, 44, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
             UILabel blurb = _ui.CreateLabel(parent, "LibraryWelcomeBlurb",
-                "Pick a scenario on the left to read its field notes and begin.\n\nDrafts are your workshop for stories still being built.\n\nDrop downloaded scenarios in Install Downloads.",
+                "Pick a scenario on the left to read its field notes and begin.\n\nInstalled scenario mods appear here automatically.\n\nUnlimited vanilla runs remain in their own save archives.",
                 new Vector3(82f, 117f, 0f), LibraryFont(20), _chrome.Palette.InkFaded,
                 RightPageWidth, 280, NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
             blurb.multiLine = true;
@@ -953,6 +967,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             string title = scenario != null ? Safe(scenario.DisplayName, scenario.ScenarioId) : "Scenario";
             string description = scenario != null ? Safe(scenario.Description, "No description was provided for this scenario.") : string.Empty;
+            if (scenario != null && scenario.IsVanilla)
+            {
+                title = "Unlimited " + title + " Saves";
+                description = "Separate archive for unlimited runs. The stock vanilla scenario save stays in the vanilla window.";
+            }
 
             BuildSectionLabel(parent, "ScenarioDossierLabel", "SCENARIO DOSSIER", -520f, 218f, LeftPageWidth - 18);
 
@@ -1028,8 +1047,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return "Unknown";
             if (scenario.Source == ScenarioCatalogSource.Vanilla)
                 return "Vanilla";
-            if (scenario.Source == ScenarioCatalogSource.Draft)
-                return "Local draft";
             return Safe(scenario.OwnerModId, "Local mod");
         }
 
@@ -1212,7 +1229,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (row.CanDelete && delete != null)
             {
                 _chrome.Buttons.Build(root, "Delete", "Del",
-                    new Vector3(194f, 20f, 0f), 38, 22, 10, delegate { delete(row); });
+                    new Vector3(197f, 20f, 0f), 32, 22, 10, delegate { delete(row); });
             }
         }
 
@@ -1360,167 +1377,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             hover.ScaleTarget = root.transform;
             hover.RestScale = 1f;
             hover.HoverScale = 1.01f;
-        }
-
-        private GameObject BuildDraftEditor(
-            GameObject parent,
-            ScenarioBookDraftEditorModel model,
-            Action<ScenarioBookDraftEditorModel> save,
-            Action openDraft,
-            Action duplicateDraft,
-            Action openExportFolder,
-            Action deleteDraft)
-        {
-            GameObject root = _ui.CreateChild(parent, "ScenarioBookDraftEditor", Vector3.zero);
-            _ui.CreateLabel(root, "NameLabel", "Scenario Name",
-                new Vector3(-520f, 164f, 0f), 19, _chrome.Palette.Ink,
-                LeftPageWidth, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-            _draftNameInput = CreateTextInput(root, "ScenarioNameInput",
-                new Vector3(LeftPageX, 124f, 0f), DraftInputWidth, 44,
-                model != null ? model.DisplayName : string.Empty, false, 21, _chrome.Palette.Ink);
-
-            _ui.CreateLabel(root, "DescriptionLabel", "Description",
-                new Vector3(-520f, 88f, 0f), 19, _chrome.Palette.Ink,
-                LeftPageWidth, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-            _draftDescriptionInput = CreateTextInput(root, "ScenarioDescriptionInput",
-                new Vector3(LeftPageX, -17f, 0f), DraftInputWidth, 150,
-                model != null ? model.Description : string.Empty, true, 17, _chrome.Palette.Ink);
-
-            _ui.CreateLabel(root, "IdLabel", "FILE DETAILS  -  AUTHORING FILE ID",
-                new Vector3(-520f, -112f, 0f), 11, _chrome.Palette.InkFaded,
-                LeftPageWidth, 18, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-            _draftIdInput = CreateTextInput(root, "DraftIdInput",
-                new Vector3(LeftPageX, -146f, 0f), DraftInputWidth, 30,
-                model != null ? model.DraftId : string.Empty, false, 14, _chrome.Palette.InkFaded);
-
-            BuildDraftFacts(root, model != null ? model.Facts : null);
-
-            _chrome.Buttons.Build(root, "SaveDraftDetails", "Save Details",
-                new Vector3(420f, 30f, 0f), 160, 44, 17, delegate
-                {
-                    if (save != null)
-                        save(ReadDraftEditorModel(model));
-                });
-            _chrome.Buttons.Build(root, "OpenDraft", "Open Draft",
-                new Vector3(420f, -28f, 0f), 160, 44, 17, delegate
-                {
-                    if (openDraft != null)
-                        openDraft();
-                });
-            _chrome.Buttons.Build(root, "DuplicateDraft", "Duplicate Draft",
-                new Vector3(420f, -86f, 0f), 160, 44, 17, delegate
-                {
-                    if (duplicateDraft != null)
-                        duplicateDraft();
-                });
-            _chrome.Buttons.Build(root, "DeleteDraft", "Delete Draft",
-                new Vector3(420f, -144f, 0f), 160, 44, 17, delegate
-                {
-                    if (deleteDraft != null)
-                        deleteDraft();
-                });
-
-            if (model != null && model.Facts != null && model.Facts.HasExport)
-            {
-                _chrome.Buttons.Build(root, "OpenExportFolder", "Open Export",
-                    new Vector3(420f, -202f, 0f), 160, 44, 17, delegate
-                    {
-                        if (openExportFolder != null)
-                            openExportFolder();
-                    });
-            }
-
-            return root;
-        }
-
-        private void BuildDraftFacts(GameObject root, ScenarioBookDraftFactsModel facts)
-        {
-            _ui.CreateLabel(root, "DraftFactsHeading", "Draft status",
-                new Vector3(96f, 168f, 0f), 17, _chrome.Palette.Ink,
-                245, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-
-            float y = 140f;
-            BuildDraftFactLine(root, "BaseMode", "Base mode: " + FactValue(facts != null ? facts.BaseModeLabel : null, "Standard"), y); y -= 22f;
-            BuildDraftFactLine(root, "Edited", "Last edited: " + FactValue(facts != null ? facts.LastEditedText : null, "unknown"), y); y -= 22f;
-            BuildDraftFactLine(root, "Validation", "Validation: " + FactValue(facts != null ? facts.ValidationSummary : null, "Not checked"), y); y -= 22f;
-            BuildDraftFactLine(root, "Export", "Last export: " + (facts != null && facts.HasExport ? FactValue(facts.LastExportText, "exported") : "none yet"), y); y -= 22f;
-            BuildDraftFactLine(root, "Recovery", "Recovery data: " + BuildRecoveryValue(facts), y); y -= 22f;
-            if (facts != null && facts.HasExport)
-            {
-                BuildDraftFactLine(root, "ExportPath", "Export folder: " + FactValue(facts.LastExportRoot, "unknown"), y); y -= 22f;
-                BuildDraftFactLine(root, "Share", "Send this folder to another player; they drop it in "
-                    + ScenarioPackageImportService.StagingFolderName + " and click Install.", y);
-            }
-        }
-
-        private void BuildDraftFactLine(GameObject root, string key, string text, float y)
-        {
-            UILabel line = _ui.CreateLabel(root, "DraftFact_" + key, text,
-                new Vector3(96f, y, 0f), 15, _chrome.Palette.InkFaded,
-                245, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-            line.overflowMethod = UILabel.Overflow.ShrinkContent;
-        }
-
-        private static string BuildRecoveryValue(ScenarioBookDraftFactsModel facts)
-        {
-            if (facts == null)
-                return "none";
-            if (facts.HasRecoveryData)
-                return "unsaved autosave present";
-            return facts.HasHistory ? "history saved" : "none";
-        }
-
-        private static string FactValue(string value, string fallback)
-        {
-            return string.IsNullOrEmpty(value) ? fallback : value;
-        }
-
-        private UIInput CreateTextInput(
-            GameObject parent,
-            string name,
-            Vector3 localPosition,
-            int width,
-            int height,
-            string value,
-            bool multiLine,
-            int fontSize,
-            Color textColor)
-        {
-            GameObject root = _ui.CreateChild(parent, name, localPosition);
-            _ui.CreateQuad(root, "InputBoundary", _chrome.Textures.White, Vector3.zero,
-                width + 4, height + 4, new Color(0.35f, 0.25f, 0.16f, 0.58f), _ui.NextDepth());
-            _ui.CreateQuad(root, "InputPaper", _chrome.Textures.White, Vector3.zero,
-                width, height, new Color(0.96f, 0.89f, 0.70f, 0.82f), _ui.NextDepth());
-            _ui.AddClickCollider(root, width, height, null);
-
-            UILabel label = _ui.CreateLabel(root, "Text", value,
-                multiLine ? new Vector3(-width * 0.5f + 16f, height * 0.5f - 16f, 0f) : new Vector3(-width * 0.5f + 16f, 0f, 0f),
-                fontSize, textColor,
-                width - 32, height - 16,
-                NGUIText.Alignment.Left,
-                multiLine ? UIWidget.Pivot.TopLeft : UIWidget.Pivot.Left,
-                _ui.NextDepth());
-            label.multiLine = multiLine;
-            label.overflowMethod = UILabel.Overflow.ClampContent;
-
-            UIInput input = root.AddComponent<UIInput>();
-            input.label = label;
-            input.activeTextColor = textColor;
-            input.caretColor = _chrome.Palette.Ink;
-            input.selectionColor = new Color(0.35f, 0.25f, 0.16f, 0.35f);
-            input.value = value ?? string.Empty;
-            return input;
-        }
-
-        private ScenarioBookDraftEditorModel ReadDraftEditorModel(ScenarioBookDraftEditorModel original)
-        {
-            return new ScenarioBookDraftEditorModel
-            {
-                Scenario = original != null ? original.Scenario : null,
-                DraftId = _draftIdInput != null ? _draftIdInput.value : string.Empty,
-                DisplayName = _draftNameInput != null ? _draftNameInput.value : string.Empty,
-                Description = _draftDescriptionInput != null ? _draftDescriptionInput.value : string.Empty
-            };
         }
 
         private GameObject BuildEmptyRow(GameObject parent)

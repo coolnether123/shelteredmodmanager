@@ -7,8 +7,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
     internal enum ScenarioCatalogSource
     {
         Vanilla = 0,
-        Modded = 1,
-        Draft = 2
+        Modded = 1
     }
 
     internal enum ScenarioLaunchMode
@@ -16,8 +15,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         Survival = 0,
         Surrounded = 1,
         Stasis = 2,
-        CustomDefinition = 3,
-        AuthoringDraft = 4
+        CustomDefinition = 3
     }
 
     internal sealed class ScenarioCatalogEntry

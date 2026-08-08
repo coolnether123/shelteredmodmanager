@@ -31,14 +31,14 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
             "MapIcon_Unknown"
         };
 
-        public static string[] GetKnownIconIds()
+        internal static string[] GetKnownIconIds()
         {
             string[] copy = new string[KnownIconIds.Length];
             Array.Copy(KnownIconIds, copy, KnownIconIds.Length);
             return copy;
         }
 
-        public static bool IsKnownIconId(string iconId)
+        internal static bool IsKnownIconId(string iconId)
         {
             if (string.IsNullOrEmpty(iconId))
                 return true;

@@ -25,6 +25,22 @@ Use both fields when the mod references both assemblies. Do not leave old 1.3 me
 6. Run the mod alone, then with the full public mod set.
 7. Check save/load warnings before advertising old-save compatibility.
 
+### Manager runtime option API
+
+Use `ModAPI.Core.ManagerBooleanOptions.RegisterBooleanOption(...)`, `GetBool(...)`, and `SetBool(...)`.
+`ManagerBooleanOptionDefinition` remains public from `ModAPI.dll`; `Manager.exe` no longer emits a duplicate
+definition. The JSON container, record, and desktop/runtime policy-input types are internal in the 2.0 line.
+Code that referenced `ManagerBooleanOptionsFile` or `ManagerBooleanOptionRecord` must move to the supported
+facade instead of editing `manager_options.json` directly.
+
+### Custom scenario API and editor split
+
+Reference `ShelteredAPI.dll` for scenario definitions, XML authoring, registration/catalog access, runtime operations, browsing, and saves. Do not reference `ShelteredScenarioEditor.dll`; it is an optional downstream application and may be physically absent from a player's installation.
+
+`ShelteredScenarios` is now the only Sheltered-specific registration/catalog facade. Code written against the unreleased `ShelteredScenarioRegistration` wrapper must move directly to `ShelteredScenarios`; there is no alias or forwarding shim. `ShelteredScenarioAuthoring` remains the XML/file facade, and `ShelteredScenarioRuntime` remains the active-runtime facade.
+
+Editor workflow metadata such as the author test checklist is not part of `ScenarioDefinition`. The editor keeps it in adjacent `scenario.editor.xml` files and excludes those files from exported packages, so mods must not read, write, or package that sidecar. The editor's runtime playtest uses a disposable `IScenarioPreviewSession`; owners close it with `Dispose`, not a legacy `EndPreview` call.
+
 ## Player-Facing Compatibility Text
 
 Use plain language on Nexus pages:

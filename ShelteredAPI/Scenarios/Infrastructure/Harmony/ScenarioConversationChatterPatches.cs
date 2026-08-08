@@ -116,7 +116,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
         {
             try
             {
-                return ScenarioCompositionRoot.ResolveRuntime<ScenarioConversationRuntimeService>();
+                return ScenarioRuntimeCompositionRoot.Resolve<ScenarioConversationRuntimeService>();
             }
             catch
             {

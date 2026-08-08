@@ -5,10 +5,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using UnityEngine;
 
-using ShelteredAPI.Hooks;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
-using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal enum ScenarioCharacterTexturePart
@@ -28,24 +25,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
     internal sealed class ScenarioCharacterAppearanceService
     {
-        internal sealed class ResolvedCharacterTarget
+        private sealed class ResolvedCharacterTarget
         {
-            public FamilyMember FamilyMember;
             public BaseCharacter Character;
             public CharacterMesh Mesh;
             public CharacterMeshOptions.CharacterMeshType MeshType;
-            public int FamilyIndex;
-            public string TargetPath;
-            public string DisplayName;
-        }
-
-        internal sealed class PreviewSession
-        {
-            public ResolvedCharacterTarget Target;
-            public string HeadTextureId;
-            public string TorsoTextureId;
-            public string LegTextureId;
-            public Sprite AvatarSprite;
         }
 
         private static readonly FieldInfo BaseCharacterMeshField = typeof(BaseCharacter).GetField("m_mesh", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -60,16 +44,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private static readonly FieldInfo BaseCharacterSkinColorField = typeof(BaseCharacter).GetField("m_skinColor", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterShirtColorField = typeof(BaseCharacter).GetField("m_shirtColor", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterPantsColorField = typeof(BaseCharacter).GetField("m_pantsColor", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo NpcVisitHairColorsField = typeof(NpcVisitManager).GetField("m_hairColors", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo NpcVisitSkinColorsField = typeof(NpcVisitManager).GetField("m_skinColors", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo NpcVisitShirtColorsField = typeof(NpcVisitManager).GetField("m_shirtColors", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo NpcVisitPantsColorsField = typeof(NpcVisitManager).GetField("m_pantsColors", BindingFlags.NonPublic | BindingFlags.Instance);
-
-        private static readonly string[] FallbackHairColors = new[] { "#3B2116", "#6B3F1D", "#A36B35", "#D1B07A", "#101010", "#808080" };
-        private static readonly string[] FallbackSkinColors = new[] { "#F2C49B", "#D79B72", "#A96E4B", "#70452F", "#3A2419" };
-        private static readonly string[] FallbackShirtColors = new[] { "#5F7EA6", "#7D8B55", "#9A4B4B", "#6B5D8F", "#C1A34F", "#535353" };
-        private static readonly string[] FallbackPantsColors = new[] { "#2D3B4F", "#4F4A42", "#5E5A35", "#3A3A3A", "#6C513A" };
-
         private static readonly Color DefaultHairColor = new Color(0.23f, 0.13f, 0.08f, 1f);
         private static readonly Color DefaultSkinColor = new Color(0.84f, 0.61f, 0.45f, 1f);
         private static readonly Color DefaultShirtColor = new Color(0.37f, 0.45f, 0.58f, 1f);
@@ -77,46 +51,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
         private readonly IScenarioSpriteAssetResolver _assetResolver;
 
-        public static ScenarioCharacterAppearanceService Instance
-        {
-            get { return ScenarioCompositionRoot.Resolve<ScenarioCharacterAppearanceService>(); }
-        }
-
         internal ScenarioCharacterAppearanceService(IScenarioSpriteAssetResolver assetResolver)
         {
             _assetResolver = assetResolver;
         }
 
-        public bool CanEdit(ScenarioAuthoringTarget target)
-        {
-            ResolvedCharacterTarget resolved;
-            string message;
-            return TryResolve(target, out resolved, out message);
-        }
-
-        public bool TryResolve(ScenarioAuthoringTarget target, out ResolvedCharacterTarget resolved, out string message)
-        {
-            resolved = null;
-            message = null;
-
-            GameObject gameObject = ResolveGameObject(target);
-            if (gameObject == null)
-            {
-                message = "Character editor requires a live character target.";
-                return false;
-            }
-
-            FamilyMember familyMember = gameObject.GetComponentInParent<FamilyMember>();
-            if (familyMember == null)
-            {
-                message = "Character editing currently supports family members only.";
-                return false;
-            }
-
-            return TryResolve(familyMember, target != null ? target.TransformPath : null, target != null ? target.DisplayName : null, out resolved, out message);
-        }
-
-        public bool TryResolve(FamilyMember familyMember, string targetPath, string displayName, out ResolvedCharacterTarget resolved, out string message)
+        private static bool TryResolve(FamilyMember familyMember, out ResolvedCharacterTarget resolved, out string message)
         {
             resolved = null;
             message = null;
@@ -147,92 +87,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return false;
             }
 
-            int familyIndex = FindFamilyIndex(familyMember);
-            if (familyIndex < 0)
-            {
-                message = "Selected family member could not be matched to the current family roster.";
-                return false;
-            }
-
             resolved = new ResolvedCharacterTarget
             {
-                FamilyMember = familyMember,
                 Character = familyMember,
                 Mesh = mesh,
-                MeshType = meshType,
-                FamilyIndex = familyIndex,
-                TargetPath = targetPath,
-                DisplayName = !string.IsNullOrEmpty(displayName) ? displayName : familyMember.firstName
+                MeshType = meshType
             };
             return true;
-        }
-
-        public PreviewSession CapturePreview(ResolvedCharacterTarget target)
-        {
-            if (target == null || target.Character == null)
-                return null;
-
-            return new PreviewSession
-            {
-                Target = target,
-                HeadTextureId = target.Character.headTexture,
-                TorsoTextureId = target.Character.torsoTexture,
-                LegTextureId = target.Character.legTexture,
-                AvatarSprite = target.Character.avatarSprite
-            };
-        }
-
-        public void RestorePreview(PreviewSession preview)
-        {
-            if (preview == null || preview.Target == null || preview.Target.Character == null)
-                return;
-
-            string ignored;
-            ApplyTextureId(preview.Target, ScenarioCharacterTexturePart.Head, preview.HeadTextureId, preview.AvatarSprite, out ignored);
-            ApplyTextureId(preview.Target, ScenarioCharacterTexturePart.Torso, preview.TorsoTextureId, null, out ignored);
-            ApplyTextureId(preview.Target, ScenarioCharacterTexturePart.Legs, preview.LegTextureId, null, out ignored);
-        }
-
-        public bool TryCreateEditableTexture(
-            ResolvedCharacterTarget target,
-            ScenarioCharacterTexturePart part,
-            out Texture2D texture,
-            out string sourceId,
-            out string sourceLabel)
-        {
-            texture = null;
-            sourceId = null;
-            sourceLabel = null;
-            if (target == null || target.Character == null || target.MeshType == null)
-                return false;
-
-            sourceId = GetCurrentTextureId(target.Character, part);
-            CharacterMeshOptions.CharacterTexture entry = FindTextureEntry(target.MeshType, part, sourceId);
-            if (entry == null || (UnityEngine.Object)entry.m_texture == (UnityEngine.Object)null)
-                return false;
-
-            texture = CopyTexture(entry.m_texture);
-            sourceLabel = BuildPartLabel(part) + " Texture";
-            return texture != null;
-        }
-
-        public bool ApplyPreviewTexture(
-            ResolvedCharacterTarget target,
-            ScenarioCharacterTexturePart part,
-            string textureId,
-            Texture2D texture,
-            out string message)
-        {
-            message = null;
-            if (target == null || string.IsNullOrEmpty(textureId) || texture == null)
-            {
-                message = "Character preview data was incomplete.";
-                return false;
-            }
-
-            Sprite avatarSprite = part == ScenarioCharacterTexturePart.Head ? CreateTextureSprite(texture) : null;
-            EnsureCustomTextureRegistered(target, part, textureId, texture, avatarSprite);
-            return ApplyTextureId(target, part, textureId, avatarSprite, out message);
         }
 
         public bool ApplyConfiguredAppearance(
@@ -247,7 +108,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return false;
 
             ResolvedCharacterTarget target;
-            if (!TryResolve(member, null, null, out target, out message))
+            if (!TryResolve(member, out target, out message))
                 return false;
 
             ApplyConfiguredPart(definition, scenarioFilePath, target, config.Appearance.HeadTextureId, config.Appearance.HeadTexturePath, ScenarioCharacterTexturePart.Head);
@@ -304,207 +165,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return true;
         }
 
-        public string GetCurrentTextureId(ResolvedCharacterTarget target, ScenarioCharacterTexturePart part)
-        {
-            return GetCurrentTextureId(target != null ? target.Character : null, part);
-        }
-
-        public string GetCurrentTextureId(BaseCharacter character, ScenarioCharacterTexturePart part)
-        {
-            if (character == null)
-                return null;
-
-            switch (part)
-            {
-                case ScenarioCharacterTexturePart.Head:
-                    return character.headTexture;
-                case ScenarioCharacterTexturePart.Torso:
-                    return character.torsoTexture;
-                case ScenarioCharacterTexturePart.Legs:
-                    return character.legTexture;
-                default:
-                    return null;
-            }
-        }
-
-        public static string BuildPartLabel(ScenarioCharacterTexturePart part)
-        {
-            switch (part)
-            {
-                case ScenarioCharacterTexturePart.Head: return "Head";
-                case ScenarioCharacterTexturePart.Torso: return "Torso";
-                case ScenarioCharacterTexturePart.Legs: return "Legs";
-                default: return "Part";
-            }
-        }
-
-        public static string BuildColorLabel(ScenarioCharacterColorPart part)
-        {
-            switch (part)
-            {
-                case ScenarioCharacterColorPart.Hair: return "Hair";
-                case ScenarioCharacterColorPart.Skin: return "Skin";
-                case ScenarioCharacterColorPart.Shirt: return "Shirt";
-                case ScenarioCharacterColorPart.Pants: return "Pants";
-                default: return "Color";
-            }
-        }
-
-        public static void UpsertAppearance(FamilyMemberConfig config, ScenarioCharacterTexturePart part, string textureId, string texturePath)
-        {
-            if (config == null)
-                return;
-
-            if (config.Appearance == null)
-                config.Appearance = new FamilyMemberAppearanceConfig();
-
-            switch (part)
-            {
-                case ScenarioCharacterTexturePart.Head:
-                    config.Appearance.HeadTextureId = textureId;
-                    config.Appearance.HeadTexturePath = texturePath;
-                    break;
-                case ScenarioCharacterTexturePart.Torso:
-                    config.Appearance.TorsoTextureId = textureId;
-                    config.Appearance.TorsoTexturePath = texturePath;
-                    break;
-                case ScenarioCharacterTexturePart.Legs:
-                    config.Appearance.LegTextureId = textureId;
-                    config.Appearance.LegTexturePath = texturePath;
-                    break;
-            }
-        }
-
-        public static void UpsertColor(FamilyMemberConfig config, ScenarioCharacterColorPart part, string colorHex)
-        {
-            if (config == null)
-                return;
-
-            if (config.Appearance == null)
-                config.Appearance = new FamilyMemberAppearanceConfig();
-
-            switch (part)
-            {
-                case ScenarioCharacterColorPart.Hair:
-                    config.Appearance.HairColorHex = colorHex;
-                    break;
-                case ScenarioCharacterColorPart.Skin:
-                    config.Appearance.SkinColorHex = colorHex;
-                    break;
-                case ScenarioCharacterColorPart.Shirt:
-                    config.Appearance.ShirtColorHex = colorHex;
-                    break;
-                case ScenarioCharacterColorPart.Pants:
-                    config.Appearance.PantsColorHex = colorHex;
-                    break;
-            }
-        }
-
-        public static void CaptureAppearance(FamilyMember member, FamilyMemberConfig config)
-        {
-            if (member == null || config == null)
-                return;
-
-            if (config.Appearance == null)
-                config.Appearance = new FamilyMemberAppearanceConfig();
-
-            config.Appearance.MeshId = member.meshId;
-            config.Appearance.IsAdult = member.isAdult;
-            config.Appearance.HeadTextureId = member.headTexture;
-            config.Appearance.HeadTexturePath = null;
-            config.Appearance.TorsoTextureId = member.torsoTexture;
-            config.Appearance.TorsoTexturePath = null;
-            config.Appearance.LegTextureId = member.legTexture;
-            config.Appearance.LegTexturePath = null;
-            config.Appearance.HairColorHex = ToColorHex(member.hairColor);
-            config.Appearance.SkinColorHex = ToColorHex(member.skinColor);
-            config.Appearance.ShirtColorHex = ToColorHex(member.shirtColor);
-            config.Appearance.PantsColorHex = ToColorHex(member.pantsColor);
-        }
-
-        public string CycleTextureId(string meshId, ScenarioCharacterTexturePart part, string currentTextureId, int delta)
-        {
-            CharacterMeshOptions.CharacterMeshType meshType = ResolveMeshType(meshId);
-            List<CharacterMeshOptions.CharacterTexture> textures = GetTextureList(meshType, part);
-            if (textures == null || textures.Count == 0)
-                return string.IsNullOrEmpty(currentTextureId) ? "default" : currentTextureId;
-
-            int currentIndex = FindTextureIndex(textures, currentTextureId);
-            int direction = delta < 0 ? -1 : 1;
-            for (int offset = 1; offset <= textures.Count; offset++)
-            {
-                int nextIndex = currentIndex + (offset * direction);
-                while (nextIndex < 0)
-                    nextIndex += textures.Count;
-                nextIndex = nextIndex % textures.Count;
-
-                CharacterMeshOptions.CharacterTexture next = textures[nextIndex];
-                if (IsCustomizationTexture(next))
-                    return next.m_id;
-            }
-
-            return string.IsNullOrEmpty(currentTextureId) ? "default" : currentTextureId;
-        }
-
-        public string RandomTextureId(string meshId, ScenarioCharacterTexturePart part)
-        {
-            CharacterMeshOptions.CharacterMeshType meshType = ResolveMeshType(meshId);
-            List<CharacterMeshOptions.CharacterTexture> textures = GetTextureList(meshType, part);
-            if (textures == null || textures.Count == 0)
-                return "default";
-
-            int start = UnityEngine.Random.Range(0, textures.Count);
-            for (int offset = 0; offset < textures.Count; offset++)
-            {
-                CharacterMeshOptions.CharacterTexture texture = textures[(start + offset) % textures.Count];
-                if (IsCustomizationTexture(texture))
-                    return texture.m_id;
-            }
-
-            return "default";
-        }
-
-        public string CycleColorHex(ScenarioCharacterColorPart part, string currentHex, int delta)
-        {
-            List<Color> colors = GetVanillaColorList(part);
-            if (colors != null && colors.Count > 0)
-            {
-                int currentIndex = FindColorIndex(colors, currentHex);
-                int direction = delta < 0 ? -1 : 1;
-                int nextIndex = currentIndex + direction;
-                while (nextIndex < 0)
-                    nextIndex += colors.Count;
-                nextIndex = nextIndex % colors.Count;
-                return ToColorHex(colors[nextIndex]);
-            }
-
-            string[] fallback = GetFallbackColors(part);
-            if (fallback == null || fallback.Length == 0)
-                return currentHex;
-
-            int index = FindColorIndex(fallback, currentHex);
-            int fallbackDirection = delta < 0 ? -1 : 1;
-            int fallbackNext = index + fallbackDirection;
-            while (fallbackNext < 0)
-                fallbackNext += fallback.Length;
-            fallbackNext = fallbackNext % fallback.Length;
-            return fallback[fallbackNext];
-        }
-
-        public string RandomColorHex(ScenarioCharacterColorPart part)
-        {
-            List<Color> colors = GetVanillaColorList(part);
-            if (colors != null && colors.Count > 0)
-                return ToColorHex(colors[UnityEngine.Random.Range(0, colors.Count)]);
-
-            string[] fallback = GetFallbackColors(part);
-            if (fallback == null || fallback.Length == 0)
-                return "#FFFFFF";
-
-            return fallback[UnityEngine.Random.Range(0, fallback.Length)];
-        }
-
-        public void SanitizeAppearanceTextures(FamilyMemberAppearanceConfig appearance)
+        private void SanitizeAppearanceTextures(FamilyMemberAppearanceConfig appearance)
         {
             if (appearance == null)
                 return;
@@ -513,15 +174,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             SanitizeAppearanceTexture(appearance, meshType, ScenarioCharacterTexturePart.Head);
             SanitizeAppearanceTexture(appearance, meshType, ScenarioCharacterTexturePart.Torso);
             SanitizeAppearanceTexture(appearance, meshType, ScenarioCharacterTexturePart.Legs);
-        }
-
-        public static string ToColorHex(Color color)
-        {
-            return "#"
-                + ToByte(color.r).ToString("X2")
-                + ToByte(color.g).ToString("X2")
-                + ToByte(color.b).ToString("X2")
-                + ToByte(color.a).ToString("X2");
         }
 
         public static void ResolveConfiguredColors(
@@ -662,12 +314,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             ResolvedCharacterTarget target = new ResolvedCharacterTarget
             {
-                FamilyMember = member,
                 Character = member,
                 Mesh = mesh,
-                MeshType = meshType,
-                FamilyIndex = FindFamilyIndex(member),
-                DisplayName = member.firstName
+                MeshType = meshType
             };
 
             string ignored;
@@ -982,27 +631,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return meshType ?? options.FindCharacterMesh("man");
         }
 
-        private static int FindTextureIndex(List<CharacterMeshOptions.CharacterTexture> textures, string textureId)
-        {
-            for (int i = 0; textures != null && i < textures.Count; i++)
-            {
-                CharacterMeshOptions.CharacterTexture texture = textures[i];
-                if (texture != null && string.Equals(texture.m_id, textureId, StringComparison.OrdinalIgnoreCase))
-                    return i;
-            }
-
-            return -1;
-        }
-
-        private static bool IsCustomizationTexture(CharacterMeshOptions.CharacterTexture texture)
-        {
-            if (texture == null || string.IsNullOrEmpty(texture.m_id) || !texture.m_availableForCustomization)
-                return false;
-
-            string id = texture.m_id.ToLowerInvariant();
-            return id != "gasmask" && id != "hazmat";
-        }
-
         private static CharacterMesh.TextureType ToMeshTexturePart(ScenarioCharacterTexturePart part)
         {
             switch (part)
@@ -1012,83 +640,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 case ScenarioCharacterTexturePart.Legs: return CharacterMesh.TextureType.Legs;
                 default: return CharacterMesh.TextureType.Head;
             }
-        }
-
-        private static CharacterMesh.ColorCustomization ToMeshColorPart(ScenarioCharacterColorPart part)
-        {
-            switch (part)
-            {
-                case ScenarioCharacterColorPart.Hair: return CharacterMesh.ColorCustomization.HairColor;
-                case ScenarioCharacterColorPart.Skin: return CharacterMesh.ColorCustomization.SkinColor;
-                case ScenarioCharacterColorPart.Shirt: return CharacterMesh.ColorCustomization.ShirtColor;
-                case ScenarioCharacterColorPart.Pants: return CharacterMesh.ColorCustomization.PantsColor;
-                default: return CharacterMesh.ColorCustomization.HairColor;
-            }
-        }
-
-        private static List<Color> GetVanillaColorList(ScenarioCharacterColorPart part)
-        {
-            NpcVisitManager manager = NpcVisitManager.Instance;
-            if ((UnityEngine.Object)manager == (UnityEngine.Object)null)
-                return null;
-
-            FieldInfo field = null;
-            switch (part)
-            {
-                case ScenarioCharacterColorPart.Hair:
-                    field = NpcVisitHairColorsField;
-                    break;
-                case ScenarioCharacterColorPart.Skin:
-                    field = NpcVisitSkinColorsField;
-                    break;
-                case ScenarioCharacterColorPart.Shirt:
-                    field = NpcVisitShirtColorsField;
-                    break;
-                case ScenarioCharacterColorPart.Pants:
-                    field = NpcVisitPantsColorsField;
-                    break;
-            }
-
-            return field != null ? field.GetValue(manager) as List<Color> : null;
-        }
-
-        private static string[] GetFallbackColors(ScenarioCharacterColorPart part)
-        {
-            switch (part)
-            {
-                case ScenarioCharacterColorPart.Hair: return FallbackHairColors;
-                case ScenarioCharacterColorPart.Skin: return FallbackSkinColors;
-                case ScenarioCharacterColorPart.Shirt: return FallbackShirtColors;
-                case ScenarioCharacterColorPart.Pants: return FallbackPantsColors;
-                default: return FallbackHairColors;
-            }
-        }
-
-        private static int FindColorIndex(List<Color> colors, string currentHex)
-        {
-            for (int i = 0; colors != null && i < colors.Count; i++)
-            {
-                if (string.Equals(ToColorHex(colors[i]), currentHex, StringComparison.OrdinalIgnoreCase))
-                    return i;
-            }
-
-            return -1;
-        }
-
-        private static int FindColorIndex(string[] colors, string currentHex)
-        {
-            for (int i = 0; colors != null && i < colors.Length; i++)
-            {
-                if (string.Equals(colors[i], currentHex, StringComparison.OrdinalIgnoreCase))
-                    return i;
-            }
-
-            return -1;
-        }
-
-        private static int ToByte(float channel)
-        {
-            return Mathf.Clamp(Mathf.RoundToInt(channel * 255f), 0, 255);
         }
 
         private static void SetCharacterColorField(BaseCharacter character, FieldInfo field, Color color)
@@ -1117,35 +668,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             }
         }
 
-        internal static Texture2D CopyTexture(Texture2D source)
-        {
-            if (source == null)
-                return null;
-
-            Texture2D copy = new Texture2D(source.width, source.height, TextureFormat.ARGB32, false);
-            copy.name = source.name;
-            copy.filterMode = FilterMode.Point;
-            copy.wrapMode = TextureWrapMode.Clamp;
-            try
-            {
-                copy.SetPixels(source.GetPixels());
-                copy.Apply();
-                return copy;
-            }
-            catch
-            {
-                RenderTexture renderTexture = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32);
-                RenderTexture previous = RenderTexture.active;
-                Graphics.Blit(source, renderTexture);
-                RenderTexture.active = renderTexture;
-                copy.ReadPixels(new Rect(0f, 0f, source.width, source.height), 0, 0);
-                copy.Apply();
-                RenderTexture.active = previous;
-                RenderTexture.ReleaseTemporary(renderTexture);
-                return copy;
-            }
-        }
-
         private static Sprite CreateTextureSprite(Texture2D texture)
         {
             if (texture == null)
@@ -1161,30 +683,5 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return sprite;
         }
 
-        private static GameObject ResolveGameObject(ScenarioAuthoringTarget target)
-        {
-            if (target == null || target.RuntimeObject == null)
-                return null;
-
-            GameObject gameObject = target.RuntimeObject as GameObject;
-            if (gameObject != null)
-                return gameObject;
-
-            Component component = target.RuntimeObject as Component;
-            return component != null ? component.gameObject : null;
-        }
-
-        private static int FindFamilyIndex(FamilyMember familyMember)
-        {
-            FamilyManager familyManager = FamilyManager.Instance;
-            List<FamilyMember> members = familyManager != null ? familyManager.GetAllFamilyMembers() : null;
-            for (int i = 0; members != null && i < members.Count; i++)
-            {
-                if ((UnityEngine.Object)members[i] == (UnityEngine.Object)familyMember)
-                    return i;
-            }
-
-            return -1;
-        }
     }
 }

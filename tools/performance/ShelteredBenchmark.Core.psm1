@@ -141,6 +141,22 @@ function Test-ShelteredBenchmarkConfig {
         if ($mode -eq 'vanilla' -and $executionMode -eq 'parallel-platforms') {
             $errors.Add("Vanilla profile '$name' cannot use parallel-platforms because this Unity build pauses when unfocused.")
         }
+        $physicallyAbsentRoles = @((Get-ObjectPropertyValue $profile 'physicallyAbsentDeploymentRoles' @()) | ForEach-Object {
+            ([string]$_).Trim().ToLowerInvariant()
+        } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($physicallyAbsentRoles.Count -ne @($physicallyAbsentRoles | Select-Object -Unique).Count) {
+            $errors.Add("Profile '$name' physicallyAbsentDeploymentRoles contains duplicates.")
+        }
+        if ($physicallyAbsentRoles.Count -gt 0 -and -not [bool](Get-ObjectPropertyValue $profile 'harness' ($mode -ne 'vanilla'))) {
+            $errors.Add("Profile '$name' cannot remove deployment roles without the harness evidence lane.")
+        }
+        if ($physicallyAbsentRoles -contains 'scenarioeditor') {
+            $managerOptions = Get-ObjectPropertyValue $profile 'managerOptions' ([pscustomobject]@{})
+            $editorEnabled = Get-ObjectPropertyValue $managerOptions 'ShelteredScenarioEditor.Enabled' $null
+            if ($null -eq $editorEnabled -or [bool]$editorEnabled) {
+                $errors.Add("Profile '$name' must set ShelteredScenarioEditor.Enabled=false when the scenarioeditor deployment is physically absent.")
+            }
+        }
     }
     $requiresInstrumentation = @($profiles | Where-Object {
         [bool](Get-ObjectPropertyValue $_ 'enabled' $true) -and [bool](Get-ObjectPropertyValue $_ 'harness' (([string](Get-ObjectPropertyValue $_ 'mode' '') -ne 'vanilla')))
@@ -150,7 +166,7 @@ function Test-ShelteredBenchmarkConfig {
             $platformName = [string](Get-ObjectPropertyValue $platform 'name' '')
             $gates = @(Get-ObjectPropertyValue $platform 'hashGates' @())
             $roles = @($gates | ForEach-Object { ([string](Get-ObjectPropertyValue $_ 'role' '')).ToLowerInvariant() })
-            foreach ($requiredRole in @('modapi', 'shelteredapi', 'harness')) {
+            foreach ($requiredRole in @('modapi', 'shelteredapi', 'scenarioeditor', 'harness')) {
                 if ($roles -notcontains $requiredRole) { $errors.Add("Platform '$platformName' needs a '$requiredRole' deployment hash gate for harness profiles.") }
             }
             foreach ($gate in $gates) {
@@ -161,6 +177,14 @@ function Test-ShelteredBenchmarkConfig {
                 if ([string]::IsNullOrWhiteSpace([string](Get-ObjectPropertyValue $gate 'sourcePath' '')) -and
                     [string]::IsNullOrWhiteSpace([string](Get-ObjectPropertyValue $gate 'sha256' ''))) {
                     $errors.Add("Platform '$platformName' hash gate '$gateName' needs sourcePath or sha256.")
+                }
+            }
+            foreach ($profile in $profiles | Where-Object { [bool](Get-ObjectPropertyValue $_ 'enabled' $true) }) {
+                $profileName = [string](Get-ObjectPropertyValue $profile 'name' '')
+                foreach ($absentRole in @((Get-ObjectPropertyValue $profile 'physicallyAbsentDeploymentRoles' @()) | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() })) {
+                    if ($roles -notcontains $absentRole) {
+                        $errors.Add("Profile '$profileName' cannot make unknown deployment role '$absentRole' absent on platform '$platformName'.")
+                    }
                 }
             }
         }
@@ -426,12 +450,37 @@ function Set-ShelteredManagerOptions {
         [Parameter(Mandatory = $true)]$Overrides
     )
     $table = ConvertTo-PlainHashtable $Overrides
-    if ($null -eq $table -or $table.Count -eq 0) { return }
+    if ($null -eq $table) { $table = @{} }
     $path = Join-Path $InstallRoot 'SMM\bin\manager_options.json'
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing manager options: $path" }
     $document = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-    $seen = @{}
+    $canonicalEditorOptionId = 'ShelteredScenarioEditor.Enabled'
+    $retiredEditorOptionId = @('ShelteredAPI', 'PatchCustomScenarioEditor') -join '.'
+    $normalizedOptions = New-Object 'System.Collections.Generic.List[object]'
+    $canonicalEditorOptionFound = $false
     foreach ($option in @(Get-ObjectPropertyValue $document 'booleans' @())) {
+        $id = [string](Get-ObjectPropertyValue $option 'id' '')
+        if ([string]::Equals($id, $retiredEditorOptionId, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if ([string]::Equals($id, $canonicalEditorOptionId, [StringComparison]::OrdinalIgnoreCase)) {
+            $canonicalEditorOptionFound = $true
+        }
+        $normalizedOptions.Add($option)
+    }
+    if (-not $canonicalEditorOptionFound) {
+        $normalizedOptions.Add([pscustomobject]@{
+            id = $canonicalEditorOptionId
+            owner = 'ShelteredScenarioEditor'
+            label = 'Custom Scenario Editor'
+            description = 'Enables the scenario editor and its Add New Scenario entry. Installed custom scenarios remain available while the editor is disabled.'
+            value = $false
+            defaultValue = $false
+            requiresRestart = $true
+            sortOrder = 100
+        })
+    }
+    $document.booleans = $normalizedOptions.ToArray()
+    $seen = @{}
+    foreach ($option in @($document.booleans)) {
         $id = [string](Get-ObjectPropertyValue $option 'id' '')
         if ($table.ContainsKey($id)) {
             $option.value = [bool]$table[$id]
@@ -505,6 +554,7 @@ function Enter-BenchmarkInstallLocks {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string[]]$InstallRoots)
     $locks = New-Object 'System.Collections.Generic.List[object]'
+    $ownershipToken = [Guid]::NewGuid().ToString('N')
     try {
         foreach ($root in @($InstallRoots | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\').ToLowerInvariant() } | Sort-Object -Unique)) {
             $sha = [Security.Cryptography.SHA256]::Create()
@@ -516,7 +566,13 @@ function Enter-BenchmarkInstallLocks {
             try { $acquired = $mutex.WaitOne(0) }
             catch [Threading.AbandonedMutexException] { $acquired = $true }
             if (-not $acquired) { $mutex.Dispose(); throw "Another benchmark owns install '$root' (mutex $name)." }
-            $locks.Add([pscustomobject]@{ InstallRoot = $root; Name = $name; Mutex = $mutex })
+            $locks.Add([pscustomobject]@{
+                InstallRoot = $root
+                Name = $name
+                Mutex = $mutex
+                OwnershipToken = $ownershipToken
+                OwnerProcessId = $PID
+            })
         }
         return $locks.ToArray()
     }
@@ -524,6 +580,62 @@ function Enter-BenchmarkInstallLocks {
         foreach ($lock in $locks) { try { $lock.Mutex.ReleaseMutex(); $lock.Mutex.Dispose() } catch { } }
         throw
     }
+}
+
+function New-BenchmarkInstallLockEnvelope {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][object[]]$Locks)
+    foreach ($lock in $Locks) {
+        if ([int](Get-ObjectPropertyValue $lock 'OwnerProcessId' 0) -ne $PID -or $null -eq $lock.Mutex) {
+            throw 'Only the process holding the install mutexes can issue a platform-session authorization envelope.'
+        }
+    }
+    return [pscustomobject]@{
+        Locks = @($Locks | Select-Object InstallRoot, Name, OwnershipToken, OwnerProcessId)
+    }
+}
+
+function Assert-BenchmarkInstallLockAuthorization {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$InstallRoot,
+        [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][object[]]$InstallLocks
+    )
+    $normalizedInstallRoot = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\').ToLowerInvariant()
+    $authorizedLock = @($InstallLocks | Where-Object { [string]$_.InstallRoot -eq $normalizedInstallRoot } | Select-Object -First 1)
+    if ($authorizedLock.Count -ne 1) { throw "Platform session requires parent-issued install-lock authorization for '$InstallRoot'." }
+
+    $ownershipToken = [string](Get-ObjectPropertyValue $authorizedLock[0] 'OwnershipToken' '')
+    $ownerProcessId = [int](Get-ObjectPropertyValue $authorizedLock[0] 'OwnerProcessId' 0)
+    $lockName = [string](Get-ObjectPropertyValue $authorizedLock[0] 'Name' '')
+    if ([string]::IsNullOrWhiteSpace($ownershipToken) -or $ownerProcessId -le 0 -or
+        [string]::IsNullOrWhiteSpace($lockName) -or -not $lockName.StartsWith('Global\ShelteredBenchmark_', [StringComparison]::Ordinal) -or
+        $null -eq (Get-Process -Id $ownerProcessId -ErrorAction SilentlyContinue)) {
+        throw "Platform session received invalid or expired install-lock authorization for '$InstallRoot'."
+    }
+    foreach ($installLock in $InstallLocks) {
+        if ([string](Get-ObjectPropertyValue $installLock 'OwnershipToken' '') -ne $ownershipToken -or
+            [int](Get-ObjectPropertyValue $installLock 'OwnerProcessId' 0) -ne $ownerProcessId) {
+            throw 'Platform session received a mixed install-lock authorization set.'
+        }
+    }
+
+    # A child process cannot inherit mutex ownership. Its descriptor is parent-issued
+    # authorization, valid only while the named mutex remains held and the issuer lives.
+    $lockProbe = New-Object Threading.Mutex($false, $lockName)
+    $probeAcquired = $false
+    try {
+        try { $probeAcquired = $lockProbe.WaitOne(0) }
+        catch [Threading.AbandonedMutexException] { $probeAcquired = $true }
+        if (($ownerProcessId -eq $PID) -ne $probeAcquired) {
+            throw "Platform session could not verify active install-lock authorization for '$InstallRoot'."
+        }
+    }
+    finally {
+        if ($probeAcquired) { $lockProbe.ReleaseMutex() }
+        $lockProbe.Dispose()
+    }
+    return $authorizedLock[0]
 }
 
 function Exit-BenchmarkInstallLocks {
@@ -616,6 +728,7 @@ function Get-BenchmarkEnvironment {
         @{ Path = (Join-Path $installRoot 'SMM\bin\Doorstop.dll'); Role = 'doorstop-managed' },
         @{ Path = (Join-Path $installRoot 'SMM\ModAPI.dll'); Role = 'modapi' },
         @{ Path = (Join-Path $installRoot 'SMM\bin\ShelteredAPI.dll'); Role = 'shelteredapi' },
+        @{ Path = (Join-Path $installRoot 'SMM\bin\ShelteredScenarioEditor.dll'); Role = 'scenarioeditor' },
         @{ Path = (Join-Path $installRoot 'mods\loadorder.json'); Role = 'loadorder' }
     )
     foreach ($candidate in $candidates) {
@@ -993,9 +1106,9 @@ function Write-BenchmarkAggregateReport {
 
 Export-ModuleMember -Function @(
     'ConvertTo-PlainHashtable', 'Get-BenchmarkEnvironment', 'Get-FileFingerprint',
-    'Enter-BenchmarkInstallLocks', 'Exit-BenchmarkInstallLocks', 'Get-EnabledLoadOrderIds', 'Get-InstalledModCatalog', 'Get-LoadOrderState', 'Get-ObjectPropertyValue',
+    'Assert-BenchmarkInstallLockAuthorization', 'Enter-BenchmarkInstallLocks', 'Exit-BenchmarkInstallLocks', 'Get-EnabledLoadOrderIds', 'Get-InstalledModCatalog', 'Get-LoadOrderState', 'Get-ObjectPropertyValue',
     'Export-ShelteredStartupTimings', 'Get-Percentile', 'Get-ProcessSampleSummary', 'Import-ShelteredBenchmarkConfig', 'Invoke-BenchmarkCommand',
-    'New-InstallStateSnapshot', 'Resolve-BenchmarkExecution', 'Resolve-ConfiguredPath', 'Resolve-ShelteredModProfile',
+    'New-BenchmarkInstallLockEnvelope', 'New-InstallStateSnapshot', 'Resolve-BenchmarkExecution', 'Resolve-ConfiguredPath', 'Resolve-ShelteredModProfile',
     'Restore-InstallStateSnapshot', 'Set-DoorstopEnabled', 'Set-ShelteredLoadOrder', 'Test-BenchmarkDeploymentHashes',
     'Set-ShelteredManagerOptions', 'Test-BenchmarkFileManifest', 'Test-BenchmarkMutableModPath', 'Test-ShelteredBenchmarkConfig', 'Write-BenchmarkAggregateReport'
 )

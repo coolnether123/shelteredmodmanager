@@ -29,8 +29,6 @@ namespace ShelteredAPI.Saves.Paging
         private const string TEXT_MISSING = "X";
         private const string TEXT_UNKNOWN = "?";
 
-        private static UIFont _cachedUIFont;
-        private static Font _cachedTTFFont;
         private static UIAtlas _cachedVerificationAtlas;
 
         private static void HideAllIcons()
@@ -106,18 +104,10 @@ namespace ShelteredAPI.Saves.Paging
                     var parentPanel = NGUITools.FindInParents<UIPanel>(btn.gameObject);
                     int baseDepth = UIUtil.ComputeSafeDepth(parentPanel, 50);
                     
-                    // Background: Create a UITexture with a white pixel texture
-                    // This is the ONLY way to get a colored box in NGUI without sprites
+                    // Background: use the shared white texture so the box can be tinted
+                    // without allocating one Unity texture per save slot.
                     var bgTex = iconGO.AddComponent<UITexture>();
-                    
-                    // Create a simple 2x2 white texture
-                    var whiteTex = new Texture2D(2, 2);
-                    for (int x = 0; x < 2; x++)
-                        for (int y = 0; y < 2; y++)
-                            whiteTex.SetPixel(x, y, Color.white);
-                    whiteTex.Apply();
-                    
-                    bgTex.mainTexture = whiteTex;
+                    bgTex.mainTexture = UIUtil.WhiteTexture;
                     bgTex.depth = baseDepth;
                     bgTex.width = SaveSnapshotSlotControls.VerificationButtonSize;
                     bgTex.height = SaveSnapshotSlotControls.VerificationButtonSize;
@@ -143,17 +133,6 @@ namespace ShelteredAPI.Saves.Paging
                         1);
                     var uiBtn = iconGO.AddComponent<UIButton>();
                     uiBtn.tweenTarget = iconGO; 
-                    
-                    // Initial setup of cached fonts if missing
-                    if (_cachedUIFont == null && _cachedTTFFont == null)
-                    {
-                        var label = panel.GetComponentInChildren<UILabel>();
-                        if (label != null)
-                        {
-                            _cachedUIFont = label.bitmapFont;
-                            _cachedTTFFont = label.trueTypeFont;
-                        }
-                    }
                     
                     _slotIcons[btn] = iconGO;
                 }
@@ -207,9 +186,10 @@ namespace ShelteredAPI.Saves.Paging
                 if (childLabel == null && iconChildObj != null)
                 {
                     childLabel = iconChildObj.gameObject.AddComponent<UILabel>();
-
-                    childLabel.bitmapFont = _cachedUIFont;
-                    childLabel.trueTypeFont = _cachedTTFFont;
+                    UIFontCache.SeedFromGameObject(panel.gameObject, "SaveVerification");
+                    UIFontCache.FontResult fonts = UIFontCache.GetFonts();
+                    childLabel.bitmapFont = fonts.Bitmap;
+                    childLabel.trueTypeFont = fonts.TTF;
                     childLabel.fontSize = 48; // Larger font for better visibility
                     childLabel.pivot = UIWidget.Pivot.Center;
                     childLabel.alignment = NGUIText.Alignment.Center; // Center text horizontally
@@ -227,8 +207,9 @@ namespace ShelteredAPI.Saves.Paging
                     // Ensure fonts are still valid if they were null during creation
                     if (childLabel.bitmapFont == null && childLabel.trueTypeFont == null)
                     {
-                        childLabel.bitmapFont = _cachedUIFont;
-                        childLabel.trueTypeFont = _cachedTTFFont;
+                        UIFontCache.FontResult fonts = UIFontCache.GetFonts();
+                        childLabel.bitmapFont = fonts.Bitmap;
+                        childLabel.trueTypeFont = fonts.TTF;
                     }
                 }
 
@@ -306,7 +287,7 @@ namespace ShelteredAPI.Saves.Paging
                         else
                         {
                             // For custom saves, set the redirect target
-                            PlatformSaveProxy.SetNextLoad(capVisible.TransportSaveType, capVisible.StorageScenarioId, capTarget.id);
+                            SaveRuntimeState.QueueLoad(capVisible.TransportSaveType, capVisible.StorageScenarioId, capTarget.id);
                             SaveProtectionPatches.LoadGamePatch._forceLoad = true;
                             slotToLoad = capVisible.TransportSlotNumber;
 
@@ -361,7 +342,7 @@ namespace ShelteredAPI.Saves.Paging
             if (sampleAtlas == null)
                 return;
 
-            CacheFonts(panel);
+            UIFontCache.SeedFromGameObject(panel.gameObject, "SaveVerification.Snapshot");
             List<SaveSlotButton> buttons = GetVisibleSlotButtons(panel);
             int page = PagingManager.GetPage(panel);
 
@@ -404,19 +385,6 @@ namespace ShelteredAPI.Saves.Paging
                 .ToList();
         }
 
-        private static void CacheFonts(SlotSelectionPanel panel)
-        {
-            if ((_cachedUIFont != null || _cachedTTFFont != null) || panel == null)
-                return;
-
-            var label = panel.GetComponentInChildren<UILabel>();
-            if (label != null)
-            {
-                _cachedUIFont = label.bitmapFont;
-                _cachedTTFFont = label.trueTypeFont;
-            }
-        }
-
         private static GameObject GetOrCreateSnapshotIcon(SlotSelectionPanel panel, SaveSlotButton btn, int absoluteSlot, UIAtlas sampleAtlas)
         {
             GameObject iconGO;
@@ -431,13 +399,7 @@ namespace ShelteredAPI.Saves.Paging
             int baseDepth = UIUtil.ComputeSafeDepth(parentPanel, 50);
 
             var bgTex = iconGO.AddComponent<UITexture>();
-            var whiteTex = new Texture2D(2, 2);
-            for (int x = 0; x < 2; x++)
-                for (int y = 0; y < 2; y++)
-                    whiteTex.SetPixel(x, y, Color.white);
-            whiteTex.Apply();
-
-            bgTex.mainTexture = whiteTex;
+            bgTex.mainTexture = UIUtil.WhiteTexture;
             bgTex.depth = baseDepth;
             bgTex.width = SaveSnapshotSlotControls.VerificationButtonSize;
             bgTex.height = SaveSnapshotSlotControls.VerificationButtonSize;
@@ -477,8 +439,9 @@ namespace ShelteredAPI.Saves.Paging
             if (childLabel == null)
             {
                 childLabel = iconChildObj.gameObject.AddComponent<UILabel>();
-                childLabel.bitmapFont = _cachedUIFont;
-                childLabel.trueTypeFont = _cachedTTFFont;
+                UIFontCache.FontResult fonts = UIFontCache.GetFonts();
+                childLabel.bitmapFont = fonts.Bitmap;
+                childLabel.trueTypeFont = fonts.TTF;
                 childLabel.fontSize = 48;
                 childLabel.pivot = UIWidget.Pivot.Center;
                 childLabel.alignment = NGUIText.Alignment.Center;

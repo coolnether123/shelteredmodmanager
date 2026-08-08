@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using ModAPI.Core;
 using ModAPI.Debugging;
-using ShelteredAPI.Scenarios.Application.Authoring;
-using ShelteredAPI.Scenarios.Composition;
-using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using UnityEngine;
 
 namespace ShelteredAPI.Debugging
@@ -50,7 +47,7 @@ namespace ShelteredAPI.Debugging
         }
     }
 
-    /// <summary>Bridges the reusable overlay's visibility to the Sheltered authoring input gate.</summary>
+    /// <summary>Tracks feedback-overlay visibility for the Sheltered input gate.</summary>
     internal static class ShelteredFeedbackInputEnabler
     {
         private static bool _overlayVisible;
@@ -63,24 +60,6 @@ namespace ShelteredAPI.Debugging
         public static void SetOverlayVisible(bool visible)
         {
             _overlayVisible = visible;
-            ApplyAuthoringCapture();
-        }
-
-        internal static void ApplyAuthoringCapture()
-        {
-            if (!_overlayVisible)
-                return;
-
-            try
-            {
-                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
-                if (inputCapture != null)
-                    inputCapture.SetKeyboardCaptured(true);
-            }
-            catch
-            {
-                // The feedback surface must remain available outside authoring.
-            }
         }
     }
 
@@ -90,7 +69,6 @@ namespace ShelteredAPI.Debugging
         {
             List<KeyValuePair<string, string>> lines = new List<KeyValuePair<string, string>>();
             AddSceneContext(lines);
-            AddScenarioContext(lines);
             AddGameTimeContext(lines);
             return lines;
         }
@@ -104,26 +82,6 @@ namespace ShelteredAPI.Debugging
             catch (Exception ex)
             {
                 lines.Add(Context("Scene", "Unavailable (" + ex.Message + ")"));
-            }
-        }
-
-        private static void AddScenarioContext(ICollection<KeyValuePair<string, string>> lines)
-        {
-            try
-            {
-                IScenarioAuthoringBackend backend = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
-                ScenarioAuthoringState state = backend != null ? backend.CurrentState : null;
-                bool active = state != null && state.IsActive;
-                lines.Add(Context("Scenario editor active", active ? "Yes" : "No"));
-                if (!active)
-                    return;
-
-                lines.Add(Context("Draft id", state.ActiveDraftId));
-                lines.Add(Context("Workshop page", state.ActiveShellTab.ToString()));
-            }
-            catch (Exception ex)
-            {
-                lines.Add(Context("Scenario editor", "Unavailable (" + ex.Message + ")"));
             }
         }
 

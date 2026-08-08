@@ -18,7 +18,8 @@ $allowed = @(
 
 $roots = @(
     (Join-Path $RepoRoot "ModAPI"),
-    (Join-Path $RepoRoot "ShelteredAPI")
+    (Join-Path $RepoRoot "ShelteredAPI"),
+    (Join-Path $RepoRoot "ShelteredScenarioEditor")
 )
 
 $failures = New-Object "System.Collections.Generic.List[string]"

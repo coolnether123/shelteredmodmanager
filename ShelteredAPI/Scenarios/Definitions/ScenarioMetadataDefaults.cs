@@ -3,9 +3,7 @@ using System;
 namespace ShelteredAPI.Scenarios.Definitions
 {
     /// <summary>
-    /// Shared draft-safe defaults and semantic-version helpers for package metadata.
-    /// Keeping these values in one place prevents authoring, serialization, and
-    /// validation from drifting apart.
+    /// Canonical draft-safe defaults and semantic-version helpers for scenario metadata.
     /// </summary>
     internal static class ScenarioMetadataDefaults
     {

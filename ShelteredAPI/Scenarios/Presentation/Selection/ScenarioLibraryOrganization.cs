@@ -158,11 +158,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         {
             List<ScenarioBookRowModel> tools = new List<ScenarioBookRowModel>();
             List<ScenarioBookRowModel> scenarios = new List<ScenarioBookRowModel>();
+            List<ScenarioBookRowModel> unlimitedArchives = new List<ScenarioBookRowModel>();
             for (int i = 0; rows != null && i < rows.Count; i++)
             {
                 ScenarioBookRowModel row = rows[i];
-                if (row != null
-                    && (row.Kind == ScenarioBookRowKind.Type || row.Kind == ScenarioBookRowKind.OpenInstallScenarios))
+                if (row != null && row.Kind == ScenarioBookRowKind.Type)
                 {
                     tools.Add(row);
                     continue;
@@ -173,6 +173,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
                     row.IsPinned = preferences != null && preferences.IsPinned(row.Scenario.ScenarioId);
                     row.LibrarySortMode = mode;
                 }
+                if (row != null && row.Kind == ScenarioBookRowKind.OpenScenarioSaves)
+                {
+                    unlimitedArchives.Add(row);
+                    continue;
+                }
                 scenarios.Add(row);
             }
 
@@ -181,6 +186,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
                 return Compare(left, right, mode);
             });
             tools.AddRange(scenarios);
+            unlimitedArchives.Sort(delegate(ScenarioBookRowModel left, ScenarioBookRowModel right)
+            {
+                int leftMode = left != null && left.Scenario != null ? (int)left.Scenario.BaseGameMode : int.MaxValue;
+                int rightMode = right != null && right.Scenario != null ? (int)right.Scenario.BaseGameMode : int.MaxValue;
+                return leftMode.CompareTo(rightMode);
+            });
+            tools.AddRange(unlimitedArchives);
             return tools;
         }
 

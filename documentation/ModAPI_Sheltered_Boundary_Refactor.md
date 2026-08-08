@@ -61,7 +61,7 @@ These current `ModAPI` surfaces encode Sheltered runtime concepts and should mov
 | `Items/InventoryHelper.cs` | `ItemManager` and `InventoryManager` integration. Prompt 6 moved this implementation to `ShelteredAPI`. |
 | Remaining manager-state helpers that name Sheltered managers | Prompt 4 moved `ManagerStateHelper` to `ShelteredAPI`. |
 | Remaining event helpers backed by Sheltered managers or panels | Prompt 4 moved `GameEvents`, `FactionEvents`, `UIEvents`, and `GameTimeTriggerHelper` to `ShelteredAPI`. |
-| `Hooks/WorldHooks.cs` and remaining interaction-style helpers outside the moved registry | Sheltered world hook vocabulary and runtime targets. Prompt 4 moved the interaction implementation to `ShelteredAPI`; Prompt 6 moved `UIHooks` to `ShelteredAPI`; Prompt 7 moved `WorldHooks` to `ShelteredAPI`. Public object-button registration now goes through `ShelteredAPI.Interactions.ObjectButtonInjector`. |
+| Former `UIHooks`/`WorldHooks` implementations and interaction-style helpers outside the registry | The boundary phases first moved these Sheltered-owned internals out of `ModAPI`; the 2.0 ownership cleanup later removed the unconsumed hook classes. Public object-button registration goes through `ShelteredAPI.Interactions.ObjectButtonInjector`, while supported UI behavior goes through `ShelteredUI`. |
 | Sheltered persistence and game-state helpers | Sheltered exploration/save manager helpers and `SaveData`/`ISaveable` integrations. Public usage now goes through `ShelteredGameState`, `ShelteredPersistence`, `ShelteredPersistentList<T>`, and `ShelteredPersistentDictionary<TValue>`. |
 | Remaining typed compatibility bridge in `Core/ShelteredContentBridge.cs` | Prompt 6 replaced the `ModAPI` copy with `ShelteredAPI.Content.ShelteredItemContentBridge`, which owns the `ItemManager.ItemType` adapter for 2.0 compatibility helpers. |
 | `Core/SaveProtection.cs` and `Core/SaveRuntimeState.cs` | Sheltered save/runtime implementation, not a neutral framework contract. Prompt 5 moved these implementations to `ShelteredAPI`. |
@@ -78,7 +78,7 @@ These old helper names are implementation details in the 2.0 line. Functionality
 | Surface | Replacement Direction |
 | --- | --- |
 | Replaced Sheltered helper names (`GameUtil`, `ModList`, `ModDictionary`, `PartyHelper`, `InteractionRegistry`, manager/event helper classes) | Keep functionality available through `ShelteredGameState`, `ShelteredPersistence`, `ShelteredCharacters`, `ObjectButtonInjector`, and `ShelteredEvents`; do not keep the old helper names public. |
-| Sheltered UI/content/debug helper internals (`InventoryHelper`, `UIHooks`, `ContextMenuHelper`, `ModUIHooks`, `ModSettingsPanel`, `ModManagerPanel`, NGUI helpers, Spine settings UI renderers, and `UIDebug`) | Keep functionality behind `ShelteredContent`, `ShelteredUI`, and focused public UI/debug facades; do not present old helper classes as public API. |
+| Sheltered UI/content/debug helper internals (`InventoryHelper`, the former `UIHooks`/`ContextMenuHelper`, `ModUIHooks`, `ModSettingsPanel`, `ModManagerPanel`, NGUI helpers, Spine settings UI renderers, and `UIDebug`) | Keep supported functionality behind `ShelteredContent`, `ShelteredUI`, and focused public UI/debug facades. The inert hook/context-menu implementations were removed during the 2.0 ownership cleanup rather than retained as parallel internal APIs. |
 | Duplicate implementation files that already have ShelteredAPI equivalents | Keep one Sheltered-owned implementation and route public usage through facades. |
 | Examples that compile or accidentally patch runtime behavior | Keep as documentation/sample source only, not compiled framework behavior. |
 | Reflection bridges whose only purpose is to let `ModAPI` call `ShelteredAPI` | Replace with host-owned registration/composition in `ShelteredAPI`. |
@@ -130,11 +130,21 @@ Boundary baseline shrink from Prompt 2:
 
 ## Prompt 3 Scenario Ownership Split
 
-Prompt 3 separated the generic scenario framework from the Sheltered scenario authoring/runtime pack:
+Prompt 3 separated the generic scenario framework from the Sheltered XML-authoring/runtime API:
 
 - `ModAPI.Scenarios` keeps `ICustomScenarioService`, `CustomScenarioRegistration`, lifecycle state and event args, `CustomScenarioDefinitionFactory`, `ScenarioInfo`, `ScenarioModFolder`, `IScenarioModFolderSource`, `ModRegistryScenarioModFolderSource`, `ScenarioDependencyManifest`, and `ScenarioValidationResult`.
-- `ShelteredAPI.Scenarios` owns `ScenarioDefinition`, Sheltered scenario domain types, XML section serializers, validation rules, `ScenarioValidator`, `ScenarioCatalog`, `ScenarioLoader`, `ScenarioFrameworkVerification`, `ScenarioPipelineSmokeTest`, placement definitions, and `ScenarioRuntimeBinding`.
+- At that phase, `ShelteredAPI.Scenarios` received `ScenarioDefinition`, Sheltered scenario domain types, XML section serializers, validation rules, `ScenarioValidator`, `ScenarioCatalog`, `ScenarioLoader`, editor verification helpers, placement definitions, and `ScenarioRuntimeBinding`.
 - `ShelteredAPI` continues to register the scenario runtime through `ShelteredApiRuntimeBootstrap` and the scenario composition root.
+
+The later standalone-editor extraction narrows this boundary again:
+
+- `ShelteredAPI.Scenarios` retains every public XML/code authoring contract needed by mods, the installed-scenario catalog/browser, launch/runtime binding, apply services, and scenario save routing. `ShelteredScenarios` is the sole Sheltered-specific registration/catalog facade; `ShelteredScenarioRegistration` was removed without a compatibility alias.
+- `ShelteredScenarioEditor.dll` owns interactive drafts, editor commands/sessions, editor patches and diagnostics, and authoring presentation.
+- Editor checklist metadata is stored transactionally in adjacent `scenario.editor.xml` sidecars, paired with draft snapshots/copies, and excluded from runtime packages; it does not extend the ShelteredAPI scenario definition.
+- Preview crosses the boundary through one coarse `IScenarioPreviewSession : IDisposable`; the editor owns the current session and ShelteredAPI releases the preview definition, seed, carrier, and binding on disposal.
+- Editor-only framework verification and smoke diagnostics move with the editor; they are not public ShelteredAPI facade methods.
+- Dependencies point `ShelteredScenarioEditor -> ShelteredAPI -> ModAPI`; ShelteredAPI does not reference or resolve editor types.
+- The editor is optional and controlled only by `ShelteredScenarioEditor.Enabled`; no old toggle or namespace alias is retained for the unreleased 2.0 line.
 
 Boundary baseline shrink from Prompt 3:
 
@@ -178,7 +188,7 @@ Prompt 6 moved concrete Sheltered UI, item/content, and diagnostic runtime hooks
 
 - Inventory runtime helpers are hosted by `ShelteredAPI.dll` and exposed publicly through `ShelteredAPI.Content.ShelteredContent`.
 - `ShelteredAPI.Content.ShelteredItemContentBridge` owns the temporary typed conversion from neutral content runtime keys to Sheltered `ItemManager.ItemType` values.
-- NGUI panel helpers, mod-manager and settings panels, `ModUIHooks`, `ContextMenuHelper`, `UIHooks`, `UIPatches`, item-panel augmentation, panel lifecycle patch forwarding, `UIDebug`, and the Spine settings UI renderers are hosted by `ShelteredAPI.dll` under `ShelteredAPI/UI/Compatibility`.
+- NGUI panel helpers, mod-manager and settings panels, `ModUIHooks`, `UIPatches`, item-panel augmentation, panel lifecycle patch forwarding, `UIDebug`, and the Spine settings UI renderers are hosted by `ShelteredAPI.dll`. The unregistered `ContextMenuHelper` and unconsumed `UIHooks` compatibility classes were subsequently removed before 2.0.
 - `CrashCorridorMapDiagnostics` is hosted by `ShelteredAPI.dll` because it patches Sheltered loading, save, and UI managers.
 - `ModAPI` keeps only neutral UI/input framework pieces: `UIFlowGuard`, `ScrollInputBridge`, `TouchInputBridge`, input binding/action contracts, and Unity scene helpers that do not name Sheltered managers or NGUI widgets.
 
@@ -193,7 +203,7 @@ Prompt 7 removed the remaining Sheltered-specific compile-time and source refere
 
 - `ModAPI.csproj` no longer references `Assembly-CSharp` or `Manager`.
 - `ModAPI.Core.IGameHelper` no longer returns `FamilyMember`; it exposes only neutral string IDs and an opaque character handle. `ShelteredAPI.Adapters.GameHelperExtensions.FindFamilyMember(...)` provides the typed Sheltered adapter.
-- `WorldHooks` internals and `ShelteredPatterns` are hosted by `ShelteredAPI.dll`; public Sheltered patch helpers should use `ShelteredAPI.*` names.
+- `ShelteredPatterns` remains Sheltered-owned. The unconsumed internal `WorldHooks` class that was first moved across the assembly boundary was subsequently removed; public Sheltered patch helpers use supported `ShelteredAPI.*` names.
 - `PluginManager`, `SharedAssemblyResolver`, and `HarmonyBootstrap` no longer name `ShelteredAPI` directly. They discover shared runtime assemblies from the SMM runtime folders and integrate game-owned behavior through `IGameRuntimeBootstrap` plus neutral registry IDs.
 - The `InternalsVisibleTo("ShelteredAPI")` friend relationship was removed. Any cross-assembly runtime bridge must be a deliberate public neutral contract.
 

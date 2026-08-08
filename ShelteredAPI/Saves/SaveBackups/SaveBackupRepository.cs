@@ -2241,7 +2241,7 @@ namespace ShelteredAPI.Saves.Backups
 
         private string GetTimelinePath(string timelineKey)
         {
-            return Path.Combine(Path.Combine(_root, "timelines"), SanitizePathSegment(timelineKey));
+            return Path.Combine(Path.Combine(_root, "timelines"), SaveBackupPathPolicy.SanitizeSegment(timelineKey));
         }
 
         private static int CompareSnapshotRefs(SaveBackupSnapshotRef left, SaveBackupSnapshotRef right)
@@ -2350,17 +2350,6 @@ namespace ShelteredAPI.Saves.Backups
         private static string NormalizeManifestPath(string path)
         {
             return (path ?? string.Empty).Replace('\\', '/');
-        }
-
-        private static string SanitizePathSegment(string value)
-        {
-            string safe = string.IsNullOrEmpty(value) ? "unknown" : value;
-            char[] invalid = Path.GetInvalidFileNameChars();
-            for (int i = 0; i < invalid.Length; i++)
-                safe = safe.Replace(invalid[i], '_');
-
-            safe = safe.Replace('\\', '_').Replace('/', '_').Replace(':', '_').Replace('|', '_');
-            return safe.Length > 96 ? safe.Substring(0, 96) : safe;
         }
 
         private sealed class RestoreFilePlan

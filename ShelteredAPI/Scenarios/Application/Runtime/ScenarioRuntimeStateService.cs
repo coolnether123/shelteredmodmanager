@@ -55,11 +55,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 + "#"
                 + binding.DayCreated.ToString()
                 + "#"
-                + (!string.IsNullOrEmpty(binding.RunId)
-                    ? ("run:" + binding.RunId)
-                    : binding.LastEditorSaveTick.HasValue
-                        ? ("playtest:" + binding.LastEditorSaveTick.Value.ToString())
-                        : "legacy-normal");
+                + (binding.IsPreview ? "preview:" : "run:")
+                + (binding.RunId ?? string.Empty);
         }
     }
 

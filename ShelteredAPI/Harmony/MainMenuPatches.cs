@@ -209,7 +209,7 @@ namespace ShelteredAPI.Harmony
 
                     // For auto-load, we use Slot 1 as the proxy carrier
                     var virtualSaveType = SaveManager.SaveType.Slot1;
-                    PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
+                    SaveRuntimeState.QueueLoad(virtualSaveType, "Standard", entry.id);
 
                     DifficultyManager.StoreMenuDifficultySettings(
                         entry.saveInfo.rainDiff, entry.saveInfo.resourceDiff, entry.saveInfo.breachDiff, 

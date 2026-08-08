@@ -13,11 +13,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     {
         private readonly IScenarioStateManager _stateManager;
         private readonly IScenarioRuntimeBindingPersistence _persistence;
+        private readonly ScenarioRuntimeDefinitionResolver _definitionResolver;
         private bool _hooked;
 
         public static ShelteredScenarioRuntimeBindingManager Instance
         {
-            get { return ScenarioCompositionRoot.Resolve<ShelteredScenarioRuntimeBindingManager>(); }
+            get { return ScenarioRuntimeCompositionRoot.Resolve<ShelteredScenarioRuntimeBindingManager>(); }
         }
 
         public ScenarioRuntimeBinding CurrentBinding
@@ -39,11 +40,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         internal ShelteredScenarioRuntimeBindingManager(
             IScenarioStateManager stateManager,
             IScenarioRuntimeBindingPersistence persistence,
-            IVanillaScenarioRuntime vanillaRuntime)
+            IVanillaScenarioRuntime vanillaRuntime,
+            ScenarioRuntimeDefinitionResolver definitionResolver)
         {
             _stateManager = stateManager;
             _persistence = persistence;
             _vanillaRuntime = vanillaRuntime;
+            _definitionResolver = definitionResolver;
         }
 
         private readonly IVanillaScenarioRuntime _vanillaRuntime;
@@ -104,6 +107,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             try
             {
                 ScenarioRuntimeBinding loaded = _persistence.Load(data);
+                if (loaded != null && loaded.IsPreview && !_definitionResolver.HasPreview(loaded))
+                    loaded = null;
                 InvalidateUnavailableCompletionCarrier(loaded);
                 SetBinding(loaded);
                 if (loaded != null && loaded.IsConvertedToNormalSave)

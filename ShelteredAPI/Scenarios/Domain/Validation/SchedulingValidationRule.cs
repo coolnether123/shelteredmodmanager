@@ -6,12 +6,12 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Content.Compatibility;
 using ShelteredAPI.Saves;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Journal;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Domain.Validation{
@@ -23,12 +23,12 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 return;
 
             HashSet<string> actionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            ValidateLegacySchedules(definition, summary, actionIds);
+            ValidateAuthoredSchedules(definition, summary, actionIds);
             ValidateJournal(definition, summary, actionIds);
             ValidateSharedSchedules(definition, summary, actionIds);
         }
 
-        private static void ValidateLegacySchedules(ScenarioDefinition definition, ValidationSummary summary, HashSet<string> actionIds)
+        private static void ValidateAuthoredSchedules(ScenarioDefinition definition, ValidationSummary summary, HashSet<string> actionIds)
         {
             ScenarioDefinitionIndex index = new ScenarioDefinitionIndex(definition);
             for (int i = 0; definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
@@ -38,7 +38,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 if (id == null)
                     summary.AddError("people.future_survivor.id_required", "[People] Future survivor #" + i + " is missing id.");
                 else
-                    AddActionId(summary, actionIds, "legacy:survivor:" + id, "[People] Duplicate future survivor schedule id: " + id);
+                    AddActionId(summary, actionIds, "authored:survivor:" + id, "[People] Duplicate future survivor schedule id: " + id);
                 ValidateTime(summary, survivor != null ? survivor.Arrival : null, "[People] Future survivor '" + (id ?? ("#" + i)) + "'");
                 if (survivor == null || survivor.Survivor == null || TrimToNull(survivor.Survivor.Name) == null)
                     summary.AddError("people.future_survivor.name_required", "[People] Future survivor '" + (id ?? ("#" + i)) + "' needs a usable name.");
@@ -51,7 +51,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 if (id == null)
                     summary.AddError("inventory.schedule.id_required", "[Inventory / Storage] Timed inventory change #" + i + " is missing id.");
                 else
-                    AddActionId(summary, actionIds, "legacy:inventory:" + id, "[Inventory / Storage] Duplicate timed inventory schedule id: " + id);
+                    AddActionId(summary, actionIds, "authored:inventory:" + id, "[Inventory / Storage] Duplicate timed inventory schedule id: " + id);
                 ValidateTime(summary, change != null ? change.When : null, "[Inventory / Storage] Timed inventory '" + (id ?? ("#" + i)) + "'");
                 ValidateItem(summary, change != null ? change.ItemId : null, "[Inventory / Storage] Timed inventory '" + (id ?? ("#" + i)) + "'");
                 if (change == null || change.Quantity <= 0)
@@ -67,7 +67,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 if (id == null)
                     summary.AddError("events.weather.id_required", "[Events] Weather event #" + i + " is missing id.");
                 else
-                    AddActionId(summary, actionIds, "legacy:weather:" + id, "[Events] Duplicate weather event id: " + id);
+                    AddActionId(summary, actionIds, "authored:weather:" + id, "[Events] Duplicate weather event id: " + id);
                 ValidateTime(summary, weather != null ? weather.When : null, "[Events] Weather event '" + (id ?? ("#" + i)) + "'");
                 if (!IsValidWeather(weather != null ? weather.WeatherState : null))
                     summary.AddError("events.weather.invalid_state", "[Events] Weather event '" + (id ?? ("#" + i)) + "' has invalid weather state.");
@@ -141,8 +141,8 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 case ScenarioConditionKind.SurvivorPresent:
                     if (condition.ActorRef != null)
                     {
-                        if (!ScenarioCastMemberReferenceCatalog.HasActorRef(definition, condition.ActorRef, true, true))
-                            summary.AddError("events.trigger.deleted_actor", scope + " references deleted cast member actor '" + ScenarioCastMemberReferenceCatalog.FormatActorRef(condition.ActorRef) + "'. Fix: open Events > Conditions and pick an existing cast member, or clear the actor link.");
+                        if (!ScenarioActorReferenceIndex.Contains(definition, condition.ActorRef, true, true))
+                            summary.AddError("events.trigger.deleted_actor", scope + " references deleted cast member actor '" + ScenarioActorReferenceIndex.Format(condition.ActorRef) + "'. Fix: open Events > Conditions and pick an existing cast member, or clear the actor link.");
                     }
                     else if (target == null || (!index.HasFamilySurvivor(target) && !index.HasFutureSurvivor(target)))
                         summary.AddError("events.trigger.unknown_survivor", scope + " references unknown survivor '" + (target ?? string.Empty) + "'.");
@@ -186,8 +186,8 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 if (triggerId != null && !index.HasTrigger(triggerId))
                     summary.AddError("journal.entry.unknown_trigger", scope + " references unknown trigger '" + triggerId + "'.");
 
-                if (entry != null && entry.Writer != null && !ScenarioCastMemberReferenceCatalog.HasActorRef(definition, entry.Writer, true, true))
-                    summary.AddError("journal.entry.deleted_writer", scope + " references deleted cast member actor '" + ScenarioCastMemberReferenceCatalog.FormatActorRef(entry.Writer) + "'.");
+                if (entry != null && entry.Writer != null && !ScenarioActorReferenceIndex.Contains(definition, entry.Writer, true, true))
+                    summary.AddError("journal.entry.deleted_writer", scope + " references deleted cast member actor '" + ScenarioActorReferenceIndex.Format(entry.Writer) + "'.");
 
                 if (entry != null && entry.Mode == ScenarioJournalEntryMode.Repeat && entry.CooldownMinutes < 0)
                     summary.AddError("journal.entry.cooldown", scope + " repeat cooldown cannot be negative.");
@@ -244,8 +244,8 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     string survivorId = TrimToNull(effect.SurvivorId) ?? TrimToNull(effect.TargetId);
                     if (effect.ActorRef != null)
                     {
-                        if (!ScenarioCastMemberReferenceCatalog.HasActorRef(definition, effect.ActorRef, false, true))
-                            summary.AddError("people.effect.deleted_actor", scope + " references deleted future survivor actor '" + ScenarioCastMemberReferenceCatalog.FormatActorRef(effect.ActorRef) + "'. Fix: open Events > Scheduled Changes and pick an existing future survivor, or clear the actor link.");
+                        if (!ScenarioActorReferenceIndex.Contains(definition, effect.ActorRef, false, true))
+                            summary.AddError("people.effect.deleted_actor", scope + " references deleted future survivor actor '" + ScenarioActorReferenceIndex.Format(effect.ActorRef) + "'. Fix: open Events > Scheduled Changes and pick an existing future survivor, or clear the actor link.");
                     }
                     else if (survivorId == null)
                         summary.AddError("people.effect.survivor_required", scope + " survivor effect is missing survivorId/targetId.");

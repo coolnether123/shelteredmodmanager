@@ -113,6 +113,7 @@ $plan.ToArray() | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $runRoot 'pl
 $config | ConvertTo-Json -Depth 30 | Set-Content (Join-Path $runRoot 'benchmark.config.json') -Encoding UTF8
 
 $suiteLocks = Enter-BenchmarkInstallLocks @($platforms | ForEach-Object { [string]$_.installRoot })
+$parallelLockEnvelope = New-BenchmarkInstallLockEnvelope -Locks $suiteLocks
 $suiteSnapshots = New-Object 'System.Collections.Generic.List[object]'
 $activeJobs = New-Object 'System.Collections.Generic.List[object]'
 try {
@@ -177,10 +178,10 @@ try {
                 $profileSafe = ([string]$profileItem.name) -replace '[^A-Za-z0-9_.-]', '_'
                 $caseRoot = Join-Path $runRoot ("cases\{0}\{1}\iteration-{2:d3}" -f $platformSafe, $profileSafe, $iteration)
                 $job = Start-Job -Name "$platformSafe-$profileSafe-$iteration" -ScriptBlock {
-                    param($module, $platform, $profile, $configuration, $repo, $root, $number, $id, $executionMode, $comparisonLane)
+                    param($module, $platform, $profile, $configuration, $repo, $root, $number, $id, $installLockEnvelope, $executionMode, $comparisonLane)
                     Import-Module $module -Force -DisableNameChecking
-                    Invoke-ShelteredBenchmarkCase $platform $profile $configuration $repo $root $number $id $executionMode $comparisonLane
-                } -ArgumentList $runnerModule, $platformItem, $profileItem, $config, $repositoryRoot, $caseRoot, $iteration, $runId, $execution.ExecutionMode, $execution.ComparisonLane
+                    Invoke-ShelteredBenchmarkCase $platform $profile $configuration $repo $root $number $id @($installLockEnvelope.Locks) $executionMode $comparisonLane
+                } -ArgumentList $runnerModule, $platformItem, $profileItem, $config, $repositoryRoot, $caseRoot, $iteration, $runId, $parallelLockEnvelope, $execution.ExecutionMode, $execution.ComparisonLane
                 $jobs += $job
                 $activeJobs.Add($job)
             }
@@ -208,7 +209,7 @@ try {
                     $platformSafe = ([string]$platformItem.name) -replace '[^A-Za-z0-9_.-]', '_'
                     $profileSafe = ([string]$profileItem.name) -replace '[^A-Za-z0-9_.-]', '_'
                     $caseRoot = Join-Path $runRoot ("cases\{0}\{1}\iteration-{2:d3}" -f $platformSafe, $profileSafe, $iteration)
-                    $result = Invoke-ShelteredBenchmarkCase $platformItem $profileItem $config $repositoryRoot $caseRoot $iteration $runId $execution.ExecutionMode $execution.ComparisonLane
+                    $result = Invoke-ShelteredBenchmarkCase $platformItem $profileItem $config $repositoryRoot $caseRoot $iteration $runId $suiteLocks $execution.ExecutionMode $execution.ComparisonLane
                     $results.Add($result)
                 }
             }

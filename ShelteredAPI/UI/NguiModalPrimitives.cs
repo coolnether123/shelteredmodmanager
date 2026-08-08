@@ -82,6 +82,35 @@ namespace ShelteredAPI.UI
             Color textColor,
             Action onClick)
         {
+            return CreateButton(
+                parent,
+                name,
+                text,
+                position,
+                width,
+                height,
+                16,
+                bitmapFont,
+                trueTypeFont,
+                backgroundColor,
+                textColor,
+                onClick);
+        }
+
+        public static GameObject CreateButton(
+            Transform parent,
+            string name,
+            string text,
+            Vector3 position,
+            int width,
+            int height,
+            int fontSize,
+            UIFont bitmapFont,
+            Font trueTypeFont,
+            Color backgroundColor,
+            Color textColor,
+            Action onClick)
+        {
             GameObject button = new GameObject(name);
             button.transform.SetParent(parent, false);
             button.transform.localPosition = position;
@@ -94,7 +123,7 @@ namespace ShelteredAPI.UI
             background.depth = 100;
             background.color = backgroundColor;
 
-            UILabel label = CreateLabel(button.transform, "Label", text, Vector3.zero, 16, textColor, bitmapFont, trueTypeFont, 101);
+            UILabel label = CreateLabel(button.transform, "Label", text, Vector3.zero, fontSize, textColor, bitmapFont, trueTypeFont, 101);
             label.alignment = NGUIText.Alignment.Center;
             label.width = width - 20;
             label.height = height - 8;
@@ -104,11 +133,16 @@ namespace ShelteredAPI.UI
             BoxCollider collider = button.AddComponent<BoxCollider>();
             collider.size = new Vector3(width, height, 1f);
 
-            UIEventListener.Get(button).onClick = _ =>
+            UIEventListener listener = UIEventListener.Get(button);
+            listener.onClick = _ =>
             {
                 if (onClick != null)
                     onClick();
             };
+
+            UIButton uiButton = button.AddComponent<UIButton>();
+            uiButton.tweenTarget = button;
+            uiButton.isEnabled = onClick != null;
             return button;
         }
     }

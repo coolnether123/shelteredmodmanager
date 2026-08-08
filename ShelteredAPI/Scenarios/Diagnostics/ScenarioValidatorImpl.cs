@@ -4,9 +4,10 @@ using System.Globalization;
 using System.IO;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Diagnostics{
-    internal sealed class ScenarioValidatorImpl
+    internal sealed class ScenarioValidatorImpl : IScenarioDefinitionValidator
     {
         private readonly ScenarioValidator _neutralValidator;
 

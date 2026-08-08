@@ -43,9 +43,9 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
             return summary;
         }
 
-        public ScenarioValidationResult ValidateLegacy(ScenarioDefinition definition, string scenarioFilePath)
+        public ScenarioValidationResult ValidateResult(ScenarioDefinition definition, string scenarioFilePath)
         {
-            return Validate(definition, scenarioFilePath).ToLegacyResult();
+            return Validate(definition, scenarioFilePath).ToValidationResult();
         }
     }
 }

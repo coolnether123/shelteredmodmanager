@@ -235,6 +235,17 @@ namespace ShelteredAPI.UI.Internal.ModManager{
             clone.layer = layer;
             NGUITools.SetLayer(clone, layer);
 
+            UIPanel ownerPanel = clone.transform.parent != null
+                ? NGUITools.FindInParents<UIPanel>(clone.transform.parent.gameObject)
+                : null;
+            UIPanel[] clonedPanels = clone.GetComponentsInChildren<UIPanel>(true);
+            for (int i = 0; i < clonedPanels.Length; i++)
+            {
+                clonedPanels[i].alpha = 1f;
+                if (ownerPanel != null)
+                    clonedPanels[i].depth = ownerPanel.depth;
+            }
+
             UIButton[] buttons = clone.GetComponentsInChildren<UIButton>(true);
             for (int i = 0; i < buttons.Length; i++)
                 Object.Destroy(buttons[i].gameObject);
@@ -317,6 +328,8 @@ namespace ShelteredAPI.UI.Internal.ModManager{
                 Object.Destroy(sound);
             foreach (UI_PlaySound sound in clone.GetComponentsInChildren<UI_PlaySound>(true))
                 Object.Destroy(sound);
+            foreach (TweenAlpha tween in clone.GetComponentsInChildren<TweenAlpha>(true))
+                tween.value = 1f;
             foreach (UIPlayTween tween in clone.GetComponentsInChildren<UIPlayTween>(true))
                 Object.Destroy(tween);
             foreach (UIPlayAnimation animation in clone.GetComponentsInChildren<UIPlayAnimation>(true))
@@ -331,16 +344,7 @@ namespace ShelteredAPI.UI.Internal.ModManager{
                 if (listener == null)
                     continue;
 
-                listener.onSubmit = null;
-                listener.onClick = null;
-                listener.onDoubleClick = null;
-                listener.onHover = null;
-                listener.onPress = null;
-                listener.onSelect = null;
-                listener.onScroll = null;
-                listener.onDrag = null;
-                listener.onDrop = null;
-                listener.onKey = null;
+                UIExtensionService.ClearEventListenerDelegates(listener);
                 listener.enabled = false;
                 Object.Destroy(listener);
             }

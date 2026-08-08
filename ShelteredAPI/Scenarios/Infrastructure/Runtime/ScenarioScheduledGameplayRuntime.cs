@@ -5,6 +5,8 @@ using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioScheduledGameplayRuntime : MonoBehaviour
     {
@@ -42,6 +44,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         private void Update()
         {
+            ScenarioRuntimeCompositionRoot.Resolve<IScenarioSpriteSwapEngine>().Update();
             if (_coordinator == null)
                 return;
 

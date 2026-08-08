@@ -17,7 +17,7 @@ $mainForm = Get-Content -LiteralPath (Join-Path $RepoRoot "Manager\MainForm.cs")
 $workshop = Get-Content -LiteralPath (Join-Path $RepoRoot "Manager\Views\ContentWorkshopTab.cs") -Raw
 $service = Get-Content -LiteralPath (Join-Path $RepoRoot "Manager\Core\Services\ContentWorkshopProjectService.cs") -Raw
 $canvas = Get-Content -LiteralPath (Join-Path $RepoRoot "Manager\Controls\PixelEditorCanvas.cs") -Raw
-$scenarioAdapter = Get-Content -LiteralPath (Join-Path $RepoRoot "ShelteredAPI\Scenarios\Infrastructure\Assets\ScenarioPixelEditorAdapter.cs") -Raw
+$scenarioAdapter = Get-Content -LiteralPath (Join-Path $RepoRoot "ShelteredScenarioEditor\Infrastructure\Assets\ScenarioPixelEditorAdapter.cs") -Raw
 $failures = New-Object "System.Collections.Generic.List[string]"
 
 $requiredCompileItems = @(

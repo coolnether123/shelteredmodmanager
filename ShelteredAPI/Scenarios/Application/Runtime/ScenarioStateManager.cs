@@ -135,7 +135,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 IsConvertedToNormalSave = binding.IsConvertedToNormalSave,
                 DayCreated = binding.DayCreated,
                 RunId = binding.RunId,
-                LastEditorSaveTick = binding.LastEditorSaveTick,
+                IsPreview = binding.IsPreview,
                 ScenarioQuestInstanceId = binding.ScenarioQuestInstanceId
             };
         }

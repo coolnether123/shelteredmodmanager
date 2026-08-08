@@ -4,9 +4,8 @@ using ModAPI.Scenarios;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-using ShelteredAPI.Hooks;
-using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class ScenarioSpriteRuntimeResolver
     {
@@ -32,9 +31,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                         return Ui2DSprite.sprite2D;
                     if (Kind == ScenarioSpriteTargetComponentKind.ParticleSystemRenderer && ParticleRenderer != null)
                     {
-                        Material material = ParticleRenderer.material != null ? ParticleRenderer.material : ParticleRenderer.sharedMaterial;
+                        Material material = ParticleRenderer.material;
+                        if (material == null)
+                            material = ParticleRenderer.sharedMaterial;
                         Texture2D texture = material != null ? material.mainTexture as Texture2D : null;
-                        return ScenarioSpriteReferenceLibrary.CreateFullTextureSprite(texture, texture != null ? texture.name : null);
+                        return ScenarioSpriteReferenceLibrary.GetOrCreateFullTextureSprite(texture, texture != null ? texture.name : null);
                     }
                     return null;
                 }
@@ -74,42 +75,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return target != null;
         }
 
-        public bool TryResolve(ScenarioAuthoringTarget authoringTarget, out ResolvedTarget target)
+        internal bool TryResolve(Transform transform, ScenarioSpriteTargetComponentKind preferredKind, out ResolvedTarget target)
         {
-            target = null;
-            if (authoringTarget == null)
-                return false;
-
-            string targetPath = ResolveTargetPath(authoringTarget);
-            if (string.IsNullOrEmpty(targetPath))
-                return false;
-
-            // TransformPath is the durable authoring identity. RuntimeObject can
-            // be a transient hit/renderer proxy below that logical target, so it
-            // is only a fallback when the persisted path is not currently live.
-            Transform transform = FindTransformByPath(targetPath);
-            if (transform == null)
-            {
-                Transform runtimeTransform = ResolveTransform(authoringTarget);
-                Transform current = runtimeTransform;
-                while (current != null)
-                {
-                    if (string.Equals(BuildTransformPath(current), targetPath, StringComparison.Ordinal))
-                    {
-                        transform = current;
-                        break;
-                    }
-                    current = current.parent;
-                }
-
-                if (transform == null)
-                    transform = runtimeTransform;
-            }
-
-            if (transform == null)
-                return false;
-
-            target = CreateResolvedTarget(transform, targetPath, ScenarioSpriteTargetComponentKind.Auto);
+            target = CreateResolvedTarget(
+                transform,
+                transform != null ? ScenarioTransformPath.Build(transform) : null,
+                preferredKind);
             return target != null;
         }
 
@@ -185,7 +156,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 return new ResolvedTarget
                 {
-                    TargetPath = BuildTransformPath(spriteRenderer.transform),
+                    TargetPath = ScenarioTransformPath.Build(spriteRenderer.transform),
                     Transform = spriteRenderer.transform,
                     Kind = ScenarioSpriteTargetComponentKind.SpriteRenderer,
                     SpriteRenderer = spriteRenderer
@@ -196,7 +167,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 return new ResolvedTarget
                 {
-                    TargetPath = BuildTransformPath(ui2DSprite.transform),
+                    TargetPath = ScenarioTransformPath.Build(ui2DSprite.transform),
                     Transform = ui2DSprite.transform,
                     Kind = ScenarioSpriteTargetComponentKind.UI2DSprite,
                     Ui2DSprite = ui2DSprite
@@ -207,7 +178,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 return new ResolvedTarget
                 {
-                    TargetPath = BuildTransformPath(particleRenderer.transform),
+                    TargetPath = ScenarioTransformPath.Build(particleRenderer.transform),
                     Transform = particleRenderer.transform,
                     Kind = ScenarioSpriteTargetComponentKind.ParticleSystemRenderer,
                     ParticleRenderer = particleRenderer
@@ -215,31 +186,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             }
 
             return null;
-        }
-
-        private static Transform ResolveTransform(ScenarioAuthoringTarget authoringTarget)
-        {
-            if (authoringTarget == null || authoringTarget.RuntimeObject == null)
-                return null;
-
-            GameObject gameObject = authoringTarget.RuntimeObject as GameObject;
-            if (gameObject != null)
-                return gameObject.transform;
-
-            Component component = authoringTarget.RuntimeObject as Component;
-            return component != null ? component.transform : null;
-        }
-
-        private static string ResolveTargetPath(ScenarioAuthoringTarget authoringTarget)
-        {
-            if (authoringTarget == null)
-                return null;
-
-            if (!string.IsNullOrEmpty(authoringTarget.TransformPath))
-                return authoringTarget.TransformPath;
-
-            Transform transform = ResolveTransform(authoringTarget);
-            return BuildTransformPath(transform);
         }
 
         private static Transform FindTransformByPath(string targetPath)
@@ -332,21 +278,5 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return null;
         }
 
-        private static string BuildTransformPath(Transform transform)
-        {
-            if (transform == null)
-                return null;
-
-            System.Collections.Generic.List<string> names = new System.Collections.Generic.List<string>();
-            Transform current = transform;
-            while (current != null)
-            {
-                names.Add(current.name);
-                current = current.parent;
-            }
-
-            names.Reverse();
-            return string.Join("/", names.ToArray());
-        }
     }
 }

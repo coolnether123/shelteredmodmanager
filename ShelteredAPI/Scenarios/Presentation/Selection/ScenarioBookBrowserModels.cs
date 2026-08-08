@@ -15,17 +15,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
     {
         Types,
         Scenarios,
-        Saves,
-        DraftDetails,
-        InstallScenarios
+        Saves
     }
 
     internal enum ScenarioBookType
     {
         Published,
         Surrounded,
-        Stasis,
-        Draft
+        Stasis
     }
 
     internal enum ScenarioBookRowKind
@@ -34,18 +31,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         Type,
         Scenario,
         StartScenario,
-        OpenDraft,
-        CreateDraft,
-        DuplicateDraft,
-        DeleteDraft,
-        RecoveryResume,
-        RecoveryCleanup,
         LoadSave,
-        OpenScenarioSaves,
-        OpenInstallScenarios,
-        OpenScenarioDownloadsFolder,
-        InstallPackage,
-        UninstallPackage
+        OpenScenarioSaves
     }
 
     internal sealed class ScenarioBookRowModel
@@ -61,21 +48,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public ScenarioCatalogEntry Scenario;
         public SaveEntry Save;
         public ScenarioBookSaveDetailModel SaveDetail;
-        public string RecoveryScenarioId;
-        public string RecoverySaveId;
-        public SaveManager.SaveType RecoverySaveType;
-        public ScenarioPackageImportCandidate ImportCandidate;
         public bool IsPinned;
         public ScenarioLibrarySortMode LibrarySortMode;
-    }
-
-    internal sealed class ScenarioBookDraftEditorModel
-    {
-        public ScenarioCatalogEntry Scenario;
-        public string DraftId;
-        public string DisplayName;
-        public string Description;
-        public ScenarioBookDraftFactsModel Facts;
     }
 
     internal sealed class ScenarioBookSaveDetailModel

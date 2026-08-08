@@ -34,7 +34,10 @@ High-level flow:
 - applying `ModAPI` Harmony bootstrap plus patches from runtime assemblies that expose `IGameRuntimeBootstrap`
 - initializing game runtime bootstraps
 - wiring save/session lifecycle hooks through neutral `GameRuntime.*` registry IDs
-- leaving Sheltered-specific content, save, UI, input, actor, and scenario ownership to `ShelteredAPI`
+- leaving Sheltered-specific content, save, UI, input, actor, and scenario runtime ownership to `ShelteredAPI`
+- discovering optional runtime assemblies independently, so `ShelteredScenarioEditor.dll` may bootstrap only when deployed without becoming a dependency of ModAPI or ShelteredAPI
+
+The scenario dependency direction is `ShelteredScenarioEditor -> ShelteredAPI -> ModAPI`. The editor owns interactive authoring UI and drafts. ShelteredAPI owns mod-facing scenario facades and the installed-scenario runtime/browser lane. The editor may be physically absent; when present but disabled by `ShelteredScenarioEditor.Enabled`, it must not initialize its authoring composition graph.
 
 ShelteredAPI registers neutral runtime IDs when it is present. Neutral IDs used by `ModAPI` include:
 - `GameRuntime.Actors`
@@ -153,6 +156,26 @@ Sheltered save-slot APIs are exposed through `ShelteredSaves` and `ShelteredSave
 - Save-backed seed files are written by `ModRandomState` under the host-provided neutral save path. Sheltered slot routing remains in `ShelteredAPI`.
 - A save-seed reset clears named streams and notifies listeners to obtain fresh stream instances. An exact deterministic restore retains named-stream state and notifies listeners to rebind to the restored instances.
 - Lifecycle diagnostics are emitted for seed/reset/stream/snapshot events only. Per-draw logging is intentionally excluded.
+
+## 7.2 Manager-owned runtime options
+
+`ModAPI.Core.ManagerBooleanOptions` is the only supported runtime entry point for boolean options shown
+by the desktop manager. Mods register a `ManagerBooleanOptionDefinition` and query the selected value;
+they do not read or write `manager_options.json` directly.
+
+The public definition belongs only to `ModAPI.dll`; `Manager.exe` does not export a second type with the
+same fully qualified name. The desktop Manager and Unity runtime compile the same internal descriptor,
+persisted contract, and merge policy from `Shared/ManagerOptions`. Their environment adapters remain
+separate: Manager uses `JavaScriptSerializer`, while ModAPI uses its Unity-compatible manual JSON adapter.
+Metadata refreshes preserve the current selected value, identifiers compare case-insensitively, and the
+persisted file/record DTOs are deliberately internal in the 2.0 API.
+
+## 7.3 Decompiler sidecar
+
+The .NET 8 decompiler executable has one execution path: `Program` validates CLI input and calls
+`DecompilerEngine`. `SemanticExtensions.GetILRanges` is the single syntax/IL mapping primitive currently
+required by that engine. New service facades or semantic APIs should be added only with a concrete second
+consumer.
 
 ## 8. Practical Guidance
 
