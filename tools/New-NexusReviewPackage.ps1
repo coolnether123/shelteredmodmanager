@@ -39,6 +39,15 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'Dist\SMM') -Destination (Join-Path 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'documentation\Nexus_Registration_Submission.md') -Destination (Join-Path $stageRoot 'NEXUS_REVIEW.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'documentation\Nexus_OAuth_Implementation.md') -Destination (Join-Path $stageRoot 'NEXUS_OAUTH.md')
 
+$forbiddenTestArtifacts = Get-ChildItem -LiteralPath (Join-Path $stageRoot 'SMM') -Recurse -File |
+    Where-Object { $_.Name -match '(?i)(^|[._-])(test|tests|harness)([._-]|$)' }
+if ($forbiddenTestArtifacts) {
+    $relativePaths = $forbiddenTestArtifacts | ForEach-Object {
+        $_.FullName.Substring($stageRoot.Length).TrimStart('\')
+    }
+    throw "Nexus review package contains test-only artifacts: $($relativePaths -join ', ')"
+}
+
 $smmStage = Join-Path $stageRoot 'SMM'
 Get-ChildItem -LiteralPath $smmStage -Recurse -File | Where-Object {
     $_.Extension -in @('.pdb', '.log', '.nxm') -or

@@ -93,4 +93,10 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
+$httpBehaviorTest = Join-Path $RepoRoot 'tools\Test-NexusHttpBehavior.ps1'
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $httpBehaviorTest -RepoRoot $RepoRoot
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
 Write-Host 'Nexus Manager contract checks passed.'

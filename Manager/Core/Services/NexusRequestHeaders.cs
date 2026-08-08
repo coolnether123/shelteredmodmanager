@@ -16,10 +16,8 @@ namespace Manager.Core.Services
                 return;
 
             request.Accept = "application/json";
-            request.UserAgent = AppVersionInfo.UserAgent;
             request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-            request.Headers["Application-Name"] = AppVersionInfo.ApplicationName;
-            request.Headers["Application-Version"] = AppVersionInfo.NexusHeader;
+            ApplyApplicationHeaders(request);
 
             if (credential == null)
                 return;
@@ -28,6 +26,16 @@ namespace Manager.Core.Services
                 request.Headers["Authorization"] = "Bearer " + credential.BearerToken;
             else if (!string.IsNullOrEmpty(credential.ApiKey))
                 request.Headers["APIKEY"] = credential.ApiKey;
+        }
+
+        internal static void ApplyApplicationHeaders(HttpWebRequest request)
+        {
+            if (request == null)
+                return;
+
+            request.UserAgent = AppVersionInfo.UserAgent;
+            request.Headers["Application-Name"] = AppVersionInfo.ApplicationName;
+            request.Headers["Application-Version"] = AppVersionInfo.NexusHeader;
         }
     }
 }

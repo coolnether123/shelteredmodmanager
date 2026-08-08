@@ -175,6 +175,8 @@
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
     <Compile Include="Core\Services\NexusRequestHeaders.cs" />
+    <Compile Include="Core\Services\NexusRequestFailurePolicy.cs" />
+    <Compile Include="Core\Services\NexusRateLimitTracker.cs" />
     <Compile Include="Core\Services\NexusRequestCredential.cs" />
     <Compile Include="Core\Services\NexusOAuthConfiguration.cs" />
     <Compile Include="Core\Services\NexusOAuthProtocol.cs" />

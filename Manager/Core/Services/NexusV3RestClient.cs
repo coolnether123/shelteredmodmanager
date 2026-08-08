@@ -26,16 +26,28 @@ namespace Manager.Core.Services
     {
         private const string BaseUrl = "https://api.nexusmods.com/v3";
         private readonly INexusCredentialProvider _credentialProvider;
+        private readonly NexusRateLimitTracker _rateLimits;
+        private readonly string _baseUrl;
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
 
         public NexusV3RestClient(string apiKey)
+            : this(new StaticNexusCredentialProvider(apiKey), new NexusRateLimitTracker(), BaseUrl)
         {
-            _credentialProvider = new StaticNexusCredentialProvider(apiKey);
         }
 
         internal NexusV3RestClient(INexusCredentialProvider credentialProvider)
+            : this(credentialProvider, new NexusRateLimitTracker(), BaseUrl)
+        {
+        }
+
+        internal NexusV3RestClient(
+            INexusCredentialProvider credentialProvider,
+            NexusRateLimitTracker rateLimits,
+            string baseUrl)
         {
             _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(string.Empty);
+            _rateLimits = rateLimits ?? new NexusRateLimitTracker();
+            _baseUrl = string.IsNullOrEmpty(baseUrl) ? BaseUrl : baseUrl.TrimEnd('/');
         }
 
         public NexusV3RestResult Get(string relativePath)
@@ -157,18 +169,26 @@ namespace Manager.Core.Services
 
         private NexusV3RestResult Send(string method, string relativePath, Dictionary<string, object> body)
         {
+            NexusRateLimitTracker.Lease rateLimitLease = null;
+            bool requestSubmitted = false;
             try
             {
-                string url = BaseUrl + relativePath;
+                string credentialError;
+                NexusRequestCredential credential = _credentialProvider.GetCredential(out credentialError);
+                if (!string.IsNullOrEmpty(credentialError) && (credential == null || !credential.IsConfigured))
+                    return new NexusV3RestResult { ErrorMessage = credentialError };
+
+                string rateLimitMessage;
+                string credentialScope = credential != null ? credential.RateLimitScope : string.Empty;
+                if (!_rateLimits.TryAcquire(credentialScope, out rateLimitLease, out rateLimitMessage))
+                    return new NexusV3RestResult { ErrorMessage = rateLimitMessage };
+
+                string url = _baseUrl + relativePath;
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 request.Method = method;
                 request.Timeout = 30000;
                 request.ReadWriteTimeout = 30000;
                 request.KeepAlive = false;
-                string credentialError;
-                NexusRequestCredential credential = _credentialProvider.GetCredential(out credentialError);
-                if (!string.IsNullOrEmpty(credentialError) && (credential == null || !credential.IsConfigured))
-                    return new NexusV3RestResult { ErrorMessage = credentialError };
                 NexusRequestHeaders.ApplyJsonHeaders(request, credential);
 
                 if (body != null)
@@ -177,16 +197,19 @@ namespace Manager.Core.Services
                     byte[] bytes = Encoding.UTF8.GetBytes(json);
                     request.ContentType = "application/json";
                     request.ContentLength = bytes.Length;
+                    requestSubmitted = true;
                     using (Stream stream = request.GetRequestStream())
                     {
                         stream.Write(bytes, 0, bytes.Length);
                     }
                 }
 
+                requestSubmitted = true;
                 using (var response = (HttpWebResponse)request.GetResponse())
                 using (Stream stream = response.GetResponseStream())
                 using (StreamReader reader = stream != null ? new StreamReader(stream) : null)
                 {
+                    _rateLimits.Observe(response, rateLimitLease);
                     string json = reader != null ? reader.ReadToEnd() : string.Empty;
                     return new NexusV3RestResult
                     {
@@ -197,19 +220,41 @@ namespace Manager.Core.Services
             }
             catch (WebException ex)
             {
-                HttpStatusCode status = 0;
-                var http = ex.Response as HttpWebResponse;
-                if (http != null)
-                    status = http.StatusCode;
+                if (NexusRequestFailurePolicy.IsDefinitelyUnsent(ex))
+                    _rateLimits.Release(rateLimitLease);
 
-                return new NexusV3RestResult
+                HttpStatusCode status = 0;
+                using (var http = ex.Response as HttpWebResponse)
                 {
-                    StatusCode = status,
-                    ErrorMessage = ReadWebException(ex, "Nexus v3 request failed")
-                };
+                    if (http != null)
+                    {
+                        status = http.StatusCode;
+                        _rateLimits.Observe(http, rateLimitLease);
+                    }
+
+                    string responseRateLimitMessage;
+                    if ((int)status == 429 && _rateLimits.TryGetBlockingMessage(
+                        rateLimitLease != null ? rateLimitLease.CredentialScope : string.Empty,
+                        out responseRateLimitMessage))
+                    {
+                        return new NexusV3RestResult
+                        {
+                            StatusCode = status,
+                            ErrorMessage = responseRateLimitMessage
+                        };
+                    }
+
+                    return new NexusV3RestResult
+                    {
+                        StatusCode = status,
+                        ErrorMessage = ReadWebException(http, ex, "Nexus v3 request failed")
+                    };
+                }
             }
             catch (Exception ex)
             {
+                if (!requestSubmitted)
+                    _rateLimits.Release(rateLimitLease);
                 return new NexusV3RestResult { ErrorMessage = "Nexus v3 request failed: " + ex.Message };
             }
         }
@@ -234,11 +279,10 @@ namespace Manager.Core.Services
             return root;
         }
 
-        private static string ReadWebException(WebException ex, string prefix)
+        private static string ReadWebException(HttpWebResponse response, WebException ex, string prefix)
         {
             try
             {
-                using (var response = ex.Response as HttpWebResponse)
                 using (Stream stream = response != null ? response.GetResponseStream() : null)
                 using (StreamReader reader = stream != null ? new StreamReader(stream) : null)
                 {
@@ -252,6 +296,14 @@ namespace Manager.Core.Services
             }
 
             return prefix + ": " + ex.Message;
+        }
+
+        private static string ReadWebException(WebException ex, string prefix)
+        {
+            using (var response = ex.Response as HttpWebResponse)
+            {
+                return ReadWebException(response, ex, prefix);
+            }
         }
     }
 }
