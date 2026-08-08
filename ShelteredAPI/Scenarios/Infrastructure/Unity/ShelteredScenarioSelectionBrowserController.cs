@@ -216,13 +216,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
 
         private static void PositionHub(UIButton source, UIButton hub)
         {
-            Bounds bounds = NGUIMath.CalculateRelativeWidgetBounds(source.transform, true);
-            float width = bounds.size.x > 1f ? bounds.size.x : 320f;
-            float offsetX = Mathf.Clamp(width + 360f, 620f, 720f);
             Vector3 sourcePosition = source.transform.localPosition;
+
+            // Keep the hub in the historical footer-center row at the bottom
+            // of the first page, below the last vanilla scenario button and
+            // its summary text.
+            float footerButtonY = Mathf.Min(sourcePosition.y - 84f, -100f);
+            float footerCenterY = Mathf.Min(footerButtonY - 82f, -190f);
             hub.transform.localPosition = new Vector3(
-                Mathf.Round(sourcePosition.x + offsetX),
-                Mathf.Round(sourcePosition.y),
+                Mathf.Round(sourcePosition.x),
+                Mathf.Round(footerCenterY),
                 Mathf.Round(sourcePosition.z));
         }
 
@@ -262,6 +265,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
                 if (label == primary)
                 {
                     label.color = HubLabelColor;
+                    label.pivot = UIWidget.Pivot.Center;
+                    label.transform.localPosition = new Vector3(
+                        0f,
+                        0f,
+                        label.transform.localPosition.z);
                     label.alignment = NGUIText.Alignment.Center;
                     label.overflowMethod = UILabel.Overflow.ShrinkContent;
                     label.ProcessText();
