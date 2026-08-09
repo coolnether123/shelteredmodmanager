@@ -1559,7 +1559,32 @@ namespace ShelteredAPI.Saves.Backups
                     {
                         string validationError = ValidateCommittedRestoreState(mutations);
                         if (!string.IsNullOrEmpty(validationError))
-                            throw new IOException("Committed restore state is invalid: " + validationError);
+                        {
+                            // A successful restore leaves its durable marker for the next
+                            // repository recovery pass. The running game can legitimately
+                            // save the restored slot before that next pass, so an exact hash
+                            // mismatch is stale transaction metadata when the destination is
+                            // demonstrably newer than the commit marker. Preserve the newer
+                            // save and retire only the already-committed transaction files.
+                            DateTime committedAtUtc = File.GetLastWriteTimeUtc(committedPath);
+                            bool destinationAdvancedAfterCommit = false;
+                            for (int i = 0; i < mutations.Count; i++)
+                            {
+                                string destinationPath = mutations[i].DestinationPath;
+                                if (File.Exists(destinationPath)
+                                    && File.GetLastWriteTimeUtc(destinationPath) > committedAtUtc)
+                                {
+                                    destinationAdvancedAfterCommit = true;
+                                    break;
+                                }
+                            }
+
+                            if (!destinationAdvancedAfterCommit)
+                                throw new IOException("Committed restore state is invalid: " + validationError);
+
+                            MMLog.WriteInfo("[SaveBackup] Committed restore transaction " + transactionId
+                                + " was superseded by a newer destination write; preserving current save state.");
+                        }
                     }
                     else
                     {

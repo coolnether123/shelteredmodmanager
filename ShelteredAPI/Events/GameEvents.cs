@@ -46,6 +46,7 @@ namespace ShelteredAPI.Events
         private static bool _dayHooked;
         private static bool _partyHooked;
         private static SaveData _loadStartData;
+        private static bool _suppressNextNewGameForLoad;
         private static readonly object WarnOnceSync = new object();
         private static readonly HashSet<string> LocalWarnOnceKeys = new HashSet<string>(StringComparer.Ordinal);
 
@@ -95,6 +96,14 @@ namespace ShelteredAPI.Events
         {
             SaveData data;
             _loadStartData = mgr != null && TryGetField(mgr, "m_data", out data) ? data : null;
+            _suppressNextNewGameForLoad = true;
+        }
+
+        private static bool ConsumeLoadNewGameSuppression()
+        {
+            bool suppress = _suppressNextNewGameForLoad;
+            _suppressNextNewGameForLoad = false;
+            return suppress;
         }
 
         internal static void TryRaiseBeforeSave(SaveManager mgr)
@@ -164,6 +173,7 @@ namespace ShelteredAPI.Events
                 return;
 
             _beforeLoadSceneContentsRaised = true;
+            _suppressNextNewGameForLoad = true;
             if (OnBeforeLoadSceneContents != null)
                 SafeInvoke(delegate { OnBeforeLoadSceneContents(data); }, "OnBeforeLoadSceneContents");
 
@@ -244,13 +254,16 @@ namespace ShelteredAPI.Events
             private static void Postfix()
             {
                 GameEvents.HookDayEvents();
+                bool loadStartedThisSession = GameEvents.ConsumeLoadNewGameSuppression();
                 GameEvents.TryRaiseSessionStarted();
 
-                // Check for new game specifically
+                // SaveManager.isLoading can already be false by GameTime.Awake during a
+                // completed load. StartLoad is the authoritative discriminator for this
+                // session; consume it once so load startup cannot be misreported as NewGame.
                 try
                 {
                     var sm = SaveManager.instance;
-                    if (sm != null && !sm.isLoading)
+                    if (sm != null && !sm.isLoading && !loadStartedThisSession)
                     {
                         GameEvents.TryRaiseNewGame();
                     }

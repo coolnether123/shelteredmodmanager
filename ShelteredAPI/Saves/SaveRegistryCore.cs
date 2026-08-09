@@ -1202,12 +1202,6 @@ namespace ShelteredAPI.Saves
             return true;
         }
 
-        internal static void ImportStandardVanillaSlotsIfNeeded()
-        {
-            for (int slotNumber = 1; slotNumber <= 3; slotNumber++)
-                ImportStandardVanillaSlotIfNeeded(slotNumber);
-        }
-
         internal static SaveEntry ImportStandardVanillaSlotIfNeeded(int slotNumber)
         {
             if (slotNumber < 1 || slotNumber > 3)

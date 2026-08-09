@@ -183,6 +183,7 @@
     <Compile Include="Util\ManualJson.cs" />
     <Compile Include="Loading\ModLoadPlanBuilder.cs" />
     <Compile Include="Persistence\ModPersistenceStore.cs" />
+    <Compile Include="Persistence\PersistenceFieldGraphSerializer.cs" />
     <Compile Include="Persistence\SaveSystemImpl.cs" />
     <Compile Include="Core\ModPersistenceData.cs" />
     <Compile Include="Persistence\IModPersistenceLogic.cs" />
