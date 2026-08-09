@@ -385,13 +385,18 @@ function Get-Sha256Text {
     } finally { $sha.Dispose() }
 }
 
-function Get-RepositoryFilesForGate {
-    param([object]$Gate, [object]$Graph, [string]$Root)
-    $paths = New-Object System.Collections.Generic.List[string]
+function Get-RepositoryDefinitionsForGate {
+    param([object]$Gate, [object]$Graph)
     $owners = New-Object System.Collections.Generic.List[object]
     $ownerDefinition = @($Graph.repositories | Where-Object { [string]$_.id -eq [string]$Gate.owner }) | Select-Object -First 1
     if ($null -eq $ownerDefinition -and [string]$Gate.owner -eq [string]$Graph.manager.id) { $ownerDefinition = $Graph.manager }
     if ($null -ne $ownerDefinition) { [void]$owners.Add($ownerDefinition) }
+    if ($Gate.PSObject.Properties['owners']) {
+        foreach ($ownerId in @($Gate.owners)) {
+            $definition = @($Graph.repositories | Where-Object { [string]$_.id -eq [string]$ownerId }) | Select-Object -First 1
+            if ($null -ne $definition -and -not (@($owners | ForEach-Object { [string]$_.id }) -contains [string]$definition.id)) { [void]$owners.Add($definition) }
+        }
+    }
 
     if ($Gate.kind -eq 'gameplay' -and $Gate.PSObject.Properties['scenario']) {
         foreach ($edge in @($Graph.dependencyEdges | Where-Object { [string]$_.scenario -eq [string]$Gate.scenario })) {
@@ -401,6 +406,13 @@ function Get-RepositoryFilesForGate {
             }
         }
     }
+    return @($owners | Sort-Object id)
+}
+
+function Get-RepositoryFilesForGate {
+    param([object]$Gate, [object]$Graph, [string]$Root)
+    $paths = New-Object System.Collections.Generic.List[string]
+    $owners = @(Get-RepositoryDefinitionsForGate $Gate $Graph)
 
     foreach ($definition in $owners) {
         $repoRoot = Join-Path $Root ([string]$definition.path)
@@ -430,53 +442,115 @@ function Get-RepositoryFilesForGate {
     return @($paths | Select-Object -Unique | Sort-Object)
 }
 
+function Add-FingerprintInput {
+    param([System.Collections.IList]$Inputs, [string]$Label, [string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Required fingerprint input is missing: $Path" }
+    [void]$Inputs.Add([pscustomobject]@{ label = (Normalize-PathText $Label); path = [IO.Path]::GetFullPath($Path) })
+}
+
+function Add-RuntimeDirectoryFingerprintInputs {
+    param([System.Collections.IList]$Inputs, [string]$GameRoot, [string[]]$Directories)
+    foreach ($directory in @($Directories | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique | Sort-Object)) {
+        $relative = Normalize-PathText ([string]$directory)
+        $full = Join-Path (Join-Path $GameRoot 'mods') $directory
+        if (-not (Test-Path -LiteralPath $full -PathType Container)) { throw "Required runtime mod directory is missing: $full" }
+        [void]$Inputs.Add([pscustomobject]@{ label = "runtime/$relative/.directory"; path = $null; marker = 'present' })
+        foreach ($file in @(Get-ChildItem -LiteralPath $full -Recurse -File -ErrorAction Stop | Sort-Object FullName)) {
+            [void]$Inputs.Add([pscustomobject]@{ label = "runtime/$relative/" + (Get-RelativePathText $full $file.FullName); path = $file.FullName })
+        }
+    }
+}
+
+function Get-FingerprintInputLines {
+    param([System.Collections.IEnumerable]$Inputs)
+    foreach ($input in @($Inputs | Sort-Object label, path)) {
+        if ($null -ne $input.path) {
+            "file=$($input.label)|$((Get-FileHash -LiteralPath $input.path -Algorithm SHA256).Hash.ToLowerInvariant())"
+        } else {
+            "marker=$($input.label)|$($input.marker)"
+        }
+    }
+}
+
 function Get-LiveHarnessFingerprint {
-    param([string]$BaseUrl)
+    param([string]$BaseUrl, [object]$Gate, [object]$Graph, [string]$Root)
     if ([string]::IsNullOrWhiteSpace($BaseUrl)) { throw 'A live harness URL is required to fingerprint gameplay evidence.' }
     $status = Invoke-RestMethod -Method Get -Uri ($BaseUrl.TrimEnd('/') + '/status') -TimeoutSec 15
     if ($null -eq $status -or -not ($status.PSObject.Properties.Name -contains 'ok') -or -not [bool]$status.ok) { throw "Harness status failed at $BaseUrl." }
     $gameRoot = [string]$status.gameRoot
     if ([string]::IsNullOrWhiteSpace($gameRoot) -or -not (Test-Path -LiteralPath $gameRoot)) { throw "Harness did not expose a readable game root at $BaseUrl." }
-    $inputs = New-Object System.Collections.Generic.List[string]
+    $inputs = New-Object System.Collections.Generic.List[object]
+    $scenario = if ($Gate.kind -eq 'gameplay' -and $Gate.PSObject.Properties['scenario']) { Get-Scenario $Graph ([string]$Gate.scenario) } else { $null }
+    $harnessRepo = Get-AutomaticHarnessRepo
+    foreach ($relative in @($Graph.defaults.harnessSharedInputs)) {
+        Add-FingerprintInput $inputs ("harness/" + (Normalize-PathText $relative)) (Join-Path $harnessRepo ($relative -replace '/', '\'))
+    }
+    if ($null -ne $scenario -and $scenario.PSObject.Properties['harnessInputs']) {
+        foreach ($relative in @($scenario.harnessInputs)) {
+            Add-FingerprintInput $inputs ("harness/" + (Normalize-PathText $relative)) (Join-Path $harnessRepo ($relative -replace '/', '\'))
+        }
+    }
     $managed = Join-Path $gameRoot 'Sheltered_Data\Managed\Assembly-CSharp.dll'
     if (-not (Test-Path -LiteralPath $managed)) { $managed = Join-Path $gameRoot 'ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll' }
-    if (Test-Path -LiteralPath $managed) { [void]$inputs.Add($managed) }
+    Add-FingerprintInput $inputs 'game/Assembly-CSharp.dll' $managed
     $loadOrder = Join-Path $gameRoot 'mods\loadorder.json'
-    if (Test-Path -LiteralPath $loadOrder) { [void]$inputs.Add($loadOrder) }
-    $modsRoot = Join-Path $gameRoot 'mods'
-    if (Test-Path -LiteralPath $modsRoot) {
-        foreach ($file in @(Get-ChildItem -LiteralPath $modsRoot -Recurse -File -ErrorAction Stop | Where-Object { $_.Extension -eq '.dll' -or $_.Name -eq 'About.json' })) { [void]$inputs.Add($file.FullName) }
+    Add-FingerprintInput $inputs 'game/mods/loadorder.json' $loadOrder
+    $runtimeDirectories = New-Object System.Collections.Generic.List[string]
+    foreach ($directory in @($Graph.defaults.runtimeSharedModDirectories)) { Add-Unique $runtimeDirectories ([string]$directory) }
+    foreach ($definition in @(Get-RepositoryDefinitionsForGate $Gate $Graph)) {
+        foreach ($directory in @($definition.runtimeModDirectories)) { Add-Unique $runtimeDirectories ([string]$directory) }
     }
-    $parts = foreach ($path in @($inputs | Select-Object -Unique | Sort-Object)) {
-        '{0}|{1}' -f (Get-RelativePathText $gameRoot $path), ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant())
-    }
-    return Get-Sha256Text (($parts -join "`n") + "`nurl=" + $BaseUrl.TrimEnd('/'))
+    Add-RuntimeDirectoryFingerprintInputs $inputs $gameRoot $runtimeDirectories
+    $content = ((Get-FingerprintInputLines $inputs) -join "`n") + "`nurl=" + $BaseUrl.TrimEnd('/')
+    return Get-Sha256Text $content
 }
 
 function Get-AutomaticHarnessFingerprint {
-    param([object]$Gate, [object]$Scenario, [string]$Root)
+    param([object]$Gate, [object]$Scenario, [object]$Graph, [string]$Root)
     $harnessRepo = Get-AutomaticHarnessRepo
     $gameRoot = Get-AutomaticGameRoot ([string]$Gate.platform)
     $runner = Get-AutomaticTransactionRunnerPath
-    $inputs = New-Object System.Collections.Generic.List[string]
-    foreach ($path in @(
-        $runner,
-        (Join-Path $harnessRepo 'Assemblies\Sheltered Agent Interface.dll'),
-        (Join-Path $harnessRepo 'Assemblies\Sheltered Agent Interface.pdb'),
-        (Join-Path $gameRoot 'Sheltered_Data\Managed\Assembly-CSharp.dll'),
-        (Join-Path $gameRoot 'ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll'),
-        (Join-Path $gameRoot 'mods\loadorder.json')
-    )) {
-        if (Test-Path -LiteralPath $path -PathType Leaf) { [void]$inputs.Add([IO.Path]::GetFullPath($path)) }
+    $inputs = New-Object System.Collections.Generic.List[object]
+    Add-FingerprintInput $inputs 'harness/transaction-runner.ps1' $runner
+    foreach ($relative in @($Graph.defaults.harnessSharedInputs)) {
+        Add-FingerprintInput $inputs ("harness/" + (Normalize-PathText $relative)) (Join-Path $harnessRepo ($relative -replace '/', '\'))
     }
-    $modsRoot = Join-Path $gameRoot 'mods'
-    if (Test-Path -LiteralPath $modsRoot -PathType Container) {
-        foreach ($file in @(Get-ChildItem -LiteralPath $modsRoot -Recurse -File -ErrorAction Stop | Where-Object { $_.Extension -eq '.dll' -or $_.Name -eq 'About.json' })) { [void]$inputs.Add($file.FullName) }
+    if ($Scenario.PSObject.Properties['harnessInputs']) {
+        foreach ($relative in @($Scenario.harnessInputs)) {
+            Add-FingerprintInput $inputs ("harness/" + (Normalize-PathText $relative)) (Join-Path $harnessRepo ($relative -replace '/', '\'))
+        }
     }
-    $parts = foreach ($path in @($inputs | Select-Object -Unique | Sort-Object)) {
-        '{0}|{1}' -f $path, ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant())
+    $managed = Join-Path $gameRoot 'Sheltered_Data\Managed\Assembly-CSharp.dll'
+    if (-not (Test-Path -LiteralPath $managed)) { $managed = Join-Path $gameRoot 'ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll' }
+    Add-FingerprintInput $inputs 'game/Assembly-CSharp.dll' $managed
+    Add-FingerprintInput $inputs 'game/mods/loadorder.json' (Join-Path $gameRoot 'mods\loadorder.json')
+    $runtimeDirectories = New-Object System.Collections.Generic.List[string]
+    foreach ($directory in @($Graph.defaults.runtimeSharedModDirectories)) { Add-Unique $runtimeDirectories ([string]$directory) }
+    foreach ($definition in @(Get-RepositoryDefinitionsForGate $Gate $Graph)) {
+        foreach ($directory in @($definition.runtimeModDirectories)) { Add-Unique $runtimeDirectories ([string]$directory) }
     }
-    return Get-Sha256Text (($parts -join "`n") + "`nplatform=" + [string]$Gate.platform + "`nscenario=" + [string]$Scenario.id)
+    Add-RuntimeDirectoryFingerprintInputs $inputs $gameRoot $runtimeDirectories
+    $content = ((Get-FingerprintInputLines $inputs) -join "`n") + "`nplatform=" + [string]$Gate.platform + "`nscenario=" + [string]$Scenario.id
+    return Get-Sha256Text $content
+}
+
+function Get-RelevantGraphSlice {
+    param([object]$Gate, [object]$Graph)
+    $definitions = @(Get-RepositoryDefinitionsForGate $Gate $Graph)
+    $scenario = if ($Gate.PSObject.Properties['scenario']) { Get-Scenario $Graph ([string]$Gate.scenario) } else { $null }
+    $edges = if ($Gate.PSObject.Properties['scenario']) { @($Graph.dependencyEdges | Where-Object { [string]$_.scenario -eq [string]$Gate.scenario } | Sort-Object provider, consumer, scenario) } else { @() }
+    $defaults = [ordered]@{
+        configuration = [string]$Graph.defaults.configuration
+        platforms = @($Graph.defaults.platforms)
+        runtimeSharedModDirectories = @($Graph.defaults.runtimeSharedModDirectories)
+        harnessSharedInputs = @($Graph.defaults.harnessSharedInputs)
+    }
+    return [ordered]@{
+        defaults = $defaults
+        repositories = @($definitions | ForEach-Object { $_ | ConvertTo-Json -Depth 8 -Compress } | Sort-Object)
+        dependencyEdges = @($edges | ForEach-Object { $_ | ConvertTo-Json -Depth 8 -Compress })
+        scenario = if ($null -ne $scenario) { $scenario | ConvertTo-Json -Depth 8 -Compress } else { $null }
+    } | ConvertTo-Json -Depth 12 -Compress
 }
 
 function Get-GateFingerprint {
@@ -484,20 +558,24 @@ function Get-GateFingerprint {
     $parts = New-Object System.Collections.Generic.List[string]
     [void]$parts.Add('configuration=' + $Configuration)
     [void]$parts.Add('gate=' + ($Gate | ConvertTo-Json -Depth 8 -Compress))
-    [void]$parts.Add('graph=' + ((Get-FileHash -LiteralPath $GraphPath -Algorithm SHA256).Hash.ToLowerInvariant()))
+    if ([string]$Gate.owner -eq 'release-layer') {
+        [void]$parts.Add('graph-validation=' + ((Get-FileHash -LiteralPath $GraphPath -Algorithm SHA256).Hash.ToLowerInvariant()))
+    } else {
+        [void]$parts.Add('graph-slice=' + (Get-RelevantGraphSlice $Gate $Graph))
+    }
     foreach ($path in @(Get-RepositoryFilesForGate $Gate $Graph $Root)) {
         [void]$parts.Add(('file={0}|{1}' -f (Get-RelativePathText $Root $path), ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant())))
     }
     if ($Gate.kind -eq 'gameplay') {
         $baseUrl = Get-HarnessUrlForPlatform ([string]$Gate.platform)
-        if ($baseUrl) { [void]$parts.Add('harness=' + (Get-LiveHarnessFingerprint $baseUrl)) }
+        if ($baseUrl) { [void]$parts.Add('harness=' + (Get-LiveHarnessFingerprint $baseUrl $Gate $Graph $Root)) }
         else {
             $scenario = Get-Scenario $Graph ([string]$Gate.scenario)
-            [void]$parts.Add('harness=' + (Get-AutomaticHarnessFingerprint $Gate $scenario $Root))
+            [void]$parts.Add('harness=' + (Get-AutomaticHarnessFingerprint $Gate $scenario $Graph $Root))
         }
     } elseif ($Gate.kind -eq 'platform-smoke') {
         $baseUrl = Get-HarnessUrlForPlatform ([string]$Gate.platform)
-        [void]$parts.Add('harness=' + $(if ($baseUrl) { Get-LiveHarnessFingerprint $baseUrl } else { 'missing-url' }))
+        [void]$parts.Add('harness=' + $(if ($baseUrl) { Get-LiveHarnessFingerprint $baseUrl $Gate $Graph $Root } else { 'missing-url' }))
     }
     return Get-Sha256Text ($parts -join "`n")
 }
