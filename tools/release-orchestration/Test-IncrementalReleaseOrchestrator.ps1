@@ -75,8 +75,14 @@ foreach ($scenarioId in @('systems-water', 'systems-oxygen', 'deep-progression')
     Assert-True ([string]$progression.steps[0].scenario -eq $scenarioId) "$scenarioId must pass scenario=$scenarioId."
     Assert-True ([string]$progression.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
 }
-$vanillaBreach = @($graph.scenarios | Where-Object { $_.id -eq 'vanilla-breach' })[0]
-Assert-True ($vanillaBreach.fixturePath -eq '/release-fixture/interaction') 'Vanilla scenario entries must remain owned by the parent harness route work.'
+foreach ($scenarioId in @('vanilla-breach', 'vanilla-radio', 'vanilla-quest-weapons', 'vanilla-trading-slots', 'vanilla-weapon-craft', 'vanilla-recycling')) {
+    $vanillaScenario = @($graph.scenarios | Where-Object { [string]$_.id -eq $scenarioId })[0]
+    Assert-True ($vanillaScenario.fixturePath -eq '/release-scenario/interaction') "$scenarioId must use the completion-backed interaction route."
+    Assert-True ($null -eq $vanillaScenario.fixture) "$scenarioId must not carry the retired fixture selector."
+    Assert-True (@($vanillaScenario.steps).Count -eq 1) "$scenarioId must be one completion-backed call."
+    Assert-True ([string]$vanillaScenario.steps[0].scenario -eq $scenarioId) "$scenarioId must pass scenario=$scenarioId."
+    Assert-True ([string]$vanillaScenario.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
+}
 
 $vanillaTrading = Invoke-PlanCase 'vanilla-trading-file' @('Sheltered-Vanilla-Fixes/Sheltered Vanilla Fixes/Patches/TradingWhiteSlotResetPatches.cs')
 Assert-True (@($vanillaTrading.gates.id) -contains 'gameplay.Steam.vanilla-trading-slots') 'A trading-slot patch must select its focused behavior matrix.'
