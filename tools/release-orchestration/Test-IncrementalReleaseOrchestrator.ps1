@@ -222,6 +222,18 @@ Assert-True ($packageScriptSource.Contains('Package build complete: {0} rebuilt,
 Assert-True ($packageScriptSource.Contains("Dll='Better AI Queue Mod\Better AI Queue\Assemblies\Better AI Queue.dll'")) 'Better AI Queue packaging must consume the solution Release output.'
 Assert-True (-not $packageScriptSource.Contains("Dll='Better AI Queue\build\release\Better AI Queue.dll'")) 'Better AI Queue packaging must not consume the stale legacy build folder.'
 
+$exactMatrixSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Invoke-ExactPackageScenarioMatrix.ps1') -Raw
+$stageSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Stage-ElevenModRuntime.ps1') -Raw
+$restoreSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Restore-ElevenModRuntime.ps1') -Raw
+Assert-True ($exactMatrixSource.Contains('$Scenarios -split ''[,;]''')) 'Exact-package runtime must accept a focused scenario set.'
+Assert-True ($exactMatrixSource.Contains('incremental-release-graph.json')) 'Exact-package runtime must resolve routes from the release graph.'
+Assert-True ($exactMatrixSource.Contains('finally {')) 'Exact-package runtime must restore the lane through a finally boundary.'
+Assert-True ($exactMatrixSource.Contains('exactPackageCount = 11')) 'Exact-package runtime must certify the eleven-package scope.'
+Assert-True ($stageSource.Contains('$parsedManifest') -and $stageSource.Contains('$manifestEntry')) 'Eleven-package staging must normalize Windows PowerShell JSON arrays.'
+Assert-True ($stageSource.Contains("state='backup-complete'")) 'Eleven-package staging must persist recoverable state before replacing live folders.'
+Assert-True ($stageSource.Contains('refusing to replace live mod folders')) 'Eleven-package staging must reject a running game.'
+Assert-True ($restoreSource.Contains('refusing to restore live mod folders')) 'Eleven-package restoration must reject a running game.'
+
 $unmappedOutput = Join-Path ([IO.Path]::GetTempPath()) ('sheltered-release-unmapped-' + [Guid]::NewGuid().ToString('N') + '.json')
 try {
     $unmappedExit = 0
