@@ -862,11 +862,11 @@ foreach ($plan in $plans.Values) {
     }
 }
 if ($modPackageOwners.Count -gt 0) {
-    [void]$gates.Add([pscustomobject]@{ id = 'package.mods'; phase = 'packaging'; kind = 'package'; owner = 'content-packages'; scope = 'mods'; owners = $modPackageOwners.ToArray(); script = 'release/2.0/tools/New-ModPackages.ps1'; heavy = $false; detail = "Run the shared mod packaging script once for: $($modPackageOwners -join ', '). Scoped promotion verification remains per changed mod." })
+    [void]$gates.Add([pscustomobject]@{ id = 'package.mods'; phase = 'packaging'; kind = 'package'; owner = 'content-packages'; scope = 'mods'; owners = $modPackageOwners.ToArray(); script = 'shelteredmodmanager/tools/release-orchestration/New-ModPackages.ps1'; heavy = $false; detail = "Run the shared mod packaging script once for: $($modPackageOwners -join ', '). Scoped promotion verification remains per changed mod." })
 }
 if ($releasePackagesChanged) {
     $allModOwners = @($graph.repositories | Where-Object { [bool]$_.package } | ForEach-Object { [string]$_.id })
-    [void]$gates.Add([pscustomobject]@{ id = 'package.mods'; phase = 'packaging'; kind = 'package'; owner = 'content-packages'; scope = 'mods'; owners = $allModOwners; script = 'release/2.0/tools/New-ModPackages.ps1'; heavy = $false; detail = 'Release package metadata changed; regenerate the canonical package set before provenance checks.' })
+    [void]$gates.Add([pscustomobject]@{ id = 'package.mods'; phase = 'packaging'; kind = 'package'; owner = 'content-packages'; scope = 'mods'; owners = $allModOwners; script = 'shelteredmodmanager/tools/release-orchestration/New-ModPackages.ps1'; heavy = $false; detail = 'Release package metadata changed; regenerate the canonical package set before provenance checks.' })
     foreach ($ownerId in $allModOwners) {
         [void]$gates.Add([pscustomobject]@{ id = "promotion.$ownerId"; phase = 'promotion'; kind = 'promotion'; owner = $ownerId; scope = 'mod-rc'; heavy = $false; detail = "Revalidate $ownerId package provenance after release metadata changed; do not publish." })
     }
