@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
-using UnityEngine;
 
 namespace ModAPI.Persistence
 {
@@ -82,7 +81,7 @@ namespace ModAPI.Persistence
         {
             try
             {
-                _registeredDefaults[key] = JsonUtility.ToJson(data);
+                _registeredDefaults[key] = PersistenceFieldGraphSerializer.Serialize(data);
             }
             catch (Exception ex)
             {
@@ -214,7 +213,7 @@ namespace ModAPI.Persistence
 
                             try
                             {
-                                JsonUtility.FromJsonOverwrite(entry.json, dataObject);
+                                PersistenceFieldGraphSerializer.DeserializeOverwrite(entry.json, dataObject);
                                 state.Loaded = true;
                             }
                             catch (Exception ex)
@@ -284,7 +283,7 @@ namespace ModAPI.Persistence
 
             try
             {
-                JsonUtility.FromJsonOverwrite(defaultJson, dataObject);
+                PersistenceFieldGraphSerializer.DeserializeOverwrite(defaultJson, dataObject);
                 return true;
             }
             catch (Exception ex)

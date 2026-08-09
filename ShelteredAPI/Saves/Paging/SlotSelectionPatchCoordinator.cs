@@ -652,7 +652,9 @@ namespace ShelteredAPI.Saves.Paging{
             return false;
         }
 
-        private static void UpdateSaveSlotAuxiliaryControls(SlotSelectionPanel panel)
+        private static void UpdateSaveSlotAuxiliaryControls(
+            SlotSelectionPanel panel,
+            List<SlotSelectionVisibleSave> visibleSaves = null)
         {
             if (SaveSnapshotBrowserState.IsActive(panel))
             {
@@ -661,7 +663,8 @@ namespace ShelteredAPI.Saves.Paging{
                 return;
             }
 
-            List<SlotSelectionVisibleSave> visibleSaves = SlotSelectionSaveEntryResolver.Resolve(panel);
+            if (visibleSaves == null)
+                visibleSaves = SlotSelectionSaveEntryResolver.Resolve(panel);
             SaveVerification.UpdateIcons(panel, visibleSaves);
             SaveSnapshotSlotControls.UpdateButtons(panel, visibleSaves);
         }
@@ -670,13 +673,12 @@ namespace ShelteredAPI.Saves.Paging{
         {
             try
             {
-                SaveRegistryCore.ImportStandardVanillaSlotsIfNeeded();
-
                 var panelTraverse = Traverse.Create(panel);
                 var slotInfoList = panelTraverse.Field("m_slotInfo").GetValue<System.Collections.IList>();
                 if (slotInfoList == null)
                     return;
 
+                List<SlotSelectionVisibleSave> visibleSaves = SlotSelectionSaveEntryResolver.Resolve(panel);
                 slotInfoList.Clear();
                 panelTraverse.Field("m_slotBeingLoaded").SetValue(-1);
 
@@ -685,13 +687,15 @@ namespace ShelteredAPI.Saves.Paging{
                 for (int slotNumber = 1; slotNumber <= 3; slotNumber++)
                 {
                     object slotInfo = CreateSlotInfo();
-                    PopulateVanillaSlotInfo(slotInfo, slotNumber);
+                    int visibleIndex = slotNumber - 1;
+                    SaveEntry imported = visibleIndex < visibleSaves.Count ? visibleSaves[visibleIndex].Entry : null;
+                    PopulateVanillaSlotInfo(slotInfo, slotNumber, imported);
                     slotInfoList.Add(slotInfo);
                 }
 
                 panelTraverse.Method("RefreshSlotLabels").GetValue();
                 ClearInactiveVanillaLabels(panel);
-                UpdateSaveSlotAuxiliaryControls(panel);
+                UpdateSaveSlotAuxiliaryControls(panel, visibleSaves);
                 PagingManager.Update(panel);
             }
             catch (Exception ex)
@@ -706,11 +710,10 @@ namespace ShelteredAPI.Saves.Paging{
             return Activator.CreateInstance(slotInfoType, true);
         }
 
-        private static void PopulateVanillaSlotInfo(object slotInfo, int slotNumber)
+        private static void PopulateVanillaSlotInfo(object slotInfo, int slotNumber, SaveEntry imported)
         {
             var slotTraverse = Traverse.Create(slotInfo);
 
-            SaveEntry imported = SaveRegistryCore.ImportStandardVanillaSlotIfNeeded(slotNumber);
             if (imported != null && File.Exists(DirectoryProvider.EntryPath("Standard", slotNumber, false)))
             {
                 ApplySlotInfo(slotInfo, imported);

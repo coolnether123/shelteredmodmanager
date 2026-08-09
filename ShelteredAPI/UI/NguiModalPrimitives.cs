@@ -134,6 +134,10 @@ namespace ShelteredAPI.UI
             label.height = height - 8;
             label.multiLine = false;
             label.overflowMethod = UILabel.Overflow.ShrinkContent;
+            // UILabel adjusts its transform while recalculating glyph bounds.
+            // Restore the requested visual centre after every sizing option has
+            // been applied so bitmap-font metrics cannot move the caption.
+            label.transform.localPosition = Vector3.zero;
 
             BoxCollider collider = button.AddComponent<BoxCollider>();
             collider.size = new Vector3(width, height, 1f);

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using ModAPI.Core;
 using ModAPI.Util;
-using UnityEngine;
 
 namespace ModAPI.Persistence
 {
@@ -23,7 +22,11 @@ namespace ModAPI.Persistence
             {
                 try
                 {
-                    containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
+                    containerObj.entries.Add(new ModDataEntry
+                    {
+                        key = kv.Key,
+                        json = PersistenceFieldGraphSerializer.Serialize(kv.Value)
+                    });
                 }
                 catch (Exception ex)
                 {
