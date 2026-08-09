@@ -606,7 +606,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         private void PrepareAdjacentPages()
         {
             int pageCount = GetPageCount();
-            if (_renderer == null || pageCount <= 1 || _view == ScenarioBookBrowserViewKind.Types)
+            if (_renderer == null || pageCount <= 1)
                 return;
             if (CanChangePage(1)) PreparePage(ResolveTargetPageIndex(1));
             if (CanChangePage(-1)) PreparePage(ResolveTargetPageIndex(-1));

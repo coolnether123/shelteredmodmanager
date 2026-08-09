@@ -121,10 +121,15 @@ namespace ShelteredAPI.UI
             background.width = width;
             background.height = height;
             background.depth = 100;
+            // Treat the supplied position as the visual center. NGUI defaults
+            // can vary across the game's bundled versions, which otherwise
+            // shifts modal buttons toward their bottom-right corner.
+            background.pivot = UIWidget.Pivot.Center;
             background.color = backgroundColor;
 
             UILabel label = CreateLabel(button.transform, "Label", text, Vector3.zero, fontSize, textColor, bitmapFont, trueTypeFont, 101);
             label.alignment = NGUIText.Alignment.Center;
+            label.pivot = UIWidget.Pivot.Center;
             label.width = width - 20;
             label.height = height - 8;
             label.multiLine = false;
