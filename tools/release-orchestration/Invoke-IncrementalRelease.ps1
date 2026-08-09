@@ -11,6 +11,11 @@ param(
     [string]$HarnessUrl,
     [string]$SteamHarnessUrl,
     [string]$EpicHarnessUrl,
+    [string]$HarnessRepo,
+    [string]$SteamGameRoot,
+    [string]$EpicGameRoot,
+    [string]$TransactionRunnerPath,
+    [int]$TransactionTimeoutSeconds = 180,
     [ValidateSet('Release', 'Debug')]
     [string]$Configuration = 'Release',
     [switch]$Stable,
@@ -25,6 +30,10 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrWhiteSpace($ShelteredRoot)) { $ShelteredRoot = Join-Path $scriptRoot '..\..\..' }
 if ([string]::IsNullOrWhiteSpace($GraphPath)) { $GraphPath = Join-Path $scriptRoot 'incremental-release-graph.json' }
 if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) { $EvidenceRoot = Join-Path $ShelteredRoot 'release\2.0\evidence\incremental-gates' }
+$resolvedHarnessRepo = $null
+$resolvedSteamGameRoot = $null
+$resolvedEpicGameRoot = $null
+$resolvedTransactionRunnerPath = $null
 
 function Normalize-PathText {
     param([string]$Path)
@@ -235,6 +244,78 @@ function Get-HarnessUrlForPlatform {
     return $null
 }
 
+function Resolve-DirectoryPath {
+    param([string]$ExplicitPath, [string]$Label, [string[]]$Candidates)
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+        $full = [IO.Path]::GetFullPath($ExplicitPath)
+        if (-not (Test-Path -LiteralPath $full -PathType Container)) { throw "$Label does not exist: $full" }
+        return $full
+    }
+    foreach ($candidate in @($Candidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+        $full = [IO.Path]::GetFullPath($candidate)
+        if (Test-Path -LiteralPath $full -PathType Container) { return $full }
+    }
+    throw "$Label was not supplied and no safe default was discovered. Checked: $($Candidates -join '; ')"
+}
+
+function Get-AutomaticHarnessRepo {
+    if ($null -eq $script:resolvedHarnessRepo) {
+        $environmentRoot = [Environment]::GetEnvironmentVariable('SHELTERED_AGENT_INTERFACE_ROOT')
+        $script:resolvedHarnessRepo = Resolve-DirectoryPath $HarnessRepo 'Sheltered Agent Interface harness repository' @(
+            $environmentRoot,
+            (Join-Path $root '..\..\..\..\Projects\ShelteredAgentInterface'),
+            'A:\Dev\Projects\ShelteredAgentInterface'
+        )
+    }
+    return $script:resolvedHarnessRepo
+}
+
+function Get-AutomaticGameRoot {
+    param([string]$Platform)
+    if ($Platform -eq 'Steam') {
+        if ($null -eq $script:resolvedSteamGameRoot) {
+            $environmentRoot = [Environment]::GetEnvironmentVariable('SHELTERED_STEAM_GAME_ROOT')
+            $script:resolvedSteamGameRoot = Resolve-DirectoryPath $SteamGameRoot 'Steam Sheltered game root' @(
+                $environmentRoot,
+                'A:\SteamLibrary\steamapps\common\Sheltered',
+                'C:\Program Files (x86)\Steam\steamapps\common\Sheltered',
+                'C:\Program Files\Steam\steamapps\common\Sheltered'
+            )
+        }
+        return $script:resolvedSteamGameRoot
+    }
+    if ($Platform -eq 'Epic') {
+        if ($null -eq $script:resolvedEpicGameRoot) {
+            $environmentRoot = [Environment]::GetEnvironmentVariable('SHELTERED_EPIC_GAME_ROOT')
+            $script:resolvedEpicGameRoot = Resolve-DirectoryPath $EpicGameRoot 'Epic Sheltered game root' @(
+                $environmentRoot,
+                'D:\Epic Games Games\Sheltered',
+                'C:\Program Files\Epic Games\Sheltered',
+                'C:\Program Files (x86)\Epic Games\Sheltered'
+            )
+        }
+        return $script:resolvedEpicGameRoot
+    }
+    throw "Automatic transaction mode does not support platform '$Platform'."
+}
+
+function Get-AutomaticTransactionRunnerPath {
+    if ($null -eq $script:resolvedTransactionRunnerPath) {
+        $harnessRepo = Get-AutomaticHarnessRepo
+        $candidate = if ([string]::IsNullOrWhiteSpace($TransactionRunnerPath)) { Join-Path $harnessRepo 'tools\Invoke-TransactionalReleaseScenario.ps1' } else { $TransactionRunnerPath }
+        $full = [IO.Path]::GetFullPath($candidate)
+        if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "Transactional release runner is missing: $full" }
+        $script:resolvedTransactionRunnerPath = $full
+    }
+    return $script:resolvedTransactionRunnerPath
+}
+
+function Get-HarnessExecutionMode {
+    param([string]$Platform)
+    if (Get-HarnessUrlForPlatform $Platform) { return 'url' }
+    return 'transaction-runner'
+}
+
 function Invoke-HarnessRoute {
     param([string]$BaseUrl, [string]$Path, [hashtable]$Query)
     $pairs = New-Object System.Collections.Generic.List[string]
@@ -372,6 +453,32 @@ function Get-LiveHarnessFingerprint {
     return Get-Sha256Text (($parts -join "`n") + "`nurl=" + $BaseUrl.TrimEnd('/'))
 }
 
+function Get-AutomaticHarnessFingerprint {
+    param([object]$Gate, [object]$Scenario, [string]$Root)
+    $harnessRepo = Get-AutomaticHarnessRepo
+    $gameRoot = Get-AutomaticGameRoot ([string]$Gate.platform)
+    $runner = Get-AutomaticTransactionRunnerPath
+    $inputs = New-Object System.Collections.Generic.List[string]
+    foreach ($path in @(
+        $runner,
+        (Join-Path $harnessRepo 'Assemblies\Sheltered Agent Interface.dll'),
+        (Join-Path $harnessRepo 'Assemblies\Sheltered Agent Interface.pdb'),
+        (Join-Path $gameRoot 'Sheltered_Data\Managed\Assembly-CSharp.dll'),
+        (Join-Path $gameRoot 'ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll'),
+        (Join-Path $gameRoot 'mods\loadorder.json')
+    )) {
+        if (Test-Path -LiteralPath $path -PathType Leaf) { [void]$inputs.Add([IO.Path]::GetFullPath($path)) }
+    }
+    $modsRoot = Join-Path $gameRoot 'mods'
+    if (Test-Path -LiteralPath $modsRoot -PathType Container) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $modsRoot -Recurse -File -ErrorAction Stop | Where-Object { $_.Extension -eq '.dll' -or $_.Name -eq 'About.json' })) { [void]$inputs.Add($file.FullName) }
+    }
+    $parts = foreach ($path in @($inputs | Select-Object -Unique | Sort-Object)) {
+        '{0}|{1}' -f $path, ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant())
+    }
+    return Get-Sha256Text (($parts -join "`n") + "`nplatform=" + [string]$Gate.platform + "`nscenario=" + [string]$Scenario.id)
+}
+
 function Get-GateFingerprint {
     param([object]$Gate, [object]$Graph, [string]$Root)
     $parts = New-Object System.Collections.Generic.List[string]
@@ -381,9 +488,16 @@ function Get-GateFingerprint {
     foreach ($path in @(Get-RepositoryFilesForGate $Gate $Graph $Root)) {
         [void]$parts.Add(('file={0}|{1}' -f (Get-RelativePathText $Root $path), ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant())))
     }
-    if ($Gate.kind -eq 'gameplay' -or $Gate.kind -eq 'platform-smoke') {
+    if ($Gate.kind -eq 'gameplay') {
         $baseUrl = Get-HarnessUrlForPlatform ([string]$Gate.platform)
-        [void]$parts.Add('harness=' + (Get-LiveHarnessFingerprint $baseUrl))
+        if ($baseUrl) { [void]$parts.Add('harness=' + (Get-LiveHarnessFingerprint $baseUrl)) }
+        else {
+            $scenario = Get-Scenario $Graph ([string]$Gate.scenario)
+            [void]$parts.Add('harness=' + (Get-AutomaticHarnessFingerprint $Gate $scenario $Root))
+        }
+    } elseif ($Gate.kind -eq 'platform-smoke') {
+        $baseUrl = Get-HarnessUrlForPlatform ([string]$Gate.platform)
+        [void]$parts.Add('harness=' + $(if ($baseUrl) { Get-LiveHarnessFingerprint $baseUrl } else { 'missing-url' }))
     }
     return Get-Sha256Text ($parts -join "`n")
 }
@@ -394,6 +508,12 @@ function Get-EvidencePath {
     return Join-Path ([IO.Path]::GetFullPath($EvidenceRoot)) ($safe + '.json')
 }
 
+function Get-AutomaticTransactionEvidenceRoot {
+    param([object]$Gate, [string]$Fingerprint)
+    $safe = ([string]$Gate.id -replace '[^A-Za-z0-9._-]', '_')
+    return Join-Path (Join-Path ([IO.Path]::GetFullPath($EvidenceRoot)) 'transactions') ($safe + '-' + $Fingerprint)
+}
+
 function Get-ReusableEvidence {
     param([object]$Gate, [string]$Fingerprint)
     if ($NoEvidenceReuse -or $Gate.kind -eq 'promotion') { return $null }
@@ -401,6 +521,14 @@ function Get-ReusableEvidence {
     if (-not (Test-Path -LiteralPath $path)) { return $null }
     try { $receipt = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json } catch { return $null }
     if ([string]$receipt.gateId -ne [string]$Gate.id -or [string]$receipt.status -ne 'passed' -or [string]$receipt.fingerprint -ne $Fingerprint -or [string]$receipt.configuration -ne $Configuration) { return $null }
+    if ($Gate.kind -eq 'gameplay' -and (Get-HarnessExecutionMode ([string]$Gate.platform)) -eq 'transaction-runner') {
+        if (-not $receipt.PSObject.Properties['transactionReportPath'] -or [string]::IsNullOrWhiteSpace([string]$receipt.transactionReportPath)) { return $null }
+        $expectedRoot = Get-AutomaticTransactionEvidenceRoot $Gate $Fingerprint
+        try {
+            if ([IO.Path]::GetFullPath((Split-Path -Parent ([string]$receipt.transactionReportPath))) -ne [IO.Path]::GetFullPath($expectedRoot)) { return $null }
+            Assert-TransactionReport $Gate (Get-Scenario $graph ([string]$Gate.scenario)) ([string]$receipt.transactionReportPath) $expectedRoot
+        } catch { return $null }
+    }
     return $receipt
 }
 
@@ -420,9 +548,56 @@ function Save-GateEvidence {
         status = 'passed'
         passedUtc = [DateTime]::UtcNow.ToString('o')
         detail = [string]$Result.detail
+        transactionReportPath = if ($Result.PSObject.Properties.Name -contains 'transactionReportPath') { [string]$Result.transactionReportPath } else { $null }
+        harnessMode = if ($Gate.kind -eq 'gameplay') { Get-HarnessExecutionMode ([string]$Gate.platform) } else { $null }
     }
     $receipt | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding UTF8
     return $path
+}
+
+function Assert-TransactionReport {
+    param([object]$Gate, [object]$Scenario, [string]$ReportPath, [string]$ExpectedEvidenceRoot)
+    if ([string]::IsNullOrWhiteSpace($ReportPath) -or -not (Test-Path -LiteralPath $ReportPath -PathType Leaf)) { throw "Transaction report is missing: $ReportPath" }
+    $report = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json
+    if ([int]$report.schemaVersion -ne 1) { throw "Unsupported transaction report schema: $ReportPath" }
+    if (-not [bool]$report.ok -or [string]$report.platform -ne [string]$Gate.platform -or [string]$report.scenario -ne [string]$Gate.scenario) { throw "Transaction report identity/result is invalid: $ReportPath" }
+    if ([string]$report.route -ne [string]$Scenario.fixturePath) { throw "Transaction report route does not match the release graph: $ReportPath" }
+    if ($null -eq $report.health -or -not [bool]$report.health.ok) { throw "Transaction report health evidence is invalid: $ReportPath" }
+    if ($null -eq $report.result -or -not [bool]$report.result.ok) { throw "Transaction report scenario result is invalid: $ReportPath" }
+    if ($null -eq $report.restoration -or -not [bool]$report.restoration.ok) { throw "Transaction report restoration evidence is invalid: $ReportPath" }
+    $reportRoot = [IO.Path]::GetFullPath([string]$report.evidenceRoot)
+    $expectedRoot = [IO.Path]::GetFullPath($ExpectedEvidenceRoot)
+    if ($reportRoot -ne $expectedRoot -or [IO.Path]::GetFullPath((Split-Path -Parent $ReportPath)) -ne $expectedRoot) { throw "Transaction report evidence root is not the expected manager-owned root: $ReportPath" }
+    return $report
+}
+
+function Invoke-AutomaticTransaction {
+    param([object]$Gate, [object]$Graph, [string]$Root, [string]$Fingerprint)
+    $scenario = Get-Scenario $Graph ([string]$Gate.scenario)
+    if ($null -eq $scenario -or [string]::IsNullOrWhiteSpace([string]$scenario.fixturePath)) { throw "Release scenario is not defined: $($Gate.scenario)" }
+    if (@('/release-scenario/interaction', '/release-scenario/progression') -notcontains [string]$scenario.fixturePath) { throw "Automatic transaction mode requires a completion-backed scenario route; '$($scenario.fixturePath)' is not supported." }
+    $steps = @($scenario.steps)
+    if ($steps.Count -ne 1 -or -not $steps[0].PSObject.Properties['scenario'] -or [string]$steps[0].scenario -ne [string]$scenario.id) { throw "Automatic transaction mode requires one completion-backed step with scenario=$($scenario.id)." }
+    $argument = if ($steps[0].PSObject.Properties['argument'] -and $steps[0].argument) { [string]$steps[0].argument } else { 'confirm=true' }
+    if ($argument -ne 'confirm=true') { throw "Automatic transaction mode requires confirm=true for $($scenario.id)." }
+    $harnessRepo = Get-AutomaticHarnessRepo
+    $evidencePath = Get-AutomaticTransactionEvidenceRoot $Gate $Fingerprint
+    $runnerArgs = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Get-AutomaticTransactionRunnerPath),
+        '-Platform', [string]$Gate.platform,
+        '-GameRoot', (Get-AutomaticGameRoot ([string]$Gate.platform)),
+        '-HarnessBuildRoot', (Join-Path $harnessRepo 'Assemblies'),
+        '-Route', [string]$scenario.fixturePath,
+        '-Scenario', [string]$scenario.id,
+        '-Argument', $argument,
+        '-EvidenceRoot', $evidencePath,
+        '-TimeoutSeconds', [string]$TransactionTimeoutSeconds
+    )
+    $runnerOutput = @(& powershell @runnerArgs 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "Transactional runner exited $LASTEXITCODE for $($Gate.id): $($runnerOutput | Select-Object -Last 3 | ForEach-Object { [string]$_ } -join ' ')" }
+    $reportPath = Join-Path $evidencePath 'transaction-report.json'
+    $null = Assert-TransactionReport $Gate $scenario $reportPath $evidencePath
+    return $reportPath
 }
 
 function Invoke-Gate {
@@ -467,22 +642,29 @@ function Invoke-Gate {
             }
         } elseif ($Gate.kind -eq 'gameplay' -or $Gate.kind -eq 'platform-smoke') {
             $baseUrl = Get-HarnessUrlForPlatform ([string]$Gate.platform)
-            if (-not $baseUrl) { $result.status = 'blocked'; $result.detail = "No harness URL supplied for $($Gate.platform); use -SteamHarnessUrl/-EpicHarnessUrl."; return [pscustomobject]$result }
-            $scenario = Get-Scenario $Graph ([string]$Gate.scenario)
-            foreach ($step in @($scenario.steps)) {
-                $path = if ($step.route) { [string]$step.route } else { [string]$scenario.fixturePath }
-                $query = @{}
-                if ($step.action) { $query.action = [string]$step.action }
-                if ($step.PSObject.Properties['scenario'] -and $step.scenario) { $query.scenario = [string]$step.scenario }
-                if ($scenario.fixture) { $query.fixture = [string]$scenario.fixture }
-                if ($step.argument) {
-                    if ($path -eq '/release-fixture/family-persistence') { $query.args = [string]$step.argument }
-                    else { $query.argument = [string]$step.argument }
+            if (-not $baseUrl -and $Gate.kind -eq 'platform-smoke') {
+                $result.status = 'blocked'; $result.detail = "No harness URL supplied for $($Gate.platform); platform smoke requires -SteamHarnessUrl/-EpicHarnessUrl."; return [pscustomobject]$result
+            }
+            if (-not $baseUrl) {
+                $result.transactionReportPath = Invoke-AutomaticTransaction $Gate $Graph $Root $fingerprint
+                $result.detail = "Validated transaction-report.json evidence from $($result.transactionReportPath)."
+            } else {
+                $scenario = Get-Scenario $Graph ([string]$Gate.scenario)
+                foreach ($step in @($scenario.steps)) {
+                    $path = if ($step.route) { [string]$step.route } else { [string]$scenario.fixturePath }
+                    $query = @{}
+                    if ($step.action) { $query.action = [string]$step.action }
+                    if ($step.PSObject.Properties['scenario'] -and $step.scenario) { $query.scenario = [string]$step.scenario }
+                    if ($scenario.fixture) { $query.fixture = [string]$scenario.fixture }
+                    if ($step.argument) {
+                        if ($path -eq '/release-fixture/family-persistence') { $query.args = [string]$step.argument }
+                        else { $query.argument = [string]$step.argument }
+                    }
+                    $call = Invoke-HarnessRoute $baseUrl $path $query
+                    if ($null -eq $call.Response -or -not ($call.Response.PSObject.Properties.Name -contains 'ok')) { throw "Harness response omitted required ok=true contract: $($call.Uri)." }
+                    if (-not [bool]$call.Response.ok) { throw "Harness refused $($call.Uri)." }
+                    if ($call.Response.PSObject.Properties.Name -contains 'supported' -and -not [bool]$call.Response.supported) { throw "Harness reported unsupported state for $($call.Uri)." }
                 }
-                $call = Invoke-HarnessRoute $baseUrl $path $query
-                if ($null -eq $call.Response -or -not ($call.Response.PSObject.Properties.Name -contains 'ok')) { throw "Harness response omitted required ok=true contract: $($call.Uri)." }
-                if (-not [bool]$call.Response.ok) { throw "Harness refused $($call.Uri)." }
-                if ($call.Response.PSObject.Properties.Name -contains 'supported' -and -not [bool]$call.Response.supported) { throw "Harness reported unsupported state for $($call.Uri)." }
             }
         } elseif ($Gate.kind -eq 'package') {
             $scriptPath = Join-Path $Root ([string]$Gate.script)
