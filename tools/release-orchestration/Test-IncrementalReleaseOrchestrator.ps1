@@ -40,6 +40,10 @@ Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'four-person-expediti
 Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'expeditions' }).Count -eq 0) 'The retired expeditions scenario ID must not remain in the graph.'
 Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'better-ai-queue-persistence' }).Count -eq 1) 'Better AI Queue must use its completion-backed persistence scenario ID.'
 Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'ai-queue' }).Count -eq 0) 'The status-only Better AI Queue scenario must not remain in the graph.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'expanded-map-generation' }).Count -eq 1) 'Expanded Map Sizes must use its completion-backed generation scenario ID.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'expanded-map-sizes' }).Count -eq 0) 'The status-only Expanded Map Sizes scenario must not remain in the graph.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'display-fixes-wardrobe' }).Count -eq 1) 'Display Fixes must use its completion-backed Wardrobe scenario ID.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'display-fixes' }).Count -eq 0) 'The status-only Display Fixes scenario must not remain in the graph.'
 Assert-True (@($graph.defaults.harnessSharedInputs).Count -gt 0) 'Shared harness route inputs must be explicit.'
 foreach ($scenario in @($graph.scenarios | Where-Object { [string]$_.fixturePath -like '/release-scenario/*' })) {
     Assert-True (@($scenario.harnessInputs).Count -gt 0) "Completion-backed scenario $($scenario.id) must declare scoped harness inputs."
@@ -92,7 +96,7 @@ foreach ($scenarioId in @('four-person-expedition')) {
     Assert-True ([string]$expeditionScenario.steps[0].scenario -eq $scenarioId) "$scenarioId must pass its canonical scenario ID."
     Assert-True ([string]$expeditionScenario.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
 }
-foreach ($scenarioId in @('better-ai-queue-persistence')) {
+foreach ($scenarioId in @('better-ai-queue-persistence', 'expanded-map-generation', 'display-fixes-wardrobe')) {
     $additionalScenario = @($graph.scenarios | Where-Object { [string]$_.id -eq $scenarioId })[0]
     Assert-True ($additionalScenario.fixturePath -eq '/release-scenario/interaction') "$scenarioId must use the completion-backed interaction route."
     Assert-True (@($additionalScenario.steps).Count -eq 1) "$scenarioId must be one completion-backed call."
@@ -137,8 +141,16 @@ Assert-True (@($betterQueue.gates.id) -contains 'gameplay.Epic.better-ai-queue-p
 Assert-True (-not (@($betterQueue.gates.id) -contains 'gameplay.Steam.family-persistence')) 'Better AI Queue source must not select unrelated Family persistence.'
 
 $expandedMap = Invoke-PlanCase 'expanded-map-source' @('Sheltered-Expanded-Map-Sizes/ExpandedMapSizes/MapSizePlugin.cs')
+Assert-True (@($expandedMap.gates.id) -contains 'gameplay.Steam.expanded-map-generation') 'Expanded Map Sizes source must select the Steam completion-backed map-generation transaction.'
+Assert-True (@($expandedMap.gates.id) -contains 'gameplay.Epic.expanded-map-generation') 'Expanded Map Sizes source must select the Epic completion-backed map-generation transaction.'
 Assert-True (@($expandedMap.gates.id) -contains 'gameplay.Steam.bunker-persistence') 'Expanded Map Sizes source must select the dependent Bunker persistence transaction.'
 Assert-True (@($expandedMap.gates.id) -contains 'gameplay.Epic.bunker-persistence') 'Expanded Map Sizes source must select the Epic dependent Bunker persistence transaction.'
+
+$displayFixes = Invoke-PlanCase 'display-fixes-source' @('Sheltered-Display-Fixes/Sheltered Display Fixes/Patches/RenderTexturePatches.cs')
+Assert-True (@($displayFixes.gates.id) -contains 'contracts.Sheltered-Display-Fixes') 'Display Fixes source must select its render-texture lifecycle contracts.'
+Assert-True (@($displayFixes.gates.id) -contains 'gameplay.Steam.display-fixes-wardrobe') 'Display Fixes source must select the Steam completion-backed Wardrobe transaction.'
+Assert-True (@($displayFixes.gates.id) -contains 'gameplay.Epic.display-fixes-wardrobe') 'Display Fixes source must select the Epic completion-backed Wardrobe transaction.'
+Assert-True (-not (@($displayFixes.gates.id) -contains 'gameplay.Steam.expanded-map-generation')) 'Display Fixes source must not select unrelated map generation.'
 
 $bunker = Invoke-PlanCase 'bunker-source' @('BunkerRandomLocation/BunkerRandomLocation/BunkerRandomLocationPlugin.cs')
 Assert-True (@($bunker.gates.id) -contains 'gameplay.Steam.bunker-persistence') 'Bunker source must select its completion-backed persistence transaction.'
