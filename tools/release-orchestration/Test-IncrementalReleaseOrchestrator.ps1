@@ -67,6 +67,17 @@ Assert-True ((@($trading.gates | Where-Object { $_.id -eq 'package.mods' })).Cou
 Assert-True (-not (@($trading.gates.id) -contains 'gameplay.Steam.deep-progression')) 'Trading source must not select Deep Expansion progression.'
 Assert-True ((@($graph.scenarios | Where-Object { $_.id -eq 'trading-amount' })[0].fixturePath) -eq '/release-scenario/interaction') 'Trading must use the completion-backed scenario transaction, not manual fixture choreography.'
 
+foreach ($scenarioId in @('systems-water', 'systems-oxygen', 'deep-progression')) {
+    $progression = @($graph.scenarios | Where-Object { [string]$_.id -eq $scenarioId })[0]
+    Assert-True ($progression.fixturePath -eq '/release-scenario/progression') "$scenarioId must use the completion-backed progression route."
+    Assert-True ($null -eq $progression.fixture) "$scenarioId must not carry the retired fixture selector."
+    Assert-True (@($progression.steps).Count -eq 1) "$scenarioId must be one completion-backed call."
+    Assert-True ([string]$progression.steps[0].scenario -eq $scenarioId) "$scenarioId must pass scenario=$scenarioId."
+    Assert-True ([string]$progression.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
+}
+$vanillaBreach = @($graph.scenarios | Where-Object { $_.id -eq 'vanilla-breach' })[0]
+Assert-True ($vanillaBreach.fixturePath -eq '/release-fixture/interaction') 'Vanilla scenario entries must remain owned by the parent harness route work.'
+
 $vanillaTrading = Invoke-PlanCase 'vanilla-trading-file' @('Sheltered-Vanilla-Fixes/Sheltered Vanilla Fixes/Patches/TradingWhiteSlotResetPatches.cs')
 Assert-True (@($vanillaTrading.gates.id) -contains 'gameplay.Steam.vanilla-trading-slots') 'A trading-slot patch must select its focused behavior matrix.'
 Assert-True (@($vanillaTrading.gates.id) -contains 'gameplay.Epic.trading-vanilla-seam') 'A trading-slot patch must preserve the Trading Amount compatibility edge.'
@@ -107,6 +118,17 @@ Assert-True ($runnerSource.Contains("status = 'dependency-blocked'")) 'Downstrea
 Assert-True ($runnerSource.Contains('Get-ReusableEvidence')) 'Validated evidence reuse is not implemented.'
 Assert-True ($runnerSource.Contains('Get-LiveHarnessFingerprint')) 'Gameplay evidence is not bound to the live game/mod/harness files.'
 Assert-True ($runnerSource.Contains("Harness response omitted required ok=true contract")) 'Harness results must require explicit ok=true.'
+Assert-True ($runnerSource.Contains('[string]$HarnessRepo')) 'Automatic transaction mode must expose the harness repository parameter.'
+Assert-True ($runnerSource.Contains('[string]$SteamGameRoot')) 'Automatic transaction mode must expose the Steam game-root parameter.'
+Assert-True ($runnerSource.Contains('[string]$EpicGameRoot')) 'Automatic transaction mode must expose the Epic game-root parameter.'
+Assert-True ($runnerSource.Contains('Get-AutomaticHarnessRepo')) 'Automatic transaction mode must discover a safe harness repository default.'
+Assert-True ($runnerSource.Contains('Get-AutomaticGameRoot')) 'Automatic transaction mode must discover safe Steam/Epic game-root defaults.'
+Assert-True ($runnerSource.Contains('Invoke-AutomaticTransaction')) 'Gameplay gates must invoke the transactional runner when no live URL is supplied.'
+Assert-True ($runnerSource.Contains('Invoke-TransactionalReleaseScenario.ps1')) 'Automatic mode must target the transactional release runner.'
+Assert-True ($runnerSource.Contains('Assert-TransactionReport')) 'Automatic mode must validate transaction-report.json evidence.'
+Assert-True ($runnerSource.Contains('restoration evidence is invalid')) 'Automatic mode must fail closed when restoration evidence is invalid.'
+Assert-True ($runnerSource.Contains('transactionReportPath')) 'Automatic mode must retain the validated transaction report path for evidence reuse.'
+Assert-True ($runnerSource.Contains('platform smoke requires -SteamHarnessUrl/-EpicHarnessUrl')) 'Non-completion platform smoke must remain explicitly URL-backed.'
 Assert-True ($runnerSource.Contains("scripts = @('shelteredmodmanager/tools/release-orchestration/Test-IncrementalReleaseOrchestrator.ps1')")) 'The release-graph gate must execute its self-test.'
 
 $unmappedOutput = Join-Path ([IO.Path]::GetTempPath()) ('sheltered-release-unmapped-' + [Guid]::NewGuid().ToString('N') + '.json')
