@@ -747,7 +747,11 @@ function Invoke-Gate {
         } elseif ($Gate.kind -eq 'package') {
             $scriptPath = Join-Path $Root ([string]$Gate.script)
             if (-not (Test-Path -LiteralPath $scriptPath)) { throw "Package script not found: $scriptPath" }
-            if ($Gate.scope -eq 'mods') { $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath -ShelteredRoot $Root -OutputRoot (Join-Path $Root 'release\2.0\artifacts\mods') }
+            if ($Gate.scope -eq 'mods') {
+                $selectedProjects = @($Gate.owners | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ';'
+                if ([string]::IsNullOrWhiteSpace($selectedProjects)) { throw 'The mod package gate selected no project owners.' }
+                $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath -ShelteredRoot $Root -OutputRoot (Join-Path $Root 'release\2.0\artifacts\mods') -Projects $selectedProjects
+            }
             else { $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Configuration $Configuration }
             if ($LASTEXITCODE -ne 0) { throw "Package script exited $LASTEXITCODE." }
         } elseif ($Gate.kind -eq 'promotion') {
@@ -894,7 +898,8 @@ foreach ($repoPlan in @($plans.Values)) {
 $gateReport = @($orderedGates | ForEach-Object {
     $gatePlatform = if ($_.PSObject.Properties['platform']) { $_.platform } else { $null }
     $gateScenario = if ($_.PSObject.Properties['scenario']) { $_.scenario } else { $null }
-    [pscustomobject]@{ id = $_.id; phase = $_.phase; kind = $_.kind; owner = $_.owner; platform = $gatePlatform; scenario = $gateScenario; heavy = $_.heavy; detail = $_.detail }
+    $gateOwners = if ($_.PSObject.Properties['owners']) { @($_.owners) } else { @() }
+    [pscustomobject]@{ id = $_.id; phase = $_.phase; kind = $_.kind; owner = $_.owner; owners = $gateOwners; platform = $gatePlatform; scenario = $gateScenario; heavy = $_.heavy; detail = $_.detail }
 })
 $report = [ordered]@{
     schemaVersion = 1; generatedUtc = [DateTime]::UtcNow.ToString('o'); mode = if ($Execute) { 'execute' } else { 'dry-run' }; configuration = $Configuration

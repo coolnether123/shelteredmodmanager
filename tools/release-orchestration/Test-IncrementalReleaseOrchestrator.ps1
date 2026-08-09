@@ -139,6 +139,9 @@ $betterQueue = Invoke-PlanCase 'better-queue-source' @('Better-AI-Queue/Better A
 Assert-True (@($betterQueue.gates.id) -contains 'gameplay.Steam.better-ai-queue-persistence') 'Better AI Queue source must select the Steam completion-backed persistence transaction.'
 Assert-True (@($betterQueue.gates.id) -contains 'gameplay.Epic.better-ai-queue-persistence') 'Better AI Queue source must select the Epic completion-backed persistence transaction.'
 Assert-True (-not (@($betterQueue.gates.id) -contains 'gameplay.Steam.family-persistence')) 'Better AI Queue source must not select unrelated Family persistence.'
+$betterQueuePackage = @($betterQueue.gates | Where-Object { $_.id -eq 'package.mods' })[0]
+$betterQueuePackageOwners = @($betterQueuePackage.owners)
+Assert-True ($betterQueuePackageOwners.Count -eq 1 -and [string]$betterQueuePackageOwners[0] -eq 'Better-AI-Queue') 'A Better AI Queue change must pass only Better-AI-Queue to selective packaging.'
 
 $expandedMap = Invoke-PlanCase 'expanded-map-source' @('Sheltered-Expanded-Map-Sizes/ExpandedMapSizes/MapSizePlugin.cs')
 Assert-True (@($expandedMap.gates.id) -contains 'gameplay.Steam.expanded-map-generation') 'Expanded Map Sizes source must select the Steam completion-backed map-generation transaction.'
@@ -151,6 +154,9 @@ Assert-True (@($displayFixes.gates.id) -contains 'contracts.Sheltered-Display-Fi
 Assert-True (@($displayFixes.gates.id) -contains 'gameplay.Steam.display-fixes-wardrobe') 'Display Fixes source must select the Steam completion-backed Wardrobe transaction.'
 Assert-True (@($displayFixes.gates.id) -contains 'gameplay.Epic.display-fixes-wardrobe') 'Display Fixes source must select the Epic completion-backed Wardrobe transaction.'
 Assert-True (-not (@($displayFixes.gates.id) -contains 'gameplay.Steam.expanded-map-generation')) 'Display Fixes source must not select unrelated map generation.'
+$displayPackage = @($displayFixes.gates | Where-Object { $_.id -eq 'package.mods' })[0]
+$displayPackageOwners = @($displayPackage.owners)
+Assert-True ($displayPackageOwners.Count -eq 1 -and [string]$displayPackageOwners[0] -eq 'Sheltered-Display-Fixes') 'A Display Fixes change must pass only Sheltered-Display-Fixes to selective packaging.'
 
 $bunker = Invoke-PlanCase 'bunker-source' @('BunkerRandomLocation/BunkerRandomLocation/BunkerRandomLocationPlugin.cs')
 Assert-True (@($bunker.gates.id) -contains 'gameplay.Steam.bunker-persistence') 'Bunker source must select its completion-backed persistence transaction.'
@@ -206,7 +212,15 @@ Assert-True ($runnerSource.Contains('Assert-TransactionReport')) 'Automatic mode
 Assert-True ($runnerSource.Contains('restoration evidence is invalid')) 'Automatic mode must fail closed when restoration evidence is invalid.'
 Assert-True ($runnerSource.Contains('transactionReportPath')) 'Automatic mode must retain the validated transaction report path for evidence reuse.'
 Assert-True ($runnerSource.Contains('platform smoke requires -SteamHarnessUrl/-EpicHarnessUrl')) 'Non-completion platform smoke must remain explicitly URL-backed.'
+Assert-True ($runnerSource.Contains('-Projects $selectedProjects')) 'The package runner must pass selected mod owners to the package script.'
 Assert-True ($runnerSource.Contains("scripts = @('shelteredmodmanager/tools/release-orchestration/Test-IncrementalReleaseOrchestrator.ps1')")) 'The release-graph gate must execute its self-test.'
+
+$packageScriptPath = Join-Path $ShelteredRoot 'release\2.0\tools\New-ModPackages.ps1'
+$packageScriptSource = Get-Content -LiteralPath $packageScriptPath -Raw
+Assert-True ($packageScriptSource.Contains('[string]$Projects')) 'The mod package script must expose selective project input.'
+Assert-True ($packageScriptSource.Contains('Package build complete: {0} rebuilt, {1} preserved.')) 'Selective packaging must preserve unchanged package records.'
+Assert-True ($packageScriptSource.Contains("Dll='Better AI Queue Mod\Better AI Queue\Assemblies\Better AI Queue.dll'")) 'Better AI Queue packaging must consume the solution Release output.'
+Assert-True (-not $packageScriptSource.Contains("Dll='Better AI Queue\build\release\Better AI Queue.dll'")) 'Better AI Queue packaging must not consume the stale legacy build folder.'
 
 $unmappedOutput = Join-Path ([IO.Path]::GetTempPath()) ('sheltered-release-unmapped-' + [Guid]::NewGuid().ToString('N') + '.json')
 try {
