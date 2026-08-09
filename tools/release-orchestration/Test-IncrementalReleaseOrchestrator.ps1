@@ -215,7 +215,7 @@ Assert-True ($runnerSource.Contains('platform smoke requires -SteamHarnessUrl/-E
 Assert-True ($runnerSource.Contains('-Projects $selectedProjects')) 'The package runner must pass selected mod owners to the package script.'
 Assert-True ($runnerSource.Contains("scripts = @('shelteredmodmanager/tools/release-orchestration/Test-IncrementalReleaseOrchestrator.ps1')")) 'The release-graph gate must execute its self-test.'
 
-$packageScriptPath = Join-Path $ShelteredRoot 'release\2.0\tools\New-ModPackages.ps1'
+$packageScriptPath = Join-Path $ShelteredRoot 'shelteredmodmanager\tools\release-orchestration\New-ModPackages.ps1'
 $packageScriptSource = Get-Content -LiteralPath $packageScriptPath -Raw
 Assert-True ($packageScriptSource.Contains('[string]$Projects')) 'The mod package script must expose selective project input.'
 Assert-True ($packageScriptSource.Contains('Package build complete: {0} rebuilt, {1} preserved.')) 'Selective packaging must preserve unchanged package records.'
