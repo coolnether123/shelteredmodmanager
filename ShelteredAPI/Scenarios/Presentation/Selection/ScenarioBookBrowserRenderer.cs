@@ -194,6 +194,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 playStats,
                 rows,
                 pageIndex,
+                pageCount,
                 headerTitle,
                 headerDetail,
                 select,
@@ -466,6 +467,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             ScenarioBookPlayStatsModel playStats,
             IList<ScenarioBookRowModel> rows,
             int pageIndex,
+            int pageCount,
             string headerTitle,
             string headerDetail,
             Action<ScenarioBookRowModel> select,
@@ -482,6 +484,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             {
                 GameObject library = _ui.CreateChild(parent, "PreparedScenarioLibrary_" + SanitizeObjectName(key), Vector3.zero);
                 BuildLibrarySpread(library, selectedScenario, playStats, rows, pageIndex, select);
+                BuildLibraryPageControls(library, pageIndex, pageCount);
                 return new PreparedPage { Root = library, Height = 470 };
             }
 

@@ -1219,14 +1219,17 @@ namespace ShelteredAPI.Saves
             if (comparison.Status == VanillaMirrorComparisonStatus.InSync)
             {
                 EnsureStandardVanillaMirrorManifest(comparison);
-                return new SaveRegistryCore(scenarioId).GetSaveBySlot(slotNumber);
+                // Use the shared Standard registry here. Constructing a new registry
+                // forces a full Slot_* discovery and reparses every SaveData.xml file
+                // each time the page-0 UI refreshes.
+                return ExpandedVanillaSaves.GetBySlot(slotNumber);
             }
 
             if (comparison.Status == VanillaMirrorComparisonStatus.Diverged
                 || comparison.Status == VanillaMirrorComparisonStatus.MissingVanilla)
             {
                 return File.Exists(xmlPath)
-                    ? new SaveRegistryCore(scenarioId).GetSaveBySlot(slotNumber)
+                    ? ExpandedVanillaSaves.GetBySlot(slotNumber)
                     : null;
             }
 

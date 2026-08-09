@@ -83,11 +83,13 @@ namespace ShelteredAPI.Saves.Paging
             // Checkbox background
             var checkboxBg = NguiModalPrimitives.CreateBox(checkboxContainer.transform, "CheckboxBg",
                 new Vector3(-100, 0, 0), 20, 20, new Color(0.3f, 0.25f, 0.2f, 1f), 100, false);
+            checkboxBg.GetComponent<UITexture>().pivot = UIWidget.Pivot.Center;
             
             // Checkbox checkmark (initially hidden)
             var checkmark = NguiModalPrimitives.CreateLabel(checkboxContainer.transform, "Checkmark", "✓",
                 new Vector3(-100, 0, 0), 18, new Color(0.3f, 0.9f, 0.3f), uiFont, ttfFont, 101);
             checkmark.alignment = NGUIText.Alignment.Center;
+            checkmark.pivot = UIWidget.Pivot.Center;
             checkmark.gameObject.SetActive(false);
             
             // Checkbox label
@@ -95,6 +97,7 @@ namespace ShelteredAPI.Saves.Paging
                 "Remember my choice",
                 new Vector3(10, 0, 0), 16, COLOR_SUBTEXT, uiFont, ttfFont, 100);
             checkboxLabel.alignment = NGUIText.Alignment.Left;
+            checkboxLabel.pivot = UIWidget.Pivot.Left;
             
             // Add click handler to checkbox area
             var checkboxCol = checkboxBg.AddComponent<BoxCollider>();
