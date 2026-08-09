@@ -36,6 +36,14 @@ Assert-True ($graph.schemaVersion -eq 2) 'Graph schema version must be 2.'
 Assert-True (@($graph.repositories).Count -eq 11) 'Graph must contain exactly eleven in-scope mod repositories.'
 Assert-True (@($graph.scenarios).Count -ge 15) 'Graph must include targeted and compatibility scenarios.'
 Assert-True (@($graph.dependencyEdges).Count -eq 5) 'Graph dependency edges must remain explicit and deduplicated.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'four-person-expedition' }).Count -eq 1) 'Four Person must use the canonical transaction scenario ID.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'expeditions' }).Count -eq 0) 'The retired expeditions scenario ID must not remain in the graph.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'better-ai-queue-persistence' }).Count -eq 1) 'Better AI Queue must use its completion-backed persistence scenario ID.'
+Assert-True (@($graph.scenarios | Where-Object { $_.id -eq 'ai-queue' }).Count -eq 0) 'The status-only Better AI Queue scenario must not remain in the graph.'
+Assert-True (@($graph.defaults.harnessSharedInputs).Count -gt 0) 'Shared harness route inputs must be explicit.'
+foreach ($scenario in @($graph.scenarios | Where-Object { [string]$_.fixturePath -like '/release-scenario/*' })) {
+    Assert-True (@($scenario.harnessInputs).Count -gt 0) "Completion-backed scenario $($scenario.id) must declare scoped harness inputs."
+}
 foreach ($repo in @($graph.repositories)) {
     Assert-True (Test-Path -LiteralPath (Join-Path $ShelteredRoot ([string]$repo.project))) "Configured project is missing for $($repo.id): $($repo.project)"
     foreach ($script in @($repo.contracts)) { Assert-True (Test-Path -LiteralPath (Join-Path $ShelteredRoot ([string]$script))) "Configured contract is missing for $($repo.id): $script" }
@@ -49,7 +57,8 @@ Assert-True ($lifespan.mode -eq 'dry-run') 'Default runner mode must be dry-run.
 Assert-True ($lifespan.selectedOwners -contains 'Lifespan') 'Lifespan source must select Lifespan.'
 Assert-True ($lifespan.selectedOwners -contains 'Procreation-Framework') 'Lifespan source must select the dependent Family compatibility owner.'
 Assert-True (@($lifespan.gates.id) -contains 'gameplay.Steam.lifespan-persistence') 'Lifespan source must select its Steam fixture.'
-Assert-True (@($lifespan.gates.id) -contains 'gameplay.Epic.family-lifespan-handoff') 'Lifespan source must select the Epic dependent compatibility fixture.'
+Assert-True (@($lifespan.gates.id) -contains 'gameplay.Steam.family-persistence') 'Lifespan source must select the dependent Family persistence transaction.'
+Assert-True (@($lifespan.gates.id) -contains 'gameplay.Epic.family-persistence') 'Lifespan source must select the Epic dependent Family persistence transaction.'
 Assert-True (-not (@($lifespan.gates.id) -contains 'gameplay.Steam.trading-amount')) 'Lifespan source must not select Trading Amount.'
 Assert-True ((@($lifespan.gates | Where-Object { $_.phase -eq 'gameplay' -and $_.heavy })).Count -gt 0) 'State-heavy gates must be visible in the plan, not silently hidden.'
 
@@ -62,7 +71,8 @@ Assert-True (@($testOnly.gates | Where-Object { $_.phase -eq 'gameplay' }).Count
 
 $trading = Invoke-PlanCase 'trading-source' @('TradingAmount/TradingAmount/TradingPanelPatch.cs')
 Assert-True (@($trading.gates.id) -contains 'gameplay.Steam.trading-amount') 'Trading source must select the automated TradingPanel fixture.'
-Assert-True (@($trading.gates.id) -contains 'gameplay.Epic.trading-vanilla-seam') 'Trading source must select the Vanilla Fixes seam compatibility fixture.'
+Assert-True (@($trading.gates.id) -contains 'gameplay.Epic.trading-amount') 'Trading source must select the shared Epic Trading Amount transaction.'
+Assert-True (-not (@($trading.gates.id) -contains 'gameplay.Epic.trading-vanilla-seam')) 'The retired Trading/Vanilla seam fixture must not be selected.'
 Assert-True ((@($trading.gates | Where-Object { $_.id -eq 'package.mods' })).Count -eq 1) 'Multiple selected mod owners must share one packaging gate.'
 Assert-True (-not (@($trading.gates.id) -contains 'gameplay.Steam.deep-progression')) 'Trading source must not select Deep Expansion progression.'
 Assert-True ((@($graph.scenarios | Where-Object { $_.id -eq 'trading-amount' })[0].fixturePath) -eq '/release-scenario/interaction') 'Trading must use the completion-backed scenario transaction, not manual fixture choreography.'
@@ -75,6 +85,28 @@ foreach ($scenarioId in @('systems-water', 'systems-oxygen', 'deep-progression')
     Assert-True ([string]$progression.steps[0].scenario -eq $scenarioId) "$scenarioId must pass scenario=$scenarioId."
     Assert-True ([string]$progression.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
 }
+foreach ($scenarioId in @('four-person-expedition')) {
+    $expeditionScenario = @($graph.scenarios | Where-Object { [string]$_.id -eq $scenarioId })[0]
+    Assert-True ($expeditionScenario.fixturePath -eq '/release-scenario/interaction') "$scenarioId must use the completion-backed interaction route."
+    Assert-True (@($expeditionScenario.steps).Count -eq 1) "$scenarioId must be one completion-backed call."
+    Assert-True ([string]$expeditionScenario.steps[0].scenario -eq $scenarioId) "$scenarioId must pass its canonical scenario ID."
+    Assert-True ([string]$expeditionScenario.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
+}
+foreach ($scenarioId in @('better-ai-queue-persistence')) {
+    $additionalScenario = @($graph.scenarios | Where-Object { [string]$_.id -eq $scenarioId })[0]
+    Assert-True ($additionalScenario.fixturePath -eq '/release-scenario/interaction') "$scenarioId must use the completion-backed interaction route."
+    Assert-True (@($additionalScenario.steps).Count -eq 1) "$scenarioId must be one completion-backed call."
+    Assert-True ([string]$additionalScenario.steps[0].scenario -eq $scenarioId) "$scenarioId must pass its canonical scenario ID."
+    Assert-True ([string]$additionalScenario.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
+}
+foreach ($scenarioId in @('family-persistence', 'lifespan-persistence', 'bunker-persistence')) {
+    $persistenceScenario = @($graph.scenarios | Where-Object { [string]$_.id -eq $scenarioId })[0]
+    Assert-True ($persistenceScenario.fixturePath -eq '/release-scenario/interaction') "$scenarioId must use the completion-backed interaction route."
+    Assert-True ($null -eq $persistenceScenario.fixture) "$scenarioId must not carry the retired family fixture selector."
+    Assert-True (@($persistenceScenario.steps).Count -eq 1) "$scenarioId must be one completion-backed call."
+    Assert-True ([string]$persistenceScenario.steps[0].scenario -eq $scenarioId) "$scenarioId must pass scenario=$scenarioId."
+    Assert-True ([string]$persistenceScenario.steps[0].argument -eq 'confirm=true') "$scenarioId must pass confirm=true."
+}
 foreach ($scenarioId in @('vanilla-breach', 'vanilla-radio', 'vanilla-quest-weapons', 'vanilla-trading-slots', 'vanilla-weapon-craft', 'vanilla-recycling')) {
     $vanillaScenario = @($graph.scenarios | Where-Object { [string]$_.id -eq $scenarioId })[0]
     Assert-True ($vanillaScenario.fixturePath -eq '/release-scenario/interaction') "$scenarioId must use the completion-backed interaction route."
@@ -86,13 +118,31 @@ foreach ($scenarioId in @('vanilla-breach', 'vanilla-radio', 'vanilla-quest-weap
 
 $vanillaTrading = Invoke-PlanCase 'vanilla-trading-file' @('Sheltered-Vanilla-Fixes/Sheltered Vanilla Fixes/Patches/TradingWhiteSlotResetPatches.cs')
 Assert-True (@($vanillaTrading.gates.id) -contains 'gameplay.Steam.vanilla-trading-slots') 'A trading-slot patch must select its focused behavior matrix.'
-Assert-True (@($vanillaTrading.gates.id) -contains 'gameplay.Epic.trading-vanilla-seam') 'A trading-slot patch must preserve the Trading Amount compatibility edge.'
+Assert-True (@($vanillaTrading.gates.id) -contains 'gameplay.Epic.trading-amount') 'A trading-slot patch must preserve the Trading Amount compatibility edge.'
+Assert-True (-not (@($vanillaTrading.gates.id) -contains 'gameplay.Epic.trading-vanilla-seam')) 'A trading-slot patch must not select the retired seam fixture.'
 Assert-True (-not (@($vanillaTrading.gates.id) -contains 'gameplay.Steam.vanilla-breach')) 'A trading-slot-only patch must not rerun the breach matrix.'
 Assert-True (-not (@($vanillaTrading.gates.id) -contains 'gameplay.Steam.vanilla-recycling')) 'A trading-slot-only patch must not rerun the recycling matrix.'
 
 $vanillaCore = Invoke-PlanCase 'vanilla-core-file' @('Sheltered-Vanilla-Fixes/Sheltered Vanilla Fixes/Core/FixBootstrapper.cs')
 Assert-True (@($vanillaCore.gates.id) -contains 'gameplay.Steam.vanilla-breach') 'Shared Vanilla Fixes core changes must select breach.'
 Assert-True (@($vanillaCore.gates.id) -contains 'gameplay.Steam.vanilla-recycling') 'Shared Vanilla Fixes core changes must select recycling.'
+
+$family = Invoke-PlanCase 'family-source' @('Procreation-Framework/Procreation Framework/FamilyExpansionPlugin.cs')
+Assert-True (@($family.gates.id) -contains 'gameplay.Steam.family-persistence') 'Family Expansion source must select its completion-backed persistence transaction.'
+Assert-True (@($family.gates.id) -contains 'gameplay.Epic.family-persistence') 'Family Expansion source must select its Epic persistence transaction.'
+
+$betterQueue = Invoke-PlanCase 'better-queue-source' @('Better-AI-Queue/Better AI Queue/Persistence/QueuePersistenceData.cs')
+Assert-True (@($betterQueue.gates.id) -contains 'gameplay.Steam.better-ai-queue-persistence') 'Better AI Queue source must select the Steam completion-backed persistence transaction.'
+Assert-True (@($betterQueue.gates.id) -contains 'gameplay.Epic.better-ai-queue-persistence') 'Better AI Queue source must select the Epic completion-backed persistence transaction.'
+Assert-True (-not (@($betterQueue.gates.id) -contains 'gameplay.Steam.family-persistence')) 'Better AI Queue source must not select unrelated Family persistence.'
+
+$expandedMap = Invoke-PlanCase 'expanded-map-source' @('Sheltered-Expanded-Map-Sizes/ExpandedMapSizes/MapSizePlugin.cs')
+Assert-True (@($expandedMap.gates.id) -contains 'gameplay.Steam.bunker-persistence') 'Expanded Map Sizes source must select the dependent Bunker persistence transaction.'
+Assert-True (@($expandedMap.gates.id) -contains 'gameplay.Epic.bunker-persistence') 'Expanded Map Sizes source must select the Epic dependent Bunker persistence transaction.'
+
+$bunker = Invoke-PlanCase 'bunker-source' @('BunkerRandomLocation/BunkerRandomLocation/BunkerRandomLocationPlugin.cs')
+Assert-True (@($bunker.gates.id) -contains 'gameplay.Steam.bunker-persistence') 'Bunker source must select its completion-backed persistence transaction.'
+Assert-True (-not (@($bunker.gates.id) -contains 'gameplay.Steam.family-persistence')) 'Bunker source must not select Family persistence.'
 
 $managerOAuth = Invoke-PlanCase 'manager-oauth' @('shelteredmodmanager/Manager/Core/Services/NexusOAuthClient.cs')
 Assert-True ($managerOAuth.selectedOwners -contains 'shelteredmodmanager') 'Manager OAuth source must select the Manager owner.'
@@ -123,6 +173,15 @@ $runnerSource = Get-Content -LiteralPath $RunnerPath -Raw
 Assert-True ($runnerSource.Contains("status = 'dependency-blocked'")) 'Downstream package/promotion gates must fail closed after an upstream failure.'
 Assert-True ($runnerSource.Contains('Get-ReusableEvidence')) 'Validated evidence reuse is not implemented.'
 Assert-True ($runnerSource.Contains('Get-LiveHarnessFingerprint')) 'Gameplay evidence is not bound to the live game/mod/harness files.'
+Assert-True ($runnerSource.Contains('Get-RepositoryDefinitionsForGate')) 'Fingerprint scope must use the shared repository/dependency definition selector.'
+Assert-True ($runnerSource.Contains('Get-RelevantGraphSlice')) 'Gate fingerprints must use a relevant graph slice.'
+Assert-True ($runnerSource.Contains('runtimeSharedModDirectories')) 'Runtime fingerprints must include shared framework mod directories.'
+Assert-True ($runnerSource.Contains('harnessInputs')) 'Scenario fingerprints must include declared harness inputs.'
+Assert-True ($runnerSource.Contains('runtimeModDirectories')) 'Runtime fingerprints must include selected repository mod directories.'
+Assert-True (-not $runnerSource.Contains('Sheltered Agent Interface.dll')) 'Fingerprints must not hash the entire harness DLL.'
+Assert-True (-not $runnerSource.Contains('Sheltered Agent Interface.pdb')) 'Fingerprints must not hash the entire harness PDB.'
+Assert-True (-not $runnerSource.Contains("Get-ChildItem -LiteralPath `$modsRoot -Recurse")) 'Fingerprints must not hash every installed mod.'
+Assert-True (([regex]::Matches($runnerSource, [regex]::Escape("Get-FileHash -LiteralPath `$GraphPath"))).Count -eq 1) 'Whole-graph hashing must be limited to the release-graph validation gate.'
 Assert-True ($runnerSource.Contains("Harness response omitted required ok=true contract")) 'Harness results must require explicit ok=true.'
 Assert-True ($runnerSource.Contains('[string]$HarnessRepo')) 'Automatic transaction mode must expose the harness repository parameter.'
 Assert-True ($runnerSource.Contains('[string]$SteamGameRoot')) 'Automatic transaction mode must expose the Steam game-root parameter.'
