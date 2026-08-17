@@ -8,11 +8,17 @@ using Manager.Core.Models;
 
 namespace Manager.Core.Services
 {
+    internal interface INexusOAuthTokenClient
+    {
+        NexusOAuthTokenSet ExchangeAuthorizationCode(string authorizationCode, string codeVerifier, out string errorMessage);
+        NexusOAuthTokenSet Refresh(string refreshToken, out string errorMessage);
+    }
+
     /// <summary>
     /// Exchanges authorization codes and refresh tokens with the Nexus user
     /// service. This public desktop client never uses or stores a client secret.
     /// </summary>
-    internal sealed class NexusOAuthClient
+    internal sealed class NexusOAuthClient : INexusOAuthTokenClient
     {
         private readonly string _tokenEndpoint;
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
@@ -29,7 +35,7 @@ namespace Manager.Core.Services
                 : tokenEndpoint;
         }
 
-        internal NexusOAuthTokenSet ExchangeAuthorizationCode(
+        public NexusOAuthTokenSet ExchangeAuthorizationCode(
             string authorizationCode,
             string codeVerifier,
             out string errorMessage)
@@ -43,7 +49,7 @@ namespace Manager.Core.Services
             return RequestTokens(fields, out errorMessage);
         }
 
-        internal NexusOAuthTokenSet Refresh(string refreshToken, out string errorMessage)
+        public NexusOAuthTokenSet Refresh(string refreshToken, out string errorMessage)
         {
             var fields = new Dictionary<string, string>();
             fields["grant_type"] = "refresh_token";

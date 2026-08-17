@@ -7,7 +7,7 @@ namespace Manager.Core.Services
 {
     /// <summary>
     /// Coordinates Nexus API quotas for one service instance. Quota state is
-    /// partitioned by credential scope and never stores API keys or tokens.
+    /// partitioned by credential scope and never stores OAuth tokens.
     /// </summary>
     internal sealed class NexusRateLimitTracker
     {

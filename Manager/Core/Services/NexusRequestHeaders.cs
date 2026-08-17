@@ -5,11 +5,6 @@ namespace Manager.Core.Services
 {
     internal static class NexusRequestHeaders
     {
-        internal static void ApplyJsonHeaders(HttpWebRequest request, string apiKey)
-        {
-            ApplyJsonHeaders(request, NexusRequestCredential.FromApiKey(apiKey));
-        }
-
         internal static void ApplyJsonHeaders(HttpWebRequest request, NexusRequestCredential credential)
         {
             if (request == null)
@@ -24,8 +19,6 @@ namespace Manager.Core.Services
 
             if (!string.IsNullOrEmpty(credential.BearerToken))
                 request.Headers["Authorization"] = "Bearer " + credential.BearerToken;
-            else if (!string.IsNullOrEmpty(credential.ApiKey))
-                request.Headers["APIKEY"] = credential.ApiKey;
         }
 
         internal static void ApplyApplicationHeaders(HttpWebRequest request)

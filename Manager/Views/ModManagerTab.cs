@@ -1018,7 +1018,7 @@ namespace Manager.Views
                 (settings.NexusGameDomain ?? string.Empty).Trim().ToLowerInvariant() + "|" +
                 settings.IncludeNexusPrereleaseFiles.ToString() + "|" +
                 (settings.ModsPath ?? string.Empty).Trim().ToLowerInvariant() + "|" +
-                (settings.NexusApiKey ?? string.Empty).Trim();
+                settings.HasNexusOAuthSession.ToString();
         }
 
         private static int CountModsWithUpdates(List<ModItem> mods)

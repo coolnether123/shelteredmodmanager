@@ -24,11 +24,6 @@ namespace Manager.Core.Services
         private readonly string _endpoint;
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
 
-        public NexusGraphQlClient(string apiKey)
-            : this(new StaticNexusCredentialProvider(apiKey), new NexusRateLimitTracker(), Endpoint)
-        {
-        }
-
         internal NexusGraphQlClient(INexusCredentialProvider credentialProvider)
             : this(credentialProvider, new NexusRateLimitTracker(), Endpoint)
         {
@@ -39,7 +34,9 @@ namespace Manager.Core.Services
             NexusRateLimitTracker rateLimits,
             string endpoint)
         {
-            _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(string.Empty);
+            if (credentialProvider == null)
+                throw new ArgumentNullException("credentialProvider");
+            _credentialProvider = credentialProvider;
             _rateLimits = rateLimits ?? new NexusRateLimitTracker();
             _endpoint = string.IsNullOrEmpty(endpoint) ? Endpoint : endpoint;
         }
@@ -147,6 +144,12 @@ namespace Manager.Core.Services
                     using (StreamReader reader = stream != null ? new StreamReader(stream) : null)
                     {
                         _rateLimits.Observe(response, rateLimitLease);
+                        if (response != null && response.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            _credentialProvider.InvalidateCredential();
+                            return new NexusGraphQlResponse { ErrorMessage = "The Nexus OAuth session is no longer authorized. Sign in again." };
+                        }
+
                         string blockedMessage;
                         if (response != null && (int)response.StatusCode == 429 &&
                             _rateLimits.TryGetBlockingMessage(

@@ -26,7 +26,7 @@ The client ID remains intentionally empty until Nexus approves and registers the
 
 1. Place the included `SMM` folder inside a Sheltered installation directory, or launch `SMM\Manager.exe` directly to review metadata browsing without a game install.
 2. Open Settings > Nexus and enable Nexus features.
-3. Before registration, the UI reports that OAuth registration is pending and displays the exact loopback callback. A personal API key can be used as an explicit legacy review fallback.
+3. Before registration, the UI reports that OAuth registration is pending and displays the exact loopback callback. No alternate authenticated credential can be entered or selected.
 4. After Nexus supplies the client ID, choose **Sign in with Nexus**. SMM opens the system browser and waits locally for the OAuth callback.
 5. Open the Nexus tab and verify Discover, the Manager update check, and an installed-mod update check.
 6. Select an installable Sheltered mod and choose Install.
@@ -45,7 +45,7 @@ The client ID remains intentionally empty until Nexus approves and registers the
 - v2 GraphQL is used for low-request metadata browsing and batched update checks.
 - v1 remains in use for credential validation, file listing fallback, and download-link resolution because these capabilities are not available in the v3 OpenAPI.
 - v3 stable upload-session endpoints and current experimental mod-file endpoints exist in dormant author tooling. API publishing is forcibly disabled in public 2.0 builds pending separate Nexus approval.
-- OAuth bearer tokens are preferred after registration. Personal API keys remain a legacy fallback and are also DPAPI-protected.
+- Authenticated access uses OAuth bearer tokens exclusively. Failed or revoked sessions are cleared and require OAuth reconnection; there is no personal-key fallback.
 
 Every Nexus API request includes:
 
@@ -61,7 +61,7 @@ HTTP 429 responses produce an actionable user-facing error. Reservations are res
 
 ## Suggested review cases
 
-- Valid, invalid, and revoked personal API keys.
+- Valid, expired, refreshable, invalid, and revoked OAuth sessions, including confirmation that failures require reconnection.
 - OAuth approval, denial, state mismatch, timeout, refresh, revocation, sign-out, and occupied callback port.
 - Premium direct download.
 - Regular-member website-authorized Mod Manager Download.

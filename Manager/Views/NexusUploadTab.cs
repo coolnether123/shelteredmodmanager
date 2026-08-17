@@ -922,7 +922,7 @@ namespace Manager.Views
             _helpToolTip.ReshowDelay = 200;
             _helpToolTip.ShowAlways = true;
 
-            _helpToolTip.SetToolTip(_statusLabel, "Shows the Nexus game domain and whether the configured API key is connected to an account.");
+            _helpToolTip.SetToolTip(_statusLabel, "Shows the Nexus game domain and whether the OAuth session is connected to an account.");
             _helpToolTip.SetToolTip(_authorFilter, "Filter local mods by author before checking Nexus ownership.");
             _helpToolTip.SetToolTip(_localList, "Pick the local mod whose Nexus draft you want to prepare.");
             _helpToolTip.SetToolTip(_refreshOwnedButton, "Loads Nexus mods owned by the selected author so the draft can be linked to the right Nexus page.");

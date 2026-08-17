@@ -37,6 +37,18 @@ $tokenProtectorPath = Join-Path $RepoRoot 'Manager\Core\Security\NexusOAuthToken
 $dpapiPath = Join-Path $RepoRoot 'Manager\Core\Security\DpapiSecretProtector.cs'
 $settingsUiPath = Join-Path $RepoRoot 'Manager\Views\SettingsTab.cs'
 
+$personalKeyPattern = 'ApiKey|API key|apikey|NexusApiKey|PersonalApiKey|X-API-Key|APIKEY'
+$productionKeyMatches = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Manager') -Recurse -File |
+    Where-Object { $_.Extension -in @('.cs', '.csproj', '.config', '.json', '.xml', '.resx') } |
+    Select-String -Pattern $personalKeyPattern
+$unsafeProductionKeyMatches = $productionKeyMatches | Where-Object {
+    $isMigrationLine = $_.Path -eq $settingsPath -and
+        ($_.Line -match 'LegacyNexusApiKeyKey|ProtectedNexusApiKeyKey') -and
+        ($_.Line -match 'const string|\.Remove\(')
+    -not $isMigrationLine
+}
+Assert-True (-not $unsafeProductionKeyMatches) ('Personal API-key surface remains in production files: ' + (($unsafeProductionKeyMatches | ForEach-Object { $_.Path + ':' + $_.LineNumber }) -join ', '))
+
 $protocolSource = @"
 using System;
 using System.Collections.Generic;
@@ -96,7 +108,9 @@ Assert-NotContains $settingsPath 'data\["NexusOAuthAccessToken"\]|data\["NexusOA
 Assert-Contains $tokenProtectorPath 'NexusOAuth\.AccessToken\.v1' 'OAuth access tokens must use purpose-specific DPAPI entropy.'
 Assert-Contains $tokenProtectorPath 'NexusOAuth\.RefreshToken\.v1' 'OAuth refresh tokens must use purpose-specific DPAPI entropy.'
 Assert-Contains $servicePath 'IsAccessTokenUsable\(DateTime\.UtcNow,\s*RefreshBuffer\)' 'Expired OAuth access tokens must be refreshed before API use.'
-Assert-Contains $servicePath 'NexusApiKey' 'Legacy personal API keys must remain an explicit fallback.'
+Assert-NotContains $servicePath 'NexusApiKey|FromApiKey|APIKEY' 'OAuth session handling must not contain a personal API-key fallback.'
+Assert-NotContains $headersPath 'APIKEY|X-API-Key|FromApiKey' 'Production request headers must not support personal API-key authentication.'
+Assert-Contains $servicePath '(?s)tokens\.Clear\(\).*PersistSettings' 'Failed OAuth recovery must clear and persist disconnected state.'
 Assert-Contains $settingsUiPath 'Sign in with Nexus' 'Settings must expose Nexus OAuth sign-in.'
 Assert-Contains $settingsUiPath 'NexusOAuthSignOutRequested' 'Settings must expose Nexus OAuth sign-out.'
 Assert-True ([string]::IsNullOrEmpty([string]$configurationType.GetField('ClientId', $staticNonPublic).GetRawConstantValue())) 'Review source must not invent an unissued Nexus client ID.'
@@ -145,6 +159,18 @@ if (Test-Path -LiteralPath $managerAssemblyPath) {
 }
 else {
     $failures.Add("Manager build output is missing; DPAPI OAuth token round-trip was not exercised: $managerAssemblyPath")
+}
+
+$sessionBehaviorTest = Join-Path $RepoRoot 'tools\Test-NexusOAuthSession.ps1'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $sessionBehaviorTest -RepoRoot $RepoRoot
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+$artifactBehaviorTest = Join-Path $RepoRoot 'tools\Test-NexusOAuthOnlyArtifact.ps1'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $artifactBehaviorTest -ArtifactPath $managerAssemblyPath
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
 }
 
 if ($failures.Count -gt 0) {
