@@ -93,6 +93,8 @@ namespace Manager.Core.Services
         {
             var settings = new AppSettings();
             var raw = ReadIniFile();
+            bool settingsSanitized = raw.Remove(LegacyNexusApiKeyKey);
+            settingsSanitized = raw.Remove(ProtectedNexusApiKeyKey) || settingsSanitized;
 
             // Game path with auto-detection fallback
             string gamePath;
@@ -215,29 +217,6 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("NexusGameDomain", out nexusDomain))
                 settings.NexusGameDomain = nexusDomain;
 
-            string protectedNexusApiKey;
-            bool hasProtectedApiKey = raw.TryGetValue(ProtectedNexusApiKeyKey, out protectedNexusApiKey);
-            if (hasProtectedApiKey && !string.IsNullOrEmpty(protectedNexusApiKey))
-            {
-                string decrypted;
-                if (NexusApiKeyProtector.TryUnprotect(protectedNexusApiKey, out decrypted))
-                {
-                    settings.NexusApiKey = decrypted;
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("Nexus API key decrypt failed. Falling back to legacy plaintext key if available.");
-                }
-            }
-
-            // Legacy plaintext fallback for migration from older settings files.
-            if (string.IsNullOrEmpty(settings.NexusApiKey))
-            {
-                string legacyNexusApiKey;
-                if (raw.TryGetValue(LegacyNexusApiKeyKey, out legacyNexusApiKey))
-                    settings.NexusApiKey = legacyNexusApiKey;
-            }
-
             string protectedAccessToken;
             if (raw.TryGetValue(ProtectedNexusOAuthAccessTokenKey, out protectedAccessToken) &&
                 !string.IsNullOrEmpty(protectedAccessToken))
@@ -246,7 +225,11 @@ namespace Manager.Core.Services
                 if (NexusOAuthTokenProtector.TryUnprotectAccessToken(protectedAccessToken, out accessToken))
                     settings.NexusOAuthTokens.AccessToken = accessToken;
                 else
-                    System.Diagnostics.Debug.WriteLine("Nexus OAuth access token decrypt failed.");
+                {
+                    raw.Remove(ProtectedNexusOAuthAccessTokenKey);
+                    settingsSanitized = true;
+                    System.Diagnostics.Debug.WriteLine("Invalid Nexus OAuth access-token state was removed.");
+                }
             }
 
             string protectedRefreshToken;
@@ -257,7 +240,11 @@ namespace Manager.Core.Services
                 if (NexusOAuthTokenProtector.TryUnprotectRefreshToken(protectedRefreshToken, out refreshToken))
                     settings.NexusOAuthTokens.RefreshToken = refreshToken;
                 else
-                    System.Diagnostics.Debug.WriteLine("Nexus OAuth refresh token decrypt failed.");
+                {
+                    raw.Remove(ProtectedNexusOAuthRefreshTokenKey);
+                    settingsSanitized = true;
+                    System.Diagnostics.Debug.WriteLine("Invalid Nexus OAuth refresh-token state was removed.");
+                }
             }
 
             string oauthExpiresAt;
@@ -286,6 +273,9 @@ namespace Manager.Core.Services
             {
                 settings.ManagerNexusModId = 1;
             }
+
+            if (!settings.NexusOAuthTokens.HasAccessToken && !settings.NexusOAuthTokens.HasRefreshToken)
+                settingsSanitized = raw.Remove(NexusOAuthExpiresAtUtcKey) || settingsSanitized;
 
             string autoLoadSlot;
             if (raw.TryGetValue("AutoLoadSaveSlot", out autoLoadSlot))
@@ -328,6 +318,9 @@ namespace Manager.Core.Services
                 if (bool.TryParse(windowMaximized, out bool maximized))
                     settings.WindowMaximized = maximized;
             }
+
+            if (settingsSanitized)
+                WriteIniFile(raw);
 
             return settings;
         }
@@ -384,30 +377,8 @@ namespace Manager.Core.Services
             data["EnableExperimentalPublishTab"] = false.ToString();
             data["LastSeenReleaseNoticeVersion"] = settings.LastSeenReleaseNoticeVersion ?? string.Empty;
             data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
-            string plaintextNexusApiKey = settings.NexusApiKey ?? string.Empty;
-            string protectedNexusApiKeyValue = NexusApiKeyProtector.Protect(plaintextNexusApiKey);
-            if (!string.IsNullOrEmpty(protectedNexusApiKeyValue))
-            {
-                data[ProtectedNexusApiKeyKey] = protectedNexusApiKeyValue;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(plaintextNexusApiKey))
-                {
-                    data[ProtectedNexusApiKeyKey] = string.Empty;
-                }
-                else
-                {
-                    string existingProtected;
-                    if (!data.TryGetValue(ProtectedNexusApiKeyKey, out existingProtected))
-                        existingProtected = string.Empty;
-
-                    data[ProtectedNexusApiKeyKey] = existingProtected;
-                    System.Diagnostics.Debug.WriteLine("Failed to protect Nexus API key. Keeping previously stored protected value.");
-                }
-            }
-            // Never persist plaintext Nexus API key.
             data.Remove(LegacyNexusApiKeyKey);
+            data.Remove(ProtectedNexusApiKeyKey);
             NexusOAuthTokenSet oauthTokens = settings.NexusOAuthTokens;
             PersistProtectedSecret(
                 data,

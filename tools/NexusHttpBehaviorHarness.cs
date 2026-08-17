@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using Manager.Core.Models;
 
 namespace Manager.Core.Services
 {
@@ -21,6 +22,9 @@ namespace Manager.Core.Services
             TestDefinitelyUnsentReservationRollback();
             TestRateLimitResponses();
             TestV3ApplicationHeaders();
+            TestLegacyV1OAuthAuthentication();
+            TestUnauthorizedOAuthInvalidation();
+            TestOAuthAuthorizationCodeExchange();
             TestOAuthRateLimitHandling();
             TestPresignedRequestIsolation();
 
@@ -37,13 +41,14 @@ namespace Manager.Core.Services
         {
             using (var server = new ScriptedServer(Response.Ok(5, 50)))
             {
-                NexusGraphQlResponse result = CreateGraphQl("key-a", new NexusRateLimitTracker(), server.Url).Execute("query { test }", null);
+                NexusGraphQlResponse result = CreateGraphQl("oauth-a", new NexusRateLimitTracker(), server.Url).Execute("query { test }", null);
                 server.WaitForRequests(1);
                 Assert(result != null && string.IsNullOrEmpty(result.ErrorMessage), "GraphQL request should succeed.");
                 Assert(server.Header(0, "Application-Name") == Manager.Core.AppVersionInfo.ApplicationName, "Application-Name value is incorrect.");
                 Assert(server.Header(0, "Application-Version") == Manager.Core.AppVersionInfo.NexusHeader, "Application-Version value is incorrect.");
                 Assert(server.Header(0, "User-Agent") == Manager.Core.AppVersionInfo.UserAgent, "User-Agent value is incorrect.");
-                Assert(server.Header(0, "APIKEY") == "key-a", "API key header was not sent to the first-party API client.");
+                Assert(server.Header(0, "Authorization") == "Bearer oauth-a", "OAuth bearer header was not sent to the first-party API client.");
+                Assert(string.IsNullOrEmpty(server.Header(0, "APIKEY")), "A personal API-key header was emitted by the first-party API client.");
             }
         }
 
@@ -54,7 +59,7 @@ namespace Manager.Core.Services
 
             using (var serverA = new ScriptedServer(Response.Ok(0, 10, nowUtc)))
             {
-                NexusGraphQlClient clientA = CreateGraphQl("key-a", tracker, serverA.Url);
+                NexusGraphQlClient clientA = CreateGraphQl("oauth-a", tracker, serverA.Url);
                 clientA.Execute("query { test }", null);
                 NexusGraphQlResponse blocked = clientA.Execute("query { test }", null);
                 Assert(blocked.ErrorMessage != null && blocked.ErrorMessage.IndexOf("hourly rate limit", StringComparison.OrdinalIgnoreCase) >= 0,
@@ -64,14 +69,14 @@ namespace Manager.Core.Services
 
             using (var serverB = new ScriptedServer(Response.Ok(4, 10, nowUtc)))
             {
-                NexusGraphQlResponse otherAccount = CreateGraphQl("key-b", tracker, serverB.Url).Execute("query { test }", null);
+                NexusGraphQlResponse otherAccount = CreateGraphQl("oauth-b", tracker, serverB.Url).Execute("query { test }", null);
                 Assert(string.IsNullOrEmpty(otherAccount.ErrorMessage), "One credential's quota blocked another credential.");
             }
 
             nowUtc = nowUtc.AddMinutes(1);
             using (var serverAfterReset = new ScriptedServer(Response.Ok(4, 10, nowUtc)))
             {
-                NexusGraphQlResponse afterReset = CreateGraphQl("key-a", tracker, serverAfterReset.Url).Execute("query { test }", null);
+                NexusGraphQlResponse afterReset = CreateGraphQl("oauth-a", tracker, serverAfterReset.Url).Execute("query { test }", null);
                 Assert(string.IsNullOrEmpty(afterReset.ErrorMessage), "The hourly quota did not reopen at the next UTC hour.");
             }
 
@@ -79,7 +84,7 @@ namespace Manager.Core.Services
             var dailyTracker = new NexusRateLimitTracker(delegate { return nowUtc; });
             using (var dailyServer = new ScriptedServer(Response.Ok(10, 0, nowUtc)))
             {
-                NexusGraphQlClient dailyClient = CreateGraphQl("daily-key", dailyTracker, dailyServer.Url);
+                NexusGraphQlClient dailyClient = CreateGraphQl("daily-oauth", dailyTracker, dailyServer.Url);
                 dailyClient.Execute("query { test }", null);
                 NexusGraphQlResponse blocked = dailyClient.Execute("query { test }", null);
                 Assert(blocked.ErrorMessage != null && blocked.ErrorMessage.IndexOf("daily rate limit", StringComparison.OrdinalIgnoreCase) >= 0,
@@ -89,7 +94,7 @@ namespace Manager.Core.Services
             nowUtc = nowUtc.AddMinutes(1);
             using (var nextDayServer = new ScriptedServer(Response.Ok(10, 20, nowUtc)))
             {
-                NexusGraphQlResponse nextDay = CreateGraphQl("daily-key", dailyTracker, nextDayServer.Url).Execute("query { test }", null);
+                NexusGraphQlResponse nextDay = CreateGraphQl("daily-oauth", dailyTracker, nextDayServer.Url).Execute("query { test }", null);
                 Assert(string.IsNullOrEmpty(nextDay.ErrorMessage), "The daily quota did not reopen at UTC midnight.");
             }
         }
@@ -107,7 +112,7 @@ namespace Manager.Core.Services
             using (var server = new ScriptedServer(responses.ToArray()))
             {
                 var tracker = new NexusRateLimitTracker(delegate { return nowUtc; });
-                NexusGraphQlClient client = CreateGraphQl("concurrent-key", tracker, server.Url);
+                NexusGraphQlClient client = CreateGraphQl("concurrent-oauth", tracker, server.Url);
                 client.Execute("query { seed }", null);
 
                 var first = new Thread(new ThreadStart(delegate { client.Execute("query { first }", null); }));
@@ -156,19 +161,19 @@ namespace Manager.Core.Services
             var tracker = new NexusRateLimitTracker(delegate { return nowUtc; });
             using (var seedServer = new ScriptedServer(Response.Ok(1, 10, nowUtc)))
             {
-                CreateGraphQl("rollback-key", tracker, seedServer.Url).Execute("query { seed }", null);
+                CreateGraphQl("rollback-oauth", tracker, seedServer.Url).Execute("query { seed }", null);
             }
 
             var unused = new TcpListener(IPAddress.Loopback, 0);
             unused.Start();
             int unusedPort = ((IPEndPoint)unused.LocalEndpoint).Port;
             unused.Stop();
-            CreateGraphQl("rollback-key", tracker, "http://127.0.0.1:" + unusedPort + "/")
+            CreateGraphQl("rollback-oauth", tracker, "http://127.0.0.1:" + unusedPort + "/")
                 .Execute("query { unsent }", null);
 
             using (var recoveryServer = new ScriptedServer(Response.Ok(0, 9, nowUtc)))
             {
-                NexusGraphQlResponse recovered = CreateGraphQl("rollback-key", tracker, recoveryServer.Url).Execute("query { recovered }", null);
+                NexusGraphQlResponse recovered = CreateGraphQl("rollback-oauth", tracker, recoveryServer.Url).Execute("query { recovered }", null);
                 Assert(string.IsNullOrEmpty(recovered.ErrorMessage), "A definitely unsent request was not returned to local quota.");
             }
         }
@@ -178,7 +183,7 @@ namespace Manager.Core.Services
             using (var server = new ScriptedServer(Response.V3Ok()))
             {
                 var client = new NexusV3RestClient(
-                    new StaticNexusCredentialProvider("v3-key"),
+                    new TestOAuthCredentialProvider("v3-oauth"),
                     new NexusRateLimitTracker(),
                     server.Url.TrimEnd('/'));
                 NexusV3RestResult result = client.Get("/test");
@@ -186,7 +191,62 @@ namespace Manager.Core.Services
                 Assert(result != null && string.IsNullOrEmpty(result.ErrorMessage), "Nexus v3 request should succeed.");
                 Assert(server.Header(0, "Application-Name") == Manager.Core.AppVersionInfo.ApplicationName, "v3 Application-Name value is incorrect.");
                 Assert(server.Header(0, "Application-Version") == Manager.Core.AppVersionInfo.NexusHeader, "v3 Application-Version value is incorrect.");
-                Assert(server.Header(0, "APIKEY") == "v3-key", "v3 API key header is incorrect.");
+                Assert(server.Header(0, "Authorization") == "Bearer v3-oauth", "v3 OAuth bearer header is incorrect.");
+                Assert(string.IsNullOrEmpty(server.Header(0, "APIKEY")), "v3 emitted a personal API-key header.");
+            }
+        }
+
+        private static void TestUnauthorizedOAuthInvalidation()
+        {
+            using (var server = new ScriptedServer(Response.Unauthorized()))
+            {
+                var provider = new TestOAuthCredentialProvider("revoked-graphql");
+                NexusGraphQlResponse result = new NexusGraphQlClient(provider, new NexusRateLimitTracker(), server.Url)
+                    .Execute("query { viewer { name } }", null);
+                Assert(provider.Invalidations == 1 && !provider.HasConfiguredCredential,
+                    "GraphQL 401 did not invalidate the OAuth session.");
+                Assert(result.ErrorMessage != null && result.ErrorMessage.IndexOf("Sign in again", StringComparison.OrdinalIgnoreCase) >= 0,
+                    "GraphQL 401 did not require OAuth reconnection.");
+            }
+
+            using (var server = new ScriptedServer(Response.Unauthorized()))
+            {
+                var provider = new TestOAuthCredentialProvider("revoked-v3");
+                NexusV3RestResult result = new NexusV3RestClient(provider, new NexusRateLimitTracker(), server.Url.TrimEnd('/')).Get("/test");
+                Assert(provider.Invalidations == 1 && !provider.HasConfiguredCredential,
+                    "v3 401 did not invalidate the OAuth session.");
+                Assert(result.ErrorMessage != null && result.ErrorMessage.IndexOf("Sign in again", StringComparison.OrdinalIgnoreCase) >= 0,
+                    "v3 401 did not require OAuth reconnection.");
+            }
+        }
+
+        private static void TestLegacyV1OAuthAuthentication()
+        {
+            using (var server = new ScriptedServer(Response.LegacyUserOk()))
+            {
+                var provider = new TestOAuthCredentialProvider("v1-oauth");
+                var service = new NexusModsService(provider, new NexusRateLimitTracker(), server.Url.TrimEnd('/'));
+                string error;
+                NexusAccountStatus status = service.GetAccountStatus(out error);
+                server.WaitForRequests(1);
+                Assert(string.IsNullOrEmpty(error) && status != null && status.IsConnected,
+                    "Nexus v1 account request should succeed with OAuth.");
+                Assert(server.Header(0, "Authorization") == "Bearer v1-oauth",
+                    "Nexus v1 did not emit the OAuth bearer header.");
+                Assert(string.IsNullOrEmpty(server.Header(0, "APIKEY")),
+                    "Nexus v1 emitted a personal API-key header.");
+            }
+
+            using (var server = new ScriptedServer(Response.Unauthorized()))
+            {
+                var provider = new TestOAuthCredentialProvider("revoked-v1");
+                var service = new NexusModsService(provider, new NexusRateLimitTracker(), server.Url.TrimEnd('/'));
+                string error;
+                service.GetAccountStatus(out error);
+                Assert(provider.Invalidations == 1 && !provider.HasConfiguredCredential,
+                    "Nexus v1 401 did not invalidate the OAuth session.");
+                Assert(error != null && error.IndexOf("Sign in again", StringComparison.OrdinalIgnoreCase) >= 0,
+                    "Nexus v1 401 did not require OAuth reconnection.");
             }
         }
 
@@ -208,12 +268,31 @@ namespace Manager.Core.Services
             }
         }
 
+        private static void TestOAuthAuthorizationCodeExchange()
+        {
+            using (var server = new ScriptedServer(Response.OAuthTokens()))
+            {
+                var client = new NexusOAuthClient(server.Url + "token");
+                string errorMessage;
+                NexusOAuthTokenSet tokens = client.ExchangeAuthorizationCode("authorization-code", "pkce-verifier", out errorMessage);
+                server.WaitForRequests(1);
+                Assert(string.IsNullOrEmpty(errorMessage) && tokens != null &&
+                    tokens.AccessToken == "issued-access" && tokens.RefreshToken == "issued-refresh" &&
+                    tokens.ExpiresAtUtc > DateTime.UtcNow,
+                    "OAuth authorization-code exchange did not establish a usable token set.");
+                Assert(string.IsNullOrEmpty(server.Header(0, "APIKEY")),
+                    "A personal API-key header leaked into OAuth sign-in.");
+                Assert(string.IsNullOrEmpty(server.Header(0, "Authorization")),
+                    "An API bearer token leaked into the OAuth token exchange.");
+            }
+        }
+
         private static void TestPresignedRequestIsolation()
         {
             using (var server = new ScriptedServer(Response.UploadOk()))
             {
                 var client = new NexusV3RestClient(
-                    new StaticNexusCredentialProvider("private-key"),
+                    new TestOAuthCredentialProvider("presigned-oauth"),
                     new NexusRateLimitTracker(),
                     server.Url.TrimEnd('/'));
                 NexusV3UploadResult result = client.PutBytes(server.Url + "upload", new byte[] { 1, 2, 3 });
@@ -228,7 +307,7 @@ namespace Manager.Core.Services
             using (var server = new ScriptedServer(Response.UploadOk()))
             {
                 var client = new NexusV3RestClient(
-                    new StaticNexusCredentialProvider("private-key"),
+                    new TestOAuthCredentialProvider("presigned-oauth"),
                     new NexusRateLimitTracker(),
                     server.Url.TrimEnd('/'));
                 NexusV3UploadResult result = client.PostXml(server.Url + "complete", "<CompleteMultipartUpload />");
@@ -241,9 +320,41 @@ namespace Manager.Core.Services
             }
         }
 
-        private static NexusGraphQlClient CreateGraphQl(string apiKey, NexusRateLimitTracker tracker, string endpoint)
+        private static NexusGraphQlClient CreateGraphQl(string bearerToken, NexusRateLimitTracker tracker, string endpoint)
         {
-            return new NexusGraphQlClient(new StaticNexusCredentialProvider(apiKey), tracker, endpoint);
+            return new NexusGraphQlClient(new TestOAuthCredentialProvider(bearerToken), tracker, endpoint);
+        }
+
+        private sealed class TestOAuthCredentialProvider : INexusCredentialProvider
+        {
+            private string _bearerToken;
+            internal int Invalidations;
+
+            internal TestOAuthCredentialProvider(string bearerToken)
+            {
+                _bearerToken = bearerToken ?? string.Empty;
+            }
+
+            public NexusRequestCredential GetCredential(out string errorMessage)
+            {
+                errorMessage = null;
+                return new NexusRequestCredential
+                {
+                    BearerToken = _bearerToken,
+                    RateLimitScope = "test-oauth:" + _bearerToken
+                };
+            }
+
+            public bool HasConfiguredCredential
+            {
+                get { return !string.IsNullOrEmpty(_bearerToken); }
+            }
+
+            public void InvalidateCredential()
+            {
+                Invalidations++;
+                _bearerToken = string.Empty;
+            }
         }
 
         private static void Assert(bool condition, string message)
@@ -306,9 +417,38 @@ namespace Manager.Core.Services
                 return new Response { StatusCode = 200, Reason = "OK", Body = "{\"data\":{\"id\":1}}", HourlyRemaining = 5, DailyRemaining = 50, DateUtc = DateTime.UtcNow };
             }
 
+            internal static Response LegacyUserOk()
+            {
+                return new Response
+                {
+                    StatusCode = 200,
+                    Reason = "OK",
+                    Body = "{\"user_id\":7,\"name\":\"OAuth User\",\"is_premium\":true,\"is_supporter\":true}",
+                    HourlyRemaining = 5,
+                    DailyRemaining = 50,
+                    DateUtc = DateTime.UtcNow
+                };
+            }
+
+            internal static Response Unauthorized()
+            {
+                return new Response { StatusCode = 401, Reason = "Unauthorized", Body = "{\"message\":\"revoked\"}", DateUtc = DateTime.UtcNow };
+            }
+
             internal static Response OAuthRateLimited(string retryAfter)
             {
                 return new Response { StatusCode = 429, Reason = "Too Many Requests", Body = "{\"error\":\"slow_down\"}", RetryAfter = retryAfter, DateUtc = DateTime.UtcNow };
+            }
+
+            internal static Response OAuthTokens()
+            {
+                return new Response
+                {
+                    StatusCode = 200,
+                    Reason = "OK",
+                    Body = "{\"access_token\":\"issued-access\",\"refresh_token\":\"issued-refresh\",\"expires_in\":3600}",
+                    DateUtc = DateTime.UtcNow
+                };
             }
         }
 

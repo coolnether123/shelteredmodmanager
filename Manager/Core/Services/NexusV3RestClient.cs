@@ -30,11 +30,6 @@ namespace Manager.Core.Services
         private readonly string _baseUrl;
         private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
 
-        public NexusV3RestClient(string apiKey)
-            : this(new StaticNexusCredentialProvider(apiKey), new NexusRateLimitTracker(), BaseUrl)
-        {
-        }
-
         internal NexusV3RestClient(INexusCredentialProvider credentialProvider)
             : this(credentialProvider, new NexusRateLimitTracker(), BaseUrl)
         {
@@ -45,7 +40,9 @@ namespace Manager.Core.Services
             NexusRateLimitTracker rateLimits,
             string baseUrl)
         {
-            _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(string.Empty);
+            if (credentialProvider == null)
+                throw new ArgumentNullException("credentialProvider");
+            _credentialProvider = credentialProvider;
             _rateLimits = rateLimits ?? new NexusRateLimitTracker();
             _baseUrl = string.IsNullOrEmpty(baseUrl) ? BaseUrl : baseUrl.TrimEnd('/');
         }
@@ -230,6 +227,15 @@ namespace Manager.Core.Services
                     {
                         status = http.StatusCode;
                         _rateLimits.Observe(http, rateLimitLease);
+                        if (status == HttpStatusCode.Unauthorized)
+                        {
+                            _credentialProvider.InvalidateCredential();
+                            return new NexusV3RestResult
+                            {
+                                StatusCode = status,
+                                ErrorMessage = "The Nexus OAuth session is no longer authorized. Sign in again."
+                            };
+                        }
                     }
 
                     string responseRateLimitMessage;

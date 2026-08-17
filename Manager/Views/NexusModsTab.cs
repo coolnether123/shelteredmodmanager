@@ -130,9 +130,9 @@ namespace Manager.Views
                 FinishInstallWithError("Nexus authorization failed: Nexus features are disabled or unavailable.");
                 return;
             }
-            if (!_settings.HasNexusCredential)
+            if (!_settings.HasNexusOAuthSession)
             {
-                FinishInstallWithError("Nexus authorization failed: Sign in to Nexus or add a legacy personal API key in Settings first.");
+                FinishInstallWithError("Nexus authorization failed: Sign in to Nexus with OAuth first.");
                 return;
             }
             if (!string.Equals(link.GameDomain, GetGameDomain(), StringComparison.OrdinalIgnoreCase))
@@ -192,7 +192,6 @@ namespace Manager.Views
                     link.GameDomain,
                     link.ModId,
                     link.FileId,
-                    _settings.NexusApiKey,
                     link.DownloadKey,
                     link.Expires,
                     out error);
@@ -751,9 +750,9 @@ namespace Manager.Views
                 _detailsPanel.ShowMod(CreateStatusMod("Install Failed", "Mods folder is not configured."));
                 return;
             }
-            if (!_settings.HasNexusCredential)
+            if (!_settings.HasNexusOAuthSession)
             {
-                _detailsPanel.ShowMod(CreateStatusMod("Install Disabled", "Sign in to Nexus or add a legacy personal API key in Settings to attempt direct installs."));
+                _detailsPanel.ShowMod(CreateStatusMod("Install Disabled", "Sign in to Nexus with OAuth to attempt direct installs."));
                 return;
             }
 
@@ -853,7 +852,7 @@ namespace Manager.Views
                     return;
                 }
 
-                string downloadUrl = _nexusService.GetDownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
+                string downloadUrl = _nexusService.GetDownloadUrl(selected.GameDomain, selected.ModId, file.FileId, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
                     FinishInstallWithError(RewriteDirectDownloadError(error));
@@ -906,7 +905,7 @@ namespace Manager.Views
                 return;
             }
             _managerUpdateInProgress = true;
-            if (!_settings.HasNexusCredential)
+            if (!_settings.HasNexusOAuthSession)
             {
                 _managerUpdateInProgress = false;
                 BeginManualManagerUpdate(remote);
@@ -956,7 +955,7 @@ namespace Manager.Views
                 }
 
                 string downloadUrl = _nexusService.GetDownloadUrl(
-                    remote.GameDomain, remote.ModId, file.FileId, _settings.NexusApiKey, out error);
+                    remote.GameDomain, remote.ModId, file.FileId, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
                     FinishManagerUpdateError(RewriteDirectDownloadError(error));
@@ -1055,7 +1054,7 @@ namespace Manager.Views
                 }
 
                 string downloadUrl = _nexusService.GetDownloadUrlWithAuthorization(
-                    link.GameDomain, link.ModId, link.FileId, _settings.NexusApiKey,
+                    link.GameDomain, link.ModId, link.FileId,
                     link.DownloadKey, link.Expires, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
@@ -1456,7 +1455,7 @@ namespace Manager.Views
             {
                 _connectionLabel.Text = enabled ? "Nexus: not connected" : "Nexus: disabled";
                 _downloadLabel.Text = enabled
-                    ? "Direct install: sign in to Nexus or add a legacy API key in Settings."
+                    ? "Direct install: sign in to Nexus with OAuth."
                     : "Nexus features are disabled in Settings.";
             }
             else
@@ -1740,10 +1739,10 @@ namespace Manager.Views
         private static string BuildCapabilityText(NexusAccountStatus status)
         {
             if (status == null)
-                return "Direct install: sign in to Nexus or add a legacy API key in Settings.";
+                return "Direct install: sign in to Nexus with OAuth.";
 
             if (!status.IsConfigured)
-                return "Direct install: sign in to Nexus or add a legacy API key in Settings.";
+                return "Direct install: sign in to Nexus with OAuth.";
 
             if (!status.IsConnected)
                 return string.Equals(status.Summary, "Checking Nexus account...", StringComparison.OrdinalIgnoreCase)

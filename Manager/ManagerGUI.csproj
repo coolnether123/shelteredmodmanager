@@ -165,7 +165,6 @@
     <Compile Include="Core\Models\NexusNxmLink.cs" />
     <Compile Include="Core\Models\NexusUploadDraft.cs" />
     <!-- Core Services -->
-    <Compile Include="Core\Security\NexusApiKeyProtector.cs" />
     <Compile Include="Core\Security\DpapiSecretProtector.cs" />
     <Compile Include="Core\Security\NexusOAuthTokenProtector.cs" />
     <Compile Include="Core\Services\SettingsService.cs" />

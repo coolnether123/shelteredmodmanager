@@ -32,10 +32,10 @@ All Nexus clients share one credential provider. It:
 
 - returns a usable OAuth bearer token when available;
 - refreshes shortly before expiry and persists the rotated tokens;
-- falls back to a DPAPI-protected personal API key only when OAuth is unavailable;
-- returns no credential for public metadata requests when neither is configured.
+- clears the session and requires reconnection when refresh fails or Nexus rejects authorization;
+- returns no credential for public metadata requests when OAuth is not configured.
 
-Request headers always include the application name, version, and user agent. OAuth requests use `Authorization: Bearer`; the fallback uses `APIKEY`.
+Request headers always include the application name, version, and user agent. Authenticated requests use `Authorization: Bearer`. Production request code has no personal-key header, constructor, override, or fallback branch.
 
 The v1, v2 GraphQL, and v3 clients share credential-scoped rate-limit state inside the active Nexus service. They consume the hourly and daily remaining-request response headers, reserve known capacity across concurrent requests, and stop locally when Nexus reports an exhausted quota. OAuth token-endpoint throttling is handled separately and preserves `Retry-After` guidance rather than mixing user-service limits into API quota state.
 
@@ -45,6 +45,7 @@ The v1, v2 GraphQL, and v3 clients share credential-scoped rate-limit state insi
 - OAuth state comparison processes the complete values before deciding equality.
 - Tokens, authorization codes, PKCE verifiers, state, download mirrors, and `nxm://` authorization values are never logged.
 - Access and refresh tokens use distinct DPAPI entropy and are never written to plaintext settings keys.
+- Legacy personal-key settings from older releases are deleted during load/save without entering the in-memory settings model or an HTTP request.
 - Signing out clears both tokens and their expiry from persisted settings.
 - Publishing remains disabled independently of authentication.
 
@@ -56,6 +57,6 @@ Run:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\Test-NexusOAuthContracts.ps1
 ```
 
-The contract test exercises PKCE construction, callback acceptance/rejection, DPAPI round-tripping, loopback binding, protected storage, bearer headers, refresh behavior, public-client constraints, and UI wiring without requiring a live client ID.
+The contract tests exercise PKCE construction, callback acceptance/rejection, DPAPI round-tripping, loopback binding, protected storage, bearer headers, successful and failed refresh behavior, logout, legacy-state scrubbing, public-client constraints, and UI wiring without requiring a live client ID.
 
-The Nexus Manager contract suite also runs a local HTTP behavior harness that verifies exact application-header values, credential isolation, concurrent quota reservations, stale-response handling, UTC resets, HTTP 429 behavior, and presigned-request isolation.
+The Nexus Manager contract suite also runs a local HTTP behavior harness that verifies exact application-header values, OAuth-session isolation, bearer-only requests, `401` invalidation, concurrent quota reservations, stale-response handling, UTC resets, HTTP 429 behavior, and presigned-request isolation.

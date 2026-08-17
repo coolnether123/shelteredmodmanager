@@ -39,9 +39,6 @@ namespace Manager.Views
             _nexusLabel.ForeColor = Color.White;
             _enableNexusCheckBox.ForeColor = Color.White;
             _nexusOAuthStatusLabel.ForeColor = Color.Gainsboro;
-            _nexusApiKeyLabel.ForeColor = Color.White;
-            _nexusApiKeyTextBox.BackColor = Color.FromArgb(60, 60, 62);
-            _nexusApiKeyTextBox.ForeColor = Color.White;
             _nexusAccountSummaryLabel.ForeColor = Color.White;
             _nexusDownloadSummaryLabel.ForeColor = Color.Gainsboro;
             _includeNexusPrereleaseCheckBox.ForeColor = Color.White;
@@ -68,8 +65,6 @@ namespace Manager.Views
             _skipHarmonyCheckBox.ForeColor = Color.White;
             _ignoreOrderCheckBox.ForeColor = Color.White;
 
-            ApplyButtonTheme(_nexusApiHelpButton, true);
-            ApplyButtonTheme(_nexusApiRevealButton, true);
             ApplyButtonTheme(_nexusOAuthSignInButton, true);
             ApplyButtonTheme(_nexusOAuthSignOutButton, true);
             ApplyButtonTheme(_resetButton, true);
@@ -100,9 +95,6 @@ namespace Manager.Views
             _nexusLabel.ForeColor = SystemColors.ControlText;
             _enableNexusCheckBox.ForeColor = SystemColors.ControlText;
             _nexusOAuthStatusLabel.ForeColor = SystemColors.ControlText;
-            _nexusApiKeyLabel.ForeColor = SystemColors.ControlText;
-            _nexusApiKeyTextBox.BackColor = SystemColors.Window;
-            _nexusApiKeyTextBox.ForeColor = SystemColors.WindowText;
             _nexusAccountSummaryLabel.ForeColor = SystemColors.ControlText;
             _nexusDownloadSummaryLabel.ForeColor = SystemColors.ControlText;
             _includeNexusPrereleaseCheckBox.ForeColor = SystemColors.ControlText;
@@ -129,8 +121,6 @@ namespace Manager.Views
             _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
             _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
 
-            ApplyButtonTheme(_nexusApiHelpButton, false);
-            ApplyButtonTheme(_nexusApiRevealButton, false);
             ApplyButtonTheme(_nexusOAuthSignInButton, false);
             ApplyButtonTheme(_nexusOAuthSignOutButton, false);
             ApplyButtonTheme(_resetButton, false);

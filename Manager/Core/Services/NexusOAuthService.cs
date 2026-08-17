@@ -5,7 +5,7 @@ namespace Manager.Core.Services
 {
     /// <summary>
     /// Coordinates interactive sign-in, token refresh, secure persistence, and
-    /// API-key fallback for all Nexus API clients.
+    /// OAuth session invalidation for all Nexus API clients.
     /// </summary>
     internal sealed class NexusOAuthService : INexusCredentialProvider
     {
@@ -13,15 +13,23 @@ namespace Manager.Core.Services
         private static readonly TimeSpan CallbackTimeout = TimeSpan.FromMinutes(5);
         private readonly object _sync = new object();
         private readonly SettingsService _settingsService;
-        private readonly NexusOAuthClient _client;
+        private readonly INexusOAuthTokenClient _client;
         private AppSettings _settings;
         private string _oauthRateLimitScope = "oauth-session:" + Guid.NewGuid().ToString("N");
 
         internal NexusOAuthService(SettingsService settingsService, AppSettings settings)
+            : this(settingsService, settings, new NexusOAuthClient())
+        {
+        }
+
+        internal NexusOAuthService(
+            SettingsService settingsService,
+            AppSettings settings,
+            INexusOAuthTokenClient client)
         {
             _settingsService = settingsService;
             _settings = settings;
-            _client = new NexusOAuthClient();
+            _client = client ?? new NexusOAuthClient();
         }
 
         internal bool IsRegistrationAvailable
@@ -100,6 +108,11 @@ namespace Manager.Core.Services
 
         internal void SignOut()
         {
+            InvalidateCredential();
+        }
+
+        public void InvalidateCredential()
+        {
             lock (_sync)
             {
                 if (_settings == null)
@@ -129,7 +142,7 @@ namespace Manager.Core.Services
                     };
                 }
 
-                if (tokens != null && tokens.HasRefreshToken && NexusOAuthConfiguration.IsRegistered)
+                if (tokens != null && tokens.HasRefreshToken)
                 {
                     NexusOAuthTokenSet refreshed = _client.Refresh(tokens.RefreshToken, out errorMessage);
                     if (refreshed != null)
@@ -145,16 +158,21 @@ namespace Manager.Core.Services
                             RateLimitScope = _oauthRateLimitScope
                         };
                     }
+
+                    tokens.Clear();
+                    PersistSettings();
+                    if (string.IsNullOrEmpty(errorMessage))
+                        errorMessage = "The Nexus OAuth session could not be refreshed. Sign in again.";
+                    return new NexusRequestCredential();
                 }
 
-                if (!string.IsNullOrEmpty(_settings.NexusApiKey))
+                if (tokens != null && (tokens.HasAccessToken || tokens.HasRefreshToken))
                 {
-                    errorMessage = null;
-                    return NexusRequestCredential.FromApiKey(_settings.NexusApiKey);
+                    tokens.Clear();
+                    PersistSettings();
+                    if (string.IsNullOrEmpty(errorMessage))
+                        errorMessage = "The Nexus OAuth session expired and cannot be recovered. Sign in again.";
                 }
-
-                if (tokens != null && tokens.HasAccessToken && string.IsNullOrEmpty(errorMessage))
-                    errorMessage = "The Nexus sign-in session expired. Sign in again.";
 
                 return new NexusRequestCredential();
             }
@@ -166,7 +184,7 @@ namespace Manager.Core.Services
             {
                 lock (_sync)
                 {
-                    return _settings != null && _settings.HasNexusCredential;
+                    return _settings != null && _settings.HasNexusOAuthSession;
                 }
             }
         }

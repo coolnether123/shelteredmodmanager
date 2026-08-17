@@ -18,7 +18,7 @@ This list is for SMM 2.0 release tracking.
 ## Nexus Install Notes
 
 - Direct Nexus install currently supports ZIP archives.
-- Direct Nexus install requires a Nexus API key and can still be denied by Nexus account, file, or app policy.
+- Direct Nexus install requires a connected Nexus OAuth session and can still be denied by Nexus account, file, or app policy.
 - Install/update replaces only one direct mod folder under the configured `mods` folder.
 - Packages with missing `About/About.json`, duplicate mod IDs, reserved folder names, or unsafe archive paths are rejected.
 - For the current GOG staging install, verify the manager can write to `C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\mods` before running download/update smoke tests.

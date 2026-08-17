@@ -25,7 +25,7 @@ namespace Manager.Views
     //                      (e.g. dark mode). No behavior, nothing destructive.
     //   2. Saves           How the manager touches the player's save files
     //                      (auto-organize slots, backup retention).
-    //   3. Nexus           Nexus Mods integration: enable switch, API key,
+    //   3. Nexus           Nexus Mods integration: enable switch, OAuth session,
     //                      account status, prerelease opt-in, and advanced
     //                      endpoint overrides. Everything here is gated by the
     //                      "Enable Nexus features" checkbox.
@@ -65,10 +65,6 @@ namespace Manager.Views
         private Button _nexusOAuthSignInButton;
         private Button _nexusOAuthSignOutButton;
         private Label _nexusOAuthStatusLabel;
-        private Label _nexusApiKeyLabel;
-        private TextBox _nexusApiKeyTextBox;
-        private Button _nexusApiHelpButton;
-        private Button _nexusApiRevealButton;
         private Label _nexusAccountSummaryLabel;
         private Label _nexusDownloadSummaryLabel;
         private CheckBox _includeNexusPrereleaseCheckBox;
@@ -105,15 +101,12 @@ namespace Manager.Views
         private NexusAccountStatus _nexusAccountStatus;
         private bool _isDarkMode;
         private bool _suppressEvents;
-        private bool _nexusApiKeyRevealed;
-        private bool _skipNextNexusApiAutoHide;
         private bool _showAdvancedNexusOptions;
         private bool _nexusOAuthRegistrationAvailable;
         private ToolTip _helpToolTip;
         private readonly ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
         private readonly List<CheckBox> _runtimeFeatureCheckBoxes = new List<CheckBox>();
         private IList<ManagerBooleanOptionRecord> _runtimeOptions = new List<ManagerBooleanOptionRecord>();
-        private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/settings/api-keys";
 
         public event SettingsChangedHandler SettingsChanged;
         public event DarkModeChangedHandler DarkModeChanged;
@@ -290,32 +283,6 @@ namespace Manager.Views
             _nexusOAuthStatusLabel.Size = new Size(680, 35);
             _nexusOAuthStatusLabel.Text = "OAuth registration is pending Nexus approval.";
 
-            _nexusApiKeyLabel = new Label();
-            _nexusApiKeyLabel.Text = "Legacy API Key:";
-            _nexusApiKeyLabel.Font = new Font("Segoe UI", 10f);
-            _nexusApiKeyLabel.AutoSize = true;
-
-            _nexusApiKeyTextBox = new TextBox();
-            _nexusApiKeyTextBox.Font = new Font("Segoe UI", 10f);
-            _nexusApiKeyTextBox.Width = 230;
-            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Optional personal API key fallback. OAuth sign-in is preferred after Nexus registers the application.");
-
-            _nexusApiHelpButton = new Button();
-            _nexusApiHelpButton.Text = "Get API Key";
-            _nexusApiHelpButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            _nexusApiHelpButton.Size = new Size(95, 27);
-            _nexusApiHelpButton.FlatStyle = FlatStyle.Flat;
-            _nexusApiHelpButton.Cursor = Cursors.Hand;
-            _helpToolTip.SetToolTip(_nexusApiHelpButton, "Open the Nexus account page where personal API keys are managed.");
-
-            _nexusApiRevealButton = new Button();
-            _nexusApiRevealButton.Text = "Reveal Key";
-            _nexusApiRevealButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            _nexusApiRevealButton.Size = new Size(95, 27);
-            _nexusApiRevealButton.FlatStyle = FlatStyle.Flat;
-            _nexusApiRevealButton.Cursor = Cursors.Hand;
-            _helpToolTip.SetToolTip(_nexusApiRevealButton, "Reveal or hide the stored Nexus API key for manual editing.");
-
             _nexusAccountSummaryLabel = new Label();
             _nexusAccountSummaryLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _nexusAccountSummaryLabel.AutoSize = false;
@@ -326,7 +293,7 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Font = new Font("Segoe UI", 9f);
             _nexusDownloadSummaryLabel.AutoSize = false;
             _nexusDownloadSummaryLabel.Size = new Size(680, 38);
-            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without sign-in. Direct installs require OAuth or a legacy API key and may still require Nexus download authorization.";
+            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without sign-in. Direct installs require Nexus OAuth and may still require Nexus download authorization.";
 
             // Update-channel opt-in: lives with Nexus (not Developer) because it
             // changes which Nexus files surface as available updates.
@@ -510,10 +477,6 @@ namespace Manager.Views
             _contentPanel.Controls.Add(_nexusOAuthSignInButton);
             _contentPanel.Controls.Add(_nexusOAuthSignOutButton);
             _contentPanel.Controls.Add(_nexusOAuthStatusLabel);
-            _contentPanel.Controls.Add(_nexusApiKeyLabel);
-            _contentPanel.Controls.Add(_nexusApiKeyTextBox);
-            _contentPanel.Controls.Add(_nexusApiHelpButton);
-            _contentPanel.Controls.Add(_nexusApiRevealButton);
             _contentPanel.Controls.Add(_nexusAccountSummaryLabel);
             _contentPanel.Controls.Add(_nexusDownloadSummaryLabel);
             _contentPanel.Controls.Add(_includeNexusPrereleaseCheckBox);
@@ -558,13 +521,7 @@ namespace Manager.Views
             _nexusOAuthSignInButton.Click += NexusOAuthSignInButton_Click;
             _nexusOAuthSignOutButton.Click += NexusOAuthSignOutButton_Click;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
-            _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
-            _nexusApiKeyTextBox.KeyDown += NexusApiKeyTextBox_KeyDown;
-            _nexusApiKeyTextBox.Leave += NexusApiKeyTextBox_Leave;
             _managerNexusModIdTextBox.TextChanged += ManagerNexusModIdTextBox_TextChanged;
-            _nexusApiHelpButton.Click += NexusApiHelpButton_Click;
-            _nexusApiRevealButton.MouseDown += NexusApiRevealButton_MouseDown;
-            _nexusApiRevealButton.Click += NexusApiRevealButton_Click;
             _nexusAdvancedToggleLink.LinkClicked += NexusAdvancedToggleLink_LinkClicked;
             _runtimeFeaturesRefreshButton.Click += RuntimeFeaturesRefreshButton_Click;
             _resetButton.Click += ResetButton_Click;
@@ -599,10 +556,6 @@ namespace Manager.Views
                 (_settings == null || !_settings.HasNexusOAuthSession);
             _nexusOAuthSignOutButton.Enabled = enabled && _settings != null && _settings.HasNexusOAuthSession;
             _nexusOAuthStatusLabel.Enabled = enabled;
-            _nexusApiKeyLabel.Enabled = enabled;
-            _nexusApiKeyTextBox.Enabled = enabled;
-            _nexusApiHelpButton.Enabled = enabled;
-            _nexusApiRevealButton.Enabled = enabled && !string.IsNullOrEmpty(_settings != null ? _settings.NexusApiKey : string.Empty);
             _nexusAccountSummaryLabel.Enabled = enabled;
             _nexusDownloadSummaryLabel.Enabled = enabled;
             _includeNexusPrereleaseCheckBox.Enabled = enabled;
@@ -711,8 +664,6 @@ namespace Manager.Views
                 _enableNexusCheckBox.Checked = _settings.EnableNexusIntegration;
                 _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? "sheltered";
                 _managerNexusModIdTextBox.Text = _settings.ManagerNexusModId > 0 ? _settings.ManagerNexusModId.ToString() : string.Empty;
-                _nexusApiKeyRevealed = false;
-                ApplyNexusApiKeyDisplayMode();
                 SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
                 UpdateNexusStatusLabels();
                 UpdateNexusOAuthControls();
@@ -746,9 +697,6 @@ namespace Manager.Views
 
             _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
             _settings.NexusGameDomain = (_nexusDomainTextBox.Text ?? string.Empty).Trim().ToLowerInvariant();
-            if (IsNexusApiKeyEditable())
-                _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
-
             int managerModId;
             if (int.TryParse((_managerNexusModIdTextBox.Text ?? string.Empty).Trim(), out managerModId) && managerModId >= 0)
                 _settings.ManagerNexusModId = managerModId;
@@ -828,7 +776,7 @@ namespace Manager.Views
             if (_nexusAccountStatus == null)
             {
                 _nexusAccountSummaryLabel.Text = "Nexus account: not checked yet.";
-                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without sign-in. Direct installs require OAuth or a legacy API key and may still require Nexus download authorization.";
+                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without sign-in. Direct installs require Nexus OAuth and may still require Nexus download authorization.";
                 return;
             }
 
@@ -871,61 +819,6 @@ namespace Manager.Views
             {
                 _nexusOAuthStatusLabel.Text = "OAuth callback ready at http://127.0.0.1:52147/callback; Nexus client registration is pending.";
             }
-        }
-
-        private void ApplyNexusApiKeyDisplayMode()
-        {
-            if (_settings == null)
-                return;
-
-            string stored = (_settings.NexusApiKey ?? string.Empty).Trim();
-            bool hasStored = stored.Length > 0;
-            bool previousSuppress = _suppressEvents;
-
-            _suppressEvents = true;
-            try
-            {
-                if (!hasStored)
-                {
-                    _nexusApiKeyTextBox.ReadOnly = false;
-                    _nexusApiKeyTextBox.UseSystemPasswordChar = false;
-                    _nexusApiKeyTextBox.Text = string.Empty;
-                    _nexusApiRevealButton.Text = "Reveal Key";
-                    _nexusApiRevealButton.Enabled = false;
-                    return;
-                }
-
-                if (_nexusApiKeyRevealed)
-                {
-                    _nexusApiKeyTextBox.ReadOnly = false;
-                    _nexusApiKeyTextBox.UseSystemPasswordChar = false;
-                    _nexusApiKeyTextBox.Text = stored;
-                    _nexusApiRevealButton.Text = "Hide Key";
-                    _nexusApiRevealButton.Enabled = true;
-                }
-                else
-                {
-                    _nexusApiKeyTextBox.ReadOnly = true;
-                    _nexusApiKeyTextBox.UseSystemPasswordChar = true;
-                    _nexusApiKeyTextBox.Text = stored;
-                    _nexusApiRevealButton.Text = "Reveal Key";
-                    _nexusApiRevealButton.Enabled = true;
-                }
-            }
-            finally
-            {
-                _suppressEvents = previousSuppress;
-            }
-        }
-
-        private bool HasStoredNexusApiKey()
-        {
-            return _settings != null && !string.IsNullOrEmpty((_settings.NexusApiKey ?? string.Empty).Trim());
-        }
-
-        private bool IsNexusApiKeyEditable()
-        {
-            return _settings != null && (_nexusApiKeyRevealed || !HasStoredNexusApiKey());
         }
 
         private void DarkModeCheckBox_CheckedChanged(object sender, EventArgs e)
@@ -1070,50 +963,6 @@ namespace Manager.Views
             TriggerSave();
         }
 
-        private void NexusApiKeyTextBox_TextChanged(object sender, EventArgs e)
-        {
-            if (ShouldIgnoreSettingsEvent() || !IsNexusApiKeyEditable())
-                return;
-            _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
-            _nexusApiRevealButton.Enabled = !string.IsNullOrEmpty(_settings.NexusApiKey);
-            TriggerSave();
-        }
-
-        private void NexusApiKeyTextBox_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode != Keys.Enter)
-                return;
-            e.Handled = true;
-            e.SuppressKeyPress = true;
-            if (ShouldIgnoreSettingsEvent() || !IsNexusApiKeyEditable())
-                return;
-
-            _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
-            _nexusApiRevealButton.Enabled = !string.IsNullOrEmpty(_settings.NexusApiKey);
-            TriggerSave();
-            if (!string.IsNullOrEmpty(_settings.NexusApiKey))
-            {
-                _nexusApiKeyRevealed = false;
-                ApplyNexusApiKeyDisplayMode();
-            }
-        }
-
-        private void NexusApiKeyTextBox_Leave(object sender, EventArgs e)
-        {
-            if (_settings == null || !_nexusApiKeyRevealed)
-                return;
-            if (_skipNextNexusApiAutoHide)
-            {
-                _skipNextNexusApiAutoHide = false;
-                return;
-            }
-            if (!string.IsNullOrEmpty(_settings.NexusApiKey))
-            {
-                _nexusApiKeyRevealed = false;
-                ApplyNexusApiKeyDisplayMode();
-            }
-        }
-
         private void ManagerNexusModIdTextBox_TextChanged(object sender, EventArgs e)
         {
             if (ShouldIgnoreSettingsEvent())
@@ -1133,42 +982,6 @@ namespace Manager.Views
                 _settings.ManagerNexusModId = parsed;
                 TriggerSave();
             }
-        }
-
-        private void NexusApiHelpButton_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                System.Diagnostics.Process.Start(NexusApiKeyHelpUrl);
-            }
-            catch
-            {
-                MessageBox.Show("Unable to open the Nexus API page automatically.\n\nOpen this URL manually:\n" + NexusApiKeyHelpUrl,
-                    "Nexus API Key Help", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        private void NexusApiRevealButton_MouseDown(object sender, MouseEventArgs e)
-        {
-            _skipNextNexusApiAutoHide = true;
-        }
-
-        private void NexusApiRevealButton_Click(object sender, EventArgs e)
-        {
-            if (_settings == null)
-                return;
-            if (string.IsNullOrEmpty(_settings.NexusApiKey))
-            {
-                _nexusApiKeyRevealed = true;
-                ApplyNexusApiKeyDisplayMode();
-                _nexusApiKeyTextBox.Focus();
-                return;
-            }
-
-            _nexusApiKeyRevealed = !_nexusApiKeyRevealed;
-            ApplyNexusApiKeyDisplayMode();
-            if (_nexusApiKeyRevealed)
-                _nexusApiKeyTextBox.Focus();
         }
 
         private void NexusAdvancedToggleLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)

@@ -131,12 +131,6 @@ namespace Manager.Views
             _nexusOAuthStatusLabel.Width = summaryWidth;
             y += 42;
 
-            _nexusApiKeyLabel.Location = new Point(x + 10, y + 4);
-            _nexusApiKeyTextBox.Location = new Point(x + 155, y);
-            _nexusApiHelpButton.Location = new Point(x + 395, y - 1);
-            _nexusApiRevealButton.Location = new Point(x + 495, y - 1);
-            y += 38;
-
             _nexusAccountSummaryLabel.Location = new Point(x + 10, y);
             _nexusAccountSummaryLabel.Width = summaryWidth;
             y += 24;

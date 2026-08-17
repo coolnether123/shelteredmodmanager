@@ -35,9 +35,9 @@ namespace Manager.Core.Services
         private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
         private readonly NexusGraphQlClient _v2Client;
         private readonly NexusV3RestClient _v3Client;
-        private readonly string _apiKey;
         private readonly INexusCredentialProvider _credentialProvider;
         private readonly NexusRateLimitTracker _rateLimits;
+        private readonly string _legacyBaseUrl;
         private readonly object _cacheLock = new object();
         private readonly Dictionary<string, CacheEntry<NexusRemoteMod>> _modCache = new Dictionary<string, CacheEntry<NexusRemoteMod>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CacheEntry<List<NexusRemoteMod>>> _latestCache = new Dictionary<string, CacheEntry<List<NexusRemoteMod>>>(StringComparer.OrdinalIgnoreCase);
@@ -53,21 +53,23 @@ namespace Manager.Core.Services
             public DateTime CreatedUtc;
         }
 
-        public NexusModsService(string apiKey)
-            : this(new StaticNexusCredentialProvider(apiKey), apiKey)
-        {
-        }
-
         internal NexusModsService(INexusCredentialProvider credentialProvider)
-            : this(credentialProvider, string.Empty)
+            : this(credentialProvider, new NexusRateLimitTracker(), NexusApiBaseUrlV1)
         {
         }
 
-        private NexusModsService(INexusCredentialProvider credentialProvider, string apiKey)
+        internal NexusModsService(
+            INexusCredentialProvider credentialProvider,
+            NexusRateLimitTracker rateLimits,
+            string legacyBaseUrl)
         {
-            _apiKey = apiKey ?? string.Empty;
-            _credentialProvider = credentialProvider ?? new StaticNexusCredentialProvider(_apiKey);
-            _rateLimits = new NexusRateLimitTracker();
+            if (credentialProvider == null)
+                throw new ArgumentNullException("credentialProvider");
+            _credentialProvider = credentialProvider;
+            _rateLimits = rateLimits ?? new NexusRateLimitTracker();
+            _legacyBaseUrl = string.IsNullOrEmpty(legacyBaseUrl)
+                ? NexusApiBaseUrlV1
+                : legacyBaseUrl.TrimEnd('/');
             _v2Client = new NexusGraphQlClient(_credentialProvider, _rateLimits, null);
             _v3Client = new NexusV3RestClient(_credentialProvider, _rateLimits, null);
         }
@@ -383,14 +385,14 @@ namespace Manager.Core.Services
             return SelectPreferredInstallFile(files, true, true);
         }
 
-        public string GetDownloadUrl(string gameDomain, int modId, int fileId, string apiKey, out string errorMessage)
+        public string GetDownloadUrl(string gameDomain, int modId, int fileId, out string errorMessage)
         {
-            return GetLegacyDownloadUrl(gameDomain, modId, fileId, apiKey, out errorMessage);
+            return GetLegacyDownloadUrl(gameDomain, modId, fileId, out errorMessage);
         }
 
-        public string GetDownloadUrlWithAuthorization(string gameDomain, int modId, int fileId, string apiKey, string downloadKey, long expires, out string errorMessage)
+        public string GetDownloadUrlWithAuthorization(string gameDomain, int modId, int fileId, string downloadKey, long expires, out string errorMessage)
         {
-            return GetLegacyDownloadUrl(gameDomain, modId, fileId, apiKey, downloadKey, expires, out errorMessage);
+            return GetLegacyDownloadUrl(gameDomain, modId, fileId, downloadKey, expires, out errorMessage);
         }
 
         public NexusAccountStatus GetAccountStatus(out string errorMessage)
@@ -399,7 +401,7 @@ namespace Manager.Core.Services
             if (!_credentialProvider.HasConfiguredCredential)
                 return NexusAccountStatus.CreateNotConfigured();
 
-            Dictionary<string, object> data = SendLegacyGet("/users/validate", null, null, out errorMessage);
+            Dictionary<string, object> data = SendLegacyGet("/users/validate", null, out errorMessage);
             if (!string.IsNullOrEmpty(errorMessage) || data == null)
                 return NexusAccountStatus.CreateUnavailable(errorMessage);
 
@@ -435,12 +437,12 @@ namespace Manager.Core.Services
             return status;
         }
 
-        private string GetLegacyDownloadUrl(string gameDomain, int modId, int fileId, string apiKey, out string errorMessage)
+        private string GetLegacyDownloadUrl(string gameDomain, int modId, int fileId, out string errorMessage)
         {
-            return GetLegacyDownloadUrl(gameDomain, modId, fileId, apiKey, string.Empty, 0, out errorMessage);
+            return GetLegacyDownloadUrl(gameDomain, modId, fileId, string.Empty, 0, out errorMessage);
         }
 
-        private string GetLegacyDownloadUrl(string gameDomain, int modId, int fileId, string apiKey, string downloadKey, long expires, out string errorMessage)
+        private string GetLegacyDownloadUrl(string gameDomain, int modId, int fileId, string downloadKey, long expires, out string errorMessage)
         {
             errorMessage = null;
 
@@ -450,9 +452,9 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            if (string.IsNullOrEmpty(apiKey) && !_credentialProvider.HasConfiguredCredential)
+            if (!_credentialProvider.HasConfiguredCredential)
             {
-                errorMessage = "Nexus sign-in or a personal API key is required for direct Manager download.";
+                errorMessage = "Nexus OAuth sign-in is required for direct Manager download.";
                 return null;
             }
 
@@ -465,7 +467,6 @@ namespace Manager.Core.Services
 
             Dictionary<string, object> data = SendLegacyGet(
                 "/games/" + NormalizeDomain(gameDomain) + "/mods/" + modId + "/files/" + fileId + "/download_link",
-                apiKey,
                 query,
                 out errorMessage);
 
@@ -482,7 +483,6 @@ namespace Manager.Core.Services
 
         private Dictionary<string, object> SendLegacyGet(
             string relativePath,
-            string apiKeyOverride,
             Dictionary<string, string> query,
             out string errorMessage)
         {
@@ -497,21 +497,13 @@ namespace Manager.Core.Services
                 request.Timeout = 15000;
                 request.ReadWriteTimeout = 15000;
                 request.KeepAlive = false;
-                NexusRequestCredential credential;
-                if (!string.IsNullOrEmpty(apiKeyOverride))
+                string credentialError;
+                NexusRequestCredential credential = _credentialProvider.GetCredential(out credentialError);
+                if (!string.IsNullOrEmpty(credentialError) &&
+                    (credential == null || !credential.IsConfigured))
                 {
-                    credential = NexusRequestCredential.FromApiKey(apiKeyOverride);
-                }
-                else
-                {
-                    string credentialError;
-                    credential = _credentialProvider.GetCredential(out credentialError);
-                    if (!string.IsNullOrEmpty(credentialError) &&
-                        (credential == null || !credential.IsConfigured))
-                    {
-                        errorMessage = credentialError;
-                        return null;
-                    }
+                    errorMessage = credentialError;
+                    return null;
                 }
 
                 string credentialScope = credential != null ? credential.RateLimitScope : string.Empty;
@@ -558,7 +550,8 @@ namespace Manager.Core.Services
                         _rateLimits.Observe(response, rateLimitLease);
                         if (response.StatusCode == HttpStatusCode.Unauthorized)
                         {
-                            errorMessage = "Unauthorized Nexus request. Sign in again or check the legacy API key.";
+                            _credentialProvider.InvalidateCredential();
+                            errorMessage = "The Nexus OAuth session is no longer authorized. Sign in again.";
                             return null;
                         }
 
@@ -599,9 +592,9 @@ namespace Manager.Core.Services
                 errorMessage = "No Nexus upload draft is selected.";
                 return null;
             }
-            if (string.IsNullOrEmpty(_apiKey))
+            if (!_credentialProvider.HasConfiguredCredential)
             {
-                errorMessage = "A Nexus API key is required to publish through v3.";
+                errorMessage = "Nexus OAuth sign-in is required to publish through v3.";
                 return null;
             }
             if (string.IsNullOrEmpty(draft.PackagePath) || !File.Exists(draft.PackagePath))
@@ -811,11 +804,6 @@ namespace Manager.Core.Services
             if (!string.IsNullOrEmpty(draft.ExistingModFileId))
                 request["archive_existing_file"] = draft.ArchiveExistingFile;
             return request;
-        }
-
-        private bool HasApiKey
-        {
-            get { return !string.IsNullOrEmpty(_apiKey); }
         }
 
         private static Dictionary<string, object> BuildModsFilter(params KeyValuePair<string, object>[] equalsFilters)
@@ -1187,7 +1175,6 @@ query modFiles($modId: ID!, $gameId: ID!){
             Dictionary<string, object> data = SendLegacyGet(
                 "/games/" + NormalizeDomain(gameDomain) + "/mods/" + modId + "/files",
                 null,
-                null,
                 out errorMessage);
 
             if (!string.IsNullOrEmpty(errorMessage) || data == null)
@@ -1478,17 +1465,17 @@ query modFiles($modId: ID!, $gameId: ID!){
             return text.Length <= maxLength ? text : text.Substring(0, maxLength);
         }
 
-        private static string BuildLegacyUrl(string relativePath, Dictionary<string, string> query)
+        private string BuildLegacyUrl(string relativePath, Dictionary<string, string> query)
         {
             string path = relativePath ?? string.Empty;
             if (!path.StartsWith("/", StringComparison.Ordinal))
                 path = "/" + path;
 
             if (query == null || query.Count == 0)
-                return NexusApiBaseUrlV1 + path;
+                return _legacyBaseUrl + path;
 
             var sb = new StringBuilder();
-            sb.Append(NexusApiBaseUrlV1);
+            sb.Append(_legacyBaseUrl);
             sb.Append(path);
             bool first = true;
             foreach (var pair in query)

@@ -203,7 +203,7 @@ namespace Manager
                 return;
             }
 
-            if (!_settings.HasNexusCredential)
+            if (!_settings.HasNexusOAuthSession)
             {
                 ApplyNexusAccountStatus(NexusAccountStatus.CreateNotConfigured());
                 return;
@@ -1939,8 +1939,6 @@ namespace Manager
                 changes.Add("LastSeenReleaseNoticeVersion");
             if (!string.Equals(previous.NexusGameDomain, current.NexusGameDomain, StringComparison.OrdinalIgnoreCase))
                 changes.Add("NexusGameDomain");
-            if (!string.Equals(previous.NexusApiKey, current.NexusApiKey, StringComparison.Ordinal))
-                changes.Add("NexusApiKey");
             if (previous.ManagerNexusModId != current.ManagerNexusModId)
                 changes.Add("ManagerNexusModId");
 

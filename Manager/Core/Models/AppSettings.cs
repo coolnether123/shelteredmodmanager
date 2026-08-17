@@ -35,7 +35,6 @@ namespace Manager.Core.Models
         private bool _enableExperimentalPublishTab = false;
         private string _lastSeenReleaseNoticeVersion = string.Empty;
         private string _nexusGameDomain = "sheltered";
-        private string _nexusApiKey = string.Empty;
         private NexusOAuthTokenSet _nexusOAuthTokens = new NexusOAuthTokenSet();
         private int _managerNexusModId = 1;
         private int _windowX = int.MinValue;
@@ -173,12 +172,6 @@ namespace Manager.Core.Models
             set { _nexusGameDomain = value; }
         }
 
-        public string NexusApiKey
-        {
-            get { return _nexusApiKey; }
-            set { _nexusApiKey = value; }
-        }
-
         public int ManagerNexusModId
         {
             get { return _managerNexusModId; }
@@ -278,11 +271,6 @@ namespace Manager.Core.Models
         public bool HasNexusOAuthSession
         {
             get { return NexusOAuthTokens.HasAccessToken || NexusOAuthTokens.HasRefreshToken; }
-        }
-
-        public bool HasNexusCredential
-        {
-            get { return HasNexusOAuthSession || !string.IsNullOrEmpty(NexusApiKey); }
         }
 
         public static string NormalizeDebugLogScope(string value)
