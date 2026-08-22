@@ -342,8 +342,8 @@ namespace Manager.Views
             _publishPanel.Dock = DockStyle.Fill;
             _publishPanel.Visible = false;
 
-            AddLabel(_publishPanel, "Experimental Nexus publish tools can prepare a manual handoff package. Live API publishing should only be used after validation passes and you are ready to update the selected Nexus file.", 14, 14, 640, false);
-            _openNexusButton.Text = "Open Nexus Upload Page";
+            AddLabel(_publishPanel, "These experimental tools can prepare a ZIP for manual upload to Nexus. Use API publishing only after the checks pass and you are ready to update the selected Nexus file.", 14, 14, 640, false);
+            _openNexusButton.Text = "Open Nexus upload page";
             _openNexusButton.Location = new Point(14, 82);
             _openNexusButton.Size = new Size(180, 32);
             _publishApiButton.Text = "Publish via Nexus API";
@@ -762,7 +762,7 @@ namespace Manager.Views
 
             var sb = new StringBuilder();
             if (report.Errors.Count == 0 && report.Warnings.Count == 0)
-                sb.AppendLine("Ready for Nexus handoff.");
+                sb.AppendLine("Ready to upload to Nexus.");
 
             for (int i = 0; i < report.Errors.Count; i++)
                 sb.AppendLine("Error: " + report.Errors[i]);
@@ -922,15 +922,15 @@ namespace Manager.Views
             _helpToolTip.ReshowDelay = 200;
             _helpToolTip.ShowAlways = true;
 
-            _helpToolTip.SetToolTip(_statusLabel, "Shows the Nexus game domain and whether the OAuth session is connected to an account.");
+            _helpToolTip.SetToolTip(_statusLabel, "Shows the Nexus game domain and whether you are signed in.");
             _helpToolTip.SetToolTip(_authorFilter, "Filter local mods by author before checking Nexus ownership.");
             _helpToolTip.SetToolTip(_localList, "Pick the local mod whose Nexus draft you want to prepare.");
             _helpToolTip.SetToolTip(_refreshOwnedButton, "Loads Nexus mods owned by the selected author so the draft can be linked to the right Nexus page.");
             _helpToolTip.SetToolTip(_ownedList, "Selecting an owned Nexus mod copies its known Nexus details into the draft.");
             _helpToolTip.SetToolTip(_detailsStageButton, "Review metadata that will be saved into the upload draft.");
             _helpToolTip.SetToolTip(_filesStageButton, "Build or open the ZIP package prepared from the selected local mod.");
-            _helpToolTip.SetToolTip(_verifyStageButton, "Check ownership, required fields, and package readiness before publishing.");
-            _helpToolTip.SetToolTip(_publishStageButton, "Open Nexus handoff actions once the draft and package are ready.");
+            _helpToolTip.SetToolTip(_verifyStageButton, "Check ownership, required fields, and the ZIP before publishing.");
+            _helpToolTip.SetToolTip(_publishStageButton, "Open upload options when the draft and ZIP are ready.");
             _helpToolTip.SetToolTip(_nameBox, "Display name for the Nexus file draft.");
             _helpToolTip.SetToolTip(_versionBox, "Version string Nexus users will see for this upload.");
             _helpToolTip.SetToolTip(_fileCategoryBox, "Nexus file bucket: main for primary releases, optional for add-ons, miscellaneous for supporting files.");
@@ -946,7 +946,7 @@ namespace Manager.Views
             _helpToolTip.SetToolTip(_openPackageButton, "Open the folder containing the generated upload ZIP.");
             _helpToolTip.SetToolTip(_verifyButton, "Refresh validation results for ownership, metadata, and package state.");
             _helpToolTip.SetToolTip(_validationBox, "Shows publish blockers and warnings for the selected mod draft.");
-            _helpToolTip.SetToolTip(_openNexusButton, "Open the Nexus upload page for manual handoff.");
+            _helpToolTip.SetToolTip(_openNexusButton, "Open the Nexus upload page for manual upload.");
             _helpToolTip.SetToolTip(_publishApiButton, "Attempt publishing through the configured Nexus API service.");
         }
 

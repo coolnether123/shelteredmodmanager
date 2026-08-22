@@ -147,7 +147,7 @@ namespace Manager.Core.Services
                         if (response != null && response.StatusCode == HttpStatusCode.Unauthorized)
                         {
                             _credentialProvider.InvalidateCredential();
-                            return new NexusGraphQlResponse { ErrorMessage = "The Nexus OAuth session is no longer authorized. Sign in again." };
+                            return new NexusGraphQlResponse { ErrorMessage = "Your Nexus sign-in expired. Sign in again." };
                         }
 
                         string blockedMessage;

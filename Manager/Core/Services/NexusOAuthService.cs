@@ -66,8 +66,7 @@ namespace Manager.Core.Services
             errorMessage = null;
             if (!NexusOAuthConfiguration.IsRegistered)
             {
-                errorMessage = "Nexus OAuth registration is pending. The callback is ready at " +
-                    NexusOAuthConfiguration.RedirectUri + ", but Nexus must issue the application client ID first.";
+                errorMessage = "Nexus sign-in is not available yet. Try again later.";
                 return false;
             }
 
@@ -162,7 +161,7 @@ namespace Manager.Core.Services
                     tokens.Clear();
                     PersistSettings();
                     if (string.IsNullOrEmpty(errorMessage))
-                        errorMessage = "The Nexus OAuth session could not be refreshed. Sign in again.";
+                        errorMessage = "Your Nexus sign-in expired. Sign in again.";
                     return new NexusRequestCredential();
                 }
 
@@ -171,7 +170,7 @@ namespace Manager.Core.Services
                     tokens.Clear();
                     PersistSettings();
                     if (string.IsNullOrEmpty(errorMessage))
-                        errorMessage = "The Nexus OAuth session expired and cannot be recovered. Sign in again.";
+                        errorMessage = "Your Nexus sign-in expired. Sign in again.";
                 }
 
                 return new NexusRequestCredential();

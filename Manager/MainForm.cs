@@ -399,7 +399,7 @@ namespace Manager
             this._gameSetupPage.Name = "_gameSetupPage";
             this._gameSetupPage.Size = new System.Drawing.Size(1174, 562);
             this._gameSetupPage.TabIndex = 0;
-            this._gameSetupPage.Text = "Game Setup";
+            this._gameSetupPage.Text = "Game setup";
             // 
             // _modManagerPage
             // 
@@ -408,7 +408,7 @@ namespace Manager
             this._modManagerPage.Name = "_modManagerPage";
             this._modManagerPage.Size = new System.Drawing.Size(1174, 562);
             this._modManagerPage.TabIndex = 1;
-            this._modManagerPage.Text = "Mod Manager";
+            this._modManagerPage.Text = "Mod manager";
             // 
             // _modManagerTab
             // 
@@ -426,7 +426,7 @@ namespace Manager
             this._contentWorkshopPage.Name = "_contentWorkshopPage";
             this._contentWorkshopPage.Size = new System.Drawing.Size(1174, 562);
             this._contentWorkshopPage.TabIndex = 2;
-            this._contentWorkshopPage.Text = "Content Workshop";
+            this._contentWorkshopPage.Text = "Content workshop";
             //
             // _contentWorkshopTab
             //
@@ -912,7 +912,7 @@ namespace Manager
             }
 
             int enabledModCount = ReconcileLoadOrderForLaunch();
-            _gameSetupTab.Log("Launching Sheltered with " + enabledModCount + " mod(s).");
+            _gameSetupTab.Log("Launching Sheltered with " + FormatCount(enabledModCount, "mod") + ".");
             SetupDoorstop();
             if (!PreflightCheck()) return;
             DeleteLegacyRootLogs(Path.GetDirectoryName(_settings.GamePath));
@@ -1119,12 +1119,12 @@ namespace Manager
                     status.StartupComplete = true;
                     string pluginCount = match.Groups[1].Value;
                     string errorCount = match.Groups[2].Value;
-                    status.Message = "SMM loaded " + pluginCount + " plugin(s), " + errorCount + " error(s).";
+                    status.Message = "Mods loaded: " + FormatCount(pluginCount, "plugin") + ", " + FormatCount(errorCount, "error") + ".";
                     return status;
                 }
 
                 status.StartupComplete = true;
-                status.Message = "SMM startup complete.";
+                status.Message = "Mods loaded successfully.";
                 return status;
             }
 
@@ -1141,50 +1141,50 @@ namespace Manager
                 return FatalLaunchStatus("PluginManager.loadAssemblies was not found in ModAPI.dll.");
 
             if (ContainsOrdinalIgnoreCase(content, "ERROR: Camera timeout"))
-                return FatalLaunchStatus("Unity camera initialization timed out before SMM could bootstrap.");
+                return FatalLaunchStatus("Mod support could not start. Check the SMM log for details.");
 
             if (ContainsOrdinalIgnoreCase(content, "Timeout: Unity log callback was not received"))
-                return FatalLaunchStatus("Unity never delivered the startup log callback that triggers SMM bootstrap.");
+                return FatalLaunchStatus("Mod support could not start. Check the SMM log for details.");
 
             if (ContainsOrdinalIgnoreCase(content, "CRITICAL while creating runner"))
-                return FatalLaunchStatus("SMM could not create its Unity bootstrap runner.");
+                return FatalLaunchStatus("Mod support could not start. Check the SMM log for details.");
 
             if (ContainsOrdinalIgnoreCase(content, "[Bootstrap] ERROR:"))
-                return FatalLaunchStatus("Doorstop bootstrap threw an exception. Open SMM\\mod_manager.log for the stack trace.");
+                return FatalLaunchStatus("Mod support could not start. Check SMM\\mod_manager.log for details.");
 
             if (ContainsOrdinalIgnoreCase(content, "LoadAndInitializePlugins complete"))
             {
-                status.Message = "plugin activation complete; waiting for final startup summary";
+                status.Message = "Loading mods...";
                 return status;
             }
 
             if (ContainsOrdinalIgnoreCase(content, "Handoff to ModAPI complete"))
             {
-                status.Message = "Doorstop handed off to ModAPI; waiting for plugin startup to finish";
+                status.Message = "Starting mod support...";
                 return status;
             }
 
             if (ContainsOrdinalIgnoreCase(content, "Invoking PluginManager.loadAssemblies"))
             {
-                status.Message = "ModAPI startup invoked";
+                status.Message = "Loading mods...";
                 return status;
             }
 
             if (ContainsOrdinalIgnoreCase(content, "First Unity log callback received"))
             {
-                status.Message = "Unity startup callback received";
+                status.Message = "Starting mod support...";
                 return status;
             }
 
             if (ContainsOrdinalIgnoreCase(content, "Registered Unity log callback"))
             {
-                status.Message = "Unity log callback registered";
+                status.Message = "Starting mod support...";
                 return status;
             }
 
             if (ContainsOrdinalIgnoreCase(content, "Sheltered Mod Manager starting"))
             {
-                status.Message = "Doorstop entrypoint started";
+                status.Message = "Starting mod support...";
                 return status;
             }
 
@@ -1197,6 +1197,19 @@ namespace Manager
             status.Fatal = true;
             status.Message = message;
             return status;
+        }
+
+        private static string FormatCount(int count, string singular)
+        {
+            return count + " " + singular + (count == 1 ? string.Empty : "s");
+        }
+
+        private static string FormatCount(string count, string singular)
+        {
+            int parsedCount;
+            return int.TryParse(count, out parsedCount)
+                ? FormatCount(parsedCount, singular)
+                : count + " " + singular + "s";
         }
 
         private static bool ContainsOrdinalIgnoreCase(string text, string value)
@@ -1837,7 +1850,7 @@ namespace Manager
                             _settingsTab.Initialize(_settings);
                             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
                             RefreshNexusAccountStatusAsync(true);
-                            _gameSetupTab.Log("Nexus OAuth sign-in completed.");
+                            _gameSetupTab.Log("Signed in to Nexus.");
                         }
                         else
                         {
@@ -1869,7 +1882,7 @@ namespace Manager
             _settingsTab.Initialize(_settings);
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
             RefreshNexusAccountStatusAsync(true);
-            _gameSetupTab.Log("Signed out of Nexus OAuth.");
+            _gameSetupTab.Log("Signed out of Nexus.");
         }
 
         private void SettingsTab_ResetWindowRequested()

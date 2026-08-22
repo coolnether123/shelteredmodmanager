@@ -85,7 +85,7 @@ namespace Manager.Core.Models
                 IsConnected = false,
                 DirectDownloadAvailability = NexusDirectDownloadAvailability.Unavailable,
                 Summary = "Not signed in to Nexus.",
-                DirectDownloadSummary = "Browsing and update checks still work. Direct installs stay disabled until OAuth sign-in is completed."
+                DirectDownloadSummary = "Browse mods and check for updates without signing in. Sign in to install mods from Nexus."
             };
         }
 
@@ -97,7 +97,7 @@ namespace Manager.Core.Models
                 IsConnected = false,
                 DirectDownloadAvailability = NexusDirectDownloadAvailability.Unknown,
                 Summary = "Checking Nexus account...",
-                DirectDownloadSummary = "Validating the stored Nexus OAuth session and fetching account capability details."
+                DirectDownloadSummary = "Checking whether this account can download mods..."
             };
         }
 
@@ -109,7 +109,7 @@ namespace Manager.Core.Models
                 IsConnected = false,
                 DirectDownloadAvailability = NexusDirectDownloadAvailability.Unknown,
                 Summary = "Could not verify the Nexus account.",
-                DirectDownloadSummary = "Direct-download capability is unknown until the Nexus OAuth session can be validated.",
+                DirectDownloadSummary = "We could not confirm whether this account can download mods.",
                 ErrorMessage = message ?? string.Empty
             };
         }

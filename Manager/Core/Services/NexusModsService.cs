@@ -454,7 +454,7 @@ namespace Manager.Core.Services
 
             if (!_credentialProvider.HasConfiguredCredential)
             {
-                errorMessage = "Nexus OAuth sign-in is required for direct Manager download.";
+                errorMessage = "Sign in to Nexus to download updates automatically.";
                 return null;
             }
 
@@ -551,7 +551,7 @@ namespace Manager.Core.Services
                         if (response.StatusCode == HttpStatusCode.Unauthorized)
                         {
                             _credentialProvider.InvalidateCredential();
-                            errorMessage = "The Nexus OAuth session is no longer authorized. Sign in again.";
+                            errorMessage = "Your Nexus sign-in expired. Sign in again.";
                             return null;
                         }
 
@@ -594,7 +594,7 @@ namespace Manager.Core.Services
             }
             if (!_credentialProvider.HasConfiguredCredential)
             {
-                errorMessage = "Nexus OAuth sign-in is required to publish through v3.";
+                errorMessage = "Sign in to Nexus before publishing.";
                 return null;
             }
             if (string.IsNullOrEmpty(draft.PackagePath) || !File.Exists(draft.PackagePath))

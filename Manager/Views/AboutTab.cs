@@ -91,24 +91,10 @@ namespace Manager.Views
 
             _descriptionBox = new RichTextBox();
             _descriptionBox.Text =
-                "Sheltered Mod Manager is a modding framework for Sheltered by Unicube and Team17. It installs non-destructively alongside the game and supports Steam/GOG 32-bit builds and Epic 64-bit builds.\n\n" +
-
-                "Core features:\n" +
-                "- Plugin loader with dependency resolution and load order management.\n" +
-                "- Unlimited save slots for vanilla scenarios with mod tracking and verification.\n" +
-                "- Desktop and in-game mod managers.\n" +
-                "- Rebindable Sheltered and mod-defined keybindings.\n" +
-
-                "Custom scenario support:\n" +
-                "- Custom scenario browser, XML scenario packs, triggers, scheduled effects, and win/loss runtime support.\n" +
-                "- Advanced in-game authoring is an opt-in preview and defaults off.\n\n" +
-
-                "Developer API:\n" +
-                "- ModAPI.dll provides the neutral modding framework surface.\n" +
-                "- ShelteredAPI.dll provides Sheltered content, saves, UI, input, events, actors, scenarios, and Harmony integration.\n" +
-                "- ModManagerBase, attribute settings, Spine settings UI, isolated persistence, event bus, and runtime inspector (F9).\n\n" +
-
-                "Originally created by benjaminfoo in 2019. Maintained by Coolnether123 from 2025 to present with the original author's permission.";
+                "Sheltered Mod Manager installs alongside Sheltered by Unicube and Team17. It supports Steam and GOG 32-bit builds plus Epic 64-bit builds.\n\n" +
+                "Use it to install and organize mods, manage load order, track modded saves, and launch the game. It also includes a Content Workshop for creating items, recipes, and icons without writing code.\n\n" +
+                "Custom scenarios are supported. Advanced in-game authoring is still a preview and is off by default.\n\n" +
+                "benjaminfoo created the original mod loader in 2019. Coolnether123 has maintained it since 2025 with the original author's permission.";
 
             _descriptionBox.Font = new Font("Segoe UI", 10f);
             _descriptionBox.Location = new Point(20, yPos);
@@ -121,7 +107,7 @@ namespace Manager.Views
             _descriptionBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom;
 
             _linksLabel = new Label();
-            _linksLabel.Text = "Resources & Community";
+            _linksLabel.Text = "Resources and community";
             _linksLabel.UseMnemonic = false;
             _linksLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _linksLabel.AutoSize = true;
@@ -138,7 +124,7 @@ namespace Manager.Views
             rightColumnY += 50;
 
             _creditsLabel = new Label();
-            _creditsLabel.Text = "Credits & Acknowledgments";
+            _creditsLabel.Text = "Credits and acknowledgments";
             _creditsLabel.UseMnemonic = false;
             _creditsLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _creditsLabel.AutoSize = true;

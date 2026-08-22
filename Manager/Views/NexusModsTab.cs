@@ -132,7 +132,7 @@ namespace Manager.Views
             }
             if (!_settings.HasNexusOAuthSession)
             {
-                FinishInstallWithError("Nexus authorization failed: Sign in to Nexus with OAuth first.");
+                FinishInstallWithError("Sign in to Nexus before installing mods directly.");
                 return;
             }
             if (!string.Equals(link.GameDomain, GetGameDomain(), StringComparison.OrdinalIgnoreCase))
@@ -752,7 +752,7 @@ namespace Manager.Views
             }
             if (!_settings.HasNexusOAuthSession)
             {
-                _detailsPanel.ShowMod(CreateStatusMod("Install Disabled", "Sign in to Nexus with OAuth to attempt direct installs."));
+                _detailsPanel.ShowMod(CreateStatusMod("Install disabled", "Sign in to Nexus to install mods directly."));
                 return;
             }
 
@@ -883,11 +883,11 @@ namespace Manager.Views
             _managerUpdatePromptedVersion = version;
             string message =
                 "Sheltered Mod Manager " + version + " is available." + Environment.NewLine + Environment.NewLine +
-                "Yes: download and install automatically." + Environment.NewLine +
-                "No: open Nexus and select a manager ZIP you downloaded manually." + Environment.NewLine +
-                "Cancel: install later." + Environment.NewLine + Environment.NewLine +
-                "Both installation paths preserve local settings, restart automatically, and keep a rollback copy.";
-            DialogResult choice = MessageBox.Show(this, message, "SMM Update Available",
+                "Yes installs it automatically." + Environment.NewLine +
+                "No lets you choose a downloaded ZIP." + Environment.NewLine +
+                "Cancel closes this message." + Environment.NewLine + Environment.NewLine +
+                "Either installation method keeps your settings and a rollback copy. The manager restarts after installation.";
+            DialogResult choice = MessageBox.Show(this, message, "SMM update available",
                 MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
             if (choice == DialogResult.Yes)
                 BeginManagerUpdate(remote);
@@ -1455,7 +1455,7 @@ namespace Manager.Views
             {
                 _connectionLabel.Text = enabled ? "Nexus: not connected" : "Nexus: disabled";
                 _downloadLabel.Text = enabled
-                    ? "Direct install: sign in to Nexus with OAuth."
+                    ? "Sign in to Nexus to install mods directly."
                     : "Nexus features are disabled in Settings.";
             }
             else
@@ -1739,15 +1739,15 @@ namespace Manager.Views
         private static string BuildCapabilityText(NexusAccountStatus status)
         {
             if (status == null)
-                return "Direct install: sign in to Nexus with OAuth.";
+                return "Sign in to Nexus to install mods directly.";
 
             if (!status.IsConfigured)
-                return "Direct install: sign in to Nexus with OAuth.";
+                return "Sign in to Nexus to install mods directly.";
 
             if (!status.IsConnected)
                 return string.Equals(status.Summary, "Checking Nexus account...", StringComparison.OrdinalIgnoreCase)
-                    ? "Direct install: checking account capability..."
-                    : "Direct install: account status unavailable.";
+                    ? "Checking whether this account can download mods..."
+                    : "Could not check whether this account can install mods.";
 
             switch (status.DirectDownloadAvailability)
             {

@@ -151,8 +151,8 @@ namespace Manager
             try
             {
                 MessageBox.Show(
-                    "An unexpected error occurred:\n\n" + e.Exception.Message + "\n\n" + e.Exception.StackTrace,
-                    "Sheltered Mod Manager - Error",
+                    BuildUnexpectedErrorMessage(e.Exception),
+                    "Sheltered Mod Manager error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
@@ -163,28 +163,21 @@ namespace Manager
         {
             try
             {
-                Exception ex = e.ExceptionObject as Exception;
-                string msg;
-                if (ex != null)
-                {
-                    msg = ex.Message + "\n\n" + ex.StackTrace;
-                }
-                else if (e.ExceptionObject != null)
-                {
-                    msg = e.ExceptionObject.ToString();
-                }
-                else
-                {
-                    msg = "Unknown error";
-                }
-
                 MessageBox.Show(
-                    "An unexpected error occurred (non-UI):\n\n" + msg,
-                    "Sheltered Mod Manager - Error",
+                    BuildUnexpectedErrorMessage(e.ExceptionObject as Exception),
+                    "Sheltered Mod Manager error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
             catch { }
+        }
+
+        private static string BuildUnexpectedErrorMessage(Exception exception)
+        {
+            string message = "Sheltered Mod Manager ran into an unexpected error. Restart the manager and try again.";
+            if (exception != null && !string.IsNullOrEmpty(exception.Message))
+                message += "\n\nDetails: " + exception.Message;
+            return message;
         }
 
 
