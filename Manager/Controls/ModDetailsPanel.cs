@@ -192,7 +192,7 @@ namespace Manager.Controls
 
             // Website link
             _websiteLink = new LinkLabel();
-            _websiteLink.Text = "Visit Website";
+            _websiteLink.Text = "Visit website";
             _websiteLink.Font = new Font("Segoe UI", 9f);
             _websiteLink.AutoSize = true;
             _websiteLink.Location = new Point(12, 295);
@@ -205,7 +205,7 @@ namespace Manager.Controls
             _nexusStatusLabel.Location = new Point(12, 315);
 
             _nexusLink = new LinkLabel();
-            _nexusLink.Text = "Open Nexus Page";
+            _nexusLink.Text = "Open Nexus page";
             _nexusLink.Font = new Font("Segoe UI", 9f);
             _nexusLink.AutoSize = true;
             _nexusLink.Location = new Point(12, 333);
@@ -222,7 +222,7 @@ namespace Manager.Controls
             _nexusUpdateButton.Click += NexusUpdateButton_Click;
 
             _nexusStableButton = new Button();
-            _nexusStableButton.Text = "Revert to Stable";
+            _nexusStableButton.Text = "Revert to stable";
             _nexusStableButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _nexusStableButton.FlatStyle = FlatStyle.Flat;
             _nexusStableButton.Size = new Size(135, 28);
@@ -249,7 +249,7 @@ namespace Manager.Controls
 
             // Open folder button
             _openFolderButton = new Button();
-            _openFolderButton.Text = "Open Mod Folder";
+            _openFolderButton.Text = "Open mod folder";
             _openFolderButton.Font = new Font("Segoe UI", 9f);
             _openFolderButton.FlatStyle = FlatStyle.Flat;
             _openFolderButton.Size = new Size(140, 28);
@@ -549,7 +549,7 @@ namespace Manager.Controls
 
             if (!installedMod && !string.IsNullOrEmpty(mod.NexusRemoteVersion))
             {
-                _nexusStatusLabel.Text = "Nexus: Available on Nexus (" + mod.NexusRemoteVersion + ")";
+                _nexusStatusLabel.Text = "Available on Nexus (" + mod.NexusRemoteVersion + ")";
                 _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
                 return;
             }
@@ -640,13 +640,13 @@ namespace Manager.Controls
         private static string GetWebsiteLinkText(ModItem mod)
         {
             if (mod == null || string.IsNullOrEmpty(mod.Website))
-                return "Visit Website";
+                return "Visit website";
 
             string website = mod.Website.Trim();
             if (website.IndexOf("github.com", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "Open GitHub Page";
+                return "Open GitHub page";
 
-            return "Visit Website";
+            return "Visit website";
         }
 
         private static string NormalizeUrl(string value)

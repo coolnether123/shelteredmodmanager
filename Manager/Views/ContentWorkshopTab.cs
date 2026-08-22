@@ -96,7 +96,7 @@ namespace Manager.Views
             };
             Label subtitle = new Label
             {
-                Text = "Build data-driven items, recipes, and pixel icons without a code plugin.",
+                Text = "Create Sheltered items, recipes, and pixel icons without writing code.",
                 AutoSize = true,
                 Location = new Point(7, 34)
             };
@@ -504,14 +504,14 @@ namespace Manager.Views
             Panel header = new Panel { Dock = DockStyle.Top, Height = 62 };
             Label title = new Label
             {
-                Text = "Project readiness",
+                Text = "Check the project before export",
                 Font = new Font("Segoe UI", 12f, FontStyle.Bold),
                 AutoSize = true,
                 Location = new Point(4, 4)
             };
             _validationSummary = new Label
             {
-                Text = "Run Check to verify IDs, values, references, and icon files.",
+                Text = "Run check to find missing fields, broken item references, and missing icon files.",
                 AutoSize = true,
                 Location = new Point(6, 33)
             };
@@ -1114,9 +1114,9 @@ namespace Manager.Views
         {
             _validationList.Items.Clear();
             _validationSummary.Text = result.IsValid
-                ? "Ready to export | " + result.WarningCount + " warning(s)"
-                : result.ErrorCount + " error(s) must be fixed | " +
-                    result.WarningCount + " warning(s)";
+                ? "Ready to export | " + FormatCount(result.WarningCount, "warning")
+                : "Fix " + FormatCount(result.ErrorCount, "error") + " before exporting | " +
+                    FormatCount(result.WarningCount, "warning");
             for (int i = 0; i < result.Issues.Count; i++)
             {
                 ContentPackValidationIssue issue = result.Issues[i];
@@ -1628,8 +1628,13 @@ namespace Manager.Views
             _workspaceStatus.Text =
                 (_project.IsDirty ? "Unsaved project" : "Saved") +
                 (_pixelCanvas != null && _pixelCanvas.HasUnsavedChanges ? " + unsaved icon" : string.Empty) +
-                " | " + itemCount + " item(s) | " + recipeCount + " recipe(s) | " +
+                " | " + FormatCount(itemCount, "item") + " | " + FormatCount(recipeCount, "recipe") + " | " +
                 _project.RootPath;
+        }
+
+        private static string FormatCount(int count, string singular)
+        {
+            return count + " " + singular + (count == 1 ? string.Empty : "s");
         }
 
         private static void ApplyThemeRecursive(

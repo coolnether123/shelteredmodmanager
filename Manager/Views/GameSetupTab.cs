@@ -97,7 +97,7 @@ namespace Manager.Views
 
             // Game Path Section
             _gamePathLabel = new Label();
-            _gamePathLabel.Text = "Sheltered Installation";
+            _gamePathLabel.Text = "Sheltered installation";
             _gamePathLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _gamePathLabel.AutoSize = true;
             _gamePathLabel.Location = new Point(20, 20);
@@ -127,7 +127,7 @@ namespace Manager.Views
             _browseButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             
             _detectButton = new Button();
-            _detectButton.Text = "Auto-Detect";
+            _detectButton.Text = "Auto-detect";
             _detectButton.Font = new Font("Segoe UI", 9f);
             _detectButton.Location = new Point(625, 48);
             _detectButton.Width = 100;
@@ -137,7 +137,7 @@ namespace Manager.Views
 
             // Mods Path Section
             _modsPathLabel = new Label();
-            _modsPathLabel.Text = "Mods Directory";
+            _modsPathLabel.Text = "Mods directory";
             _modsPathLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _modsPathLabel.AutoSize = true;
             _modsPathLabel.Location = new Point(20, 90);
@@ -151,7 +151,7 @@ namespace Manager.Views
             _modsPathTextBox.ReadOnly = true;
 
             _openModsFolderButton = new Button();
-            _openModsFolderButton.Text = "Open Folder";
+            _openModsFolderButton.Text = "Open folder";
             _openModsFolderButton.Font = new Font("Segoe UI", 9f);
             _openModsFolderButton.Location = new Point(530, 113);
             _openModsFolderButton.Width = 90;
@@ -160,7 +160,7 @@ namespace Manager.Views
             _openModsFolderButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
             _openGameFolderButton = new Button();
-            _openGameFolderButton.Text = "Open Game Folder";
+            _openGameFolderButton.Text = "Open game folder";
             _openGameFolderButton.Font = new Font("Segoe UI", 9f);
             _openGameFolderButton.Location = new Point(20, 155);
             _openGameFolderButton.Width = 150;
@@ -198,7 +198,7 @@ namespace Manager.Views
 
             // Launch Buttons
             _launchButton = new ActionButton();
-            _launchButton.Text = "Launch Sheltered (Modded)";
+            _launchButton.Text = "Launch Sheltered (modded)";
             _launchButton.IsPrimary = true;
             _launchButton.Location = new Point(20, 200);
             _launchButton.Width = 250;
@@ -207,7 +207,7 @@ namespace Manager.Views
             _launchButton.Enabled = false;
 
             _launchVanillaButton = new ActionButton();
-            _launchVanillaButton.Text = "Launch Vanilla (No Mods)";
+            _launchVanillaButton.Text = "Launch vanilla (no mods)";
             _launchVanillaButton.Location = new Point(280, 200);
             _launchVanillaButton.Width = 200;
             _launchVanillaButton.Height = 45;
@@ -216,13 +216,13 @@ namespace Manager.Views
 
             // Log section
             _logLabel = new Label();
-            _logLabel.Text = "Activity Log";
+            _logLabel.Text = "Activity log";
             _logLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _logLabel.AutoSize = true;
             _logLabel.Location = new Point(20, 260);
 
             _clearLogButton = new Button();
-            _clearLogButton.Text = "Clear Log";
+            _clearLogButton.Text = "Clear log";
             _clearLogButton.Font = new Font("Segoe UI", 9f);
             _clearLogButton.Location = new Point(440, 258);
             _clearLogButton.Width = 90;
@@ -231,7 +231,7 @@ namespace Manager.Views
             _clearLogButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
             _loadGameLogButton = new Button();
-            _loadGameLogButton.Text = "View Game Log";
+            _loadGameLogButton.Text = "View game log";
             _loadGameLogButton.Font = new Font("Segoe UI", 9f);
             _loadGameLogButton.Location = new Point(540, 258);
             _loadGameLogButton.Width = 100;
@@ -277,7 +277,7 @@ namespace Manager.Views
 
             // Auto-load UI (positioned near launch buttons)
             _autoLoadLabel = new Label();
-            _autoLoadLabel.Text = "Auto-Load Save on Start:";
+            _autoLoadLabel.Text = "Auto-load save on start:";
             _autoLoadLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _autoLoadLabel.AutoSize = true;
             _autoLoadLabel.Location = new Point(20, 260);
@@ -337,7 +337,7 @@ namespace Manager.Views
             {
                 _settings.AutoLoadSaveSlot = selected.Slot;
                 if (selected.Slot == AUTO_LOAD_NEW_SAVE)
-                    Log("Auto-load set to: New Save (lowest available slot)");
+                    Log("Auto-load set to start a new save in the first free slot.");
                 else
                     Log("Auto-load slot set to: " + selected.ToString());
             }
@@ -355,8 +355,8 @@ namespace Manager.Views
             if (_settings == null || !_settings.IsGamePathValid)
             {
                 _autoLoadComboBox.Items.Clear();
-                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NONE, Description = "(None - Boot to Menu)" });
-                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NEW_SAVE, Description = "(New Save - lowest available slot)" });
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NONE, Description = "Open the main menu" });
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NEW_SAVE, Description = "Start a new save in the first free slot" });
                 _autoLoadComboBox.SelectedIndex = 0;
                 return;
             }
@@ -366,12 +366,12 @@ namespace Manager.Views
             {
                 int currentSelection = _settings.AutoLoadSaveSlot;
                 _autoLoadComboBox.Items.Clear();
-                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NONE, Description = "(None - Boot to Menu)" });
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NONE, Description = "Open the main menu" });
                 int selectIndex = 0;
                 if (currentSelection == AUTO_LOAD_NONE) selectIndex = 0;
 
                 int newSaveIndex = _autoLoadComboBox.Items.Add(
-                    new SaveSlotItem { Slot = AUTO_LOAD_NEW_SAVE, Description = "(New Save - lowest available slot)" }
+                    new SaveSlotItem { Slot = AUTO_LOAD_NEW_SAVE, Description = "Start a new save in the first free slot" }
                 );
                 if (currentSelection == AUTO_LOAD_NEW_SAVE) selectIndex = newSaveIndex;
 
@@ -645,7 +645,7 @@ namespace Manager.Views
                 _statusLabel.ForeColor = _isDarkMode ? Color.LightGreen : Color.Green;
                 _launchButton.Enabled = true;
                 _launchVanillaButton.Enabled = true;
-                _openGameFolderButton.Text = "Open Game Folder";
+                _openGameFolderButton.Text = "Open game folder";
                 _openGameFolderButton.Width = 150;
             }
             else
@@ -654,7 +654,7 @@ namespace Manager.Views
                 _statusLabel.ForeColor = Color.Red;
                 _launchButton.Enabled = false;
                 _launchVanillaButton.Enabled = false;
-                _openGameFolderButton.Text = "Set Game Path (.exe)";
+                _openGameFolderButton.Text = "Set game path (.exe)";
                 _openGameFolderButton.Width = 180;
             }
 

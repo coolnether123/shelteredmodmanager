@@ -96,7 +96,7 @@ namespace Manager.Core.Services
             }
             catch (Exception ex)
             {
-                errorMessage = "Nexus OAuth token request failed: " + ex.Message;
+                errorMessage = "Nexus sign-in failed: " + ex.Message;
                 return null;
             }
         }
@@ -119,7 +119,7 @@ namespace Manager.Core.Services
 
             if (data == null)
             {
-                errorMessage = "Nexus returned an invalid OAuth token response.";
+                errorMessage = "Nexus returned an invalid sign-in response.";
                 return null;
             }
 
@@ -128,7 +128,7 @@ namespace Manager.Core.Services
             int expiresIn = ReadInt(data, "expires_in");
             if (string.IsNullOrEmpty(accessToken) || expiresIn <= 0)
             {
-                errorMessage = "Nexus did not return a usable OAuth access token.";
+                errorMessage = "Nexus did not complete sign-in. Try again.";
                 return null;
             }
 
@@ -152,8 +152,8 @@ namespace Manager.Core.Services
                     {
                         string retryAfter = response.Headers["Retry-After"];
                         return !string.IsNullOrEmpty(retryAfter)
-                            ? "Nexus OAuth token request was rate limited. Retry after " + retryAfter + "."
-                            : "Nexus OAuth token request was rate limited. Wait and try again.";
+                            ? "Nexus limited sign-in requests. Try again after " + retryAfter + "."
+                            : "Nexus limited sign-in requests. Wait and try again.";
                     }
 
                     string json = reader != null ? reader.ReadToEnd() : string.Empty;
@@ -162,11 +162,11 @@ namespace Manager.Core.Services
                     {
                         string description = ReadString(data, "error_description");
                         if (!string.IsNullOrEmpty(description))
-                            return "Nexus OAuth token request failed: " + description;
+                            return "Nexus sign-in failed: " + description;
 
                         string error = ReadString(data, "error");
                         if (!string.IsNullOrEmpty(error))
-                            return "Nexus OAuth token request failed: " + error;
+                            return "Nexus sign-in failed: " + error;
                     }
                 }
             }
@@ -174,7 +174,7 @@ namespace Manager.Core.Services
             {
             }
 
-            return "Nexus OAuth token request failed: " + ex.Message;
+            return "Nexus sign-in failed: " + ex.Message;
         }
 
         private static string ReadString(Dictionary<string, object> data, string key)

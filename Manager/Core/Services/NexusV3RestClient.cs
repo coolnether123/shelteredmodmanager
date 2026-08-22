@@ -233,7 +233,7 @@ namespace Manager.Core.Services
                             return new NexusV3RestResult
                             {
                                 StatusCode = status,
-                                ErrorMessage = "The Nexus OAuth session is no longer authorized. Sign in again."
+                                ErrorMessage = "Your Nexus sign-in expired. Sign in again."
                             };
                         }
                     }

@@ -296,7 +296,8 @@ namespace Manager.Core.Services
             if (!validation.IsValid)
             {
                 return ContentWorkshopOperationResult.Failed(
-                    "Fix the " + validation.ErrorCount + " validation error(s) before exporting.");
+                    "Fix " + validation.ErrorCount + " error" +
+                    (validation.ErrorCount == 1 ? string.Empty : "s") + " before exporting.");
             }
             return ContentWorkshopOperationResult.Succeeded(project.RootPath);
         }
@@ -414,7 +415,7 @@ namespace Manager.Core.Services
         {
             return "# " + project.About.name + "\r\n\r\n" +
                 (project.About.description ?? string.Empty) + "\r\n\r\n" +
-                "This data-driven Sheltered content pack was created with Sheltered Mod Manager's Content Workshop.\r\n" +
+                "This Sheltered content pack was created with Sheltered Mod Manager's Content Workshop.\r\n" +
                 "Install it as a normal mod folder. Categories requiring custom behavior may also need a code plugin.\r\n";
         }
 
