@@ -111,7 +111,7 @@ Assert-Contains $servicePath 'IsAccessTokenUsable\(DateTime\.UtcNow,\s*RefreshBu
 Assert-NotContains $servicePath 'NexusApiKey|FromApiKey|APIKEY' 'OAuth session handling must not contain a personal API-key fallback.'
 Assert-NotContains $headersPath 'APIKEY|X-API-Key|FromApiKey' 'Production request headers must not support personal API-key authentication.'
 Assert-Contains $servicePath '(?s)tokens\.Clear\(\).*PersistSettings' 'Failed OAuth recovery must clear and persist disconnected state.'
-Assert-Contains $settingsUiPath 'Sign in with Nexus' 'Settings must expose Nexus OAuth sign-in.'
+Assert-Contains $settingsUiPath 'Sign in to Nexus' 'Settings must expose Nexus OAuth sign-in.'
 Assert-Contains $settingsUiPath 'NexusOAuthSignOutRequested' 'Settings must expose Nexus OAuth sign-out.'
 Assert-True ([string]::IsNullOrEmpty([string]$configurationType.GetField('ClientId', $staticNonPublic).GetRawConstantValue())) 'Review source must not invent an unissued Nexus client ID.'
 
