@@ -4,13 +4,11 @@ using UnityEngine;
 namespace ModAPI.UI
 {
     /// <summary>
-    /// Simple global UI flow guard to prevent UI elements from
-    /// consuming clicks while a mod is taking over a screen
-    /// (e.g., to show a custom UI).
+    /// Blocks underlying UI controls while a mod owns the current screen.
     /// </summary>
     public static class UIFlowGuard
     {
-        // Volatile to ensure cross-thread visibility if anything weird happens.
+        // Volatile keeps the guard visible if a caller changes it off the main thread.
         public static volatile bool BlockSlotClicks;
         private static int _blockSlotClicksUntilFrame;
 
@@ -25,7 +23,7 @@ namespace ModAPI.UI
         }
 
         /// <summary>
-        /// Enables/disables the guard immediately.
+        /// Enables or disables the guard immediately.
         /// </summary>
         public static void BlockSlotClicksToggle(bool on)
         {
@@ -58,7 +56,7 @@ namespace ModAPI.UI
 
         /// <summary>
         /// Coroutine that releases the guard on the next frame.
-        /// Usage: StartCoroutine(UIFlowGuard.ReleaseGuardNextFrame())
+        /// Start the coroutine with <c>StartCoroutine(UIFlowGuard.ReleaseGuardNextFrame())</c>.
         /// </summary>
         public static IEnumerator ReleaseGuardNextFrame()
         {

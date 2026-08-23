@@ -117,8 +117,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Analyzes method for anchors and logs the summary to MMLog.
-        /// Useful during development to find robust jump targets.
+        /// Analyzes the method and logs stable anchor candidates to MMLog.
         /// </summary>
         public static FluentTranspiler ExportAnchors(this FluentTranspiler t, float threshold = 1.2f)
         {
@@ -151,11 +150,8 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Inserts code safely relative to the current anchor.
-        /// - If anchor is a Return/Throw, inserts BEFORE.
-        /// - Otherwise inserts AFTER, ensuring we don't accidentally split a block if the next instruction is a jump target?
-        ///   Actually, Harmony handles label shifting on InsertBefore/After automatically.
-        ///   This method mainly ensures we don't insert dead code after a Return.
+        /// Inserts before a return or throw. Inserts after any other anchor.
+        /// This prevents the new instructions from becoming unreachable after a method terminator.
         /// </summary>
         public static FluentTranspiler SafeInsert(this FluentTranspiler t, params CodeInstruction[] instructions)
         {

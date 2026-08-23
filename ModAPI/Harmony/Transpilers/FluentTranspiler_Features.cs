@@ -11,20 +11,13 @@ namespace ModAPI.Harmony
     public partial class FluentTranspiler
     {
         /// <summary>
-        /// Attempts to match a specific sequence of instructions and provides a "Diagnostic Breadcrumb" for debugging.
+        /// Matches an instruction sequence and records diagnostics when the sequence is absent.
         /// </summary>
         /// <remarks>
-        /// <para>
-        /// <b>Why use this over a normal Match?</b> In a complex patch with multiple steps, a standard match failure 
-        /// is "silent" and hard to locate. MatchIntent creates a narrative in your logs. If a game update breaks 
-        /// only the 3rd step of your patch, the log will tell you exactly which "intent" failed.
-        /// </para>
-        /// <para>
-        /// <b>Automatic Diagnostics:</b> If the match fails, this method automatically triggers a "Nearby Anchor" 
-        /// search to give you a hint about where the code might have moved in a game update.
-        /// </para>
+        /// Unlike a direct matcher call, this method names the failed step and reports the nearest
+        /// remaining anchor. Use it when a patch has several independent matches.
         /// </remarks>
-        /// <param name="intent">A human-readable description of what this section of the patch is trying to find (e.g., "Find the water calculation loop").</param>
+        /// <param name="intent">Description of the target sequence, such as "water calculation loop".</param>
         /// <param name="matches">The Harmony <see cref="CodeMatch"/> patterns to search for.</param>
         public FluentTranspiler MatchIntent(string intent, params CodeMatch[] matches)
         {
@@ -55,7 +48,7 @@ namespace ModAPI.Harmony
                         }
                     }
                 }
-                catch { /* Safer to ignore diagnostic failures than to crash the transpiler */ }
+                catch { /* Diagnostics must not abort the transpiler. */ }
             }
             else
             {
@@ -68,13 +61,12 @@ namespace ModAPI.Harmony
         #region Contracts & Stack Safety
 
         /// <summary>
-        /// Asserts that the stack depth at the current instruction is exactly <paramref name="depth"/>.
-        /// This is a "checkpoint" validation that runs during <see cref="Build"/>.
+        /// Requires the stack depth at the current instruction to equal <paramref name="depth"/>.
+        /// <c>Build</c> evaluates this checkpoint.
         /// </summary>
         /// <remarks>
-        /// Use this after a complex sequence of pushes/pops to ensure you haven't leaked a value 
-        /// or underflowed the stack. If the assertion fails, the transpiler will throw a detailed 
-        /// error showing the expected vs actual stack depth and types.
+        /// Use this after a sequence of pushes and pops. A failed check reports the expected and
+        /// actual stack depths and types.
         /// </remarks>
         /// <param name="depth">The expected number of elements on the stack.</param>
         public FluentTranspiler ExpectStack(int depth)
@@ -89,20 +81,18 @@ namespace ModAPI.Harmony
         private int _lastStackCheckPos = -1;
 
         /// <summary>
-        /// Asserts that the sequence of instructions since the last stack check has resulted 
-        /// in a specific change in stack depth (delta).
+        /// Requires the instructions since the previous stack check to change the stack depth by
+        /// <paramref name="delta"/>.
         /// </summary>
         /// <remarks>
-        /// Example: If you call a method that takes 2 arguments and returns 1 value, the delta is -1.
-        /// This is useful for verifying that a custom injection has the expected net effect on the stack.
+        /// A call that takes two arguments and returns one value has a delta of -1.
         /// </remarks>
-        /// <param name="delta">The expected change in stack depth (e.g., -1 for consumer, 1 for producer).</param>
+        /// <param name="delta">The expected stack-depth change. A consumer uses -1 and a producer uses 1.</param>
         public FluentTranspiler EnsureStack(int delta)
         {
             if (!_matcher.IsValid) return this;
             
-            // We record that the delta between _lastStackCheckPos and current Pos must be 'delta'
-            // For simplicity, we convert this to an absolute expectation if possible, or record for later validation.
+            // Record the expected delta for Build to validate against one shared stack analysis.
             if (_lastStackCheckPos == -1)
             {
                 AddNote("EnsureStack: No previous operation to calculate delta from. Use ExpectStack for absolute anchoring.");
@@ -134,16 +124,11 @@ namespace ModAPI.Harmony
         #region Pattern Combinators
 
         /// <summary>
-        /// Resilience Combinator: Attempts Pattern A, then falls back to Pattern B if A fails.
+        /// Tries <paramref name="patternA"/>, then tries <paramref name="patternB"/> if the first pattern fails.
         /// </summary>
         /// <remarks>
-        /// <b>Why use this?</b> 
-        /// <para>
-        /// <b>Mod Compatibility.</b> In a modded game, another mod might have already patched 
-        /// the method you're looking at. If your primary pattern fails, use <b>MatchEither</b> 
-        /// to provide a fallback that accounts for common modded states or difference between 
-        /// game platforms (Steam/GOG vs Epic Games). 
-        /// </para>
+        /// Use the second pattern for a known alternate IL shape, such as another storefront build
+        /// or a method that another mod has already patched.
         /// </remarks>
         public FluentTranspiler MatchEither(
             Func<FluentTranspiler, FluentTranspiler> patternA,
@@ -170,19 +155,11 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Structure Combinator: Matches boundaries while ignoring "dirty" IL in the middle.
+        /// Matches two boundary patterns separated by at most <paramref name="maxGap"/> instructions.
         /// </summary>
         /// <remarks>
-        /// <b>Why use this?</b>
-        /// <para>
-        /// <b>Surgical Resilience.</b> Sometimes you know the "start" and "end" of a logic block, 
-        /// but the middle is messy—either because the compiler generated weird IL or because 
-        /// another mod has injected a logging call or a tiny check there.
-        /// </para>
-        /// <para>
-        /// Use <b>MatchWithGap</b> to lock onto the stable boundaries and ignore the "gap" in the middle. 
-        /// This ensures your patch works regardless of what other modders have done to that specific block of code.
-        /// </para>
+        /// Use this when the boundary instructions are stable but compiler output or another patch
+        /// may change the instructions between them.
         /// </remarks>
         /// <param name="startPattern">Logic to find the entry point.</param>
         /// <param name="endPattern">Logic to find the exit point.</param>
@@ -208,9 +185,7 @@ namespace ModAPI.Harmony
             // Search forward for end pattern within gap
             for (int i = 0; i <= maxGap; i++)
             {
-                // Clone matcher state conceptually? No, just move forward
-                // But if we fail, we need to backtrack.
-                // Simple approach: Check at current, then next, until maxGap.
+                // Probe each position in the allowed gap and reset the matcher before every attempt.
                 
                 int currentProbe = afterStart + i;
                 if (currentProbe >= _matcher.Instructions().Count) break;
@@ -223,9 +198,7 @@ namespace ModAPI.Harmony
                 endPattern(this);
                 if (_matcher.IsValid && _matcher.Pos > preCheck) 
                 {
-                    // Found it!
-                    // We need to decide what state satisfied "MatchWithGap".
-                    // Usually it means we are now AT the end of the Gap pattern.
+                    // Leave the matcher at the end pattern selected by the callback.
                     return this; 
                 }
             }
@@ -250,15 +223,12 @@ namespace ModAPI.Harmony
             var currentInstrs = _matcher.Instructions();
             report.InstructionCount = currentInstrs.Count;
 
-            // Analyze modifications if possible (simple heuristic)
+            // Summarize diagnostics and structural state without mutating the instruction stream.
             if (_originalMethod != null)
             {
                 try 
                 {
-                    // To get a true diff, we'd need the original instructions.
-                    // If we don't have them easily, we report generic stats.
-                    // Assuming FluentTranspiler was created with 'instructions', those ARE the current instructions.
-                    // We can check if _matcher.IsInvalid or if we have warnings.
+                    // DryRun has only the current stream, so report counts instead of a before-and-after diff.
                     
                     if (Warnings.Count > 0 || SoftFailures.Count > 0 || Notes.Count > 0)
                     {
@@ -318,10 +288,8 @@ namespace ModAPI.Harmony
         #region Linting
 
         /// <summary>
-        /// Scans the current instruction stream for patterns that usually deserve another look.
-        /// These checks are meant to support patch authors during development and can be
-        /// selectively suppressed when a known game method shape would otherwise create
-        /// repeated noise in the log.
+        /// Checks operands, branch labels, local indices, argument indices, casts, and exception handlers.
+        /// Callers can suppress a check for a known game method shape.
         /// </summary>
         private void Lint(List<CodeInstruction> instructions)
         {
@@ -344,7 +312,7 @@ namespace ModAPI.Harmony
                      instr.opcode.OperandType == OperandType.InlineField || 
                      instr.opcode.OperandType == OperandType.InlineType))
                 {
-                    AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} has NULL operand (Expected {instr.opcode.OperandType})");
+                    AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} has a null operand. Expected {instr.opcode.OperandType}.");
                 }
 
                 // Check for Callvirt vs Call correctness
@@ -393,7 +361,7 @@ namespace ModAPI.Harmony
                     // Catch common mistake: using integer instead of Label for branch operand
                     if (instr.operand != null && !(instr.operand is Label) && !(instr.operand is Label[]))
                     {
-                        AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} has invalid operand type '{instr.operand.GetType().Name}'. Branch instructions MUST use a 'Label' as their operand. Using an integer (e.g. 2) is a common error that causes native crashes.");
+                        AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} has invalid operand type '{instr.operand.GetType().Name}'. Branch instructions require a Label operand, not an integer.");
                     }
                 }
 
@@ -425,12 +393,8 @@ namespace ModAPI.Harmony
                 }
             }
 
-            // Check for modifications inside Try/Catch blocks
-            // This requires mapping current index back to original, which is hard if instructions shifted.
-            // Heuristic: If we are at an index that was originally a try block...
-            // Actually, we can just check if any exception blocks exist and if our total count changed drastically?
-            // Better: Iterate EH clauses from MethodBody and see if current instructions at those offsets look valid.
-            // Since this is advanced, we'll placeholder it with a basic check:
+            // Warn when the original method has exception handlers. Mapping shifted instructions
+            // back to exception regions requires metadata that this linter does not retain.
             try
             {
                 var methodBody = _originalMethod.GetMethodBody();

@@ -80,10 +80,10 @@ namespace ModAPI.Spine
         /// <summary>Controls vertical sorting. Lower numbers appear first. Default is 0.</summary>
         public int SortOrder = 0;
         
-        /// <summary>ID of another Boolean setting that must be TRUE for this setting to be eligible/enabled.</summary>
+        /// <summary>ID of a Boolean setting that must be true before this setting is enabled.</summary>
         public string DependsOnId;
         
-        /// <summary>If this is a Boolean setting, setting this to true will hide all dependent children when this is FALSE.</summary>
+        /// <summary>When true on a Boolean setting, hides dependent settings while this setting is false.</summary>
         public bool ControlsChildVisibility = false;
         
         /// <summary>If true, shows a "Restart Required" warning when changed.</summary>
@@ -97,10 +97,10 @@ namespace ModAPI.Spine
         
         // Advanced Hooks (Method names)
         
-        /// <summary>Force a specific widget type (e.g., use numeric input instead of slider).</summary>
+        /// <summary>Forces a specific widget type, such as numeric input instead of a slider.</summary>
         public SettingType Type = SettingType.Unknown;
         
-        /// <summary>Hex color (e.g., "#FF0000") for Header widgets.</summary>
+        /// <summary>Hex color, such as "#FF0000", for header widgets.</summary>
         public string HeaderColor;
         
         /// <summary>Name of a method/property returning bool to determine runtime visibility.</summary>
@@ -143,7 +143,7 @@ namespace ModAPI.Spine
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
     public class ModSettingPresetAttribute : Attribute
     {
-        /// <summary>The display name for the preset option (e.g. "Easy", "Hard").</summary>
+        /// <summary>The preset's display name, such as "Easy" or "Hard".</summary>
         public string PresetName;
         
         /// <summary>The value this field should take when the preset is selected.</summary>

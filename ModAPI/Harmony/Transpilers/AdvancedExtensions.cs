@@ -8,7 +8,7 @@ using ModAPI.Core;
 namespace ModAPI.Harmony
 {
     /// <summary>
-    /// Advanced and rarely used transpiler tools. 
+    /// Transpiler operations for uncommon IL edits.
     /// Kept separate to reduce clutter for standard mod development.
     /// </summary>
     public partial class FluentTranspiler
@@ -16,7 +16,7 @@ namespace ModAPI.Harmony
         #region Branch Matching (Advanced)
 
         /// <summary>
-        /// Match a forward branch instruction (br, brtrue, brfalse, etc.).
+        /// Matches a forward <c>br</c>, <c>brtrue</c>, or <c>brfalse</c> instruction.
         /// Useful for finding loop boundaries and conditional jumps.
         /// </summary>
         public FluentTranspiler FindNextBranch(SearchMode mode = SearchMode.Next)
@@ -73,7 +73,7 @@ namespace ModAPI.Harmony
     /// </summary>
     public static class AdvancedPatterns
     {
-        #region DontDestroyOnLoad Nuking
+        #region DontDestroyOnLoad removal
         
         /// <summary>
         /// Remove a call to DontDestroyOnLoad.
@@ -87,7 +87,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Remove ALL calls to DontDestroyOnLoad in the method.
+        /// Removes every call to <c>DontDestroyOnLoad</c> in the method.
         /// </summary>
         public static FluentTranspiler NukeAllDontDestroyOnLoad(this FluentTranspiler t)
         {

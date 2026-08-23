@@ -52,7 +52,7 @@ namespace ModAPI.Loading
             SimpleLoadOrder obj = JsonUtility.FromJson<SimpleLoadOrder>(json);
             if (obj != null && obj.order != null) return obj.order;
 
-            // Robust fallback parser for loadorder.json formats that JsonUtility can fail on.
+            // Fall back to manual parsing for loadorder.json shapes that JsonUtility rejects.
             return TryExtractOrderArray(json);
         }
 

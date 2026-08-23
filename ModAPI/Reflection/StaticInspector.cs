@@ -6,7 +6,7 @@ using ModAPI.Core;
 namespace ModAPI.Reflection
 {
     /// <summary>
-    /// Reflection helper for capturing static field and property values from a type.
+    /// Captures static field and property values from a type.
     /// Intended for diagnostics; do not depend on the captured dictionary as a stable save contract.
     /// </summary>
     public static class StaticInspector

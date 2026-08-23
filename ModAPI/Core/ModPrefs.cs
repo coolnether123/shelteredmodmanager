@@ -189,7 +189,7 @@ namespace ModAPI.Core
                 string mdPath = Path.Combine(ModApiPaths.UserRoot, "settings.md");
                 if (!File.Exists(mdPath))
                 {
-                    File.WriteAllText(mdPath, "# ModAPI User Settings\n\nThis folder contains internal ModAPI framework state and user settings.\n\n- `settings.json`: Contains technical flags (e.g., tutorial seen status).");
+                    File.WriteAllText(mdPath, "# ModAPI user settings\n\nThis folder contains ModAPI state and user settings.\n\n- `settings.json`: Technical flags, including tutorial completion.");
                 }
             }
             catch (Exception ex)

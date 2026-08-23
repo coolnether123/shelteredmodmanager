@@ -14,7 +14,7 @@ namespace ModAPI.Inspector
     {
         public static Transform Target;
         public static Transform HoverTarget;
-        public static Transform SecondaryTarget; // e.g. copy source pinned while user chooses a paste target
+        public static Transform SecondaryTarget; // Keeps a copy source pinned while the user chooses a paste target.
         public static bool HighlightEnabled = true;
         public static Color LineColor = new Color(1f, 0.85f, 0.1f, 1f); // selection: warm yellow
         public static Color HoverColor = new Color(0.2f, 0.85f, 1f, 1f); // hover: cyan

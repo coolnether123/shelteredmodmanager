@@ -98,7 +98,7 @@ namespace ModAPI.Core
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"LoadAssemblies: FAILED to load assembly '{dllPath}' for mod '{entry.Id}': {ex.ToString()}");
+                    MMLog.WriteError($"LoadAssemblies failed to load assembly '{dllPath}' for mod '{entry.Id}': {ex}");
                 }
             }
             return assemblies;

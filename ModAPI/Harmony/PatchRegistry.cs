@@ -175,7 +175,7 @@ namespace ModAPI.Harmony
     {
         /// <summary>All discovered Harmony patch hosts.</summary>
         public readonly List<PatchRecord> Discovered = new List<PatchRecord>();
-        /// <summary>Patch hosts that were successfully applied.</summary>
+        /// <summary>Patch hosts applied during this attempt.</summary>
         public readonly List<PatchRecord> Applied = new List<PatchRecord>();
         /// <summary>Patch hosts that were skipped or produced no patch operations.</summary>
         public readonly List<PatchRecord> Skipped = new List<PatchRecord>();
@@ -262,7 +262,7 @@ namespace ModAPI.Harmony
         public string TriggerName { get; set; }
         /// <summary>All patch hosts discovered during this scan.</summary>
         public PatchHostReportDto[] Discovered { get; set; }
-        /// <summary>Patch hosts successfully applied during this scan.</summary>
+        /// <summary>Patch hosts applied during this scan.</summary>
         public PatchHostReportDto[] Applied { get; set; }
         /// <summary>Patch hosts skipped or producing no patch operation during this scan.</summary>
         public PatchHostReportDto[] Skipped { get; set; }

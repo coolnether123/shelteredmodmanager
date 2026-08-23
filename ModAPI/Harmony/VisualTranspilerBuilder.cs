@@ -9,7 +9,7 @@ namespace ModAPI.Harmony
 {
     /// <summary>
     /// Generates starter transpiler code from visual IL patch selections.
-    /// This is a developer tool surface; review generated code before shipping a patch.
+    /// Review its generated code before shipping a patch.
     /// </summary>
     public class VisualTranspilerBuilder 
     {

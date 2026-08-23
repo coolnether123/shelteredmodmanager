@@ -9,9 +9,7 @@ using ModAPI.Core;
 namespace ModAPI.Harmony
 {
     /// <summary>
-    /// High-Level Intent API for FluentTranspiler.
-    /// Provides intent-based operations that abstract away IL details.
-    /// allows developers to express "what" they want to do rather than "how" to do it in IL.
+    /// Common FluentTranspiler edits expressed as method calls instead of raw IL operations.
     /// </summary>
     public static class IntentAPI
     {
@@ -19,12 +17,12 @@ namespace ModAPI.Harmony
         /// "When method X is called, call Y instead." Redirects the <b>first</b> matching call.
         /// </summary>
         /// <remarks>
-        /// Legacy redirect entry point retained for compatibility. The canonical way to redirect a
+        /// Legacy redirect entry point retained for compatibility. To redirect a
         /// single call site is <c>t.ForCall(originalType, originalMethod).ReplaceWith(replacementType,
         /// replacementMethod)</c>, which reports an ambiguous match instead of silently taking the
-        /// first — see Transpilers/README.md §4.1.
+        /// first. See Transpilers/README.md section 4.1.
         /// </remarks>
-        [Obsolete("Use t.ForCall(type, method).ReplaceWith(type, method) — see Transpilers/README.md §4.1.", false)]
+        [Obsolete("Use t.ForCall(type, method).ReplaceWith(type, method). See Transpilers/README.md section 4.1.", false)]
         public static FluentTranspiler RedirectCall(
             this FluentTranspiler t,
             Type originalType, string originalMethod,
@@ -37,15 +35,15 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// "When method X is called, call Y instead." Replaces ALL occurrences in the method body.
+        /// Replaces every matching call in the method body.
         /// </summary>
         /// <remarks>
-        /// Legacy redirect entry point retained for compatibility. The canonical way to redirect every
+        /// Legacy redirect entry point retained for compatibility. To redirect every
         /// matching call site is <c>t.ForCall(originalType, originalMethod).ReplaceAllWith(replacementType,
-        /// replacementMethod)</c> — see Transpilers/README.md §4.1. This shim forwards to that single
+        /// replacementMethod)</c>. See Transpilers/README.md section 4.1. This shim forwards to that single
         /// implementation so the two paths cannot drift.
         /// </remarks>
-        [Obsolete("Use t.ForCall(type, method).ReplaceAllWith(type, method) — see Transpilers/README.md §4.1.", false)]
+        [Obsolete("Use t.ForCall(type, method).ReplaceAllWith(type, method). See Transpilers/README.md section 4.1.", false)]
         public static FluentTranspiler RedirectCallAll(
             this FluentTranspiler t,
             Type originalType, string originalMethod,
@@ -57,8 +55,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// "Change this constant value to that value."
-        /// Helper for quickly tuning magic numbers.
+        /// Replaces the first matching floating-point constant.
         /// </summary>
         /// <example>
         /// <code>
@@ -76,8 +73,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// "Change this constant value to that value."
-        /// Updates ALL occurrences of the float constant.
+        /// Replaces every matching floating-point constant.
         /// </summary>
         public static FluentTranspiler ChangeConstantAll(
             this FluentTranspiler t,
@@ -90,7 +86,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// "Change this constant integer to that value."
+        /// Replaces the first matching integer constant.
         /// </summary>
         /// <example>
         /// <code>
@@ -108,8 +104,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// "Change this constant integer to that value."
-        /// Updates ALL occurrences of the integer constant.
+        /// Replaces every matching integer constant.
         /// </summary>
         public static FluentTranspiler ChangeConstantAll(
             this FluentTranspiler t,
@@ -122,9 +117,8 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// "Remove this method call and its arguments."
-        /// Automatically calculates how many stack items to pop (arguments) and pushes a default value if the method has a return type.
-        /// Handy for nuking logging calls or analytics tracking.
+        /// Removes the first matching method call and its arguments.
+        /// Pops the call arguments and pushes a default value when the method has a return value.
         /// </summary>
         public static FluentTranspiler RemoveCall(
             this FluentTranspiler t,

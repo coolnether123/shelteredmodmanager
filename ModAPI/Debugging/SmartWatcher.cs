@@ -9,7 +9,7 @@ namespace ModAPI.Debugging
 {
     /// <summary>
     /// Watches fields and properties for changes, logging only when values differ.
-    /// Thread-safe and exception-safe.
+    /// Queues list changes under a lock and removes getters after repeated errors.
     /// </summary>
     internal class SmartWatcher : MonoBehaviour
     {
@@ -70,11 +70,10 @@ namespace ModAPI.Debugging
         
         #endregion
 
-        #region Thread-Safe Watch List
+        #region Watch list synchronization
         
-        // Simple lock for Unity's single-threaded environment. ReaderWriterLockSlim adds unnecessary
-        // overhead (~150ns per acquisition) for a debugging tool that only runs on the main thread.
-        // Double-buffering pattern ensures Watch() calls from mod initialization are safely queued.
+        // Polling runs on Unity's main thread. A monitor lock protects registration calls, while
+        // pending lists keep additions and removals out of the active enumeration.
         private readonly object _watchLock = new object();
         
         private List<WatchEntry> _watches = new List<WatchEntry>();
@@ -107,7 +106,7 @@ namespace ModAPI.Debugging
 
         /// <summary>
         /// Watch a field or property on an object.
-        /// WARNING: Property getters must NOT call Watch/UnWatch on this watcher or modify the watch list.
+        /// Property getters must not call Watch, UnWatch, or otherwise modify this watcher's list.
         /// </summary>
         /// <param name="target">Object instance to watch.</param>
         /// <param name="memberName">Name of field or property.</param>
@@ -145,7 +144,7 @@ namespace ModAPI.Debugging
 
         /// <summary>
         /// Watch with type checking and optional callback.
-        /// WARNING: Callbacks must NOT call Watch/UnWatch on this watcher or modify the watch list.
+        /// Callbacks must not call Watch, UnWatch, or otherwise modify this watcher's list.
         /// </summary>
         /// <typeparam name="T">Expected type of the member.</typeparam>
         /// <param name="target">Object instance to watch.</param>
@@ -182,7 +181,7 @@ namespace ModAPI.Debugging
                 Name = $"{type.Name}.{memberName}",
                 ModName = Assembly.GetCallingAssembly().GetName().Name,
                 // Providing the previous value allows the callback to perform delta calculations 
-                // (e.g., health lost vs health gained) without maintaining its own state.
+                // such as health lost or gained without maintaining its own state.
                 OnChanged = onChanged != null 
                     ? (old, newVal) => onChanged((T)old, (T)newVal) 
                     : (Action<object, object>)null,
@@ -248,18 +247,16 @@ namespace ModAPI.Debugging
 
         #region Internal Methods
 
-        /// <summary>Find a field or property by name. Game objects often expose data 
-        /// through properties rather than public fields. Searching both ensures 
-        /// compatibility with standard Unity component patterns.</summary>
+        /// <summary>Finds an instance property or field by name, including non-public members.</summary>
         private MemberInfo FindMember(Type type, string name)
         {
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
             
-            // Try property first (more common in Unity)
+            // Prefer properties when a type exposes both member kinds under the same name.
             var prop = type.GetProperty(name, flags);
             if (prop != null) return prop;
             
-            // Then try field
+            // Fall back to a field.
             var field = type.GetField(name, flags);
             return field;
         }
@@ -278,9 +275,7 @@ namespace ModAPI.Debugging
             return obj => null;
         }
 
-        /// <summary>Safely get value with exception handling. Safeguards the update loop from 
-        /// crashing if a watched member throws an exception. Consecutive errors trigger 
-        /// automatic removal to prevent log spam.</summary>
+        /// <summary>Reads a member and returns an error marker when its getter throws.</summary>
         private object SafeGetValue(MemberInfo member, object target)
         {
             try
@@ -314,7 +309,7 @@ namespace ModAPI.Debugging
             
             if ((Time.frameCount + _pollJitter) % _basePollInterval != 0) return;
 
-            // Process pending adds/removes (thread-safe)
+            // Apply queued registrations and removals while holding the watch-list lock.
             lock (_watchLock)
             {
                 if (_pendingAdds.Count > 0)
@@ -333,12 +328,12 @@ namespace ModAPI.Debugging
                 }
             }
 
-            // Check values (reverse iteration for safe removal)
+            // Iterate backwards so dead watches can be removed in place.
             for (int i = _watches.Count - 1; i >= 0; i--)
             {
                 var w = _watches[i];
                 
-                // Clean up dead references (handles both GC and Unity destruction)
+                // Remove references collected by the GC or destroyed by Unity.
                 if (!w.IsAlive)
                 {
                     _watches.RemoveAt(i);
@@ -353,13 +348,10 @@ namespace ModAPI.Debugging
                     w.LastValue = null;
                 }
 
-                // Exception-safe value retrieval ensures that a single failing watcher 
-                // does not crash the entire update loop.
                 object currentVal;
                 try
                 {
-                    // Caching the GetValue method as a delegate avoids the overhead 
-                    // of reflection in every poll cycle.
+                    // Use the cached getter instead of reflecting during every poll.
                     currentVal = w.Getter(w.Instance.Target);
                     
                     // Check for error sentinel; if the getter returned the sentinel, 

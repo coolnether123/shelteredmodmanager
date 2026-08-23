@@ -7,7 +7,7 @@ using UnityEngine;
 namespace ModAPI.Debugging
 {
     /// <summary>
-    /// Game-agnostic, persistent IMGUI feedback capture surface. A host supplies storage and optional context.
+    /// Persistent IMGUI feedback form. The host supplies storage and optional context.
     /// </summary>
     public sealed class FeedbackOverlay : MonoBehaviour
     {
@@ -179,7 +179,7 @@ namespace ModAPI.Debugging
         private void DrawWindow(int windowId)
         {
             GUILayout.Space(5f);
-            GUILayout.Label("Notes autosave locally. Submit captures a clean frame and the recent runtime log.");
+            GUILayout.Label("Notes save as you type. Submit captures the screen without this window and includes recent logs.");
             GUILayout.Space(4f);
 
             GUI.SetNextControlName(ScratchControlName);
@@ -198,10 +198,10 @@ namespace ModAPI.Debugging
             GUILayout.Space(5f);
             GUILayout.BeginHorizontal();
             GUI.enabled = !string.IsNullOrEmpty(_scratch);
-            if (GUILayout.Button("Submit Entry", GUILayout.Height(28f)))
+            if (GUILayout.Button("Submit entry", GUILayout.Height(28f)))
                 SubmitFeedback(false);
             GUI.enabled = true;
-            if (GUILayout.Button("Screenshot Only", GUILayout.Height(28f)))
+            if (GUILayout.Button("Screenshot only", GUILayout.Height(28f)))
                 SubmitFeedback(true);
             if (GUILayout.Button("Close", GUILayout.Width(80f), GUILayout.Height(28f)))
                 Hide();
@@ -249,9 +249,8 @@ namespace ModAPI.Debugging
             string logExcerpt,
             bool screenshotOnly)
         {
-            // The click frame already contains this IMGUI window. Wait for a
-            // fresh frame in which OnGUI suppresses it, then capture that clean
-            // frame at the end of rendering.
+            // The click frame contains this IMGUI window. Wait until OnGUI suppresses the overlay,
+            // then capture the next frame after rendering finishes.
             yield return null;
             yield return new WaitForEndOfFrame();
 

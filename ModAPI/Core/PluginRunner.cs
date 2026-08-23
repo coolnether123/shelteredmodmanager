@@ -421,7 +421,7 @@ namespace ModAPI.Core
                 }
 
                 IsModernUnity = true;
-                MMLog.WriteDebug("Modern scene events hooked successfully.");
+                MMLog.WriteDebug("Modern scene events hooked.");
 
                 try
                 {

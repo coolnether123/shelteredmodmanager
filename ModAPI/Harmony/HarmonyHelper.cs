@@ -9,8 +9,8 @@ using System.Collections.Generic;
 namespace ModAPI.Harmony
 {
     /// <summary>
-    /// Provides safe, high-level utilities for Harmony patching and reflection.
-    /// Reduces boilerplate and ensures mods don't crash the game due to missing methods.
+    /// Applies Harmony patches by type and method name.
+    /// Missing target methods produce diagnostics instead of stopping the game.
     /// </summary>
     public static class HarmonyHelper
     {
@@ -93,8 +93,8 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Patch ALL overloads of a method by name.
-        /// Useful for methods like Foo(), Foo(int), Foo(string), etc.
+        /// Patches every overload of a method with the given name.
+        /// Use it for overload sets such as <c>Foo()</c>, <c>Foo(int)</c>, and <c>Foo(string)</c>.
         /// </summary>
         /// <param name="harmony">The Harmony instance to use for patching.</param>
         /// <param name="type">Target type containing the method.</param>
@@ -200,7 +200,7 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Patch all parameterless overloads (no arguments).
-        /// Convenience wrapper for PatchAllOverloads with Type.EmptyTypes.
+        /// Calls <see cref="PatchAllOverloads"/> with <see cref="Type.EmptyTypes"/>.
         /// </summary>
         public static void PatchAllParameterlessOverloads(
             HarmonyLib.Harmony harmony,

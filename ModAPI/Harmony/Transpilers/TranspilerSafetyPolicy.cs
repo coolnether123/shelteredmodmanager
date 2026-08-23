@@ -4,7 +4,7 @@ using ModAPI.Core;
 namespace ModAPI.Harmony
 {
     /// <summary>
-    /// Central policy surface for transpiler safety behavior.
+    /// Applies the shared transpiler validation policy.
     /// Keeps safety decisions in one place so FluentTranspiler and CooperativePatcher
     /// do not duplicate preference parsing logic.
     /// </summary>

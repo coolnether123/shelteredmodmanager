@@ -150,7 +150,7 @@ namespace ModAPI.Actors
     }
 
     /// <summary>
-    /// Complete actor API surface exposed by a game runtime.
+    /// Actor API exposed by a game runtime.
     /// Prefer this aggregate when a caller needs registry, components, bindings, events, simulation, and diagnostics together.
     /// </summary>
     public interface IActorSystem :

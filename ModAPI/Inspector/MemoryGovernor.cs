@@ -18,7 +18,7 @@ namespace ModAPI.Inspector
             var current = GC.GetTotalMemory(false);
             if (current > SoftLimit)
             {
-                MMLog.WriteWarning("Memory pressure: " + (current / 1024L / 1024L) + "MB / " + (SoftLimit / 1024L / 1024L) + "MB");
+                MMLog.WriteWarning("Memory pressure: " + (current / 1024L / 1024L) + " MB used, " + (SoftLimit / 1024L / 1024L) + " MB soft limit");
                 GC.Collect();
                 return true;
             }

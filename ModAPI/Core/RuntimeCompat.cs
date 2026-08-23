@@ -6,7 +6,7 @@ namespace ModAPI.Core
 {
     /// <summary>
     /// Compatibility helpers for supporting both Unity 5.3 (x86) and 5.6 (x64).
-    /// Keep version-conditional logic here so mods can call one API surface.
+    /// Keeps version-specific logic here so mods can call one stable API.
     /// </summary>
     public static class RuntimeCompat
     {

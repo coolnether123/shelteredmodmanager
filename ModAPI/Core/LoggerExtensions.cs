@@ -3,7 +3,7 @@ using System;
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Convenience extensions for <see cref="IModLogger"/>.
+    /// Adds exception logging to <see cref="IModLogger"/>.
     /// These keep common logging patterns available without exposing the global logger to plugin code.
     /// </summary>
     public static class LoggerExtensions

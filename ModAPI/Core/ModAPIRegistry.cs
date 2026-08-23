@@ -31,7 +31,7 @@ namespace ModAPI.Core
         /// <param name="apiName">Unique API name (use reverse-domain notation)</param>
         /// <param name="implementation">API implementation instance</param>
         /// <param name="providerModId">Optional mod ID that provides this API</param>
-        /// <returns>True if registered successfully, false if API name already exists</returns>
+        /// <returns>True when registered. False when the API name already exists.</returns>
         public static bool RegisterAPI<T>(string apiName, T implementation, string providerModId = null) where T : class
         {
             if (string.IsNullOrEmpty(apiName))
@@ -155,7 +155,7 @@ namespace ModAPI.Core
         /// </summary>
         /// <param name="apiName">API name to unregister</param>
         /// <param name="providerModId">Optional verification - only unregister if provider matches</param>
-        /// <returns>True if unregistered successfully</returns>
+        /// <returns>True when the registration was removed.</returns>
         public static bool UnregisterAPI(string apiName, string providerModId = null)
         {
             if (string.IsNullOrEmpty(apiName))

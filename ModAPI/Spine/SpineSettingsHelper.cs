@@ -7,7 +7,7 @@ using ModAPI.Core;
 namespace ModAPI.Spine
 {
     /// <summary>
-    /// Utility for scanning classes for ModSetting attributes and generating definitions.
+    /// Converts members marked with <see cref="ModSettingAttribute"/> into setting definitions.
     /// </summary>
     public static class SpineSettingsHelper
     {

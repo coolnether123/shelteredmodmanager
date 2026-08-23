@@ -34,7 +34,7 @@ namespace ModAPI.Core
         public Action<Action> Scheduler;
 
         /// <summary>
-        /// Convenience wrapper for deferred main-thread execution.
+        /// Queues work for the next main-thread update.
         /// </summary>
         public void RunNextFrame(Action action)
         {

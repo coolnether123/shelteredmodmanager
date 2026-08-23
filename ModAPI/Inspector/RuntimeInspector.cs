@@ -7,7 +7,7 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    // Simple in-game object explorer + inspector with click-to-select + bounds highlight
+    // In-game object hierarchy and inspector with click selection and bounds highlighting.
     internal class RuntimeInspector : MonoBehaviour
     {
         private Rect _window = new Rect(20, 20, 800, 500);
@@ -122,7 +122,7 @@ namespace ModAPI.Inspector
         {
             // Header bar
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(_pickMode ? "Pick: ON (click scene)" : "Pick: OFF", GUILayout.Width(160)))
+            if (GUILayout.Button(_pickMode ? "Pick: on (click scene)" : "Pick: off", GUILayout.Width(160)))
                 _pickMode = !_pickMode;
 
             GUILayout.Space(10);
@@ -165,7 +165,7 @@ namespace ModAPI.Inspector
             }
             else
             {
-                GUILayout.Label("No selection. Click a hierarchy item or enable Pick and click in the scene.");
+                GUILayout.Label("No selection. Select a hierarchy item, or enable Pick and click the scene.");
             }
 
             GUILayout.EndScrollView();
@@ -181,7 +181,7 @@ namespace ModAPI.Inspector
             if (t == null) return;
             if (!string.IsNullOrEmpty(_filter))
             {
-                // basic filter: skip branches that don't contain text
+                // Skip branches that do not contain the filter text.
                 var name = t.name ?? string.Empty;
                 if (name.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) < 0)
                 {
@@ -286,7 +286,7 @@ namespace ModAPI.Inspector
             try { fields = type.GetFields(flags); } catch (Exception ex) { MMLog.WarnOnce("RuntimeInspector.DrawComponentFields.GetFields", "Error getting fields: " + ex.Message); }
             try { props = type.GetProperties(flags); } catch (Exception ex) { MMLog.WarnOnce("RuntimeInspector.DrawComponentFields.GetProperties", "Error getting properties: " + ex.Message); }
 
-            // Keep it readable, skip Unity's heavy internals
+            // Skip Unity internals that add large, low-value object graphs.
             for (int i = 0; i < fields.Length; i++)
             {
                 var f = fields[i];
@@ -310,7 +310,7 @@ namespace ModAPI.Inspector
         {
             var name = mi != null ? mi.Name : string.Empty;
             if (string.IsNullOrEmpty(name)) return true;
-            // Skip very noisy Unity internals commonly present
+            // Skip high-volume Unity internals.
             if (name == "rigidbody" || name == "camera" || name == "light") return true;
             return false;
         }
@@ -321,7 +321,7 @@ namespace ModAPI.Inspector
             {
                 var v = getter != null ? getter() : null;
                 if (v == null) return "null";
-                // Prevent huge collections dumping
+                // Limit collection output so the inspector remains responsive.
                 var s = v.ToString();
                 if (s == null) return "(toString null)";
                 if (s.Length > 256) s = s.Substring(0, 256) + "…";

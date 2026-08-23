@@ -16,8 +16,7 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Semantic navigation extensions for FluentTranspiler.
-    /// Allows finding high-level code structures like loops and if-statements.
+    /// Finds loop and conditional-branch structures in a FluentTranspiler instruction stream.
     /// </summary>
     public static class ControlFlowExtensions
     {
@@ -31,12 +30,12 @@ namespace ModAPI.Harmony
             var instructions = t.Instructions().ToList();
             int currentPos = t.CurrentIndex;
 
-            // Pattern: Find a branch that jumps to an earlier instruction
+            // A backward branch identifies the loop header target.
             for (int i = currentPos; i < instructions.Count; i++)
             {
                 if (t.IsBackwardBranch(instructions[i], i, out int targetIndex))
                 {
-                    // For a 'for' loop, we usually want to be at the jump target (start of body or check)
+                    // Position the matcher at the branch target, which starts the body or condition.
                     return t.MoveTo(targetIndex);
                 }
             }
@@ -47,11 +46,10 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Positions the matcher at the first instruction inside the currently matched loop.
+        /// Returns the matcher at the loop header selected by <see cref="FindLoop"/>.
         /// </summary>
         public static FluentTranspiler AtLoopHeader(this FluentTranspiler t)
         {
-            // Usually we are already at the header if FindLoop succeeded
             return t;
         }
 
@@ -70,7 +68,7 @@ namespace ModAPI.Harmony
             {
                 if (condition(instructions[i]))
                 {
-                    // Found the condition. Now look for the branch instruction that handles the 'if'
+                    // Find the conditional branch that consumes the matched condition.
                     for (int j = i + 1; j < Math.Min(i + 5, instructions.Count); j++)
                     {
                         if (IsConditionalBranch(instructions[j].opcode))

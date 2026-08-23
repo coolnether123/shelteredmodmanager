@@ -498,7 +498,7 @@ namespace ModAPI.Inspector
                 return SafeToString(value);
             }
 
-            // Accept "Health" lock names for "this.Health" field captures.
+            // Match "Health" lock names to captured fields such as "this.Health".
             if (!variableName.StartsWith("this.", StringComparison.OrdinalIgnoreCase))
             {
                 var thisKey = "this." + variableName;
@@ -516,9 +516,8 @@ namespace ModAPI.Inspector
             if (obj == null) return "null";
             try
             {
-                // Basic string conversion. Note: In Unity, some objects (like destroyed components) 
-                // might throw if ToString() is called from a background thread.
-                // However, most standard types (int, float, string) and simple classes are safe.
+                // Unity objects, including destroyed components, may throw when a background
+                // thread calls ToString(). Primitive values and ordinary managed objects do not.
                 return obj.ToString();
             }
             catch
