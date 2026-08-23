@@ -127,13 +127,13 @@ namespace ModAPI.Core
     public interface ISaveSystem
     {
         /// <summary>
-        /// Gets the absolute path to the active save folder (e.g., .../Saves/Standard/Slot_8).
+        /// Gets the absolute path to the active save folder, such as <c>.../Saves/Standard/Slot_8</c>.
         /// Returns null if no save is currently loaded.
         /// </summary>
         string GetCurrentSlotPath();
 
         /// <summary>
-        /// Gets the human-readable slot index (e.g., 8). Returns -1 if no save is loaded.
+        /// Gets the displayed slot index, such as 8. Returns -1 if no save is loaded.
         /// </summary>
         int ActiveSlotIndex { get; }
 
@@ -142,7 +142,9 @@ namespace ModAPI.Core
         /// The data is saved as JSON in 'mods/{ModId}/data.json' within the slot folder.
         /// Call this during Initialize().
         /// </summary>
-        /// <param name="migrationCallback">Optional callback invoked if no data is found for this key (e.g., to load from legacy path).</param>
+        /// <param name="key">Unique key for this data within the mod.</param>
+        /// <param name="data">Object to save and update during load.</param>
+        /// <param name="migrationCallback">Optional callback invoked when the key has no data, such as a legacy-path loader.</param>
         void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class;
     }
 

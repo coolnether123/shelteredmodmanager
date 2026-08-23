@@ -7,7 +7,7 @@ namespace ModAPI.Util
 {
     /// <summary>
     /// A serializable wrapper for dictionaries to work around legacy XML/JSON limitations.
-    /// Used by mods to track persistent state (e.g. character IDs mapped to mod data).
+    /// Stores persistent mappings, such as character IDs to mod data.
     /// </summary>
     [Serializable]
     public class SaveLoadDictionary<TKey, TValue> : ISerializationCallbackReceiver, IDictionary<TKey, TValue>

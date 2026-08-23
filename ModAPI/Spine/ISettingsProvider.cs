@@ -8,12 +8,12 @@ namespace ModAPI.Spine
     public interface ISettingsProvider
     {
         /// <summary>
-        /// Returns a list of SettingDefinitions. Usually implemented by calling <see cref="SpineSettingsHelper.Scan(object)"/>.
+        /// Returns the setting definitions, commonly from <see cref="SpineSettingsHelper.Scan(object)"/>.
         /// </summary>
         IEnumerable<SettingDefinition> GetSettings();
         
         /// <summary>
-        /// Returns the object instance that holds the setting values (likely 'this' or a specific settings POCO).
+        /// Returns the object that holds the setting values, such as <c>this</c> or a settings POCO.
         /// </summary>
         object GetSettingsObject();
         
@@ -94,7 +94,7 @@ namespace ModAPI.Spine
     }
 
     /// <summary>
-    /// Convenience reads for settings providers.
+    /// Reads optional settings values with fallback defaults.
     /// These helpers intentionally fall back quietly so runtime feature flags can be optional.
     /// </summary>
     public static class SettingsProviderExtensions

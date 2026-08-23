@@ -10,7 +10,7 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    // Live IL Inspector. Toggle with F10.
+    // In-game IL inspector. Press F10 to toggle it.
     internal class RuntimeILInspector : MonoBehaviour
     {
         private Rect _window = new Rect(20, 50, 900, 600);
@@ -127,8 +127,7 @@ namespace ModAPI.Inspector
 
             try 
             {
-                // Simple search logic
-                // Try to find assembly
+                // Resolve an assembly first, then filter its types.
                 Assembly asm = null;
                 foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
                 {
@@ -151,9 +150,7 @@ namespace ModAPI.Inspector
                     var types = asm.GetTypes();
                     foreach (var t in types) 
                     {
-                         // Optimization: Skip valid types if typeFilter specifies name
-                         // If _typeFilter matches assembly, we search all types? Too many.
-                         // Let's assume _typeFilter is primarily for Type Name if assembly matches default.
+                         // If the filter names a type, skip unrelated types even when the assembly matches.
                          
                          bool typeMatch = t.Name.IndexOf(_typeFilter, StringComparison.OrdinalIgnoreCase) >= 0 || t.FullName.IndexOf(_typeFilter, StringComparison.OrdinalIgnoreCase) >= 0;
                          if (string.IsNullOrEmpty(_typeFilter) || typeMatch)
@@ -193,12 +190,11 @@ namespace ModAPI.Inspector
             
             try 
             {
-                // Get Original Instructions
+                // Read the original instructions before applying registered transpilers.
                 var patchInfo = HarmonyLib.Harmony.GetPatchInfo(method);
                 List<CodeInstruction> codes = null;
                 
-                // Get original
-                // Harmony 2.x
+                // Harmony 2.x exposes the original instructions through PatchProcessor.
                 var originals = PatchProcessor.GetOriginalInstructions(method);
                 if (originals != null) codes = originals.ToList();
                 
@@ -206,13 +202,10 @@ namespace ModAPI.Inspector
                 {
                     _statusMessage = $"Patched by: {string.Join(", ", patchInfo.Owners.ToArray())}. Transpilers: {patchInfo.Transpilers.Count}";
                     
-                    // Can we simulate?
-                    // We can try to run the transpilers on the codes
+                    // Simulate each registered transpiler against a copy of the instructions.
                     if (patchInfo.Transpilers.Count > 0 && codes != null)
                     {
-                        // To simulate, we need instances of transpiler methods.
-                        // Harmony stores them as Patch objects with MethodInfo.
-                        // We can manually invoke them.
+                        // Harmony stores each transpiler as a Patch with a MethodInfo.
 
                         // A throwaway ILGenerator so transpilers that declare locals or define labels
                         // during simulation succeed instead of NullReferenceException-ing on a null
@@ -225,8 +218,7 @@ namespace ModAPI.Inspector
                             try
                             {
                                 var tMethod = tr.PatchMethod;
-                                // Transpilers usually return IEnumerable<CodeInstruction> and take IEnumerable<CodeInstruction> (and maybe ILGenerator)
-                                // We can try to invoke
+                                // Invoke supported transpiler signatures with the copied instruction stream.
                                 var parameters = tMethod.GetParameters();
                                 object[] args = new object[parameters.Length];
                                 for (int i=0; i<parameters.Length; i++)
@@ -265,10 +257,8 @@ namespace ModAPI.Inspector
             }
         }
 
-        // Produces a real but throwaway ILGenerator for transpiler simulation, so patches that
-        // declare locals or define labels do not throw on a null generator. Returns null only if
-        // the runtime refuses to create a DynamicMethod, in which case simulation degrades to the
-        // previous best-effort (label/local-using transpilers may still fail, caught per-transpiler).
+        // Create a throwaway ILGenerator so simulated transpilers can declare locals and labels.
+        // If DynamicMethod creation fails, callers pass null and handle failures per transpiler.
         private static ILGenerator CreateSimulationGenerator()
         {
             try

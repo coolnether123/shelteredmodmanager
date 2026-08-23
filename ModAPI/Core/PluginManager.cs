@@ -428,7 +428,7 @@ namespace ModAPI.Core
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError("PrepareAssemblies: FAILED to load assembly '" + dllPath + "' for mod '" + entry.Id + "': " + ex);
+                    MMLog.WriteError("PrepareAssemblies failed to load assembly '" + dllPath + "' for mod '" + entry.Id + "': " + ex);
                 }
             }
 
@@ -1292,7 +1292,7 @@ namespace ModAPI.Core
                 log.IsDebugEnabled = entry.About.debugLogging;
             }
             ISettingsProvider settings = null;
-            // Legacy AutoSettings support? Replaced by newer auto-scan in ModManagerBase
+            // ModManagerBase now discovers settings. Keep the context empty for legacy plugins.
 
             PluginContextImpl context = new PluginContextImpl
             {

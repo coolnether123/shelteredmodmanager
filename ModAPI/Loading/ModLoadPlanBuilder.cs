@@ -16,7 +16,7 @@ namespace ModAPI.Loading
 
             if (orderedModIds == null)
             {
-                MMLog.WriteDebug("No load order provided (loadorder.json missing). Enabling ALL discovered mods.");
+                MMLog.WriteDebug("No load order provided because loadorder.json is missing. Enabling all discovered mods.");
                 return discovered;
             }
 

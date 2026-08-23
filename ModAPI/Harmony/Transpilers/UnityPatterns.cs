@@ -9,7 +9,7 @@ namespace ModAPI.Harmony
 {
     /// <summary>
     /// Common Unity-specific IL patterns and replacements.
-    /// Focuses on universal Unity engine types (Vector2, Time, GameObject, etc.).
+    /// Matches Unity engine types such as Vector2, Time, and GameObject.
     /// </summary>
     public static class UnityPatterns
     {
@@ -40,7 +40,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Replace ALL Vector2.zero or Vector3.zero calls in the method.
+        /// Replaces every <c>Vector2.zero</c> or <c>Vector3.zero</c> call in the method.
         /// </summary>
         public static FluentTranspiler ReplaceAllVectorZero(this FluentTranspiler t, Type vectorType)
         {
@@ -93,7 +93,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Replace ALL Time.deltaTime calls in the method.
+        /// Replaces every <c>Time.deltaTime</c> call in the method.
         /// </summary>
         public static FluentTranspiler ReplaceAllTimeDeltaTime(
             this FluentTranspiler t, 

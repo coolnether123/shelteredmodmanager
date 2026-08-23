@@ -69,13 +69,11 @@ namespace ModAPI.Core
 
             public void RunWhenSceneReady(string sceneName, Action action)
             {
-                // Already loaded?
+                // Run on the next frame when the target scene is already active.
                 try
                 {
                     if (ModAPI.SceneUtil.GetCurrentSceneName() == sceneName)
                     {
-                        // If the target scene is already loaded and active, run the action immediately (or next frame)
-                        // without waiting for a scene load event, optimizing execution.
                         StartCoroutine(RunNextFrame(action));
                         return;
                     }

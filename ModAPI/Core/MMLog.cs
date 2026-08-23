@@ -656,7 +656,7 @@ namespace ModAPI.Core
 
                     Assembly callingAssembly = declaringType.Assembly;
                     
-                    // If we found an assembly that isn't ModAPI, it's a mod!
+                    // The first non-ModAPI assembly belongs to the calling mod.
                     if (callingAssembly != modAPIAssembly)
                     {
                         lock (_cacheLock)

@@ -9,8 +9,7 @@ using ModAPI.Spine;
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Recommended base class for complex mods. 
-    /// Manages its own Lifecycle and provides pre-wired access to ModAPI systems.
+    /// Base class for mods that use ModAPI lifecycle, logging, settings, and persistence services.
     /// </summary>
     public abstract class ModManagerBase : MonoBehaviour
     {
@@ -120,9 +119,7 @@ namespace ModAPI.Core
                 {
                     if (type.IsAbstract || type.IsInterface) continue;
                     
-                    // We also support scanning for any field with [ModSetting(Scope=PerSave)] etc, 
-                    // but legacy persistence still uses ModPersistentDataAttribute (to be deprecated).
-                    // For now keeping simpler scan logic.
+                    // Persistence registration remains explicit in the base implementation.
                 }
             }
             catch (Exception ex)
@@ -132,7 +129,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Convenience method to register data for persistence.
+        /// Registers data with the active save system.
         /// </summary>
         protected void RegisterPersistentData<T>(string key, T data, Action<T> migrationCallback = null) where T : class
         {
@@ -140,7 +137,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Convenience method for starting coroutines without referencing Context directly.
+        /// Starts a coroutine through the plugin context when it is available.
         /// </summary>
         public new Coroutine StartCoroutine(IEnumerator routine)
         {
@@ -249,7 +246,7 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Utility for declarative event subscription that guarantees cleanup.
+    /// Tracks event unsubscription callbacks and runs them during disposal.
     /// </summary>
     public class EventRegistry : IDisposable
     {

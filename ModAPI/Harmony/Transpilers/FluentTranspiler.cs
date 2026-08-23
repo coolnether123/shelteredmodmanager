@@ -121,18 +121,18 @@ namespace ModAPI.Harmony
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The framework is built around a short lifecycle: open a session for the Harmony IL stream,
-    /// find a stable anchor in the target method, apply a focused edit, and finish through
-    /// <see cref="Build"/> so validation and diagnostics happen in one place.
+    /// Open a session for the Harmony IL stream, find a stable anchor in the target method,
+    /// apply an edit, and finish through
+    /// <c>Build</c> so validation and diagnostics happen in one place.
     /// </para>
     /// <para>
-    /// Most patches should use <see cref="Execute"/> because it wraps that lifecycle in the
+    /// Most patches should use <c>Execute</c> because it wraps that lifecycle in the
     /// normal Harmony transpiler shape. Use <see cref="For"/> when a patch needs explicit
-    /// control over when <see cref="Build"/> runs or which validation mode is used.
+    /// control over when <c>Build</c> runs or which validation mode is used.
     /// </para>
     /// <para>
-    /// The goal is to keep patch intent readable to developers who understand the target game
-    /// logic, without forcing every patch to manually manage labels, branch targets, and stack checks.
+    /// The wrapper manages labels, branch targets, and stack checks so each patch can state the
+    /// target game behavior it changes.
     /// </para>
     /// </remarks>
     public partial class FluentTranspiler
@@ -167,9 +167,8 @@ namespace ModAPI.Harmony
 
         private FluentTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null)
         {
-            // Cache initial state for diff/timing. 
-            // CRITICAL: We MUST buffer the enumerable here because it might be spent 
-            // by the time the matcher is initialized if we use it directly.
+            // Buffer the enumerable once. Some Harmony sources cannot be enumerated again after
+            // CodeMatcher consumes them, and the initial copy is also needed for diffs.
             var instructionsList = instructions as List<CodeInstruction> ?? instructions.ToList();
             
             _initialInstructions = instructionsList.Select(i => new CodeInstruction(i)).ToList(); // Deep copy initial state
@@ -187,10 +186,10 @@ namespace ModAPI.Harmony
         /// <remarks>
         /// Use this entry point when a patch needs manual control over the session lifetime, such as
         /// choosing strict validation rules or building in multiple stages. For ordinary game patches,
-        /// <see cref="Execute"/> is the simpler entry point.
+        /// <c>Execute</c> is the simpler entry point.
         /// </remarks>
         /// <param name="instructions">The raw IL instructions provided by the Harmony transpiler delegate.</param>
-        /// <param name="originalMethod">The method being patched. Providing this enables advanced <see cref="StackSentinel"/> validation.</param>
+        /// <param name="originalMethod">The method being patched. Supplying it enables <see cref="StackSentinel"/> validation.</param>
         /// <param name="generator">The ILGenerator from the transpiler signature. Required if you intend to use <c>DefineLabel</c> or <c>DeclareLocal</c>.</param>
         /// <returns>A new <see cref="FluentTranspiler"/> instance focused on the provided method.</returns>
         public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null)
@@ -199,11 +198,10 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Standard object equality. 
+        /// Uses standard object reference equality.
         /// </summary>
         /// <remarks>
-        /// <b>Note:</b> This is a standard C# reference equality check. 
-        /// It is NOT a transpiler matching command. To match an IL sequence, 
+        /// This is not a transpiler matching command. To match an IL sequence,
         /// use <see cref="Matches"/> or <see cref="MatchIntent"/>.
         /// </remarks>
         public new bool Equals(object obj) => base.Equals(obj);
@@ -214,15 +212,14 @@ namespace ModAPI.Harmony
         /// <remarks>
         /// <para>
         /// This is the normal entry point for fluent transpilers. It creates the session, runs the
-        /// caller's transform, and then finishes through <see cref="Build"/> with the framework's default
+        /// caller's transform, and then finishes through <c>Build</c> with the framework's default
         /// non-strict validation policy.
         /// </para>
         /// <para>
-        /// The callback should stay focused on IL intent: find a stable anchor in the target method,
-        /// assert the match, and apply the smallest safe edit that redirects or replaces that behavior.
+        /// In the callback, find a stable anchor, assert the match, and apply the required edit.
         /// </para>
         /// <para>
-        /// <b>Usage Example:</b>
+        /// <b>Example:</b>
         /// <code>
         /// [HarmonyTranspiler]
         /// public static IEnumerable&lt;CodeInstruction&gt; Transpiler(IEnumerable&lt;CodeInstruction&gt; instructions, MethodBase original)
@@ -284,7 +281,7 @@ namespace ModAPI.Harmony
             return transpiler.Build(profile);
         }
         /// <summary>
-        /// Power-search for a method call using a high-level API.
+        /// Finds a method call by declaring type, name, and optional signature.
         /// </summary>
         /// <param name="type">The declaring type (class) of the method.</param>
         /// <param name="methodName">The name of the method.</param>
@@ -307,8 +304,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Match a property getter call. 
-        /// Automatically handles both Call and Callvirt opcodes.
+        /// Matches a property getter emitted with either <c>call</c> or <c>callvirt</c>.
         /// </summary>
         /// <param name="type">Declaring type of the property.</param>
         /// <param name="propertyName">Name of the property (without "get_" prefix).</param>
@@ -592,8 +588,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Search for an integer constant load.
-        /// Automatically handles Ldc_I4_0 through Ldc_I4_S/Inline.
+        /// Searches all <c>Ldc_I4</c> encodings for an integer constant.
         /// </summary>
         /// <param name="value">The integer value to find.</param>
         /// <param name="mode">Whether to start from the beginning or continue.</param>
@@ -768,19 +763,11 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Automatically backtracks and replaces an entire value assignment sequence.
+        /// Backtracks from the current store instruction and replaces its assignment sequence.
         /// </summary>
         /// <remarks>
-        /// <b>Why use this?</b> 
-        /// <para>
-        /// In standard IL, replacing `x = y + 1` is hard because you have to figure out exactly where the code 
-        /// *started* pushing values for that line. 
-        /// </para>
-        /// <para>
-        /// <b>ReplaceAssignment</b> uses the Stack Sentinel to do that work for you. It scans backwards 
-        /// from your current position, finds the exact "root" of the expression, and swaps the 
-        /// whole block. It saves you from having to manually count `ldarg` or `ldloc` instructions.
-        /// </para>
+        /// <see cref="ReplaceAssignment"/> uses <see cref="StackSentinel"/> to find where the stored
+        /// value began. It then replaces the load, calculation, and store as one block.
         /// </remarks>
         /// <param name="newExpression">The instructions that should now generate and store the value.</param>
         public FluentTranspiler ReplaceAssignment(CodeInstruction[] newExpression)
@@ -798,8 +785,7 @@ namespace ModAPI.Harmony
 
         private int BacktrackToExpressionStart(int currentPos)
         {
-            // Robust stack analysis: We need to find the instruction where 
-            // the value currently being stored was first pushed.
+            // Find the instruction that first pushed the value stored at the current position.
             var instructions = _matcher.Instructions();
             var stackAnalysis = StackSentinel.Analyze(instructions, _originalMethod, out _);
             
@@ -809,16 +795,14 @@ namespace ModAPI.Harmony
                  return currentPos;
             }
 
-            // We are looking for the point where the stack depth was exactly 
-            // targetStack.Count - 1 (i.e., the depth before the current value was pushed).
+            // The expression starts where the stack is one value shallower than at the store.
             int targetDepth = Math.Max(0, targetStack.Count - 1);
 
             for (int i = currentPos - 1; i >= 0; i--)
             {
                 if (stackAnalysis.TryGetValue(i, out var prevStack))
                 {
-                    // If we found a point where the stack was at our target depth,
-                    // that's the start of the expression sequence.
+                    // The first matching depth is the start of the expression sequence.
                     if (prevStack.Count == targetDepth) return i;
                 }
             }
@@ -835,8 +819,7 @@ namespace ModAPI.Harmony
         #region Modification Methods
 
         /// <summary>
-        /// Replace current instruction with a new OpCode and operand.
-        /// Automatically preserves any labels attached to the original instruction.
+        /// Replaces the current instruction and preserves its labels.
         /// </summary>
         public FluentTranspiler ReplaceWith(OpCode opcode, object operand = null)
         {
@@ -854,20 +837,12 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Replace current match with a call to a static replacement method.
-        /// Automatically handles label preservation and validates that the target is static.
-        /// </summary>
-        /// <param name="type">The class containing your static hook.</param>
-        /// <param name="methodName">The name of the static method.</param>
-        /// <param name="parameterTypes">Optional parameter types for overload resolution.</param>
-        /// <summary>
         /// Replaces the current instruction with a call to a static hook.
-        /// Automatically handles label preservation and ensures the target method is compatible.
+        /// Preserves labels and validates that the hook is compatible.
         /// </summary>
         /// <remarks>
-        /// <b>Warning:</b> The target method MUST be <c>static</c>. If you are replacing an instance 
-        /// method call, the target method should usually accept the 'this' instance as its first argument
-        /// to maintain stack balance.
+        /// The hook must be static. To replace an instance method call, accept the instance as the
+        /// hook's first argument so the stack remains balanced.
         /// </remarks>
         /// <param name="type">The mod class containing the static replacement method.</param>
         /// <param name="methodName">The name of the static method.</param>
@@ -891,7 +866,7 @@ namespace ModAPI.Harmony
             {
                 AddWarning($"ReplaceWithCall could not resolve static replacement {type.Name}.{methodName}" +
                            (parameterTypes != null ? $"({string.Join(", ", parameterTypes.Select(p => p.Name).ToArray())})" : "") +
-                           ". Fix: the replacement hook must be a public/non-public static method; verify the name and the overload's parameter types.");
+                           ". Fix: the replacement hook must be a public or non-public static method. Verify the name and the overload's parameter types.");
                 return this;
             }
 
@@ -905,7 +880,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("ReplaceWithCall: no instruction is selected, so there is no call to redirect. Fix: run a Find*/Match* (e.g. FindCall/MatchCall) that succeeds before ReplaceWithCall, or use the canonical t.ForCall(...).ReplaceAllWith(...) / t.ReplaceCalls(mi).WithCall(mi) which locate the call for you (README §4.1).");
+                AddSoftFailure("ReplaceWithCall: no instruction is selected, so there is no call to redirect. Fix: run a successful Find* or Match*, such as FindCall or MatchCall, before ReplaceWithCall. You can also use t.ForCall(...).ReplaceAllWith(...) or t.ReplaceCalls(mi).WithCall(mi), which find the call before replacing it. See README section 4.1.");
                 return this;
             }
 
@@ -945,8 +920,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Safely inserts instructions at the very beginning of the method.
-        /// Automatically handles label preservation from the original first instruction.
+        /// Inserts instructions at the beginning of the method and preserves entry labels.
         /// </summary>
         public FluentTranspiler InsertAtStart(params CodeInstruction[] instructions)
         {
@@ -954,8 +928,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Safely inserts instructions before the final 'ret' instruction.
-        /// If multiple returns exist, it inserts before ALL of them.
+        /// Inserts instructions before every <c>ret</c> instruction.
         /// </summary>
         public FluentTranspiler InsertAtExit(params CodeInstruction[] instructions)
         {
@@ -971,7 +944,7 @@ namespace ModAPI.Harmony
             return this;
         }
 
-        /// <summary>Insert instruction before current position (handles branch fixups automatically).</summary>
+        /// <summary>Inserts an instruction before the current position and transfers branch labels.</summary>
         public FluentTranspiler InsertBefore(OpCode opcode, object operand = null)
         {
             if (!_matcher.IsValid)
@@ -1004,12 +977,10 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Inserts a sequence of instructions BEFORE the current position.
-        /// Automatically transfers labels from the original instruction to the FIRST new instruction.
+        /// Inserts instructions before the current position and transfers labels to the first insertion.
         /// </summary>
         /// <remarks>
-        /// This is the safest way to inject logic at a branch target, as it ensures that jumps 
-        /// intended for the original instruction now land on your injected logic.
+        /// Branches that targeted the original instruction land on the first inserted instruction.
         /// </remarks>
         /// <param name="instructions">The array of instructions to insert.</param>
         public FluentTranspiler InsertBefore(params CodeInstruction[] instructions)
@@ -1074,7 +1045,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Inserts a sequence of instructions AFTER the current position.
+        /// Inserts a sequence of instructions after the current position.
         /// The matcher remains on the ORIGINAL instruction.
         /// </summary>
         /// <remarks>
@@ -1168,9 +1139,9 @@ namespace ModAPI.Harmony
         #region Variable Capture
 
         /// <summary>
-        /// Automatically emits an Ldloc instruction for a local variable by index or name.
+        /// Emits an <c>Ldloc</c> instruction for a numeric local variable index.
         /// </summary>
-        /// <param name="localIndexOrName">The index (e.g. "0") or name (if symbols available) of the local variable.</param>
+        /// <param name="localIndexOrName">The local variable index, such as "0". Names are rejected because symbols are unavailable.</param>
         public FluentTranspiler CaptureLocal(string localIndexOrName)
         {
             if (!_matcher.IsValid) return this;
@@ -1178,7 +1149,7 @@ namespace ModAPI.Harmony
             // Only a numeric local index is resolvable. Local *names* are not recoverable here:
             // System.Reflection's LocalVariableInfo (net35) exposes no name, and Harmony hands
             // transpilers no PDB/debug symbols, so there is nothing to look a name up against.
-            // Refuse a name honestly (as a soft failure) instead of silently emitting nothing.
+            // Return a soft failure for names instead of emitting no instruction.
             if (int.TryParse(localIndexOrName, out int index))
             {
                 _matcher.Insert(new CodeInstruction(GetLdlocOpCode(index), index > 3 ? (object)index : null));
@@ -1189,7 +1160,7 @@ namespace ModAPI.Harmony
                 $"CaptureLocal could not resolve local name '{localIndexOrName}': local variable names " +
                 "are not available to transpilers on this runtime (net35 reflection exposes no local names " +
                 "and Harmony provides no debug symbols). Fix: pass the numeric local index instead, " +
-                "e.g. CaptureLocal(\"0\").");
+                "Use a numeric index, such as CaptureLocal(\"0\").");
             return this;
         }
 
@@ -1221,13 +1192,13 @@ namespace ModAPI.Harmony
         #region Bulk Operations
 
         /// <summary>
-        /// Replace ALL occurrences of a specific method call throughout the entire instruction stream.
+        /// Replaces every occurrence of a method call in the instruction stream.
         /// Handles labels correctly and uses resilient type matching (by Name/FullName).
         /// </summary>
         /// <remarks>
         /// Legacy redirect entry point retained for compatibility. The canonical form is
         /// <c>t.ForCall(sourceType, sourceMethod).ReplaceAllWith(targetType, targetMethod, targetParams)</c>
-        /// — see Transpilers/README.md §4.1. This shim forwards to that single implementation so the
+        /// See Transpilers/README.md section 4.1. This shim forwards to that implementation so the
         /// two paths cannot drift.
         /// </remarks>
         /// <param name="sourceType">The class containing the method to replace.</param>
@@ -1235,7 +1206,7 @@ namespace ModAPI.Harmony
         /// <param name="targetType">Your class containing the replacement static method.</param>
         /// <param name="targetMethod">The name of your static replacement method.</param>
         /// <param name="targetParams">Optional parameter types for target overload resolution.</param>
-        [Obsolete("Use t.ForCall(sourceType, sourceMethod).ReplaceAllWith(targetType, targetMethod, targetParams) — see Transpilers/README.md §4.1.", false)]
+        [Obsolete("Use t.ForCall(sourceType, sourceMethod).ReplaceAllWith(targetType, targetMethod, targetParams). See Transpilers/README.md section 4.1.", false)]
         public FluentTranspiler ReplaceAllCalls(Type sourceType, string sourceMethod,
             Type targetType, string targetMethod, Type[] targetParams = null)
         {
@@ -1313,13 +1284,13 @@ namespace ModAPI.Harmony
             }
         }
 
-        /// <summary>Structured diagnostics for callers that need severity/category instead of raw strings.</summary>
+        /// <summary>Structured diagnostics with severity and category values.</summary>
         public IList<TranspilerDiagnostic> Diagnostics { get { return _diagnostics.AsReadOnly(); } }
 
         /// <summary>Patch-recipe diagnostics captured during this transpiler run.</summary>
         public IList<FluentPatchDiagnostic> PatchDiagnostics { get { return _patchDiagnostics.AsReadOnly(); } }
 
-        /// <summary>The most recent high-level patch diagnostic, useful for fail-safe fallback logging.</summary>
+        /// <summary>The most recent recipe diagnostic for fallback logging.</summary>
         public FluentPatchDiagnostic LatestPatchDiagnostic
         {
             get
@@ -1364,7 +1335,7 @@ namespace ModAPI.Harmony
             AddDiagnostic(TranspilerDiagnosticSeverity.SoftFailure, category, message);
         }
 
-        /// <summary>Add a diagnostic note that should only surface in verbose/debug tooling.</summary>
+        /// <summary>Adds a diagnostic note that appears only in verbose or debug tools.</summary>
         public void AddNote(string message)
         {
             AddDiagnostic(TranspilerDiagnosticSeverity.Note, ClassifyDiagnostic(message, TranspilerDiagnosticSeverity.Note), message);
@@ -1376,7 +1347,7 @@ namespace ModAPI.Harmony
             AddDiagnostic(TranspilerDiagnosticSeverity.Note, category, message);
         }
 
-        /// <summary>Centralized typed diagnostic writer used by all helper entry points.</summary>
+        /// <summary>Records a typed diagnostic for all public entry points.</summary>
         public void AddDiagnostic(TranspilerDiagnosticSeverity severity, TranspilerDiagnosticCategory category, string message)
         {
             if (string.IsNullOrEmpty(message)) return;
@@ -1481,8 +1452,7 @@ namespace ModAPI.Harmony
         #region Pattern Matching & Safer Operations
 
         /// <summary>
-        /// Move backwards in the instruction stream. 
-        /// Safer than Previous() for checking context before removals.
+        /// Moves to an absolute position in the instruction stream.
         /// </summary>
         /// <param name="absolutePosition">Absolute index to move to.</param>
         public FluentTranspiler MoveTo(int absolutePosition)
@@ -1490,7 +1460,7 @@ namespace ModAPI.Harmony
             var instructions = _matcher.Instructions().ToList();
             if (absolutePosition < 0 || absolutePosition >= instructions.Count)
             {
-                AddSoftFailure($"MoveTo: index {absolutePosition} is out of range (the stream has {instructions.Count} instruction(s), valid indices 0..{instructions.Count - 1}). Fix: an earlier insert/remove likely shifted indices — recompute the target from a fresh Instructions() snapshot or anchor on a Find*/Match* instead of a fixed index.");
+                AddSoftFailure($"MoveTo: index {absolutePosition} is out of range (the stream has {instructions.Count} instruction(s), valid indices 0..{instructions.Count - 1}). Fix: an earlier insert or removal likely shifted indices. Recompute the target from a fresh Instructions() snapshot, or anchor on a Find*/Match* instead of a fixed index.");
                 return this;
             }
             
@@ -1500,13 +1470,10 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Replaces a range of instructions with a new sequence.
-        /// Optimized for replacing entire blocks of logic (e.g., an 'if' statement body).
         /// </summary>
         /// <remarks>
-        /// This method includes a **Safety Analysis**: if a branch in the method body 
-        /// targets an instruction INSIDE the range being removed, the transpiler will 
-        /// throw a warning to prevent corruption. It also automatically preserves labels 
-        /// from the first removed instruction.
+        /// The method rejects a removal when a branch targets the middle of the range. It preserves
+        /// labels from the first removed instruction.
         /// </remarks>
         /// <param name="removeCount">The number of original instructions to delete.</param>
         /// <param name="newInstructions">The instructions to insert in their place.</param>
@@ -1668,7 +1635,7 @@ namespace ModAPI.Harmony
                         incomingBranchMap.TryGetValue(label, out jumper);
                         if (jumper != null)
                         {
-                            AddWarning($"[CRITICAL SAFETY] Unsafe Jump Detected: Instruction @IL_{methodScope.IndexOf(jumper):X4} ({jumper.opcode}) targets the middle of your replacement block at offset {r} (Label: {label}). Aborting.");
+                            AddWarning($"[CRITICAL SAFETY] Instruction @IL_{methodScope.IndexOf(jumper):X4} ({jumper.opcode}) targets offset {r} in the middle of the replacement block (label: {label}). Replacement cancelled.");
                             return false;
                         }
                     }
@@ -1907,32 +1874,19 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Performs a global search-and-replace for a specific multi-instruction pattern.
+        /// Replaces every occurrence of a multi-instruction pattern.
         /// </summary>
         /// <remarks>
-        /// <b>Why use this?</b>
+        /// <para>Use predicates to match instruction shapes instead of fixed offsets.</para>
         /// <para>
-        /// If you need to redirect something high-level (like every coordinate calculation in the game), 
-        /// doing it manually is a nightmare. 
-        /// </para>
-        /// <para>
-        /// <b>ReplaceAllPatterns</b> is your "find/replace all." It is designed for longevity: 
-        /// it uses instruction fingerprints rather than hardcoded offsets, meaning your patch 
-        /// is much more likely to survive game updates.
-        /// </para>
-        /// <para>
-        /// <b>Step-by-Step Usage:</b>
         /// <list type="number">
-        /// <item>Define the <paramref name="patternPredicates"/>: An array of lambdas where each one matches 
-        /// one instruction in the sequence (e.g. <c>instr => instr.IsLdcI4(2)</c>).</item>
-        /// <item>Define the <paramref name="replaceWith"/>: The new instructions that will occupy that space.</item>
-        /// <item>Decide on <paramref name="preserveInstructionCount"/>: If true, the system will pad your 
-        /// replacement with <c>Nop</c> instructions to ensure the total line count of the method doesn't change 
-        /// (highly recommended if you aren't sure about branch offsets).</item>
+        /// <item>Define one <paramref name="patternPredicates"/> entry for each instruction in the sequence.</item>
+        /// <item>Define the replacement instructions in <paramref name="replaceWith"/>.</item>
+        /// <item>Set <paramref name="preserveInstructionCount"/> to pad unused slots with <c>Nop</c>.</item>
         /// </list>
         /// </para>
         /// <para>
-        /// <b>Usage Example (Redirecting 'this.width / 2'):</b>
+        /// <b>Example that redirects <c>this.width / 2</c>:</b>
         /// <code>
         /// t.ReplaceAllPatterns(
         ///     new Func&lt;CodeInstruction, bool&gt;[] {
@@ -1949,7 +1903,7 @@ namespace ModAPI.Harmony
         /// </code>
         /// </para>
         /// </remarks>
-        /// <param name="patternPredicates">An array of predicates defining the IL "fingerprint" to find. Each element matches one instruction in order.</param>
+        /// <param name="patternPredicates">Predicates that match each instruction in the target sequence.</param>
         /// <param name="replaceWith">The instructions to insert at every match location.</param>
         /// <param name="preserveInstructionCount">If true, fills remaining slots with <c>OpCodes.Nop</c> to maintain stable instruction indices.</param>
         public FluentTranspiler ReplaceAllPatterns(
@@ -2203,8 +2157,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Executes a mutation block atomically. If the block throws, instruction state is restored.
-        /// This provides rollback support for complex multi-step patch chains.
+        /// Executes a mutation block and restores the instruction state if the block throws.
         /// </summary>
         public FluentTranspiler WithTransaction(Action<FluentTranspiler> action)
         {
@@ -2262,17 +2215,15 @@ namespace ModAPI.Harmony
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <see cref="Build"/> is where the framework runs stack validation, linting, debug snapshots,
-        /// and warning escalation. When a patch uses <see cref="Execute"/>, this happens automatically.
+        /// <c>Build</c> runs stack validation, linting, debug snapshots, and warning escalation.
+        /// <c>Execute</c> calls it after the transform callback.
         /// </para>
         /// <para>
-        /// Use <paramref name="strict"/> for development or for patches that should abort on any warning.
-        /// Leave it disabled for routine production patches that need diagnostics without failing on every
-        /// non-critical game IL quirk.
+        /// Use <see cref="BuildProfile.Strict"/> during development or when any warning must stop the patch.
+        /// Use <see cref="BuildProfile.Runtime"/> for production diagnostics and critical checks.
         /// </para>
         /// </remarks>
-        /// <param name="strict">If true, any validation warning aborts the build with an exception.</param>
-        /// <param name="validateStack">If true, runs stack and lint validation before returning instructions.</param>
+        /// <param name="profile">Validation and snapshot policy for this build.</param>
         public IEnumerable<CodeInstruction> Build(BuildProfile profile)
         {
             _buildProfile = profile;
@@ -2280,6 +2231,11 @@ namespace ModAPI.Harmony
             return Build(options.Strict, options.ValidateStack, options.ForceSnapshot);
         }
 
+        /// <summary>
+        /// Finalizes the session with explicit warning and stack-validation settings.
+        /// </summary>
+        /// <param name="strict">When true, any validation warning stops the build.</param>
+        /// <param name="validateStack">When true, validates the stack and runs the linter.</param>
         public IEnumerable<CodeInstruction> Build(bool strict = true, bool validateStack = true)
         {
             _buildProfile = strict ? BuildProfile.Strict : BuildProfile.Runtime;
@@ -2509,9 +2465,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Resolves preserve mode for pattern replacement.
-        /// In safe mode we can automatically force preserve=true to avoid branch targets
-        /// jumping into removed instruction spans.
+        /// Resolves whether pattern replacement must preserve the instruction count.
         /// </summary>
         private bool ResolvePatternPreserveMode(bool requestedPreserveInstructionCount, int patternLength)
         {
@@ -2529,13 +2483,10 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Replaces the instruction at the current matcher position while meticulously preserving labels.
-        /// This is a critical internal helper that prevents "Ghost Jumps" when replacing logic.
+        /// Replaces the current instruction and copies its labels to the replacement.
         /// </summary>
         /// <remarks>
-        /// If the original instruction was a jump target (had labels), this method copies those labels 
-        /// to the new instruction before setting it. This ensures that any <c>br</c> or <c>beq</c> 
-        /// instructions in the rest of the method body still land on your new logic.
+        /// Branch instructions that targeted the original instruction continue to target the replacement.
         /// </remarks>
         private void SetInstructionSafe(CodeInstruction newInstr)
         {

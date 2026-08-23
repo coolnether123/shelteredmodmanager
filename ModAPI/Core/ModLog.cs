@@ -6,7 +6,7 @@ using System.Reflection;
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Simplified static logger for Modders. Automatically detects mod ID from assembly.
+    /// Static logger that derives the mod ID from the calling assembly.
     /// Uses caching to avoid expensive StackTrace calls on every log.
     /// </summary>
     public static class ModLog

@@ -117,8 +117,8 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// manual trigger to run all registered patches on the target.
-        /// Currently, this must be called by the "Main" patcher or a bootstrap.
+        /// Runs all registered patches for the target.
+        /// Call this from the main patcher or runtime bootstrap.
         /// </summary>
         public static IEnumerable<CodeInstruction> RunPipeline(MethodBase original, IEnumerable<CodeInstruction> instructions)
         {
@@ -126,8 +126,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Runs the cooperative pipeline with an optional ILGenerator so registrations
-        /// can declare locals and labels just like a normal Harmony transpiler.
+        /// Runs the cooperative pipeline. Supply an ILGenerator when registrations declare locals or labels.
         /// </summary>
         public static IEnumerable<CodeInstruction> RunPipeline(MethodBase original, IEnumerable<CodeInstruction> instructions, ILGenerator generator)
         {
@@ -237,7 +236,7 @@ namespace ModAPI.Harmony
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"[CooperativePatcher] Patch {patch.OwnerMod}:{patch.AnchorId} FAILED and was skipped. Error: {ex.Message}");
+                    MMLog.WriteError($"[CooperativePatcher] Skipped patch {patch.OwnerMod}:{patch.AnchorId} after it failed: {ex.Message}");
                     QuarantineOwnerIfEnabled(patch.OwnerMod, patch.AnchorId);
                     // Continue with previous valid instructions - 'currentInstructions' remains untouched by this iteration
                 }

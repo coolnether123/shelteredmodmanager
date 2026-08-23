@@ -50,7 +50,7 @@ namespace ModAPI.Harmony
             var listBefore = before.ToList();
             var listAfter = after.ToList();
 
-            // Use proper comparison
+            // Skip identical instruction streams.
             bool changed = !InstructionsEqual(listBefore, listAfter);
 
             if (!changed && !force)
@@ -59,9 +59,7 @@ namespace ModAPI.Harmony
                 return after;
             }
 
-            // Robust stack walking to identify the calling mod's assembly. This allows the 
-            // debugger to route logs to the correct mod-specific directory even when 
-            // called through helper libraries.
+            // Walk past helper libraries to identify the calling mod's assembly and log directory.
             string modName = modId ?? GetCallingModName();
             string safeLabel = SanitizePath(label);
             
@@ -109,7 +107,7 @@ namespace ModAPI.Harmony
                     string err;
                     stacksBefore = StackSentinel.Analyze(listBefore, originalMethod, out err);
                     stacksAfter = StackSentinel.Analyze(listAfter, originalMethod, out err);
-                    // Simple heuristic for branch targets: Any instruction with labels
+            // Treat every instruction with labels as a branch target.
                     targetsBefore = new HashSet<int>(listBefore.Select((instr, i) => instr.labels.Count > 0 ? i : -1).Where(i => i >= 0));
                     targetsAfter = new HashSet<int>(listAfter.Select((instr, i) => instr.labels.Count > 0 ? i : -1).Where(i => i >= 0));
                 }
@@ -164,7 +162,7 @@ namespace ModAPI.Harmony
         }
         private static string GetCallingModName()
         {
-            // Walk up the stack to find the actual mod assembly (Robust walking).
+            // Walk past framework frames to find the calling mod assembly.
             var trace = new System.Diagnostics.StackTrace();
             for (int i = 0; i < trace.FrameCount; i++)
             {
@@ -184,7 +182,7 @@ namespace ModAPI.Harmony
             return "UnknownMod";
         }
 
-        /// <summary>Proper IL comparison that handles operand differences correctly.</summary>
+        /// <summary>Compares opcodes and operands for semantic equality.</summary>
         private static bool InstructionsEqual(List<CodeInstruction> a, List<CodeInstruction> b)
         {
             if (a.Count != b.Count) return false;
@@ -409,7 +407,7 @@ namespace ModAPI.Harmony
             public List<List<string>> AfterStackTypes;
             public List<List<string>> BeforeStackTypes;
             public DateTime Timestamp;
-            public string DiffSummary; // e.g. "+5 lines"
+            public string DiffSummary; // Summary such as "+5 lines".
             public int AddedCount;
             public int RemovedCount;
             public int ChangedCount;

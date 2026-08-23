@@ -173,7 +173,7 @@ namespace ModAPI.UI.ColorPicker
             DrawColorPreview(oldPreview, _session.OldColor);
             if (GUI.Button(oldPreview, GUIContent.none, GUIStyle.none))
                 _session.RestoreOldColor();
-            GUI.Label(new Rect(oldPreview.xMax + FixedGap, rect.y + 1f, Math.Max(1f, rect.xMax - oldPreview.xMax - FixedGap), 18f), "New / Old", LabelStyle);
+            GUI.Label(new Rect(oldPreview.xMax + FixedGap, rect.y + 1f, Math.Max(1f, rect.xMax - oldPreview.xMax - FixedGap), 18f), "New, previous", LabelStyle);
         }
 
         private void DrawNumericFieldGrid(ColorPickerLayout layout)

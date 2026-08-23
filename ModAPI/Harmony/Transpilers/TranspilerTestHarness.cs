@@ -9,14 +9,13 @@ using ModAPI.Util;
 namespace ModAPI.Harmony
 {
     /// <summary>
-    /// Test harness for FluentTranspiler logic without needing a running game instance.
-    /// Useful for unit testing transpilers.
+    /// Runs FluentTranspiler tests without a game instance.
     /// </summary>
     public static class TranspilerTestHarness
     {
         /// <summary>
         /// Creates a FluentTranspiler from raw instructions for testing.
-        /// No ILGenerator, no original method — pure instruction manipulation testing.
+        /// This overload supplies neither an ILGenerator nor an original method.
         /// </summary>
         public static FluentTranspiler FromInstructions(params CodeInstruction[] instructions)
         {
@@ -193,9 +192,8 @@ namespace ModAPI.Harmony
         /// pass/fail summaries. Each line begins with "PASS" or "FAIL".
         /// </summary>
         /// <remarks>
-        /// This is the single entry point a developer or agent should call to smoke-test the fluent
-        /// transpiler after touching the framework. Pair it with <see cref="AssertAllHarnessCasesPass"/>
-        /// to turn the results into a hard failure.
+        /// Use this after changing FluentTranspiler. Pair it with
+        /// <see cref="AssertAllHarnessCasesPass"/> when a failed case must throw.
         /// </remarks>
         public static IReadOnlyList<string> RunAllHarnessCases()
         {
@@ -283,7 +281,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Exercises the broader recipe expansion surface with representative C# intent shapes.
+        /// Exercises the recipe families with representative C# instruction shapes.
         /// </summary>
         public static IReadOnlyList<string> RunRecipeExpansionHarnessCases()
         {

@@ -583,7 +583,7 @@ namespace ModAPI.Harmony
 
             if (_sourceMethod == null)
             {
-                _transpiler.AddWarning("ReplaceCalls received a null source method. Fix: the MethodInfo you passed to ReplaceCalls(...) resolved to null — check the AccessTools.Method/PropertyGetter lookup (name, declaring type, and overload parameter types) that produced it.");
+                _transpiler.AddWarning("ReplaceCalls received a null source method. Fix: the MethodInfo passed to ReplaceCalls(...) resolved to null. Check the AccessTools.Method or PropertyGetter lookup, including its name, declaring type, and overload parameter types.");
                 AddPatchDiagnostic(
                     "source method call to replace.",
                     "source method was null.",

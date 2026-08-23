@@ -50,7 +50,7 @@ namespace ModAPI.Harmony
             int count = transpiler.Instructions().Count();
             if (absoluteIndex < 0 || absoluteIndex >= count)
             {
-                transpiler.AddSoftFailure($"ReplaceAt: index {absoluteIndex} is out of range (the stream has {count} instruction(s), valid indices 0..{count - 1}). Fix: recompute the index from a fresh Instructions() snapshot — a prior insert/remove likely shifted it.");
+                transpiler.AddSoftFailure($"ReplaceAt: index {absoluteIndex} is out of range (the stream has {count} instruction(s), valid indices 0..{count - 1}). Fix: recompute the index from a fresh Instructions() snapshot. A prior insert or removal likely shifted it.");
                 return transpiler;
             }
 

@@ -84,9 +84,9 @@ namespace ModAPI.Inspector
             GUILayout.BeginHorizontal();
             if (GUILayout.Toggle(_mode == DebugMode.Live, "Live", "button", GUILayout.Width(120))) _mode = DebugMode.Live;
             if (GUILayout.Toggle(_mode == DebugMode.Snapshot, "Snapshot", "button", GUILayout.Width(120))) _mode = DebugMode.Snapshot;
-            if (GUILayout.Toggle(_mode == DebugMode.Build, "Build Patch", "button", GUILayout.Width(120))) _mode = DebugMode.Build;
+            if (GUILayout.Toggle(_mode == DebugMode.Build, "Build patch", "button", GUILayout.Width(120))) _mode = DebugMode.Build;
             GUILayout.FlexibleSpace();
-            GUILayout.Label("F12/Esc to close");
+            GUILayout.Label("Press F12 or Esc to close");
             if (GUILayout.Button("Close", GUILayout.Width(80))) _active = false;
             GUILayout.EndHorizontal();
 
@@ -143,7 +143,7 @@ namespace ModAPI.Inspector
             }
         }
 
-        // Helper method for MakeTex, assuming it's needed and not already present
+        // Build the solid-color texture used by debugger styles.
         private Texture2D MakeTex(int width, int height, Color col)
         {
             Color[] pix = new Color[width * height];
@@ -223,17 +223,17 @@ namespace ModAPI.Inspector
                 _statusText = "Snapshot ended.";
             }
 
-            var newLossless = GUILayout.Toggle(_losslessTrace, "Lossless Trace", "button", GUILayout.Width(130));
+            var newLossless = GUILayout.Toggle(_losslessTrace, "Lossless trace", "button", GUILayout.Width(130));
             if (newLossless != _losslessTrace)
             {
                 _losslessTrace = newLossless;
                 tracer.SetLosslessTrace(_losslessTrace);
             }
 
-            if (GUILayout.Toggle(!_showIL, "Source View", "button", GUILayout.Width(120))) _showIL = false;
-            if (GUILayout.Toggle(_showIL, "IL View", "button", GUILayout.Width(120))) _showIL = true;
+            if (GUILayout.Toggle(!_showIL, "Source view", "button", GUILayout.Width(120))) _showIL = false;
+            if (GUILayout.Toggle(_showIL, "IL view", "button", GUILayout.Width(120))) _showIL = true;
             GUILayout.FlexibleSpace();
-            GUILayout.Label("Click source line numbers for Point A / Point B.");
+            GUILayout.Label("Click source line numbers to select points A and B.");
             GUILayout.EndHorizontal();
         }
 
@@ -446,7 +446,7 @@ namespace ModAPI.Inspector
 
                 GUILayout.BeginHorizontal();
                 GUILayout.BeginVertical(GUILayout.Width(_windowRect.width * 0.62f));
-                _autoScroll = GUILayout.Toggle(_autoScroll, "Auto-Scroll Source");
+                _autoScroll = GUILayout.Toggle(_autoScroll, "Auto-scroll source");
                 var viewH = 320;
                 if (_autoScroll && _snapshotSourceLine != _lastScrollLine)
                 {
@@ -475,16 +475,16 @@ namespace ModAPI.Inspector
             GUILayout.BeginHorizontal();
             GUILayout.Label("Action", GUILayout.Width(50));
             GUILayout.Label(_patchConfig.Action.ToString(), GUILayout.Width(180));
-            if (GUILayout.Button("Next Action", GUILayout.Width(120))) CycleAction();
+            if (GUILayout.Button("Next action", GUILayout.Width(120))) CycleAction();
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Anchor Method", GUILayout.Width(100));
+            GUILayout.Label("Anchor method", GUILayout.Width(100));
             _patchConfig.AnchorMethod = GUILayout.TextField(_patchConfig.AnchorMethod ?? string.Empty, GUILayout.Width(260));
-            GUILayout.Label("Injection Method", GUILayout.Width(110));
+            GUILayout.Label("Injection method", GUILayout.Width(110));
             _patchConfig.InjectionMethod = GUILayout.TextField(_patchConfig.InjectionMethod ?? string.Empty, GUILayout.Width(260));
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Target ILOffset", GUILayout.Width(100));
+            GUILayout.Label("Target IL offset", GUILayout.Width(100));
             var text = GUILayout.TextField(_patchConfig.TargetILOffset.ToString(), GUILayout.Width(120));
             int parsed; if (int.TryParse(text, out parsed)) _patchConfig.TargetILOffset = parsed;
             if (GUILayout.Button("Generate", GUILayout.Width(120)))
@@ -496,9 +496,9 @@ namespace ModAPI.Inspector
             }
             GUILayout.EndHorizontal();
             _scrollBuild = GUILayout.BeginScrollView(_scrollBuild, GUILayout.Height(500));
-            GUILayout.Label("<b>C# Preview</b>");
+            GUILayout.Label("<b>C# preview</b>");
             GUILayout.TextArea(_buildPreview, _monoTextArea, GUILayout.Height(230));
-            GUILayout.Label("<b>Generated Patch Code</b>");
+            GUILayout.Label("<b>Generated patch code</b>");
             GUILayout.TextArea(_buildPatchCode, _monoTextArea, GUILayout.Height(240));
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
@@ -507,7 +507,7 @@ namespace ModAPI.Inspector
         private void ResolveMethod()
         {
             _selectedMethod = null;
-            if (string.IsNullOrEmpty(_typeName) || string.IsNullOrEmpty(_methodName)) { _statusText = "Type and Method are required."; return; }
+            if (string.IsNullOrEmpty(_typeName) || string.IsNullOrEmpty(_methodName)) { _statusText = "Enter a type and method."; return; }
             if (TryResolveMethod(_typeName, _methodName, out _selectedMethod))
             {
                 _statusText = "Resolved: " + _selectedMethod.DeclaringType.FullName + "." + _selectedMethod.Name;

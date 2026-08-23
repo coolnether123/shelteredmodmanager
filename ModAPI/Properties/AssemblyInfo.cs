@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 
 // Scenario RNG transpilers emit calls from the vanilla game assembly to internal
 // domain-aware bridge overloads. Keep those implementation details out of ModAPI's
-// public surface while allowing the rewritten call sites to pass CLR access checks.
+// public API while allowing the rewritten call sites to pass CLR access checks.
 [assembly: InternalsVisibleTo("Assembly-CSharp")]
 
 // Assembly version format:

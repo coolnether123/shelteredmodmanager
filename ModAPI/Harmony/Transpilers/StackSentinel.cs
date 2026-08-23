@@ -23,7 +23,7 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Advanced stack safety analysis for IL code.
+    /// Analyzes IL stack depth and value types by basic block.
     /// Implements Basic Block Analysis to track stack depth and Types across branches.
     /// </summary>
     public static class StackSentinel
@@ -88,7 +88,7 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Analyzes the method body and returns a map of stack states at each instruction index.
-        /// Returns null if analysis fails (e.g. underflow/mismatch).
+        /// Returns null if analysis finds an underflow or type mismatch.
         /// </summary>
         public static Dictionary<int, List<Type>> Analyze(List<CodeInstruction> instructions, MethodBase originalMethod, out string error)
         {
@@ -124,7 +124,7 @@ namespace ModAPI.Harmony
                         var instr = block.Instructions[i];
                         int absIndex = block.StartIndex + i;
                         
-                        // Store stack state BEFORE execution of instruction
+                        // Store the stack state before executing the instruction.
                         instructionStacks[absIndex] = new List<Type>(currentStack);
 
                         // 1. POP
@@ -387,7 +387,7 @@ namespace ModAPI.Harmony
                 {
                     // For non-MethodInfo MethodBase, we try our best. 
                     // Constructors (newobj) are handled separately below.
-                    // But Call to a constructor is possible!
+                    // Call may also target a constructor.
                     if (mb is MethodInfo mi2 && mi2.ReturnType != typeof(void)) result.Add(ResolveStackType(mi2.ReturnType, method));
                     else if (mb.IsConstructor) { /* Void return, push nothing */ }
                 }

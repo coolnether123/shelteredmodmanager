@@ -13,7 +13,7 @@ namespace ModAPI.Spine
 {
     /// <summary>
     /// Core manager for ModAPI settings. Replaces ModSettings and AutoSettingsProvider.
-    /// Handles runtime-safe JSON serialization, delegate caching, and New Game+ logic.
+    /// Handles Unity-compatible JSON serialization, delegate caching, and New Game+ logic.
     /// </summary>
     public class SettingsController : ISettingsProvider, ISettingsProvider2, ISettingsProvider3
     {
