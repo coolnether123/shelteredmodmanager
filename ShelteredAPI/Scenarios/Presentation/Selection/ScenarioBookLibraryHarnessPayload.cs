@@ -3,9 +3,7 @@ using UnityEngine;
 namespace ShelteredAPI.Scenarios.Presentation.Selection
 {
     /// <summary>
-    /// Additive reflection seam for the Agent Interface. The visible UI remains the
-    /// source of row identity while these fields expose organization state without
-    /// requiring text parsing.
+    /// Exposes row organization state to the UI test harness without parsing visible text.
     /// </summary>
     internal sealed class ScenarioBookLibraryHarnessPayload : MonoBehaviour
     {

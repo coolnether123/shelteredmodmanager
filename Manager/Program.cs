@@ -129,7 +129,7 @@ namespace Manager
             try
             {
                 // .NET 3.5 does not expose TLS 1.1/1.2 enum values by name.
-                // Cast known protocol constants so HTTPS APIs can negotiate modern TLS.
+                // Enable TLS 1.1 and 1.2 without requiring newer framework enum members.
                 const SecurityProtocolType Tls11 = (SecurityProtocolType)768;
                 const SecurityProtocolType Tls12 = (SecurityProtocolType)3072;
 
@@ -210,7 +210,6 @@ namespace Manager
 
             if (File.Exists(assemblyPath))
             {
-                // MMLog.Write($"[Manager] Resolving assembly: {assemblyName} from {assemblyPath}");
                 byte[] assemblyBytes = File.ReadAllBytes(assemblyPath);
                 return Assembly.Load(assemblyBytes);
             }

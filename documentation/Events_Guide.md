@@ -1,16 +1,16 @@
-# ModAPI + ShelteredAPI Events Guide
-## Current v2.0 Line
+# ModAPI and ShelteredAPI events guide
+## Current v2.0 line
 
-The 2.0 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical), and use [API Signatures Reference](API_Signatures_Reference.md) for exact current signatures.
+SMM 2.0 moved Sheltered event APIs from `ModAPI.dll` to `ShelteredAPI.dll`. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical), and use [API Signatures Reference](API_Signatures_Reference.md) for current signatures.
 
-## Compatibility Matrix
+## Compatibility matrix
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
 | Sheltered gameplay/UI events and scheduler examples | Current `ShelteredAPI.dll` under `ShelteredAPI.Events` | Supported |
 | Inter-mod communication examples | Current `ModAPI.dll` | Supported |
 
-## 1. Event Systems
+## 1. Event systems
 
 Available event systems:
 
@@ -25,9 +25,9 @@ Use `ShelteredEvents` for gameplay/UI lifecycle hooks. Use `ShelteredSaveEvents`
 
 ## 2. `ShelteredEvents`
 
-Use `ShelteredEvents` when you want the Sheltered event surface. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; if your handlers mention Sheltered game types such as `SaveData`, `EncounterCharacter`, `BasePanel`, or `ExplorationParty`, also reference `Assembly-CSharp.dll`.
+Use `ShelteredEvents` for Sheltered event APIs. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; if your handlers mention Sheltered game types such as `SaveData`, `EncounterCharacter`, `BasePanel`, or `ExplorationParty`, also reference `Assembly-CSharp.dll`.
 
-Important events:
+Events:
 
 ```csharp
 public static event Action<int> NewDay;
@@ -53,20 +53,45 @@ Example:
 using ModAPI.Core;
 using ShelteredAPI.Events;
 
-public class MyMod : IModPlugin
+public class MyMod : IModPlugin, IModShutdown
 {
-    public void Initialize(IPluginContext ctx) { }
+    private const string TriggerId = "com.mymod.economy.tick";
+    private IPluginContext _ctx;
+
+    public void Initialize(IPluginContext ctx)
+    {
+        _ctx = ctx;
+    }
 
     public void Start(IPluginContext ctx)
     {
-        ShelteredEvents.NewDay += day => ctx.Log.Info("Day " + day);
-        ShelteredEvents.SixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
-        ShelteredEvents.CombatStarted += (player, enemy) => ctx.Log.Info("Combat started");
+        ShelteredEvents.NewDay += OnNewDay;
+        ShelteredEvents.RegisterTimeTrigger(
+            TriggerId,
+            50,
+            TimeTriggerCadence.SixHour,
+            OnEconomyTick);
+    }
+
+    public void Shutdown()
+    {
+        ShelteredEvents.NewDay -= OnNewDay;
+        ShelteredEvents.UnregisterTimeTrigger(TriggerId);
+    }
+
+    private void OnNewDay(int day)
+    {
+        _ctx.Log.Info("Day " + day);
+    }
+
+    private void OnEconomyTick(TimeTriggerBatch batch)
+    {
+        _ctx.Log.Info("Tick seq=" + batch.Sequence);
     }
 }
 ```
 
-## 3. Time Triggers
+## 3. Time triggers
 
 Use `ShelteredEvents` when you want explicit named trigger registration and priority ordering in Sheltered runtime time.
 
@@ -82,28 +107,9 @@ ShelteredEvents.GetTimeTriggerPriorityList(TimeTriggerCadence cadence);
 ShelteredEvents.ConfigureStaggeredTimeRange(int minInclusiveHours, int maxInclusiveHours);
 ```
 
-Example:
+The example above registers one named six-hour trigger and removes it during shutdown.
 
-```csharp
-using ModAPI.Core;
-using ShelteredAPI.Events;
-
-public class SchedulerMod : IModPlugin
-{
-    public void Initialize(IPluginContext ctx) { }
-
-    public void Start(IPluginContext ctx)
-    {
-        ShelteredEvents.RegisterTimeTrigger(
-            triggerId: "com.mymod.economy.tick",
-            priority: 50,
-            cadence: TimeTriggerCadence.SixHour,
-            callback: batch => ctx.Log.Info("Tick seq=" + batch.Sequence));
-    }
-}
-```
-
-## 4. UI Events
+## 4. UI events
 
 Use `ShelteredEvents` when you need Sheltered panel lifecycle hooks without adding your own Harmony patches.
 
@@ -117,28 +123,9 @@ public static event Action<BasePanel> PanelPaused;
 public static event Action<GameObject, string> ButtonClicked;
 ```
 
-Example:
+Use the named-handler and shutdown pattern from the first example when you subscribe to UI events.
 
-```csharp
-using ModAPI.Core;
-using ShelteredAPI.Events;
-
-public class CraftingHelperMod : IModPlugin
-{
-    public void Initialize(IPluginContext ctx) { }
-
-    public void Start(IPluginContext ctx)
-    {
-        ShelteredEvents.PanelOpened += panel =>
-        {
-            if (panel.GetType().Name == "CraftingPanel")
-                ctx.Log.Info("Crafting panel opened");
-        };
-    }
-}
-```
-
-## 5. Save Lifecycle Events
+## 5. Save lifecycle events
 
 The Sheltered custom saves layer exposes additional save/load events under `ShelteredAPI.Saves.ShelteredSaveEvents`.
 Reference `ShelteredAPI.dll` for these APIs.
@@ -153,18 +140,9 @@ Common ones:
 
 Use these when you are integrating with the expanded save-slot system rather than the base gameplay lifecycle.
 
-Example:
+Use the named-handler and shutdown pattern from the first example when you subscribe to save events.
 
-```csharp
-using ShelteredAPI.Saves;
-
-ShelteredSaveEvents.BeforeSave += save =>
-{
-    // Inspect or prepare expanded-save metadata here.
-};
-```
-
-## 6. Inter-Mod Communication
+## 6. Inter-mod communication
 
 ### `ModEventBus`
 
@@ -189,7 +167,7 @@ if (ModAPIRegistry.TryGetAPI<IMyApi>("com.mymod.api", out api))
 }
 ```
 
-## 7. Home-Shelter Provider Lifecycle
+## 7. Home-shelter provider lifecycle
 
 Home-shelter placement is a shared `ShelteredMap` provider pattern, not an event bus contract. ShelteredAPI owns the `ExpeditionMap` generation hooks that consume the winning placement; provider mods should not patch those map-generation callsites directly. A mod that can choose the player home position should register an `IHomeShelterPlacementProvider`; its result must include at least one world, grid, or map-pixel coordinate. RBP is an example provider; consumers should read the shared `ShelteredMap` position snapshots instead of depending on RBP-specific APIs.
 
@@ -285,7 +263,7 @@ if (ShelteredMap.TryGetActiveHomeShelter(out home) ||
 
 Use `SessionStarted`, `NewGame`, `AfterLoad`, or lazy reads from your own map-facing workflow as timing boundaries. Startup and scene transitions can still produce no active home snapshot; treat a failed `TryGet...` call as "not available yet", not as an error.
 
-## 8. Best Practices
+## 8. Best practices
 
 - Subscribe in `Start(...)`, not constructors.
 - Unsubscribe in `Shutdown()` if your mod implements `IModShutdown`.
@@ -299,6 +277,6 @@ Use `SessionStarted`, `NewGame`, `AfterLoad`, or lazy reads from your own map-fa
 When events do not fire:
 1. confirm your plugin reached `Start(...)`
 2. confirm registration/subscription code executed
-3. search logs for exact event-helper signatures
-4. confirm the game state actually reached the expected lifecycle boundary
+3. search the log for `Trigger callback threw for '<trigger id>'` or other callback errors
+4. confirm the game state reached the expected lifecycle boundary
 5. if using triggers, inspect `ShelteredEvents.GetTimeTriggerPriorityList(...)` for your cadence

@@ -11,7 +11,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell
 {
     // Historical verifier marker only; no action is emitted: workspace_section_search.publish
     /// <summary>
-    /// Single source of truth for controls whose semantic action is created by an IMGUI renderer.
+    /// Canonical registry for controls whose semantic action is created by an IMGUI renderer.
     /// The shell publishes this list so automation never has to infer a click coordinate.
     /// </summary>
     internal static class ScenarioAuthoringRendererActionManifest

@@ -1,14 +1,10 @@
-# ShelteredAPI Content Guide (v2.0)
+# ShelteredAPI content guide
 
-This guide covers the current `ShelteredAPI.Content` surface for item, recipe, loot, asset, and content-localization work in the 2.0 breaking clean API line.
+Use `ShelteredAPI.Content` to register items, recipes, loot, assets, and localized content. See the [assembly boundary](README.md#assembly-boundary-canonical) before you add references.
 
-Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
+> Dev/API-preview warning: runtime stores and cooking stations are preview behavior in the current 2.0 line. Use them for mod-author testing, but expect small signature or behavior changes before these APIs are declared stable.
 
-See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical).
-
-> Dev/API-preview warning: runtime stores and cooking stations are preview behavior in the current 2.0 line. Use them for mod-author testing, but expect small signature or behavior changes before this surface is declared stable.
-
-## 1. What Lives Here
+## 1. What lives here
 
 `ShelteredAPI.Content` owns the Sheltered-specific content runtime:
 - item registration metadata
@@ -21,7 +17,7 @@ See the canonical [assembly boundary and stability rules](README.md#assembly-bou
 - content-localized text fallback and generated keys
 - loot table injection
 
-## 2. What Mod Authors Must Do
+## 2. What mod authors must do
 
 Every content mod should follow these rules:
 
@@ -37,10 +33,10 @@ Every content mod should follow these rules:
 What mod authors should not do:
 - do not register content in constructors
 - do not assume the game's enum iteration will discover your item automatically
-- do not patch core managers just to add item definitions unless you are extending the framework itself
+- do not patch core managers to add item definitions unless you are extending the framework itself
 - do not use raw text in key-only fields if you want consistent localization behavior
 
-## 3. Minimal Item Example
+## 3. Minimal item example
 
 ```csharp
 using ModAPI.Core;
@@ -72,7 +68,7 @@ public class MyPlugin : IModPlugin
 
         ShelteredContent.RegisterRecipe(
             new RecipeDefinition()
-                .WithId("recipe.power_cell")
+                .WithId("com.mymod.recipe.power_cell")
                 .WithResultItem("com.mymod.power_cell")
                 .WithStation(CraftStation.Workbench)
                 .WithLevel(1)
@@ -83,66 +79,13 @@ public class MyPlugin : IModPlugin
 }
 ```
 
-## 3.1 Storage And Cooking Preview Pattern
+### Storage and cooking
 
-Registering custom food content does not mean the item should be forced into vanilla freezer internals. `Obj_Freezer` is a vanilla object with fixed freezer fields, and ShelteredAPI intentionally avoids patching it to accept arbitrary custom item types.
+Do not force custom food into `Obj_Freezer`. Vanilla freezers use fixed fields and item types. Use a mod-owned object store for custom storage and the shelter inventory adapter for global output.
 
-Use the runtime store and cooking APIs when custom food participates in object-backed storage or station workflows:
+The [runtime UI and stores guide](ShelteredAPI_Runtime_UI_Stores_Guide.md#minimal-fridge-backed-cooking-flow) contains the complete cooking-station example.
 
-```csharp
-using ShelteredAPI.Storage;
-using ShelteredAPI.Workstations;
-
-IItemStore fridgeStore = ShelteredStores.ForObject(
-    ownerId: "com.example.cooking",
-    targetObject: fridgeObject,
-    displayName: "Fridge Storage",
-    capacity: 24);
-
-ShelteredCooking.RegisterStation(new CookingStationRegistration
-{
-    OwnerId = "com.example.cooking",
-    ObjectType = ObjectManager.ObjectType.Stove,
-    InteractionId = "com.example.cooking.stove.cook",
-    InteractionText = "Cook",
-    CanOpen = context =>
-        ShelteredStores.FindNearestObject(
-            ObjectManager.ObjectType.Freezer,
-            context.TargetObject.transform.position) != null,
-    IngredientStore = context =>
-        ShelteredStores.FindNearestObjectStore(
-            "com.example.cooking",
-            ObjectManager.ObjectType.Freezer,
-            context.TargetObject.transform.position,
-            "Fridge Storage",
-            24),
-    OutputStore = context => ShelteredStores.ForInventory(),
-    JobOptions = new CookingStationJobOptions
-    {
-        JobType = "cook_food",
-        AnimationTrigger = "Rummage",
-        DurationSeconds = 3f
-    },
-    Recipes = new[]
-    {
-        new CookingStationRecipe
-        {
-            RecipeId = "com.example.cooking.meat_to_ration",
-            DisplayName = "Cook Ration",
-            OutputItemId = VanillaItems.Ration,
-            OutputCount = 1,
-            Ingredients = new[]
-            {
-                new RecipeIngredient { ItemId = VanillaItems.Meat, Count = 1 }
-            }
-        }
-    }
-});
-```
-
-In that flow, the freezer/fridge world object is only the anchor. Meat is consumed from the mod-owned object store, and rations are added through the global shelter inventory adapter. The full copy/paste flow is in [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md#minimal-fridge-backed-cooking-flow).
-
-## 4. Item Registration Checklist
+## 4. Item registration checklist
 
 Before calling `ShelteredContent.RegisterItem(...)`, make sure the item has:
 - a stable `Id`
@@ -163,9 +106,9 @@ Optional but commonly useful:
 - `WithRecycling(...)`
 - `WithObjectType(...)`
 
-## 5. How Items Are Handled In Sheltered
+## 5. How Sheltered handles items
 
-### 5.1 Registration Phase
+### 5.1 Registration phase
 
 Your mod writes metadata through the `ShelteredContent` facade:
 - `RegisterItem(...)`
@@ -177,7 +120,7 @@ Your mod writes metadata through the `ShelteredContent` facade:
 
 At this stage nothing is in the live game managers yet.
 
-### 5.2 Resolution Phase
+### 5.2 Resolution phase
 
 The internal content resolver converts registered metadata into runtime-ready assets:
 - resolves owning assembly
@@ -185,7 +128,7 @@ The internal content resolver converts registered metadata into runtime-ready as
 - loads prefabs from bundles when configured
 - pairs `ItemDefinition` with resolved assets
 
-### 5.3 Injection Phase
+### 5.3 Injection phase
 
 The internal content injector binds to the active Sheltered runtime managers:
 - reads `ItemManager.Instance`
@@ -197,7 +140,7 @@ The internal content injector binds to the active Sheltered runtime managers:
 
 This runtime is manager-scoped, not process-scoped. If Sheltered rebuilds its managers after returning to the main menu and starting another family, the injector rebinds and reapplies content to the new manager instances.
 
-### 5.4 Inventory/UI Phase
+### 5.4 Inventory and UI phase
 
 Sheltered's vanilla code often assumes the compiled enum contains every item. Custom items break that assumption.
 
@@ -206,11 +149,11 @@ The framework compensates by:
 - augmenting item panels that would otherwise skip custom item types
 - resolving string IDs back to runtime `ItemType` values when helper APIs are used
 
-### 5.5 Localization Phase
+### 5.5 Localization phase
 
 Sheltered UI expects localization keys, not arbitrary raw display text, in most item-definition fields.
 
-To handle that safely:
+The localization layer applies these rules:
 - explicit key APIs keep your key as-is
 - explicit text APIs generate internal keys
 - generated keys are stored in the content localization table
@@ -220,13 +163,13 @@ Generated keys use the pattern:
 - `shelteredapi.<modid>.<itemid>.name`
 - `shelteredapi.<modid>.<itemid>.desc`
 
-## 6. Recommended Author Workflow
+## 6. Recommended author workflow
 
 1. Create your `ItemDefinition`.
 2. Register the item in `Start(...)`.
 3. Register any recipe that produces it.
 4. Add icon and other supporting assets under `Assets/...`.
-5. Use `ShelteredContent.ResolveItemType(...)`, `ctx.Game`, or the store APIs in [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md) when interacting with the item at runtime.
+5. Use `ShelteredContent.Runtime.ResolveItemType(...)`, `ctx.Game`, or the store APIs in the [runtime UI and stores guide](ShelteredAPI_Runtime_UI_Stores_Guide.md) when interacting with the item at runtime.
 6. Test these flows:
    - new family
    - return to main menu
@@ -238,7 +181,7 @@ Generated keys use the pattern:
    - crafting UI
    - trading UI
 
-## 7. Common Pitfalls
+## 7. Common pitfalls
 
 ### Missing display name
 
@@ -250,7 +193,7 @@ The item can still register, but UI will not have the intended icon.
 
 ### Wrong registration timing
 
-If you register content before `Start(...)`, you risk racing the loader and owning assembly resolution.
+Register content from `Start(...)`, after plugin initialization has completed.
 
 ### Assuming enum iteration will find the item
 
@@ -260,7 +203,7 @@ Vanilla `Enum.GetValues(typeof(ItemManager.ItemType))` does not know about your 
 
 String IDs must be unique across the content registry.
 
-## 8. Asset Path Rules
+## 8. Asset path rules
 
 Use mod-relative asset paths:
 - `Assets/Icons/power_cell.png`
@@ -268,7 +211,7 @@ Use mod-relative asset paths:
 
 The framework resolves them relative to the owning mod root.
 
-## 9. Troubleshooting Signals
+## 9. Troubleshooting signals
 
 Check the log for:
 - item registration failures
@@ -278,7 +221,7 @@ Check the log for:
 - failed sprite or bundle loads
 - localization warnings about likely literal text being treated as keys
 
-## 10. API Surface To Learn First
+## API types to learn first
 
 Start with these types:
 - `ShelteredAPI.Content.ShelteredContent`
@@ -287,8 +230,6 @@ Start with these types:
 - `ShelteredAPI.Content.CookingRecipe`
 - `ShelteredAPI.Content.ItemPatch`
 - `ShelteredAPI.Content.RecipePatch`
-- `ShelteredAPI.Content.ItemDefinition`
-- `ShelteredAPI.Content.RecipeDefinition`
 - `ShelteredAPI.Content.LootEntry`
 
 If you only need to add a normal item with a crafting recipe, you usually only need:

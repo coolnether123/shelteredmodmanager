@@ -176,7 +176,7 @@ namespace ShelteredAPI.Content
 
     /// <summary>
     /// Central registry for adding items, crafting recipes, loot entries, and tuning flags.
-    /// Use relative paths rooted at the mod directory (e.g., Assets/Textures/icon.png).
+    /// Use paths relative to the mod directory, such as <c>Assets/Textures/icon.png</c>.
     /// </summary>
     internal static class ContentRegistry
     {
@@ -692,8 +692,8 @@ namespace ShelteredAPI.Content
             if (string.IsNullOrEmpty(relativePath)) return relativePath;
             if (!relativePath.StartsWith("Assets/"))
             {
-                MMLog.Write($"[AssetPath] WARNING: Path '{relativePath}' does not start with 'Assets/'. " +
-                          "Paths should be relative to the mod root (e.g., 'Assets/Icons/item.png').");
+                MMLog.WriteWarning($"[AssetPath] Path '{relativePath}' does not start with 'Assets/'. " +
+                          "Paths must be relative to the mod root, such as 'Assets/Icons/item.png'.");
             }
             return relativePath;
         }
@@ -704,7 +704,7 @@ namespace ShelteredAPI.Content
     /// <summary>Defines a new item and its assets.</summary>
     public class ItemDefinition
     {
-        public string Id;                // unique key, e.g., com.mod.item.myhammer
+        public string Id;                // Unique key, such as com.mod.item.myhammer.
         public string DisplayName;       // legacy: key-or-text (auto-detected)
         public string Description;       // legacy: key-or-text (auto-detected)
         public string Name;              // legacy v1.0 alias for DisplayName
@@ -1082,7 +1082,7 @@ namespace ShelteredAPI.Content
         public string ItemId;                // item to drop
         /// <summary>
         /// Relative weight in the loot table (integer value 1-10 recommended).
-        /// Note: This is cast to an integer internally by the game's ItemBias system.
+        /// The game's ItemBias system casts this value to an integer.
         /// </summary>
         public float Weight = 1f;
         public int MinQuantity = 1;

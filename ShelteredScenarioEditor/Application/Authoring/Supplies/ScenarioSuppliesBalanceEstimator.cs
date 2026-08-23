@@ -5,12 +5,9 @@ using ShelteredAPI.Scenarios.Definitions;
 using ShelteredScenarioEditor.Infrastructure.Unity;
 namespace ShelteredScenarioEditor.Application.Authoring.Supplies{
     /// <summary>
-    /// Produces a rough, clearly-approximate sustain estimate for an authored starting
-    /// inventory: how many days of water and food it covers for the starting cast, how
-    /// much medicine is stocked, and which survival essentials are missing.
-    ///
-    /// The per-survivor-per-day consumption figures are deliberate round approximations,
-    /// not a simulation of Sheltered's stat drain. They are surfaced in the UI as such.
+    /// Estimates how many days the starting food and water support the cast, how much
+    /// medicine is stocked, and which survival essentials are missing. The per-survivor
+    /// daily values are round estimates shown as estimates in the UI, not a stat-drain simulation.
     /// </summary>
     internal static class ScenarioSuppliesBalanceEstimator
     {

@@ -15,7 +15,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
     /// with plain-language routing ("Continues to 'Second call'", "Ends the conversation",
     /// "Starts stage 'The Deal'"). Every line and reply carries an Edit affordance that jumps
     /// into the existing focused stage editor. Editing itself stays in the focused editor;
-    /// this surface only reads.
+    /// this view is read-only.
     /// </summary>
     internal static class ScenarioStoryScriptViewBuilder
     {

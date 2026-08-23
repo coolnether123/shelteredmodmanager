@@ -67,12 +67,10 @@ namespace ShelteredAPI.UI.Compatibility
             gameObject.SetActive(true);
             _label.text = text;
             
-            // Resize BG to fit text with padding
             int padding = 10;
             int width = _label.width + (padding * 2);
             int height = _label.height + (padding * 2);
             
-            // Cap max width
             if (width > 400)
             {
                  _label.width = 400;
@@ -84,12 +82,10 @@ namespace ShelteredAPI.UI.Compatibility
             _bg.width = width;
             _bg.height = height;
             
-            // Center label on BG could work, or just offset.
-            // Let's assume Pivot Center for both simplifies things.
+            // Use matching top-left pivots so the label follows the background offset.
             _bg.pivot = UIWidget.Pivot.TopLeft;
             _label.pivot = UIWidget.Pivot.TopLeft;
             
-             // Offset label slightly inside
             _label.transform.localPosition = new Vector3(padding, -padding, 0);
 
             UpdatePosition();
@@ -102,24 +98,17 @@ namespace ShelteredAPI.UI.Compatibility
 
         private void UpdatePosition()
         {
-            // Follow mouse
             Vector3 mousePos = UnityEngine.Input.mousePosition;
             
-            // NGUI Coordinate conversion
-            // Standard NGUI tooltips usually attach to UICamera logic, but we are doing a manual overlay.
-            
-            // Simple approach: Screen To World Point on the UI Plane
+            // Convert the cursor position to the manual overlay's UI plane.
             if (_uiCamera == null) _uiCamera = NGUITools.FindCameraForLayer(gameObject.layer);
             if (_uiCamera == null) return;
 
             Vector3 worldPos = _uiCamera.ScreenToWorldPoint(mousePos);
             transform.position = worldPos;
 
-            // Offset so cursor doesn't cover it
             transform.localPosition += new Vector3(15, -15, 0);
             
-            // Screen edge clamping (simple version)
-            // If x + width > ScreenWidth/2 ... (todo if needed)
         }
     }
 }

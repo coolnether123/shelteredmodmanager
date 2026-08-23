@@ -58,7 +58,7 @@ namespace ShelteredAPI.UI.Compatibility
         {
             if (template == null || parent == null) return null;
 
-            // Reuse UIUtil's robust cloning logic
+            // Clone the template with UIUtil so the button keeps the expected components.
             var btn = UIUtil.CloneButton(template, parent, label);
             if (btn == null) return null;
 
@@ -107,7 +107,7 @@ namespace ShelteredAPI.UI.Compatibility
 
         /// <summary>
         /// Sets the sprite of a UISprite by searching for the sprite name in available atlases.
-        /// assetPath can be just "SpriteName" or "AtlasName:SpriteName".
+        /// <paramref name="assetPath"/> accepts <c>SpriteName</c> or <c>AtlasName:SpriteName</c>.
         /// </summary>
         public static void SetSpriteFromPath(UISprite sprite, string assetPath)
         {

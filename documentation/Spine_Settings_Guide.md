@@ -1,202 +1,108 @@
-# Spine Settings Framework Guide (v2.0)
+# Spine settings UI
 
-## Compatibility Matrix
+This reference covers Spine setting widgets and metadata. Follow [Settings and persistence](SETTINGS.md#add-settings-to-a-plugin) to register and load a settings holder.
 
-| Doc Section | Applies To | Status |
-|-------------|------------|--------|
-| Pattern A (`ModManagerBase<T>`) | `ModAPI.dll` current | Supported |
-| Pattern B (`ISettingsProvider` + `SpineSettingsHelper.Scan`) | `ModAPI.dll` current | Supported |
-| `[ModConfiguration]` marker | Optional metadata only | Supported, not required for scanning |
-| Old examples importing `[ModSetting]` from `ModAPI.Attributes` | Older docs/snippets | Deprecated |
-
-Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
-
-## 1. Canonical Namespaces and Attributes
-
-Use this import pattern in new mods:
+## Namespaces
 
 ```csharp
-using ModAPI.Core;
-using ModAPI.Spine;       // [ModSetting], [ModSettingPreset], SettingMode, SpineSettingsHelper
-using ModAPI.Attributes;  // [ModConfiguration] (optional marker)
-```
-
-Notes:
-- `[ModSetting]` and `[ModSettingPreset]` are defined in `ModAPI.Spine`.
-- `[ModConfiguration]` is defined in `ModAPI.Attributes` and is optional for current scanning flow.
-
-## 2. Two Supported Settings Patterns
-
-### Pattern A: `ModManagerBase<T>` (Auto Settings, Recommended)
-
-Use this when you want minimal boilerplate and typed `Config`.
-
-```csharp
-using ModAPI.Core;
 using ModAPI.Spine;
-
-public class MySettings
-{
-    [ModSetting("Enable Feature", Mode = SettingMode.Simple)]
-    public bool Enabled = true;
-
-    [ModSetting("Multiplier", Min = 0.5f, Max = 3f, StepSize = 0.1f)]
-    public float Multiplier = 1f;
-}
-
-public class MyMod : ModManagerBase<MySettings>, IModPlugin
-{
-    public override void Initialize(IPluginContext ctx)
-    {
-        base.Initialize(ctx); // Creates SettingsController + loads from disk
-        Log.Info("Multiplier = " + Config.Multiplier);
-    }
-
-    public void Start(IPluginContext ctx) { }
-}
+using ModAPI.Attributes; // ModConfiguration only
 ```
 
-Sliders are granular by default. `StepSize` controls the +/- button increment. To make slider dragging snap to that increment, opt in explicitly:
+`ModSettingAttribute` and `ModSettingPresetAttribute` are in `ModAPI.Spine`. `ModConfigurationAttribute` is optional metadata; the loader does not require it to discover an attributed settings holder.
 
-```csharp
-[ModSetting("Spawn Rate", Min = 0f, Max = 5f, StepSize = 0.25f, SliderStepMode = SliderStepMode.Stepped)]
-public float SpawnRate = 1f;
-```
+## Visibility modes
 
-Numeric widgets also support display and control tuning:
+`ModSettingAttribute.Mode` defaults to `SettingMode.Advanced`.
+
+| Mode | Simple view | Advanced view |
+| --- | --- | --- |
+| `Simple` | Visible | Visible |
+| `Advanced` | Hidden | Visible |
+| `Both` | Visible | Visible |
+
+If a setting is missing, clear search and category filters before changing its mode.
+
+## Widget selection
+
+Spine infers a widget from the member type unless `ModSettingAttribute.Type` selects one. `SettingType` supports Boolean, integer, floating-point, string, enum, color, button, header, spacer, numeric input, keybind, and choice widgets.
+
+Common metadata is:
+
+| Field | Effect |
+| --- | --- |
+| `LabelKey`, `TooltipKey` | Resolve translated text while `Label` and `Tooltip` remain fallbacks |
+| `Category`, `SortOrder` | Group and order rows |
+| `DependsOnId` | Disable a row until another Boolean setting is true |
+| `ControlsChildVisibility` | Hide dependent rows while the controlling Boolean is false |
+| `RequiresRestart` | Show the restart requirement |
+| `TrueLabel`, `FalseLabel` | Replace the default `ON` and `OFF` text |
+| `ActionLabel` | Set button text for a method setting |
+| `Placeholder` | Set empty string input text |
+
+## Numeric controls
 
 ```csharp
 [ModSetting(
-    "Pregnancy Duration",
+    "Pregnancy duration",
     Min = 1f,
     Max = 14f,
     StepSize = 0.5f,
     FineStepSize = 0.25f,
     LargeStepSize = 2f,
     ValueFormat = "0.##",
-    UnitSuffix = " days",
-    Tooltip = "Drag, use +/- buttons, or click the value to type an exact duration.")]
+    UnitSuffix = " days")]
 public float PregnancyDurationDays = 4f;
 ```
 
-Useful UI fields:
-- `ValueFormat`: .NET numeric format used by the value label.
-- `UnitSuffix`: text appended to displayed numeric values.
-- `FineStepSize`: +/- button step. Falls back to `StepSize`, then a range-derived default.
-- `LargeStepSize`: +/- button step while Shift is held.
-- `ShowValueInput`: set false to hide exact numeric text entry.
-- `ShowStepperButtons`: set false to hide +/- buttons.
-- `LabelKey`: localization key for the setting label. `Label` remains the fallback.
-- `TooltipKey`: localization key for the setting tooltip. `Tooltip` remains the fallback.
-- `TrueLabel` / `FalseLabel`: custom labels for bool toggles.
-- `ActionLabel`: custom text for method/button settings.
-- `Placeholder`: empty string setting placeholder.
+Slider dragging is granular by default. Set `SliderStepMode = SliderStepMode.Stepped` to snap dragging to `StepSize`.
 
-Boolean settings render as explicit two-state controls in the in-game settings book. They do not use arrow cycling; `TrueLabel` and `FalseLabel` replace the default `ON` / `OFF` text when supplied.
+- `FineStepSize` controls the normal step buttons.
+- `LargeStepSize` applies while Shift is held.
+- `ShowValueInput` controls direct numeric text entry.
+- `ShowStepperButtons` controls the increment and decrement buttons.
 
-Tooltips are shown when hovering labels and interactive controls. Numeric tooltips also include the active range and step behavior. Prefer `TooltipKey` for translated mods and keep `Tooltip` populated with an English fallback:
+## Callbacks and choices
+
+`OnChanged`, `VisibilityMethod`, `ValidateMethod`, and `OptionsSource` contain member names on the settings object. Keep those methods and properties when trimming unused code because the scanner resolves them by reflection.
 
 ```csharp
-[ModSetting("Enable Alerts",
-    LabelKey = "mymod.settings.alerts.label",
-    TooltipKey = "mymod.settings.alerts.tooltip",
-    Tooltip = "Show an alert when shelter resources become critical.")]
-public bool EnableAlerts = true;
+[ModSetting(
+    "Alert sound",
+    Type = SettingType.Choice,
+    OptionsSource = "GetAlertSounds",
+    OnChanged = "OnAlertSoundChanged")]
+public string AlertSound = "Bell";
 ```
 
-Spine also resolves these built-in tooltip keys before falling back to English:
-`Spine.Settings.Tooltip.Defaults`, `Spine.Settings.Tooltip.SaveClose`,
-`Spine.Settings.Tooltip.Bool.Toggle`, `Spine.Settings.Tooltip.Bool.Set`,
-`Spine.Settings.Tooltip.Numeric.Range`, `Spine.Settings.Tooltip.Numeric.Step`,
-`Spine.Settings.Tooltip.Numeric.FineDrag`, `Spine.Settings.Tooltip.Numeric.ValueInput`,
-`Spine.Settings.Tooltip.Step.Increase`, `Spine.Settings.Tooltip.Step.Decrease`,
-`Spine.Settings.Tooltip.Step.LargeStep`, `Spine.Settings.Tooltip.Option.Previous`,
-`Spine.Settings.Tooltip.Option.Next`, `Spine.Settings.Tooltip.Keybind.Change`,
-`Spine.Settings.Tooltip.Keybind.Row`, `Spine.Settings.Tooltip.Keybind.Slot`,
-`Spine.Settings.Tooltip.Keybind.ClearBoth`, `Spine.Settings.Tooltip.Keybind.ResetAction`,
-`Spine.Settings.Tooltip.Color.Choose`, and `Spine.Settings.Tooltip.Text.Apply`.
-
-### Pattern B: `ISettingsProvider` + `SpineSettingsHelper.Scan` (Manual Control)
-
-Use this when you need full control over settings ownership, scanning, or save semantics.
+Use `ModSettingPresetAttribute` to declare named values:
 
 ```csharp
-using System.Collections.Generic;
-using ModAPI.Core;
-using ModAPI.Spine;
-
-public class MyMod : IModPlugin, ISettingsProvider
-{
-    private IPluginContext _ctx;
-    private readonly MySettings _settings = new MySettings();
-    private List<SettingDefinition> _defs;
-
-    public void Initialize(IPluginContext ctx)
-    {
-        _ctx = ctx;
-        _defs = SpineSettingsHelper.Scan(_settings);
-    }
-
-    public void Start(IPluginContext ctx) { }
-
-    public IEnumerable<SettingDefinition> GetSettings() => _defs;
-    public object GetSettingsObject() => _settings;
-    public void OnSettingsLoaded() { }
-    public void ResetToDefaults() => _settings.Reset();
-}
-
-public class MySettings
-{
-    [ModSetting("Enable Feature")]
-    public bool Enabled = true;
-
-    public void Reset()
-    {
-        Enabled = true;
-    }
-}
-```
-
-## 3. SettingMode Visibility Defaults (Important)
-
-`ModSettingAttribute.Mode` defaults to `SettingMode.Advanced`.
-
-Behavior:
-- `Mode = Advanced`: visible in Advanced view only.
-- `Mode = Simple`: visible in both Simple and Advanced views.
-- `Mode = Both`: visible in both Simple and Advanced views.
-
-If a setting exists but is not visible:
-1. Check `Mode` value.
-2. Clear active search/category filters in the Mod Settings UI.
-3. Confirm your plugin is exposing a provider (`ModManagerBase` auto or `ISettingsProvider` manual).
-4. Confirm scanner logs exist:
-   - `Scanning <TypeName> for settings...`
-   - `Scan complete for <TypeName>. Found <N> definitions.`
-5. Check scan errors such as:
-   - `OnChanged method '<Name>' not found on type <Type>`
-   - `VisibilityMethod '<Name>' not found on <Type>`
-   - `ValidateMethod '<Name>' not found on <Type>`
-
-## 4. Common Spine Features
-
-```csharp
-[ModSetting("Header", Type = SettingType.Header, Category = "General")]
-public string Header;
-
-[ModSetting("Danger Mode", DependsOnId = "Enabled")]
-public bool DangerMode = false;
-
-[ModSetting("Reset Cache")]
-public void ResetCacheButton()
-{
-    MMLog.WriteInfo("Cache reset");
-}
-
-[ModSetting("Enemy HP")]
+[ModSetting("Enemy health")]
 [ModSettingPreset("Easy", 50)]
 [ModSettingPreset("Normal", 100)]
 [ModSettingPreset("Hard", 250)]
-public int EnemyHp = 100;
+public int EnemyHealth = 100;
 ```
 
+## Per-save settings
+
+Set `Scope = SettingsScope.PerSave` for a value that belongs to the active save. `CarryOverToNewGamePlus` and `NewGamePlusMerge` control New Game Plus migration.
+
+Use `IPluginContext.SaveSystem` instead when the data is runtime state rather than a player-facing setting.
+
+## Raw providers
+
+Implement `ISettingsProvider` only when the plugin owns scanning, defaults, loading, and saving. The current loader registers a raw provider but does not create or load a `SettingsController` for it. A raw provider must not rely on `OnSettingsLoaded()` being called automatically before `Start(...)`.
+
+## Diagnose scanning
+
+Search `SMM/mod_manager.log` for:
+
+```text
+Scanning <TypeName> for settings...
+Scan complete for <TypeName>. Found <N> definitions.
+OnChanged method '<Name>' not found on type <Type>
+VisibilityMethod '<Name>' not found on <Type>
+ValidateMethod '<Name>' not found on <Type>
+```

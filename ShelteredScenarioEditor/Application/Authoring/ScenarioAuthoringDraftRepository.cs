@@ -481,11 +481,10 @@ namespace ShelteredScenarioEditor.Application.Authoring{
                             continue;
 
                         int slot = TryParseSlotNumber(files[i]);
-                        // A draft has two owned persistence surfaces: the authoring
-                        // definition folder and its reserved virtual save slot.  Do
+                        // A draft owns its definition folder and reserved virtual save slot. Do
                         // not let a stale save entry select an arbitrary directory.
                         // The scenario definition above is the authority for both
-                        // the draft id and slot before either surface is mutated.
+                        // the draft id and slot before either location is changed.
                         bool saveDeleted = true;
                         if (slot > 0)
                         {

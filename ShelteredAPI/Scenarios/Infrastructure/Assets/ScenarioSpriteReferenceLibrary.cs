@@ -69,7 +69,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             // Runtime keys can collide across inactive prefab/resource copies
             // that share a texture and sprite name. Prefer the copy that is
-            // actually rendering in the loaded scene so a persisted pixel
+            // rendering in the loaded scene so a persisted pixel
             // patch is rebuilt from the player's visible asset.
             SpriteRenderer[] activeRenderers = Resources.FindObjectsOfTypeAll<SpriteRenderer>();
             for (int i = 0; activeRenderers != null && i < activeRenderers.Length; i++)

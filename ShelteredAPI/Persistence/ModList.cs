@@ -15,7 +15,7 @@ namespace ShelteredAPI.Persistence
         /// <summary>
         /// Creates a new auto-persisted list.
         /// </summary>
-        /// <param name="uniqueId">A unique ID for this list, ideally prefixed with your mod ID (e.g. "MyMod_Players")</param>
+        /// <param name="uniqueId">A unique ID for this list, preferably prefixed with the mod ID, such as <c>MyMod_Players</c>.</param>
         public ShelteredPersistentList(string uniqueId)
         {
             this._id = uniqueId;

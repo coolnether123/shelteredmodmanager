@@ -1,16 +1,16 @@
-# When To Use ShelteredAPI (v2.0)
+# When to use ShelteredAPI
 
 `ShelteredAPI.dll` is the game-facing layer for mods that operate on Sheltered content, saves, runtime UI/input, gameplay events, actors/characters, or scenarios. The optional `ShelteredScenarioEditor.dll` is an application component, not a mod SDK dependency. Use [Core ModAPI Basics](ModAPI_Developer_Guide.md) first for a plugin that only needs neutral framework behavior.
 
 Assembly choices and the typed-escape-hatch rule are defined once in the canonical [assembly boundary](README.md#assembly-boundary-canonical). Exact method/type shapes belong in [API Signatures Reference](API_Signatures_Reference.md).
 
-## Facade Chooser
+## Facade chooser
 
 | Need | Public Entry Point | Detail Guide |
 |------|--------------------|--------------|
 | Register items, recipes, loot, localization, or assets | `ShelteredContent` | [Content Guide](ShelteredAPI_Content_Guide.md) |
-| Inspect/control Sheltered save slots or listen to save lifecycle | `ShelteredSaves`, `ShelteredSaveEvents` | [Settings and Persistence](SETTINGS.md#5-sheltered-save-slots) and [Events Guide](Events_Guide.md#5-save-lifecycle-events) |
-| Export save/mod/runtime facts for bug reports | `ShelteredSupportBundle` | [API Signatures Reference](API_Signatures_Reference.md#save-manifest--support-bundle-smm-20) |
+| Inspect or control Sheltered save slots, or listen to save lifecycle | `ShelteredSaves`, `ShelteredSaveEvents` | [Settings and persistence](SETTINGS.md#work-with-sheltered-slots) and [Events guide](Events_Guide.md#5-save-lifecycle-events) |
+| Export save/mod/runtime facts for bug reports | `ShelteredSupportBundle` | [API reference](API_Signatures_Reference.md#save-manifest-and-support-bundle-smm-20) |
 | Subscribe to Sheltered gameplay, UI, faction, or scheduled-time events | `ShelteredEvents` | [Events Guide](Events_Guide.md) |
 | Add Sheltered controls or adjust vanilla input tuning | `ShelteredInput` | [Input Keybindings Guide](Input_Keybindings_Guide.md) |
 | Add targeted vanilla UI behavior | `ShelteredUI` | [API Signatures Reference](API_Signatures_Reference.md) |
@@ -21,9 +21,9 @@ Assembly choices and the typed-escape-hatch rule are defined once in the canonic
 | Project or register expedition map markers and actor snapshots | `ShelteredMapMarkers` | [API Signatures Reference](API_Signatures_Reference.md#map-markers-smm-20) |
 | Inspect or conservatively restore player job queues | `ShelteredQueues` | [API Signatures Reference](API_Signatures_Reference.md#player-queues-smm-20) |
 
-## Selection Rules
+## Selection rules
 
-- Keep ordinary mod settings and save-scoped state on `ModAPI` (`ModManagerBase<T>` and `ctx.SaveSystem`).
+- Keep ordinary mod settings and save-scoped state on `ModAPI` through an attributed settings holder and `ctx.SaveSystem`.
 - Use `ShelteredSaves` only for Sheltered slot/descriptors/lifecycle work, not as an alternative general persistence store.
 - Use `ShelteredSupportBundle.ExportJson(...)` for bug-report diagnostics; absent optional services are reported as `unknown` or `unavailable`.
 - Use `ctx.Actors` and DTO/proxy types for ordinary actor logic. Cross into raw `FamilyMember`, `NpcVisitor`, or other vanilla types only through an explicit typed Sheltered escape hatch when the integration requires it.
@@ -34,7 +34,7 @@ Assembly choices and the typed-escape-hatch rule are defined once in the canonic
 - Register runtime features from plugin lifecycle methods, normally `Start(...)`, rather than constructors.
 - Never reference `ShelteredScenarioEditor.dll` from a mod. Scenario definitions, registration, validation, runtime operations, and save APIs required by mod developers remain in ShelteredAPI.
 
-## Targeted Vanilla UI Helpers
+## Targeted vanilla UI helpers
 
 Use `ShelteredUI` only when a feature must augment an existing game panel. `CloneElement(...)` reuses a visual template while clearing inherited listeners and button handlers by default; the returned result carries warnings for hierarchy-dependent work.
 
@@ -53,13 +53,13 @@ if (clone.Success)
 
 Capture temporary label/widget/tween colors with `SnapshotColors(...)` and restore them on typed panel close via `SubscribePanelLifecycle(...)`. `UITakeoverSession.BindTooltip(...)` also participates in `Restore()` by hiding its tooltip and reinstating the preceding hover binding.
 
-## Expedition Map Context
+## Expedition map context
 
 `ShelteredMap.Current` exposes read-only expedition dimensions, the `40 x 16` vanilla normal-map baseline, result scale, map seed when assigned, home shelter position, coordinate conversion, and route-distance helpers. Check `IsValid` before using coordinate or route operations: startup, scene transitions, and non-shelter scenes return explicit unavailable or not-yet-generated results.
 
 `ShelteredMap` also accepts focused location-density, town-density, quest-placement, faction-zone, home-shelter, and special-item eligibility policies. Policy composition is deterministic and empty registration produces vanilla/no-op intent. This foundation records and resolves intent; it deliberately does not apply speculative Harmony changes to vanilla map generation.
 
-## Shared Facade Conventions
+## Shared facade conventions
 
 New SMM 2.0 service APIs follow the facade pattern represented by `ShelteredSaves`, `ShelteredUI`, `ShelteredRuntimeUI`, `ShelteredCharacters`, `ShelteredStores`, and `ShelteredCooking`.
 
@@ -81,21 +81,21 @@ New SMM 2.0 service APIs follow the facade pattern represented by `ShelteredSave
 
 Existing 2.0 names that predate these rules remain supported, including `SaveEntry` and `PatchApplyReport`. New public `ShelteredAPI` classes, interfaces, structs, and enums require a justified `ShelteredAPI_PublicSurface_Baseline.tsv` row and exact callable signatures in [API Signatures Reference](API_Signatures_Reference.md). Reserved signature sections identify ownership only; they are not callable API promises.
 
-## Status Of Advanced Surfaces
+## Status of advanced APIs
 
-| Surface | 2.0 Status | Consequence For Authors |
+| API area | 2.0 status | What authors should do |
 |---------|---------------|-------------------------|
-| Content, events, input, actors/characters, and save facades | Documented public author surface | Follow the relevant guide and signature reference. |
+| Content, events, input, actors/characters, and save facades | Documented public API | Follow the relevant guide and signature reference. |
 | Expedition map context and generation-policy intent | API preview | Query runtime facts safely; generation adapters consuming policy intent remain follow-up work. |
 | Map-marker/expedition-actor snapshots and support bundles | API preview / diagnostics | Use copied facts for integrations and reports; do not treat them as mutable game state. |
 | Player queue snapshots and conservative restore | API preview | Queue capacity is observed metadata, not framework-owned policy. |
 | Runtime UI, stores, item reservations/assignments, and cooking stations | API preview | Expect small API or behavior adjustments within the 2.0 line. |
-| Installed-scenario browser, XML/code registration, runtime, and scoring snapshots | Supported 2.0 ShelteredAPI surface | Installed scenario playback remains available when the editor DLL is absent or disabled. |
+| Installed-scenario browser, XML/code registration, runtime, and scoring snapshots | Supported 2.0 ShelteredAPI | Installed scenario playback remains available when the editor DLL is absent or disabled. |
 | In-game custom scenario editor | Separate optional preview assembly | Defaults off under `ShelteredScenarioEditor.Enabled`; enable it only while creating or testing drafts and use disposable saves for playtests. |
 
 Back up saves before testing any save-changing behavior or preview authoring workflow. The stable release status applies even when a particular facade is documented.
 
-## Stable Surface Versus Internals
+## Public APIs versus internals
 
 Mods should call documented facades and exchange their public DTOs. Serializers, catalog services, storage repositories, runtime binding services, NGUI implementations, patch hosts, manager adapters, and every type in `ShelteredScenarioEditor.dll` are implementation detail and may change without becoming supported mod entry points.
 

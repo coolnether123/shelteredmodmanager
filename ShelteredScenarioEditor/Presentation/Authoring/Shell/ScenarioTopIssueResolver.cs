@@ -5,12 +5,9 @@ using ShelteredScenarioEditor.Domain.Stages;
 
 namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
     /// <summary>
-    /// Single source of truth for "what should the author fix next?". Ranks the
-    /// validation issues (blocking errors before advisory warnings, each in the
-    /// order the validator produced them) and resolves the one top issue to the
-    /// existing fix/navigation actions - the playtest fix resolver for the crisp
-    /// starting-survivor / unsaved cases, and the publish issue-row navigation for
-    /// every other domain. Home surfaces this so "6 warnings" also says what to do.
+    /// Ranks validation issues with errors before warnings while preserving validator order.
+    /// Starting-survivor and unsaved cases use the playtest fix resolver; other issues use
+    /// publish-row navigation.
     /// </summary>
     internal static class ScenarioTopIssueResolver
     {
@@ -39,8 +36,8 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
             if (issue == null)
                 return null;
 
-            // Prefer the playtest fix resolver only where it recognized a specific,
-            // crisp blocker (Open Cast / Save Draft); otherwise fall back to the
+            // Use the playtest fix resolver for its specific Open Cast and Save Draft
+            // blockers; otherwise fall back to the
             // publish issue rows for stage-specific navigation actions.
             ScenarioAuthoringInspectorAction fix = ScenarioPlaytestFixActionResolver.BuildFixAction(issue.Message);
             if (fix != null && IsSpecificPlaytestFix(fix.Id))

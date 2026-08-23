@@ -1229,7 +1229,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
     /// <summary>
     /// Runtime component type targeted by a sprite swap or scene sprite operation.
-    /// Use <see cref="Auto"/> when the resolver should choose the best available component.
+    /// <see cref="Auto"/> selects the first available SpriteRenderer, UI2DSprite, or ParticleSystemRenderer, in that order.
     /// </summary>
     public enum ScenarioSpriteTargetComponentKind
     {

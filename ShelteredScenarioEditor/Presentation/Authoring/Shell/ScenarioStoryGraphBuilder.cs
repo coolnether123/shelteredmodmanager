@@ -26,7 +26,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
     /// </summary>
     internal static class ScenarioStoryGraphBuilder
     {
-        // Readable node cap. Beyond this the flow degrades to the first stages plus a note.
+        // Beyond this node cap, show the first stages and a truncation message.
         public const int MaxStageNodes = 50;
 
         // Layout metrics (deterministic; renderer draws at these sizes).

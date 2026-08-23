@@ -40,7 +40,7 @@ namespace ShelteredAPI.UI
     }
 
     /// <summary>
-    /// Best-effort result for UI operations whose target hierarchy may differ between game builds.
+    /// Result for UI operations that can partially succeed when target hierarchies differ between game builds.
     /// </summary>
     public sealed class UIOperationResult
     {
@@ -57,7 +57,7 @@ namespace ShelteredAPI.UI
         public bool Success { get; private set; }
         /// <summary>Gets the number of components changed by the operation.</summary>
         public int AffectedCount { get; private set; }
-        /// <summary>Gets non-fatal warnings generated during best-effort processing.</summary>
+        /// <summary>Gets non-fatal warnings generated while processing the available hierarchy.</summary>
         public ReadOnlyCollection<string> Warnings { get { return _warnings; } }
         /// <summary>Gets whether any non-fatal warnings were recorded.</summary>
         public bool HasWarnings { get { return _warnings.Count != 0; } }

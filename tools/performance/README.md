@@ -5,7 +5,7 @@ same startup, process, menu, scenario-selection, custom-book, memory, and Unity 
 against Steam x86 and Epic x64. Every result identifies its executable, loader, API, harness, mod,
 Git, OS, CPU, and GPU state.
 
-The default matrix is:
+Available profiles are:
 
 | Profile | Doorstop | Harness | Custom editor | Mods | Navigation |
 |---|---:|---:|---:|---|---|
@@ -35,34 +35,34 @@ aggregate report therefore use the common native milestone.
 
 Validation and a non-mutating resolved plan:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -ValidateOnly
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -DryRun
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -ValidateOnly
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -DryRun
 
 Live runs use the enabled build hook to rebuild the manager, ShelteredAPI, the standalone
 ShelteredScenarioEditor, and harness once, then deploy the exact same managed artifacts to both
 storefronts. The harness and editor are compiled against Steam's older Unity
-surface as the compatibility floor. Use `-SkipBuild` only when the installed binaries already match
+API as the compatibility floor. Use `-SkipBuild` only when the installed binaries already match
 every configured deployment hash gate.
 
 Canonical matched-serial three-run matrix:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile vanilla,smm-scenario-editor-off,smm-native,smm-core,all-mods -Iterations 3 -MatchedSerial
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile vanilla,smm-scenario-editor-off,smm-native,smm-core,all-mods -Iterations 3 -MatchedSerial
 
 Concurrent optional-editor lifecycle matrix (functional/stress evidence, not canonical vanilla timing):
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile smm-scenario-editor-absent,smm-scenario-editor-off,smm-core -Iterations 3 -ParallelPlatforms -RunLabel editor-lifecycle
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile smm-scenario-editor-absent,smm-scenario-editor-off,smm-core -Iterations 3 -ParallelPlatforms -RunLabel editor-lifecycle
 
 Parallel functional/hotspot lane (never use its vanilla deltas as canonical):
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile smm-core,all-mods -Iterations 3 -ParallelPlatforms -RunLabel parallel-hotspot
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile smm-core,all-mods -Iterations 3 -ParallelPlatforms -RunLabel parallel-hotspot
 
 Focused regression:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam -Profile smm-core -Iterations 5 -RunLabel scenario-navigation
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam -Profile smm-core -Iterations 5 -RunLabel scenario-navigation
 
 Short live smoke before a long matrix (the recorded config copy retains these overrides):
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile smm-core -Iterations 1 -ParallelPlatforms -FpsDurationSeconds 2 -ScenarioTimeoutSeconds 30 -RunLabel smoke
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Invoke-ShelteredBenchmark.ps1 -Platform steam,epic -Profile smm-core -Iterations 1 -ParallelPlatforms -FpsDurationSeconds 2 -ScenarioTimeoutSeconds 30 -RunLabel smoke
 
 DryRun never writes to an install or launches a process. ValidateOnly only validates JSON and paths.
 SkipBuild skips both the global build and per-platform preparation hooks.
@@ -70,7 +70,7 @@ SkipBuild skips both the global build and per-platform preparation hooks.
 If PowerShell itself is force-terminated and cannot execute its suite `finally`, close only game processes
 you own and recover the captured install state with:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Restore-ShelteredBenchmarkState.ps1 -RunRoot <benchmark-folder> -Platform steam,epic -Force
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Restore-ShelteredBenchmarkState.ps1 -RunRoot <benchmark-folder> -Platform steam,epic -Force
 
 Recovery acquires the same install locks, refuses any active game process, restores the suite snapshots,
 verifies their SHA-256 identities, and writes `manual_restore_result.json` into the run folder.
@@ -96,7 +96,7 @@ stable dependency/load-after/load-before relaxation.
 
 An all-mod run is deliberately literal. If incompatible installed mods fail discovery, the case is
 retained as a failure with its exact mod set and copied SMM log. Put known exclusions in the profile
-instead of silently changing what “all” means.
+instead of silently changing what "all" means.
 
 managerOptions maps existing Boolean option IDs to run values. The editor uses the single canonical
 `ShelteredScenarioEditor.Enabled` ID and deliberately has no retired-ID alias or migration path.
@@ -253,9 +253,9 @@ one install.
 
 Run without launching Sheltered:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Test-ShelteredBenchmarkContracts.ps1
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ScenarioEditorAssemblyBoundary.ps1
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ShelteredScenarioEditorContracts.ps1
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Test-ShelteredBenchmarkContracts.ps1
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ScenarioEditorAssemblyBoundary.ps1
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ShelteredScenarioEditorContracts.ps1
 
 The contracts cover configuration failures, discovery/dependency order, load-order isolation,
 targeted Doorstop/options mutation, restoration of existing and absent files, harness URI escaping,

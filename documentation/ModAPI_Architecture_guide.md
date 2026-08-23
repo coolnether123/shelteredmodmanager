@@ -1,10 +1,10 @@
-# ModAPI v2.0 Architecture Guide
+# ModAPI v2.0 architecture guide
 
-This document summarizes loader/runtime architecture for maintainers and advanced integration work. The 2.0 line is a breaking clean API line.
+This document summarizes loader and runtime architecture for maintainers. SMM 2.0 moved Sheltered-specific integrations from `ModAPI.dll` to `ShelteredAPI.dll`.
 
 Mod authors should use the canonical [assembly boundary](README.md#assembly-boundary-canonical) rather than treating this internal map as setup instructions. For exact public signatures, use [API Signatures Reference](API_Signatures_Reference.md).
 
-## Compatibility Matrix
+## Compatibility matrix
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
@@ -12,7 +12,7 @@ Mod authors should use the canonical [assembly boundary](README.md#assembly-boun
 | Runtime host responsibilities | Current codebase | Supported |
 | Public interface details | See signature reference | Prefer signature reference |
 
-## 1. Startup Pipeline
+## 1. Startup pipeline
 
 Entry path:
 - Doorstop/bootstrap calls `PluginManager.getInstance().loadAssemblies(...)`.
@@ -22,9 +22,11 @@ High-level flow:
 2. `ModLoadOrderReader.Read(...)`
 3. `DiscoverAndOrderMods(...)`
 4. `AttachInspectorTools()`
-5. `LoadAndInitializePlugins(...)`
+5. `StartBackgroundPluginActivation(...)`
 
-## 2. Loader Initialization
+The primary path prepares plugin assemblies in the background and activates prepared plugins on the main thread. `LoadAndInitializePlugins(...)` remains the synchronous fallback.
+
+## 2. Loader initialization
 
 `InitializeLoader(...)` is responsible for:
 - resolving `GameRoot` and `ModsRoot`
@@ -49,7 +51,7 @@ ShelteredAPI registers neutral runtime IDs when it is present. Neutral IDs used 
 - `GameRuntime.ActorEvents`
 - `GameRuntime.ActorSerialization`
 
-## 3. Discovery and Load Order
+## 3. Discovery and load order
 
 Discovery is driven by `ModDiscovery.DiscoverAllMods()`:
 - scans `<GameRoot>/mods/*`
@@ -62,7 +64,7 @@ Load order is driven by `mods/loadorder.json`:
 - unknown IDs are ignored
 - duplicates are removed case-insensitively
 
-## 4. Plugin Instantiation
+## 4. Plugin instantiation
 
 For each enabled mod:
 - all DLLs under `Assemblies/` are loaded via `Assembly.Load(byte[])`
@@ -82,7 +84,7 @@ Optional interfaces currently recognized:
 - `IModSceneEvents`
 - `IModSessionEvents`
 
-## 5. Runtime Host
+## 5. Runtime host
 
 `PluginRunner` is the main runtime host. It is responsible for:
 - draining the main-thread queue
@@ -94,9 +96,10 @@ Optional interfaces currently recognized:
 
 Runtime tooling shortcuts:
 - `F9`: Runtime Inspector
-- `F10`: Runtime IL Inspector
-- `F11`: UI Debug Inspector
-- `F12`: Runtime Debugger UI
+- `F10`: Runtime IL Inspector when the decompiler executable is installed
+- `F12`: Runtime Debugger UI when the decompiler executable is installed
+
+ShelteredAPI adds its own `F11` UI Debug Inspector when the Sheltered runtime bootstrap loads.
 
 ## 6. `IPluginContext`
 
@@ -134,20 +137,20 @@ Per-plugin context exposes:
 
 ## 7. `ModManagerBase`
 
-`ModManagerBase` is the high-level base class for larger mods. It provides:
+`ModManagerBase` is a public base class intended to group common mod services. The current loader creates plugin types with `Activator.CreateInstance(...)` instead of attaching them to a `GameObject`, so its `MonoBehaviour` lifecycle and cleanup remain unverified. Do not recommend it as a new-plugin base until activation is fixed or tested in game. The class contains:
 - `Context`
 - `Log`
 - `SaveSystem`
 - deterministic `Random`
 - event registry/disposal support
 - automatic settings discovery and loading
-- automatic persistence scanning
+- explicit persistence registration through `RegisterPersistentData(...)` or `SaveSystem.RegisterModData(...)`
 
 Sheltered save-slot APIs are exposed through `ShelteredSaves` and `ShelteredSaveEvents` in `ShelteredAPI.dll`.
 
-`ModManagerBase<T>` adds a strongly typed `Config` surface.
+`ModManagerBase<T>` adds a strongly typed `Config` property.
 
-## 7.1 Deterministic Random Ownership
+## 7.1 Deterministic random ownership
 
 `ModAPI.Core.ModRandom` remains the single game-neutral deterministic random service. It owns the master seed, stable named-stream derivation, stream snapshot/restore, and save-seed reset semantics.
 
@@ -177,7 +180,7 @@ The .NET 8 decompiler executable has one execution path: `Program` validates CLI
 required by that engine. New service facades or semantic APIs should be added only with a concrete second
 consumer.
 
-## 8. Practical Guidance
+## 8. Practical guidance
 
 - Keep constructors side-effect free.
 - Put lightweight wiring in `Initialize(...)`.

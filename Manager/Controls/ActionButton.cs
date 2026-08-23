@@ -5,7 +5,7 @@ using System.Windows.Forms;
 namespace Manager.Controls
 {
     /// <summary>
-    /// Modern styled action button with icons and hover effects.
+    /// Action button with an icon and hover state.
     /// </summary>
     public class ActionButton : Button
     {

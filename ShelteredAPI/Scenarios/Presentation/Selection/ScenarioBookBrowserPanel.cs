@@ -15,7 +15,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
 {
     /// <summary>
     /// Runtime browser for installed custom scenarios and their saves. The optional
-    /// editor owns every authoring and package-management surface.
+    /// editor owns authoring and package-management UI.
     /// </summary>
     internal sealed class ScenarioBookBrowserPanel : MonoBehaviour
     {

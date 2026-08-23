@@ -15,7 +15,7 @@ namespace ShelteredAPI.Persistence
         /// <summary>
         /// Creates a new auto-persisted dictionary.
         /// </summary>
-        /// <param name="uniqueId">A unique ID for this dictionary, ideally prefixed with your mod ID (e.g. "MyMod_Settings")</param>
+        /// <param name="uniqueId">A unique ID for this dictionary, preferably prefixed with the mod ID, such as <c>MyMod_Settings</c>.</param>
         public ShelteredPersistentDictionary(string uniqueId)
         {
             this._id = uniqueId;

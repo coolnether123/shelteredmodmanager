@@ -631,7 +631,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Highly resilient helper to extract a local variable index from a previous match.
+        /// Extracts a local-variable index from the previous match.
         /// </summary>
         /// <remarks>
         /// This uses Harmony's "Named Match" feature. If you matched an instruction using 

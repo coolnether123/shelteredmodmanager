@@ -306,7 +306,7 @@ namespace ModAPI.Reflection
                 {
                     value = default(T); return typeof(T).IsClass || Nullable.GetUnderlyingType(typeof(T)) != null;
                 }
-                // Allow change-type for simple primitives/strings when possible
+                // Convert primitive and string values when the runtime supports the conversion.
                 var target = typeof(T);
                 var underlying = Nullable.GetUnderlyingType(target) ?? target;
                 if (underlying.IsEnum && raw is string)

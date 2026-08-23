@@ -145,7 +145,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
             string display = prominent ? safeLabel : safeLabel + "  " + count;
             float height = prominent ? 36f : 32f;
             Rect rect = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
-            string tooltip = safeLabel + (string.IsNullOrEmpty(secondary) ? string.Empty : " — " + secondary);
+            string tooltip = safeLabel + (string.IsNullOrEmpty(secondary) ? string.Empty : " - " + secondary);
             if (DrawPlainButton(rect, new GUIContent(display, tooltip), active || prominent ? _activeButtonStyle : _buttonStyle, true))
             {
                 if (clearSearch)

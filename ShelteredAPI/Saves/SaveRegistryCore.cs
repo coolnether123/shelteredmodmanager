@@ -135,8 +135,7 @@ namespace ShelteredAPI.Saves
         {
             lock (_lock)
             {
-                // CRITICAL FIX: If discovery is paused (during shutdown), do NOT touch the disk.
-                // Return whatever we have in cache, or an empty list if nothing.
+                // During shutdown, return cached entries without accessing the disk.
                 if (DiscoveryPaused)
                 {
                     return _entryCache ?? new Dictionary<int, SaveEntry>();
@@ -163,7 +162,7 @@ namespace ShelteredAPI.Saves
                         var savePath = Path.Combine(dir, "SaveData.xml");
                         try
                         {
-                            // Discover slot even if XML is missing (e.g. newly created slot)
+                            // Include newly created slots whose XML file has not been written yet.
                             var entry = BuildEntryFromSlot(absoluteSlot, savePath);
                             if (entry != null)
                                 _entryCache[absoluteSlot] = entry;
@@ -461,12 +460,12 @@ namespace ShelteredAPI.Saves
                 string error;
                 if (!TryWriteSlotManifest(_scenarioId, absoluteSlot, newManifest, out manifestPath, out error))
                 {
-                    MMLog.WriteError($"FAILED to update slot manifest for Slot {absoluteSlot}: {error}");
+                    MMLog.WriteError($"Failed to update slot manifest for Slot {absoluteSlot}: {error}");
                 }
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"FAILED to update slot manifest for Slot {absoluteSlot}: {ex}");
+                MMLog.WriteError($"Failed to update slot manifest for Slot {absoluteSlot}: {ex}");
             }
         }
 
@@ -474,13 +473,6 @@ namespace ShelteredAPI.Saves
         {
             return SaveManifestFacts.CaptureCurrent(info);
         }
-
-
-        // REMOVED: LoadManifest() - now using GetAllEntries() for directory-based discovery
-
-
-        // REMOVED: ReconcileManifestWithSlots() - discovery now handled by GetAllEntries()
-
         /// <summary>
         /// Condenses save slots to remove gaps in numbering.
         /// Works directly with directories without using a global manifest.
@@ -501,7 +493,6 @@ namespace ShelteredAPI.Saves
 
                 if (entry.absoluteSlot > expectedSlot)
                 {
-                    // Move it!
                     bool success = false;
                     try
                     {
@@ -547,14 +538,6 @@ namespace ShelteredAPI.Saves
                 InvalidateCache();
             }
         }
-
-
-        // REMOVED: SaveManifestFile() - no longer using global manifest
-        
-
-        // REMOVED: SerializeManifest(), DeserializeManifest(), ParseSaveEntry(), ParseSaveInfo()
-        // Global manifests are no longer used; per-slot JSON is handled by SerializeSlotManifest().
-
         private bool TryWriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
         {
             return TryWriteEntryFile(_scenarioId, absoluteSlot, xmlBytes, out fileSize, out crc);
@@ -576,7 +559,7 @@ namespace ShelteredAPI.Saves
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"FAILED writing entry file for Slot_{absoluteSlot}: {ex.Message}");
+                MMLog.WriteError($"Failed to write entry file for Slot_{absoluteSlot}: {ex.Message}");
                 return false;
             }
         }
@@ -599,24 +582,15 @@ namespace ShelteredAPI.Saves
             }
             catch (Exception ex)
             {
-                MMLog.Write("CRITICAL parse error in metadata: " + ex);
+                MMLog.WriteError("Failed to parse save metadata: " + ex);
             }
         }
-
-
-
-        // REMOVED: UniqueName() - no longer needed, names come from XML
-
         /// <summary>
-        /// Serializes a SlotManifest to JSON without Unity JsonUtility.
+        /// Serializes a <see cref="SlotManifest"/> with <see cref="ManualJson"/>.
         /// </summary>
         /// <remarks>
-        /// IMPORTANT: Unity's JsonUtility.ToJson() has a critical limitation - it CANNOT serialize
-        /// arrays of custom classes (like LoadedModInfo[]). When you call JsonUtility.ToJson() on
-        /// a SlotManifest, it will silently omit the 'lastLoadedMods' field from the output JSON,
-        /// even though the array is populated in memory. This causes saves to appear as having 0 mods.
-        /// 
-        /// We map the DTO through ModAPI.Util.ManualJson so escaping/parsing stays centralized.
+        /// The manual serializer preserves <see cref="SlotManifest.lastLoadedMods"/> and keeps
+        /// JSON escaping and parsing in one implementation.
         /// </remarks>
         internal static string SerializeSlotManifest(SlotManifest manifest)
         {
@@ -718,14 +692,8 @@ namespace ShelteredAPI.Saves
         /// Deserializes a SlotManifest from JSON.
         /// </summary>
         /// <remarks>
-        /// IMPORTANT: Unity's JsonUtility.FromJson fails to deserialize arrays of objects when 
-        /// they are written in compact/inline format like: { "modId": "...", "version": "..." }
-        /// 
-        /// This happened because early versions used handwritten manifest JSON. JsonUtility is
-        /// extremely strict about some manually written formats.
-        /// 
-        /// To maintain backward compatibility with existing save files, we parse the complete
-        /// manifest through ModAPI.Util.ManualJson instead of splitting scalar and array handling.
+        /// Uses <see cref="ManualJson"/> to support manifests written by older SMM versions and
+        /// to parse scalar and array fields consistently.
         /// </remarks>
         internal static SlotManifest DeserializeSlotManifest(string json)
         {
@@ -1320,7 +1288,7 @@ namespace ShelteredAPI.Saves
             {
                 if (slot != expected) 
                 {
-                    MMLog.WriteDebug($"HasGaps: GAP FOUND! Expected {expected}, found {slot}");
+                    MMLog.WriteDebug($"HasGaps: Expected {expected}; found {slot}.");
                     return true;
                 }
                 expected++;

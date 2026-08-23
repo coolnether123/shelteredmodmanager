@@ -104,7 +104,7 @@ namespace Manager
 
     /// <summary>
     /// Resolves mod load order by analyzing dependencies and priorities.
-    /// Implements Kahn's algorithm for robust topological sorting.
+    /// Resolves load order with Kahn's topological-sort algorithm.
     /// </summary>
     public static class LoadOrderResolver
     {
@@ -307,9 +307,7 @@ namespace Manager
                 }
                 else
                 {
-                    // (Coolnether123) Warn on duplicate mod ID; keep first entry.
-                    var existing = byId[id];
-                    // Debug.WriteLine($"Warning: Duplicate mod ID '{id}' detected. Keeping '{existing.RootPath}', ignoring '{m.RootPath}'.");
+                    // Keep the first mod found for a duplicate ID.
                 }
             }
 
@@ -437,7 +435,7 @@ namespace Manager
 
             if (!match.Success)
             {
-                // Fallback for simple ID-only constraints.
+                // Treat a dependency without a version operator as an ID-only constraint.
                 return new ModConstraint(NormId(raw));
             }
 
@@ -452,14 +450,12 @@ namespace Manager
                 { 
                     version = new Version(versionStr); 
                 }
-                catch (Exception e) {
-                    // Debug.WriteLine($"Warning: Could not parse version '{versionStr}' in dependency string '{raw}'. Ignoring version constraint. Error: {e.Message}");
+                catch (Exception) {
                 }
             }
             
-            // (Coolnether123) Warn on ambiguous constraints (e.g. 'id >=').
+            // Treat incomplete or unparsable version expressions as ID-only constraints.
             if (!string.IsNullOrEmpty(op) && version == null || string.IsNullOrEmpty(op) && version != null) {
-                // Debug.WriteLine($"Warning: Ambiguous version constraint in '{raw}'. Treating as simple dependency on '{id}'.");
                 return new ModConstraint(id);
             }
             
@@ -560,7 +556,6 @@ namespace Manager
                 // Unresolvable hard cycle: add remaining nodes by priority.
                 if (resolvedFromCycle.Count < remainingNodes.Count)
                 {
-                    // Debug.WriteLine("Unresolvable load order cycle detected.");
                     foreach (var id in remainingNodes)
                     {
                         if (!resolvedFromCycle.Contains(id)) cycled.Add(id);
@@ -605,9 +600,8 @@ namespace Manager
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                // Debug.WriteLine("Failed to read loadorder.json: " + ex.Message);
             }
             return processedData;
         }

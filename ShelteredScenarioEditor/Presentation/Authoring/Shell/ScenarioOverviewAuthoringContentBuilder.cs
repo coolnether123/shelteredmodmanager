@@ -69,9 +69,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = BuildNextItems(editorSession, definition, validation)
             });
-            // REFINE (progressive disclosure): identity/metadata details, now
-            // including author intent (Goal) and its Victory backing. Rendered
-            // collapsed on landing behind a one-line summary.
+            // Identity and metadata details follow the primary actions.
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "home_metadata",
@@ -159,7 +157,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         // The single primary "what to do next" element. Leads with the top
         // outstanding issue (or an on-track note), then offers the fix, the
-        // Test entry, and draft-health help. The renderer only surfaces this
+        // Test entry, and draft-health help. The renderer displays this
         // once the setup checklist is complete, so the two never compete.
         private static ScenarioAuthoringInspectorItem[] BuildNextItems(
             ScenarioEditorSession editorSession,

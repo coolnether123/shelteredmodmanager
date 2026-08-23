@@ -520,12 +520,6 @@ namespace Manager.Views
             }
         }
 
-        /*
-         * TODO: Implement mod lists / profiles here.
-         * The load order is now saved instantly upon any change, making the manual 'Save Order' button redundant.
-         * Future work can use this space for managing multiple mod configurations.
-         */
-
         private void MarkOrderDirty()
         {
             _orderDirty = true;

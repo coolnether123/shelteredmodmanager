@@ -56,7 +56,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             }
 
             // Global command palette is context-free: Ctrl+K toggles it from any non-text
-            // surface so creators can jump to commands, elements, and help from anywhere.
+            // input view so creators can reach commands, elements, and help from anywhere.
             if (chord.Kind == ShortcutChordKind.GlobalSearch)
             {
                 string searchMessage;

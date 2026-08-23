@@ -1,22 +1,22 @@
-# Core ModAPI Basics (v2.0)
+# Core ModAPI basics
 
 This guide covers the minimum host-neutral plugin model. For a packaged first mod, start with [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md). For exact method shapes, use [API Signatures Reference](API_Signatures_Reference.md).
 
-Read the canonical [ModAPI/ShelteredAPI assembly boundary](README.md#assembly-boundary-canonical) before adding game-facing features. Do not copy Sheltered-specific examples into a neutral plugin unless the mod actually needs that assembly.
+Read the canonical [ModAPI/ShelteredAPI assembly boundary](README.md#assembly-boundary-canonical) before adding game-facing features. Do not copy Sheltered-specific examples into a neutral plugin unless the mod needs that assembly.
 
-## What ModAPI Provides
+## What ModAPI provides
 
 | Area | Use It For |
 |------|------------|
 | `IModPlugin` and `IPluginContext` | lifecycle, logging, roots, Unity scheduling, neutral runtime access |
-| `ModManagerBase<T>` and Spine settings contracts | common mod configuration setup |
+| Attributed `Settings` or `Config` holders and Spine contracts | mod configuration |
 | `ctx.SaveSystem` | ordinary per-mod persisted state scoped to the active save |
 | `ModEventBus` and `ModAPIRegistry` | mod-to-mod messages and service lookup |
 | Input, actor, Harmony, random, and background-work contracts | host-neutral behavior where the current API exposes it |
 
 `ShelteredAPI` supplies Sheltered runtime implementations behind some neutral contracts, but a mod that only consumes neutral `ModAPI` types does not compile against those implementation types.
 
-## Minimal Lifecycle
+## Minimal lifecycle
 
 ```csharp
 using ModAPI.Core;
@@ -43,9 +43,9 @@ Use the lifecycle consistently:
 
 Keep constructors free of runtime side effects. Scene objects may not exist at startup; use `RunNextFrame(...)` or scene callbacks where appropriate.
 
-## Settings And Ordinary Mod Data
+## Settings and ordinary mod data
 
-For settings, use `ModManagerBase<T>` unless the mod needs explicit `ISettingsProvider` control. For ordinary save-scoped state, stay on the neutral persistence path:
+For settings, expose an attributed `Settings` or `Config` holder on the plugin. The loader discovers it after `Initialize(...)` and loads it before `Start(...)`. For ordinary save-scoped state, stay on the neutral persistence path:
 
 ```csharp
 public class SaveState
@@ -65,7 +65,7 @@ For data that mirrors runtime services, implement `ModAPI.Persistence.IModPersis
 
 Do not use Sheltered save-slot APIs merely to persist normal mod state. Use them only when a mod needs to inspect or control Sheltered slot/descriptors/lifecycle. Complete settings and persistence examples live in [Settings and Persistence](SETTINGS.md).
 
-## Deterministic Random Streams
+## Deterministic random streams
 
 Use `ModRandom` for save-replayable choices. It is the canonical neutral random service:
 
@@ -74,9 +74,9 @@ ModRandomStream encounterRandom = ModRandom.GetStream("com.mymod", "encounter-re
 int rewardIndex = encounterRandom.Range(0, rewards.Count);
 ```
 
-Use a stable mod ID and feature ID for each decision family. Draws from one named stream do not advance unrelated streams. `ResetForSaveSeed(...)` restarts save-seeded streams, while deterministic save restoration resumes the stored stream states. `ModManagerBase.Random` already uses a scoped canonical stream.
+Use a stable mod ID and feature ID for each decision family. Draws from one named stream do not advance unrelated streams. `ResetForSaveSeed(...)` restarts save-seeded streams, while deterministic save restoration resumes the stored stream states.
 
-## Choose The Next Guide
+## Choose the next guide
 
 | Mod requirement | Guide |
 |-----------------|-------|
@@ -89,10 +89,10 @@ Use a stable mod ID and feature ID for each decision family. Draws from one name
 | Custom scenarios | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
 | Harmony and transpilers | [Harmony Patch Guide](how%20to%20develop%20a%20patch%20with%20harmony.md) |
 
-## Practical Rules
+## Practical rules
 
 - Use stable, namespaced IDs for data keys, actions, components, triggers, and registered content.
 - Prefer the documented facade for a task before patching vanilla behavior.
 - Use `ctx.Log` for mod logs.
-- Treat public facades and DTOs as the author surface; internal manager-binding classes may move.
+- Build against public facades and DTOs; internal manager-binding classes may move.
 - The 2.0 API is a breaking stable line. Back up saves before testing a mod that touches save or scenario behavior.

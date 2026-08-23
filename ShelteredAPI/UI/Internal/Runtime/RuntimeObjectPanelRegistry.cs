@@ -64,7 +64,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
             }
             catch (Exception ex)
             {
-                MMLog.Write("ERROR in RuntimeObjectPanelRegistry.CanOpen: " + ex);
+                MMLog.WriteError("RuntimeObjectPanelRegistry.CanOpen failed: " + ex);
                 return false;
             }
         }
@@ -85,7 +85,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
             }
             catch (Exception ex)
             {
-                MMLog.Write("ERROR in RuntimeObjectPanelRegistry.Open: " + ex);
+                MMLog.WriteError("RuntimeObjectPanelRegistry.Open failed: " + ex);
                 return false;
             }
         }

@@ -214,7 +214,7 @@ namespace ModAPI.Harmony
             var hookParams = hook.GetParameters();
             for (int i = 0; i < hookParams.Length; i++)
             {
-                // Note: This relies on the hook parameters matching the indices of the enclosing method arguments.
+                // Hook parameter positions must match the enclosing method arguments.
                 // Ldarg with index.
                 insertions.Add(new CodeInstruction(OpCodes.Ldarg, i));
             }

@@ -5,7 +5,7 @@ namespace ModAPI.Core
 {
     /// <summary>
     /// Typed accessors for game runtime APIs registered through <see cref="ModAPIRegistry"/>.
-    /// String IDs remain compatibility plumbing; new callers should prefer these helpers.
+    /// String IDs remain for compatibility. New callers should use these typed helpers.
     /// </summary>
     public static class GameRuntimeApis
     {

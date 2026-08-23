@@ -21,7 +21,7 @@ namespace Manager
         /// Gets the version of ModAPI.dll from the SMM folder.
         /// </summary>
         /// <param name="smmPath">Path to the SMM folder containing ModAPI.dll</param>
-        /// <returns>Version string (e.g., "1.0.0.0") or null if not found</returns>
+        /// <returns>The version string, such as <c>1.0.0.0</c>, or <see langword="null"/> if unavailable.</returns>
         public static string GetInstalledModApiVersion(string smmPath)
         {
             return GetInstalledApiVersion(smmPath, "ModAPI");
@@ -129,7 +129,7 @@ namespace Manager
         /// <summary>
         /// Checks if a mod's required ModAPI version is compatible with the installed version.
         /// </summary>
-        /// <param name="installedVersion">Installed ModAPI version (e.g., "1.0.0.0")</param>
+        /// <param name="installedVersion">Installed ModAPI version, such as <c>1.0.0.0</c>.</param>
         /// <param name="requiredVersion">Version the mod was compiled against</param>
         /// <returns>True if the installed API is the same version or newer, false otherwise</returns>
         public static bool IsCompatible(string installedVersion, string requiredVersion)

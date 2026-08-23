@@ -1,35 +1,27 @@
-# ModAPI Developer Commenting Standard (v2.0)
+# Developer commenting standard
 
-This project is shipped as a developer-facing platform. Comments should optimize for onboarding speed.
+Write comments for mod authors and maintainers who need to understand a contract without tracing its implementation.
 
-## Goals
+## Document
 
-- Explain intent and usage, not obvious syntax.
-- Make architecture and lifecycle boundaries discoverable in IDE tooltips.
-- Keep comments stable under refactors.
+- Public and protected APIs used by mod authors.
+- Loader lifecycle boundaries, including bootstrap, initialization, start, scene changes, and shutdown.
+- Reflection, Harmony, threading, persistence, and cleanup rules that are not obvious from the code.
+- Preconditions, ownership, failure behavior, and compatibility limits.
 
-## What to Document First
+## Style
 
-1. Public APIs used by mod authors (`IPluginContext`, actors, events, save APIs, registries).
-2. Loader lifecycle boundaries (bootstrap, plugin init/start, scene hooks, shutdown).
-3. High-risk internals (reflection paths, Harmony patching strategy, threading/main-thread assumptions).
-
-## Preferred Style
-
-- Use XML doc comments (`///`) on public/protected APIs and important internal entry points.
-- Use short inline comments only where runtime behavior is non-obvious.
-- Keep comments imperative and practical: "Use X when..." or "Runs before Y...".
+- Use XML documentation on public and protected members and key internal entry points.
+- Start summaries with the action or fact. Use "Registers", "Returns", or "Runs before".
+- Use the exact type, method, option, and file names from the code.
+- Keep one thought per sentence.
+- Put a constraint beside the API it limits.
+- Use inline comments only for non-obvious runtime behavior.
 
 ## Avoid
 
-- Restating code literally.
-- Large historical notes inside core runtime files.
-- Long prose where a short summary is enough.
-
-## Recommended Rollout Order
-
-1. `ModAPI/Core/*`
-2. `ModAPI/Actors/*`
-3. `ModAPI/Events/*` and save lifecycle APIs
-4. `ModAPI/Harmony/*`
-5. `ModAPI/UI/*` and runtime UI hooks
+- Restating the syntax.
+- Historical change logs in source files.
+- Unverified claims such as "safe", "automatic", or "always".
+- Rhetorical headings, marketing language, jokes, and scratch notes.
+- Comments that describe an implementation detail as a public guarantee.

@@ -314,7 +314,7 @@ namespace ShelteredAPI.Content
                 if (definition.ObjectType != ObjectManager.ObjectType.Undefined && 
                     definition.Category != ItemCategory.Object)
                 {
-                    MMLog.Write($"WARNING: Item '{definition.Id}' has ObjectType " +
+                    MMLog.WriteWarning($"Item '{definition.Id}' has ObjectType " +
                                 $"but Category is {definition.Category}, not Object. " +
                                 $"Item may not spawn correctly.");
                 }
@@ -359,7 +359,7 @@ namespace ShelteredAPI.Content
                 def.NormalizeLegacyFields();
                 if (!ItemKeyToType.TryGetValue(def.ResultItemId, out var resultType))
                 {
-                    // Maybe it's a vanilla item ID?
+                    // The result may reference a vanilla item ID instead of a registered item.
                     if (!TryParseEnum<ItemManager.ItemType>(def.ResultItemId, out resultType))
                     {
                         MMLog.Write($"Recipe '{def.Id}' skipped - result item '{def.ResultItemId}' not found");
@@ -378,7 +378,7 @@ namespace ShelteredAPI.Content
                     }
                     else
                     {
-                        MMLog.Write($"Warning: Recipe '{def.Id}' ingredient '{ingDef.ItemId}' could not be resolved. Skipping.");
+                        MMLog.WriteWarning($"Recipe '{def.Id}' ingredient '{ingDef.ItemId}' could not be resolved and was skipped.");
                     }
                 }
 
@@ -404,7 +404,7 @@ namespace ShelteredAPI.Content
                 // Set unlockFlag via reflection if it exists and is specified
                 if (!string.IsNullOrEmpty(def.UnlockFlag))
                 {
-                    // Note: Game's Recipe class doesn't appear to have unlockFlag field
+                    // The game's Recipe type has no unlockFlag field.
                     // Unlocking is handled via CraftingManager.UnlockRecipe(id) method
                     // This field is kept for future compatibility
                 }
@@ -415,7 +415,7 @@ namespace ShelteredAPI.Content
                 // Validate the mapped station
                 if (!IsValidCraftLocation(recipe.location))
                 {
-                    MMLog.Write($"ERROR: Recipe '{def.Id}' has invalid station '{def.Station}'. Valid stations: Workbench, Laboratory, AmmoPress");
+                    MMLog.WriteError($"Recipe '{def.Id}' has invalid station '{def.Station}'. Valid stations: Workbench, Laboratory, AmmoPress");
                     failed++;
                     continue;
                 }
@@ -855,7 +855,6 @@ namespace ShelteredAPI.Content
         {
             static void Postfix(ItemButtonBase __instance)
             {
-                // MMLog.Write($"[Patch_Icon] UpdateSprite for {__instance.name}, Type: {__instance.m_type}, Slot: {__instance.slotIndex}");
 
                 if ((int)__instance.m_type >= CustomItemTypeStart)
                 {
@@ -863,7 +862,7 @@ namespace ShelteredAPI.Content
                     {
                         if (res.Icon == null)
                         {
-                            MMLog.Write($"WARNING: Custom item {__instance.m_type} has no icon. " +
+                            MMLog.WriteWarning($"Custom item {__instance.m_type} has no icon. " +
                                 $"Define IconPath (relative to Assets/) in ItemDefinition to fix this.");
                             return;
                         }
@@ -894,7 +893,6 @@ namespace ShelteredAPI.Content
                             if (ui2d.sprite2D != res.Icon) 
                             { 
                                 ui2d.sprite2D = res.Icon;
-                                // MMLog.Write($"[Patch_Icon] Set sprite2D to {res.Icon?.name}");
                             }
 
                             // Match the vanilla sprite's geometry
@@ -903,7 +901,7 @@ namespace ShelteredAPI.Content
                             ui2d.pivot = __instance.m_sprite.pivot;
                             ui2d.depth = __instance.m_sprite.depth; // Use exact depth to respect overlay widgets (ticks/crosses)
                             
-                            // Match position (important if the sprite is offset)
+                            // Preserve the source sprite offset.
                             t.localPosition = __instance.m_sprite.transform.localPosition;
 
                             // 3. Handle Visibility/State
@@ -916,14 +914,12 @@ namespace ShelteredAPI.Content
                             // Hide vanilla only if visible
                             __instance.m_sprite.alpha = lockedOrHidden ? 1f : 0f;
 
-                             // MMLog.Write($"[Patch_Icon] Applied. Visible: {!lockedOrHidden}, Depth: {ui2d.depth}, Pos: {t.localPosition}");
                         }
                         else
                         {
                              // Fallback if no vanilla sprite exists to copy from (unlikely)
                              ui2d.sprite2D = res.Icon;
                              ui2d.depth = 100;
-                             // MMLog.Write("[Patch_Icon] Warning: No vanilla m_sprite found to copy layout from.");
                         }
                     }
                 }
@@ -942,7 +938,6 @@ namespace ShelteredAPI.Content
                     if (__instance.m_sprite != null && __instance.m_sprite.alpha < 0.1f)
                     {
                         __instance.m_sprite.alpha = 1f;
-                        // MMLog.Write($"[Patch_Icon] Restored vanilla sprite for type {__instance.m_type}");
                     }
                 }
             }
@@ -981,7 +976,7 @@ namespace ShelteredAPI.Content
                 }
                 else
                 {
-                    MMLog.Write($"WARNING: Cooking recipe raw item '{recipe.RawItemId}' could not be resolved.");
+                    MMLog.WriteWarning($"Cooking recipe raw item '{recipe.RawItemId}' could not be resolved.");
                 }
             }
         }

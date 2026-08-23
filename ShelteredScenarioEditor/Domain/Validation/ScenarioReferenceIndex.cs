@@ -57,10 +57,10 @@ namespace ShelteredScenarioEditor.Domain.Validation{
         /// <summary>Owning intercom step index within the stage (-1 when not applicable).</summary>
         public int OwnerIntercomIndex { get; private set; }
 
-        /// <summary>Plain-language path to the owning element, e.g. "Stage 'Radio Call 2' / step 'ask'".</summary>
+        /// <summary>Plain-language path to the owning element, such as <c>Stage 'Radio Call 2' / step 'ask'</c>.</summary>
         public string OwnerLabel { get; private set; }
 
-        /// <summary>Plain-language description of the reference, e.g. "response option 3 route".</summary>
+        /// <summary>Plain-language description of the reference, such as <c>response option 3 route</c>.</summary>
         public string DisplayLabel { get; private set; }
 
         /// <summary>Stage index to open in the focused editor to reveal this usage (-1 when none).</summary>

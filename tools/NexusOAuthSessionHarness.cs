@@ -88,7 +88,7 @@ namespace Manager.Core.Services
                 Assert(client.RefreshCalls == 1, "A failed OAuth refresh was not attempted exactly once.");
                 Assert(credential != null && !credential.IsConfigured, "A failed OAuth refresh produced a fallback credential.");
                 Assert(!service.HasConfiguredCredential, "A failed OAuth refresh did not disconnect the session.");
-                Assert(error == "refresh rejected", "The OAuth refresh failure was not returned clearly.");
+                Assert(error == "refresh rejected", "The OAuth refresh failure was not returned.");
 
                 AppSettings loaded = settingsService.Load();
                 Assert(!loaded.HasNexusOAuthSession, "A failed OAuth refresh remained persisted as an authenticated session.");

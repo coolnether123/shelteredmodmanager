@@ -5,7 +5,7 @@ using ShelteredAPI.UI.Spine;
 using ModAPI.Core;
 namespace ShelteredAPI.UI.Compatibility
 {
-    // [LOCKED OFF] - This feature has been intentionally disabled.
+    // Disabled pending a supported color-picker entry point.
     internal class ModColorPickerPanel : MonoBehaviour
     {
         private static void Log(string msg) { MMLog.Write($"[ModColorPicker] {msg}"); }
@@ -94,7 +94,7 @@ namespace ShelteredAPI.UI.Compatibility
             bTex.mainTexture = UIUtil.WhiteTexture;
             bTex.width = 5000; bTex.height = 5000;
             bTex.color = new Color(0, 0, 0, 0.5f);
-            bTex.depth = 12900; // Explicit high depth, just below panel(13000) + local(0)
+            bTex.depth = 12900;
             
             // "Unlit/Transparent Colored" was rendering opaque white. Switching to Sprites/Default for reliable tinting.
             var shader = Shader.Find("Sprites/Default");

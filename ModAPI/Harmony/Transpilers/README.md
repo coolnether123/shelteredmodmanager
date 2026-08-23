@@ -257,8 +257,8 @@ Relevant `ModPrefs` toggles (all default to the safe value):
 | `TranspilerSafeMode` | `true` | Forces `preserveInstructionCount` for multi-instruction pattern edits. |
 | `TranspilerForcePreserveInstructionCount` | `true` | Backs the above. |
 | `TranspilerFailFastCritical` | `true` | Critical warnings throw at `Build`. |
-| `TranspilerCooperativeStrictBuild` | `false` | Run cooperative pipeline in Strict profile. |
-| `TranspilerQuarantineOnFailure` | `false` | Disable a mod's cooperative patches after a critical failure. |
+| `TranspilerCooperativeStrictBuild` | `true` | Run the cooperative pipeline in the Strict profile. |
+| `TranspilerQuarantineOnFailure` | `true` | Disable a mod's cooperative patches after a critical failure. |
 | `DebugTranspilers` | `false` | Verbose tracing and snapshots. Leave **off** in production. |
 
 ---
@@ -449,7 +449,7 @@ gameplay state.
 The retained `ProceduralTile.rnd` System.Random field and initializer rows outside the
 catalogued redirect scope remain vanilla-owned. Isolation is per declared domain, not a
 promise that ordering changes within one domain are irrelevant. A restart is a
-regeneration proof only when the route actually invokes map creation. With the gate
+regeneration proof only when the route invokes map creation. With the gate
 inactive, every bridge target calls Unity directly, including `InitState`, so normal
 vanilla games retain the original global RNG behavior.
 

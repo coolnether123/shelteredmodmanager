@@ -236,7 +236,7 @@ namespace ShelteredAPI.Interactions
         /// <summary>
         /// Registers a new interaction for a specific object type.
         /// </summary>
-        /// <typeparam name="TTarget">The type of Obj_Base to add this to (e.g. Obj_Bed)</typeparam>
+        /// <typeparam name="TTarget">The <see cref="Obj_Base"/> type that receives the interaction, such as <see cref="Obj_Bed"/>.</typeparam>
         /// <param name="interactionName">Unique internal name for the interaction</param>
         /// <param name="interactionType">The class inheriting from Int_Base to instantiate</param>
         public static void Register<TTarget>(string interactionName, Type interactionType) where TTarget : Obj_Base

@@ -31,7 +31,7 @@ namespace ShelteredAPI.Core
             string activeScene,
             LoadingTransitionDiagnostics diagnostics)
         {
-            string text = "ShelteredAPI detected a failed loading transition and returned you to the main menu.\n\n" +
+            string text = "The game could not finish loading and returned you to the main menu.\n\n" +
                 "Reason: " + reason + "\n" +
                 "From: " + SourceScene(transition) + "\n" +
                 "Target: " + Target(transition) + "\n" +

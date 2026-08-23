@@ -229,7 +229,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         // Shared Find Usages affordance: a plain-language "Used in N places" line backed by the
         // reference index, plus a clickable "Go to" action per usage that reuses the focused-editor
-        // navigation seam. Kept here so every editor surface renders references the same way.
+        // navigation path. Kept here so every editor view renders references the same way.
         internal static void AppendUsages(
             List<ScenarioAuthoringInspectorItem> items,
             ScenarioDefinition definition,

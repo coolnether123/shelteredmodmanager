@@ -1,4 +1,4 @@
-# Sheltered agent stress campaign
+# Sheltered Agent Interface stress campaign
 
 `Invoke-ShelteredAgentStress.ps1` runs the Steam and Epic Games clients concurrently and drives both
 through the Sheltered Agent Interface. The default campaign enables every supported installed mod and
@@ -34,11 +34,11 @@ stock vanilla, unlimited Surrounded/Stasis, and modded save lanes.
 
 Run the default dual-storefront campaign:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stability\Invoke-ShelteredAgentStress.ps1
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\stability\Invoke-ShelteredAgentStress.ps1
 
 Run a longer and heavier campaign without rebuilding deployed binaries:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stability\Invoke-ShelteredAgentStress.ps1 -DurationMinutes 60 -RapidUiActions 1000 -SpawnAttempts 500 -SimulationScale 12 -RestartEveryMinutes 5 -SkipBuild -RunLabel overnight
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\stability\Invoke-ShelteredAgentStress.ps1 -DurationMinutes 60 -RapidUiActions 1000 -SpawnAttempts 500 -SimulationScale 12 -RestartEveryMinutes 5 -SkipBuild -RunLabel overnight
 
 The enabled long campaign must cover all supported mods, every editor workspace/module, repeated fast
 clicks, draft create/edit/duplicate/import/export, checklist sidecar and snapshot-pair behavior, preview
@@ -75,14 +75,14 @@ identities already match the shared benchmark configuration. The campaign uses t
 
 Validate the runner's safety and coverage contracts:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stability\Test-ShelteredAgentStressContracts.ps1
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ScenarioEditorAssemblyBoundary.ps1
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ShelteredScenarioEditorContracts.ps1
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\stability\Test-ShelteredAgentStressContracts.ps1
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ScenarioEditorAssemblyBoundary.ps1
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ShelteredScenarioEditorContracts.ps1
 
 Each run is written below `Decompiled/Benchmarks`. `summary.json` is the pass/fail entry point;
 `metrics.json`, `observations.csv`, per-platform process samples, health snapshots, event streams,
 screenshots, logs, action CSV/JSONL files, and `restore-verification.json` provide the detailed evidence.
 
 `all-supported-mods` excludes four archived ModAPI v1 diagnostic plugins that cannot implement the
-ModAPI 2.0 `IPlugin` contract. Use the performance runner's literal `all-mods` profile when the purpose
+ModAPI 2.0 `IModPlugin` contract. Use the performance runner's literal `all-mods` profile when the purpose
 is to demonstrate those compatibility failures rather than test the supported runtime set.

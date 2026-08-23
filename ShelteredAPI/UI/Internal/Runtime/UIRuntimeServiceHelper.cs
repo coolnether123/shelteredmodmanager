@@ -13,7 +13,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
             }
             catch (Exception ex)
             {
-                MMLog.Write("ERROR in " + operation + ": " + ex);
+                MMLog.WriteError(operation + " failed: " + ex);
             }
         }
     }

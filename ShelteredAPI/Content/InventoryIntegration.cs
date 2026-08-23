@@ -28,9 +28,7 @@ namespace ShelteredAPI.Content
         {
             MMLog.WriteDebug("[InventoryIntegration] InventoryManager.InitialiseInventory postfix invoked.");
             
-            // Ensure ContentInjector has run before we try to add slots
-            // The RuntimeInitializeOnLoadMethod trigger sometimes doesn't fire in time,
-            // so we manually trigger it here as a fallback
+            // Ensure content injection completes before inventory slots are added.
             try
             {
                 ContentInjector.NotifyManagerReady("InventoryManager");
@@ -60,7 +58,7 @@ namespace ShelteredAPI.Content
                     return;
                 }
 
-                // Cast to IDictionary since we can't get the exact generic type
+                // The private nested inventory value is accessed through IDictionary.
                 var inventory = inventoryObj as System.Collections.IDictionary;
                 if (inventory == null)
                 {

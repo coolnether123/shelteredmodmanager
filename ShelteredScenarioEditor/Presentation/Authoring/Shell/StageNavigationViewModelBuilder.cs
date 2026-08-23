@@ -54,8 +54,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
             for (int i = 0; i < children.Length; i++)
             {
                 ScenarioStageDefinition child = children[i];
-                // Surface currently has no distinct selectable authoring target;
-                // exposing it as a workspace implies functionality it cannot provide.
+                // BunkerSurface has no selectable authoring target and is omitted from navigation.
                 if (child != null && child.Kind != ScenarioStageKind.BunkerSurface)
                     AddTab(actions, child, activeStageKind, true);
             }

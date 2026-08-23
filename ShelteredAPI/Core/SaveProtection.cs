@@ -132,9 +132,8 @@ namespace ShelteredAPI.Core
                     // NEW: Update the external manifest.json so the Manager and Restart diagnostics are accurate
                     try
                     {
-                        // SKIP manifest update here if it's a custom save! 
-                        // The PlatformSaveProxy calls OverwriteSave which already calls UpdateSlotManifest with the correct absolute slot.
-                        // Continuing here would use the vanilla 'type' (1, 2, or 3) and create wrong folders like Slot_1, Slot_2.
+                        // PlatformSaveProxy updates custom-save manifests with the absolute slot.
+                        // Using the vanilla type here would write to Slot_1, Slot_2, or Slot_3 instead.
                         if (SaveRuntimeState.HasActiveCustomSave || SaveRuntimeState.HasPendingSave(type))
                         {
                             MMLog.WriteDebug(string.Format("[SaveGamePatch] Skipping manifest update for {0} (handled by Proxy)", type));

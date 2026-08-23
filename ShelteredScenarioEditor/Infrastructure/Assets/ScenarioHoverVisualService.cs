@@ -4,7 +4,7 @@ using UnityEngine;
 using ShelteredScenarioEditor.Application.Authoring;
 namespace ShelteredScenarioEditor.Infrastructure.Assets{
     // Single owner of BoundsHighlighter's hover/selection/secondary transforms. Keeps
-    // the selection service free of rendering concerns and gives copy/paste an obvious
+    // the selection service free of rendering concerns and gives copy/paste a stable
     // place to pin its visual source marker.
     internal sealed class ScenarioHoverVisualService
     {

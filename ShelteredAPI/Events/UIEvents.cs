@@ -40,12 +40,10 @@ namespace ShelteredAPI.Events
         /// </summary>
         public static event Action<BasePanel> OnPanelPaused;
 
-        // UI button events (if NGUI hook is enabled)
         /// <summary>
-        /// Fired when any UIButton is clicked.
-        /// Parameters: button GameObject, button name
-        /// Note: This event fires for ALL buttons - filter by name/panel as needed.
+        /// Fired when any <see cref="UIButton"/> is clicked.
         /// </summary>
+        /// <remarks>Subscribers must filter events by button name or panel.</remarks>
         public static event Action<GameObject, string> OnButtonClicked;
 
         // Internal event raisers (called by Harmony patches)
@@ -112,13 +110,11 @@ namespace ShelteredAPI.Events
             }
         }
 
-        // Helper methods for mods
-
         /// <summary>
-        /// Returns true when a panel of the requested type is currently on the panel stack.
+        /// Compatibility stub for panel-stack inspection. Always returns <see langword="false"/>.
         /// </summary>
-        /// <typeparam name="T">Panel type to check</typeparam>
-        /// <returns>True if a panel of that type is on the stack</returns>
+        /// <typeparam name="T">Panel type to check.</typeparam>
+        /// <returns><see langword="false"/> because panel-stack inspection is not implemented.</returns>
         public static bool IsPanelOpen<T>() where T : BasePanel
         {
             if (UIPanelManager.instance == null)
@@ -126,9 +122,7 @@ namespace ShelteredAPI.Events
 
             try
             {
-                // Access UIPanelManager's panel stack if possible
-                // Note: This is an example - actual implementation depends on UIPanelManager internals
-                return false; // Placeholder
+                return false;
             }
             catch
             {

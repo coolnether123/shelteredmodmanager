@@ -4,7 +4,7 @@ using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
     /// <summary>
     /// Progressive-disclosure rules for the story stage editor. Advanced routing (alternate
-    /// routes, random targets, and their weights) stays hidden until a stage actually has
+    /// routes, random targets, and their weights) stays hidden until a stage has
     /// basic dialogue content, so a fresh stage reads as "write your scene first" rather than
     /// a wall of routing steppers. Kept as a tiny pure helper so the rule is testable in one
     /// place and both the main page and the focused editor agree.

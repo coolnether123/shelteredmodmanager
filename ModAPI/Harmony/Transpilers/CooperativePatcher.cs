@@ -20,8 +20,7 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Orchestrates multiple transpilers on the same method to ensure compatibility.
-    /// Replaces the "wild west" of conflicting Harmony patches with a managed pipeline.
+    /// Orders registered transpiler transformations for a target method.
     /// </summary>
     public static class CooperativePatcher
     {
@@ -43,7 +42,7 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Registers a cooperative transpiler.
-        /// NOTE: This does not apply the patch immediately. You must call Apply() or ensure ModAPI's master patcher is running.
+        /// A Harmony transpiler for the target must call <see cref="RunPipeline(MethodBase, IEnumerable{CodeInstruction})"/>.
         /// </summary>
         /// <example>
         /// <code>

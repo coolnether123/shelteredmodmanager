@@ -89,8 +89,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         private Rect DrawStandardWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            // TODO(centralize): Standard windows are the remaining generic dock/floating surface.
-            // Move callers into central workspace regions when their final placement is known.
+            // Standard windows use the generic dock or floating layout.
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioAuthoringInspectorAction[] secondaryActions = GetHeaderActions(window.HeaderActions, false);
             bool hasSecondaryActions = secondaryActions.Length > 0;
@@ -249,8 +248,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         private Rect DrawInspectorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            // TODO(centralize): Selection details still render in a right-side inspector.
-            // Merge this into the central workspace once selection/edit panels are assigned.
+            // Selection details render in the right-side inspector.
             if (IsEmptyInspector(window))
             {
                 return RuntimeCompat.ZeroRect();
@@ -506,8 +504,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         private Rect DrawDocumentModalCore(Rect rect, ScenarioAuthoringInspectorDocument document, string scrollId)
         {
-            // TODO(centralize): Document-style editors still render as modals over the shell.
-            // Convert to central workspace panels when the editor workflow is consolidated.
+            // Document editors render as modal shell windows.
             string title = document != null && !string.IsNullOrEmpty(document.Title)
                 ? document.Title.ToUpperInvariant()
                 : "DOCUMENT";
@@ -582,8 +579,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         private Rect DrawPixelEditorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            // TODO(centralize): Pixel editor is still a dedicated floating-style window.
-            // Merge it into the central art/edit workspace when the art workflow is finalized.
+            // The pixel editor uses a dedicated floating window.
             ScenarioSpriteSwapAuthoringService.CustomEditorModel editor =
                 _snapshot != null && _snapshot.ShellViewModel != null
                     ? _snapshot.ShellViewModel.CustomSpriteEditor
@@ -3075,8 +3071,8 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
                 return;
 
             // Every row renders as a single layer: a status chip on the left, then
-            // the item label. Done rows are inert; todo rows are click targets for
-            // the whole row. This avoids the earlier state split where todo rows
+            // the item label. Done rows are inert; pending rows are click targets for
+            // the whole row. This avoids the earlier state split where pending rows
             // were centered full-width buttons that collided with the chip layout.
             string rawLabel = action.Label ?? string.Empty;
             bool complete = !action.Enabled && rawLabel.StartsWith("Done:", StringComparison.OrdinalIgnoreCase);
@@ -5086,8 +5082,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
             ScenarioAuthoringSettingsViewModel settings,
             ScenarioAuthoringShellWindowViewModel window)
         {
-            // TODO(centralize): Settings still render as a standalone editor window.
-            // Move them into the central workspace/settings surface after navigation is settled.
+            // Settings render in a standalone editor window.
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window != null ? window.HeaderActions : null, true);
             int settingsActionCount = settings.HeaderActions != null ? settings.HeaderActions.Length : 0;
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(

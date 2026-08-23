@@ -109,7 +109,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell
             {
                 ScenarioMapLootDistributionEntry entry = _mapLootPreview.Distribution[i];
                 GUILayout.Label(
-                    (entry.Hidden ? "Hidden " : string.Empty) + entry.ItemId + " — "
+                    (entry.Hidden ? "Hidden " : string.Empty) + entry.ItemId + " - "
                     + entry.PercentOfRolls.ToString("0.0", CultureInfo.InvariantCulture) + "% | average "
                     + entry.AverageQuantityPerRoll.ToString("0.00", CultureInfo.InvariantCulture),
                     _mutedTextStyle);

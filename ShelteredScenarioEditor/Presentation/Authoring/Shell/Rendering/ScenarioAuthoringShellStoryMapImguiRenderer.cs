@@ -13,7 +13,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
     /// Draws the primary authoring Story Map: parchment stage cards, clipped orthogonal
     /// routes, red/amber styling for broken/unreachable stages, and a legend. The model
     /// (nodes, edges, and deterministic positions) is built by <see cref="ScenarioStoryGraphBuilder"/>
-    /// and carried on the section; this surface only draws it and routes clicks back through
+    /// and carried on the section; this renderer draws it and routes clicks back through
     /// the shared open-stage action seam.
     /// </summary>
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
