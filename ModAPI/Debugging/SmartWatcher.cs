@@ -196,7 +196,7 @@ namespace ModAPI.Debugging
             MMLog.WriteDebug($"[SmartWatcher:{entry.ModName}] Now watching {entry.Name} as {typeof(T).Name}");
         }
 
-        /// <summary>Stop watching a specific member. Note: O(n) search.</summary>
+        /// <summary>Stops watching one member with an O(n) lookup.</summary>
         public void UnWatch(object target, string memberName)
         {
             lock (_watchLock)
@@ -211,7 +211,7 @@ namespace ModAPI.Debugging
             }
         }
 
-        /// <summary>Stop watching all members on a target. Note: O(n) search.</summary>
+        /// <summary>Stops watching every member on a target with an O(n) lookup.</summary>
         public void UnWatchAll(object target)
         {
             lock (_watchLock)

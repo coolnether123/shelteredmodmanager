@@ -239,8 +239,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         private Rect DrawCollapsedWindowStripCore(Rect statusRect, ScenarioAuthoringShellWindowViewModel[] windows)
         {
-            // TODO(centralize): Collapsed window restore strip belongs to the old multi-window
-            // shell. Replace with central workspace navigation/state once windows are merged.
+            // The restore strip exposes collapsed multi-window state.
             int count = 0;
             for (int i = 0; windows != null && i < windows.Length; i++)
             {

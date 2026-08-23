@@ -450,10 +450,7 @@ namespace ShelteredAPI.UI.Compatibility
             var hierarchy = new SettingsHierarchy(allDefs);
             SettingsViewMode viewMode = (_currentViewMode == SettingMode.Simple) ? SettingsViewMode.Simple : SettingsViewMode.Advanced;
             
-            // Pass the search filter directly to get flattening if you want hierarchy-aware search,
-            // OR apply it post-flattening like you are doing.
-            // Current Issue: Search happens AFTER simple/advanced filtering.
-            
+            // Apply the view-mode filter before the text search below.
             var visible = hierarchy.GetFlattenedForView(viewMode, settings).ToList();
             
             // Inject Category Headers if not searching
@@ -529,7 +526,7 @@ namespace ShelteredAPI.UI.Compatibility
             foreach(Transform child in _presetBarRoot.transform) Destroy(child.gameObject);
 
             // Hide the preset strip entirely for mods that do not define presets
-            // (custom-only settings without Easy/Normal/Hard, etc.).
+            // (custom-only settings without Easy, Normal, or Hard values).
             if (!_presetController.HasPresets)
             {
                 _presetBarRoot.SetActive(false);
@@ -930,7 +927,6 @@ namespace ShelteredAPI.UI.Compatibility
              var provider = _currentMod.SettingsProvider;
              var settings = provider.GetSettingsObject();
              var allDefs = provider.GetSettings().ToList();
-             // _currentMod.SettingsProvider.LoadSettings(); // Don't reload, we just changed it in memory!
              _presetController.UpdateCurrentPresetState(settings, allDefs);
              
               // Refresh UI states
@@ -940,7 +936,7 @@ namespace ShelteredAPI.UI.Compatibility
 
         public void OnSettingChanged()
         {
-            // Any manual edit IMMEDIATELY makes this a Custom state
+            // A manual edit changes the preset state to Custom.
             _presetController.MarkCurrentStateAsCustom();
 
             if (_currentMod == null) return;
@@ -951,7 +947,7 @@ namespace ShelteredAPI.UI.Compatibility
             
             _presetController.UpdateCurrentPresetState(settings, allDefs);
             
-            // Re-draw just the preset widget to reflect the name change (e.g. to CUSTOM)
+            // Redraw the preset widget so it displays the new name, such as CUSTOM.
             var fonts = UIFontCache.GetFonts();
             BuildPresetCycleWidget(fonts.Bitmap, fonts.TTF, settings, allDefs);
         }

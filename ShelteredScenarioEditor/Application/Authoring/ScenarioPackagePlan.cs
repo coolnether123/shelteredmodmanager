@@ -331,7 +331,7 @@ namespace ShelteredScenarioEditor.Application.Authoring
 
         private static string Safe(string value) { return string.IsNullOrEmpty(value) ? "Not provided." : value.Trim(); }
 
-        // Only returns text when the scenario actually declares an end state, so the
+        // Returns text only when the scenario declares an end state, so the
         // README shows the victory beside the goal only when one exists.
         private static string FormatVictorySummary(ScenarioDefinition definition)
         {

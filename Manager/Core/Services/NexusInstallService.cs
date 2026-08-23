@@ -85,7 +85,7 @@ namespace Manager.Core.Services
             }
             catch
             {
-                // Best-effort cleanup only.
+                // Cleanup failures do not replace the primary install result.
             }
         }
 

@@ -60,7 +60,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                     Type type = AccessTools.TypeByName(manifest[0]);
                     if (type == null)
                     {
-                        MMLog.WriteWarning("[ScenarioRngPatch] SKIP type mismatch: " + manifest[0]);
+                        MMLog.WriteWarning("[ScenarioRngPatch] Skipped type mismatch: " + manifest[0]);
                         continue;
                     }
 
@@ -78,13 +78,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                             found = true;
                             if (!ContainsRedirectableRngCall(target))
                             {
-                                MMLog.WriteWarning("[ScenarioRngPatch] SKIP catalog drift/no RNG call: " + type.FullName + "." + target.Name);
+                                MMLog.WriteWarning("[ScenarioRngPatch] Skipped method with no redirectable RNG call: " + type.FullName + "." + target.Name);
                                 continue;
                             }
                             try { harmony.Patch(target, transpiler: transpiler); patched++; }
-                            catch (Exception ex) { MMLog.WriteWarning("[ScenarioRngPatch] SKIP method mismatch: " + type.FullName + "." + target.Name + " :: " + ex.Message); }
+                            catch (Exception ex) { MMLog.WriteWarning("[ScenarioRngPatch] Skipped method mismatch: " + type.FullName + "." + target.Name + ": " + ex.Message); }
                         }
-                        if (!found) MMLog.WriteWarning("[ScenarioRngPatch] SKIP method missing: " + type.FullName + "." + names[j]);
+                        if (!found) MMLog.WriteWarning("[ScenarioRngPatch] Skipped missing method: " + type.FullName + "." + names[j]);
                     }
                 }
 
@@ -102,8 +102,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
             {
                 // The framework's batch redirect helper does the per-site index walk, the domain-tag
                 // insert, the back-to-front application, and (for Shuffle) the per-call-site generic
-                // instantiation — all signature-validated before any IL is mutated. Missing Epic/Steam
-                // members resolve to null at load; skip those, never fatal.
+                // instantiation. Every signature is validated before any IL is mutated. Epic- or
+                // Steam-only members resolve to null on other builds and are skipped.
                 if (RangeII != null && BridgeDomainII != null)
                     t.RedirectCallsAppendingLiteral(RangeII, BridgeDomainII, domain, "RNG Range(int,int)");
                 if (RangeFF != null && BridgeDomainFF != null)
@@ -172,7 +172,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[ScenarioRngPatch] SKIP IL inspection failure: " + target.DeclaringType.FullName + "." + target.Name + " :: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioRngPatch] Skipped method after IL inspection failed: " + target.DeclaringType.FullName + "." + target.Name + ": " + ex.Message);
             }
             return false;
         }

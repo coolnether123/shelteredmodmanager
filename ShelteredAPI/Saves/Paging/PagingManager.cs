@@ -124,8 +124,7 @@ namespace ShelteredAPI.Saves.Paging
             int maxSlot = scope.GetMaxSlot();
             int lastSavePage = (maxSlot < scope.FirstExpandedSlot) ? 0 : (maxSlot - scope.FirstExpandedSlot) / 3 + 1;
             
-            // Allow navigation if we are on the vanilla page (to go to first custom page)
-            // or if we hasn't reached the page after the last save yet.
+            // Allow navigation from the vanilla page or until the page after the last save.
             bool canNext = browsingSnapshots ? p + 1 < snapshotSession.PageCount : (p == 0) || (p <= lastSavePage);
 
             var prevBtn = ui.prev?.GetComponent<UIButton>();
@@ -240,7 +239,7 @@ namespace ShelteredAPI.Saves.Paging
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[PagingManager] Critical error in ChangePage: {ex}");
+                MMLog.WriteError($"[PagingManager] ChangePage failed: {ex}");
             }
             finally
             {

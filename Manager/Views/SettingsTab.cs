@@ -21,8 +21,8 @@ namespace Manager.Views
     // ApplyTheme() (SettingsTab.Theme.cs). When you add a setting, drop it in
     // the section it belongs to and follow that section's existing pattern.
     //
-    //   1. Appearance      Purely visual preferences for the manager UI itself
-    //                      (e.g. dark mode). No behavior, nothing destructive.
+    //   1. Appearance      Visual preferences for the manager UI itself
+    //                      (such as dark mode). These settings do not change game behavior.
     //   2. Saves           How the manager touches the player's save files
     //                      (auto-organize slots, backup retention).
     //   3. Nexus           Nexus Mods integration: enable switch, OAuth session,
@@ -32,9 +32,8 @@ namespace Manager.Views
     //   4. Runtime Features Dynamic toggles registered by mods at runtime and
     //                      read back from ModAPI. This tab does not define them.
     //   5. Developer       Advanced diagnostic/safety-bypass switches, hidden
-    //                      behind Developer Mode. A setting belongs here ONLY if
-    //                      a normal player never needs it AND a wrong value is
-    //                      harmless (logging verbosity, skipping safety checks).
+    //                      behind Developer Mode. Use this section only for settings
+    //                      that normal players do not need, such as logging verbosity.
     //   6. Actions         Reset buttons. Always rendered last.
     //
     // Rule of thumb: if a setting drives a user-facing feature, it lives in

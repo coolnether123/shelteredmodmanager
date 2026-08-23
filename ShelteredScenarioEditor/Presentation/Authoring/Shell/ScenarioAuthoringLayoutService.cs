@@ -41,7 +41,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
             _settingsService.ApplyDefinitionDefaults(state.Settings);
             EnsureWindowStates(state);
             LoadLayout(state);
-            // Floating utilities are transient work surfaces. Preserve their
+            // Floating utilities are transient windows. Preserve their
             // saved size and position, but never carry an open palette/editor
             // from one authoring session into the next.
             HideStartupUtilityWindows(state);

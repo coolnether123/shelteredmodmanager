@@ -1,36 +1,29 @@
-# Known Issues
+# Known issues
 
-This list is for SMM 2.0 release tracking.
+SMM 2.0 is still in prerelease review. The repository does not yet have a final `v2.0.0` tag.
 
-## Release Scope
+## Nexus sign-in and direct install
 
-- SMM 2.0 is the stable release line for the split ModAPI/ShelteredAPI contract.
-- `ShelteredScenarioEditor.dll` is an optional preview component and defaults off under `ShelteredScenarioEditor.Enabled`. Installed custom scenario browsing and playback remain available while the editor is disabled or absent.
-- Nexus publish tools are experimental and hidden unless explicitly enabled.
-- Older 1.2.2 or 1.3 mods may require a 2.0 rebuild before they are safe for saves.
+Nexus has not issued the public OAuth client ID. Metadata browsing works without sign-in, but direct install, update, and reinstall remain unavailable until registration is complete. The manager reports that Nexus sign-in is not available.
 
-## Mods Needing Extra Verification
+The implemented installer accepts ZIP archives only. It rejects missing `About/About.json`, duplicate mod IDs, reserved folder names, unsafe archive paths, and unwritable mod folders.
 
-- Family Expansion and Deep Expansion need rebuilt 2.0 packages and smoke tests before they should be advertised as compatible.
-- Faction Overhaul should not be advertised as stable with SMM 2.0 unless its runtime checklist passes on real saves.
-- Expanded Map Sizes needs real save/runtime testing before it should be advertised as fully compatible.
+## Mod compatibility
 
-## Nexus Install Notes
+Mods built for SMM 1.2.2 or the old 1.3 beta may need a 2.0 rebuild. Do not treat a mod as save-safe because the manager can discover it. Follow the [modder migration guide](For_Modders_2.0_API_Migration.md) and test with a disposable save.
 
-- Direct Nexus install currently supports ZIP archives.
-- Direct Nexus install requires a connected Nexus OAuth session and can still be denied by Nexus account, file, or app policy.
-- Install/update replaces only one direct mod folder under the configured `mods` folder.
-- Packages with missing `About/About.json`, duplicate mod IDs, reserved folder names, or unsafe archive paths are rejected.
-- For the current GOG staging install, verify the manager can write to `C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\mods` before running download/update smoke tests.
+## Scenario editor
 
-## Report Format
+`ShelteredScenarioEditor.dll` is an optional preview component. The `ShelteredScenarioEditor.Enabled` manager option defaults off. Installed custom scenario browsing and playback remain available when the editor is disabled or absent.
 
-Bug reports should include:
+## Report a problem
 
-- Storefront and game executable path.
-- SMM version.
-- Mod list and load order.
-- Save type and slot.
-- Whether `ShelteredScenarioEditor.dll` was present and the value of `ShelteredScenarioEditor.Enabled`.
-- Reproduction steps.
+Include:
+
+- the storefront and game executable path;
+- the SMM version;
+- the mod list and load order;
+- the save type and slot;
+- whether `ShelteredScenarioEditor.dll` is present and enabled;
+- reproduction steps;
 - `SMM\mod_manager.log`.

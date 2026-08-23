@@ -87,7 +87,7 @@ namespace ShelteredAPI.UI.Compatibility
                 _instance = go.AddComponent<ModManagerPanel>();
                 _instance.Initialise();
                 
-                // CRITICAL: DontDestroyOnLoad only works for root objects.
+                // DontDestroyOnLoad requires a root object.
                 if (go.transform.parent != null)
                 {
                     go.transform.SetParent(null);
@@ -115,21 +115,21 @@ namespace ShelteredAPI.UI.Compatibility
                 _tween.duration = 0.4f;
                 _tween.ignoreTimeScale = true;
 
-                // --- CLONE BOOK VISUALS ---
+                // Clone book visuals.
                 _bookFound = ModManagerPanelScaffolding.TryCloneBookVisuals(this);
 
-                // --- CLICK BLOCKER (but it should NOT trigger back, just block) ---
+                // Block clicks from reaching the panel underneath.
                 ModManagerPanelScaffolding.CreateClickBlocker(transform, gameObject.layer);
 
-                // --- FIND BUTTON TEMPLATE ---
+                // Find the scenario button template.
                 UIButton buttonTemplate = ModManagerPanelScaffolding.FindScenarioButtonTemplate();
                 if (buttonTemplate == null)
                 {
-                    MMLog.WriteError("[ModManagerPanel] Could not find button template!");
+                    MMLog.WriteError("[ModManagerPanel] Could not find the button template.");
                     return;
                 }
 
-                // --- CREATE UI ELEMENTS ---
+                // Create the panel controls.
                 Color textColor = _bookFound ? BookTextColor : Color.white;
 
                 // Title (left page, top-center)
@@ -347,7 +347,7 @@ namespace ShelteredAPI.UI.Compatibility
             descPanel.baseClipRegion = new Vector4(0, 0, 460, 360); // Width x Height area.
             
             // Add UIScrollView for basic momentum logic.
-            // Note: Manual scrolling is handled in Update() to bypass NGUI coordinate quirks.
+            // Update() handles manual scrolling to bypass NGUI coordinate quirks.
             var scrollView = descContainer.AddComponent<UIScrollView>();
             scrollView.movement = UIScrollView.Movement.Vertical;
             scrollView.dragEffect = UIScrollView.DragEffect.MomentumAndSpring;
@@ -357,7 +357,7 @@ namespace ShelteredAPI.UI.Compatibility
             scrollView.disableDragIfFits = true;
             
             // Create the description label inside the scroll view
-            // IMPORTANT: Create without parent first to avoid position conflicts
+            // Create the label before assigning its parent to preserve its local position.
             var descLabelGO = new GameObject("DescriptionLabel");
             descLabelGO.transform.parent = descContainer.transform;
             descLabelGO.transform.localPosition = new Vector3(0f, 150f, 0f); // Start below authors
@@ -722,7 +722,7 @@ namespace ShelteredAPI.UI.Compatibility
                 }
             }
             
-            if (!fontSet) MMLog.WriteError("[ModManagerPanel] CRITICAL: Label '" + text + "' has NO FONT!");
+            if (!fontSet) MMLog.WriteError("[ModManagerPanel] Label '" + text + "' has no font.");
             
             return label;
         }

@@ -72,7 +72,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (cam == null) cam = Camera.main;
             if (cam == null) return;
 
-            // Simple Raycast using NGUI logic would be best, but let's use UICamera.raycastGlobal
+            // Raycast against the UI layer from the active NGUI camera.
             var ray = cam.ScreenPointToRay(UnityEngine.Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit, 1000f, 1 << LayerMask.NameToLayer("UI")))
             {
@@ -856,7 +856,7 @@ namespace ShelteredAPI.UI.Compatibility
                 _sourceSingleViewMode = SourceSingleViewMode.Decompiled;
                 LogUiStep("Source mode changed", "Decompiled");
             }
-            if (DrawStateButton("Regex Guess", _sourceSingleViewMode == SourceSingleViewMode.RegexRewritten, "Best-effort source rewrite using IL hunk mappings and regex anchors.", GUILayout.Width(105)))
+            if (DrawStateButton("Regex Guess", _sourceSingleViewMode == SourceSingleViewMode.RegexRewritten, "Approximate source rewrite using IL hunk mappings and regex anchors.", GUILayout.Width(105)))
             {
                 _sourceSingleViewMode = SourceSingleViewMode.RegexRewritten;
                 LogUiStep("Source mode changed", "Regex Guess");

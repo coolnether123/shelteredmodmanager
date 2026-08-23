@@ -1,4 +1,4 @@
-# Patch Governance
+# Patch governance
 
 This document defines how Harmony patches are governed inside SMM during the ModAPI 2.0 line.
 

@@ -62,7 +62,7 @@ namespace ShelteredAPI.Saves.Runtime
                 }
                 catch(Exception ex)
                 {
-                    MMLog.WriteError("[SaveGlobalData_Patch] CRITICAL error during manual save process: " + ex);
+                    MMLog.WriteError("[SaveGlobalData_Patch] Manual save failed: " + ex);
                     return true; // run original on error
                 }
             }

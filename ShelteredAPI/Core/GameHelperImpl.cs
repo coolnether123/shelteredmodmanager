@@ -31,8 +31,7 @@ namespace ShelteredAPI.Core
                 var fm = FoodManager.Instance;
                 if (fm != null)
                 {
-                    // Items like Rations or Meat might be in FoodManager
-                    // Need to check if they match the type or are handled specifically
+                    // FoodManager stores rations and meat outside the inventory dictionaries.
                     if (type == ItemManager.ItemType.Ration)
                         count += fm.Rations;
                     else if (type == ItemManager.ItemType.Meat)

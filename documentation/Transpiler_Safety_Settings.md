@@ -1,43 +1,28 @@
-# Transpiler Safety Settings
+# Transpiler safety settings
 
 This document explains global safety flags used by ModAPI transpiler systems.
 
-## Location
+## Storage
 
 Flags are read via `ModAPI.Core.ModPrefs` and stored in ModAPI user settings.
 
 ## Flags
 
-- `TranspilerSafeMode` (default `true`)
-  - Master safety toggle.
-  - Enables guardrail behavior in transpiler pipeline.
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `TranspilerSafeMode` | `true` | Enables the transpiler safety checks. |
+| `TranspilerForcePreserveInstructionCount` | `true` | Preserves instruction count for multi-instruction pattern replacements and rejects unsafe padding. |
+| `TranspilerFailFastCritical` | `true` | Turns critical validation warnings into build failures. |
+| `TranspilerCooperativeStrictBuild` | `true` | Builds cooperative steps in strict mode and skips a failing step. |
+| `TranspilerQuarantineOnFailure` | `true` | Skips later cooperative anchors from an owner after its critical failure. |
+| `TranspilerLogValidationWarnings` | `false` | Writes warning-level validation diagnostics. |
+| `TranspilerWarnOnVirtualCallMismatch` | `true` | Warns when a call replacement can change virtual dispatch. |
+| `TranspilerWarnOnExceptionHandlerMethods` | `true` | Warns when a target method contains exception-handler regions. |
 
-- `TranspilerForcePreserveInstructionCount` (default `true`)
-  - Forces `ReplaceAllPatterns` to keep instruction count stable.
-  - Protects branch targets when replacing multi-instruction spans.
-  - Unsafe preserve cases (non stack-neutral tail padding) are rejected.
+Keep the safe defaults in production. Change one flag at a time when diagnosing a failed transform.
 
-- `TranspilerFailFastCritical` (default `true`)
-  - Critical warnings become hard failures.
-  - Prevents runtime execution of known-dangerous IL states.
+## `StackSentinel` limitation
 
-- `TranspilerCooperativeStrictBuild` (default `true`)
-  - Cooperative transpiler steps build in strict mode.
-  - Failing steps are skipped instead of partially applied.
+`StackSentinel` fails validation for methods with `try`, `catch`, `finally`, or filter clauses because it does not model exception flow.
 
-- `TranspilerQuarantineOnFailure` (default `true`)
-  - Quarantines patch owners in cooperative mode after critical failures.
-  - Subsequent anchors from that owner are skipped for the run.
-
-## Why These Defaults Exist
-
-These defaults are intentionally conservative. They protect game stability when mods use brittle IL patterns or stale assumptions after updates.
-
-If you need temporary flexibility for debugging, you can disable individual flags, but production runs should keep safe defaults enabled.
-
-## StackSentinel Limitation
-
-`StackSentinel` currently fails validation for methods with exception handling clauses (`try/catch/finally/filter`) instead of silently accepting them.
-This is intentional fail-safe behavior until full exception-flow analysis is implemented.
-
-In addition, replacement helpers (`ReplaceSequence`, `ReplaceAllPatterns`) now preserve Harmony exception markers and enforce exact index-aligned replacements on EH methods.
+`ReplaceSequence` and `ReplaceAllPatterns` preserve Harmony exception markers and require exact index-aligned replacements on methods with exception handlers.

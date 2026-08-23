@@ -225,7 +225,7 @@ namespace ModAPI.Harmony
                  return result;
             }
 
-            // Simple types
+            // Constants and null
             if (opcode == OpCodes.Ldc_I4 || opcode == OpCodes.Ldc_I4_S || opcode.Name.StartsWith("ldc.i4."))
             {
                 result.Add(typeof(int));

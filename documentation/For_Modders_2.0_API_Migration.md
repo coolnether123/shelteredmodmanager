@@ -1,8 +1,8 @@
-# For Modders: 2.0 API Migration
+# For modders: 2.0 API migration
 
 SMM 2.0 introduces the ModAPI/ShelteredAPI split. Use the canonical [assembly boundary](README.md#assembly-boundary-canonical) when choosing references; this page covers migration actions for an existing package.
 
-## Required Manifest Metadata
+## Update manifest metadata
 
 Update packaged `About/About.json` files for 2.0 packages:
 
@@ -15,12 +15,12 @@ Update packaged `About/About.json` files for 2.0 packages:
 
 Use both fields when the mod references both assemblies. Do not leave old 1.3 metadata in a package advertised as SMM 2.0 compatible.
 
-## Migration Pass
+## Rebuild the mod
 
 1. Rebuild against SMM 2.0 `ModAPI.dll` and `ShelteredAPI.dll`.
 2. Move Sheltered-specific namespaces to the supported `ShelteredAPI.*` facades.
 3. Keep neutral framework usage on `ModAPI.*`.
-4. Verify `entryType` still points to an `IModPlugin` implementation, or remove it if the mod relies on plugin scanning.
+4. Remove `entryType`. The current loader ignores it and activates every concrete `IModPlugin` type it discovers.
 5. Update `About.json`, README requirements, and Nexus description.
 6. Run the mod alone, then with the full public mod set.
 7. Check save/load warnings before advertising old-save compatibility.
@@ -41,7 +41,7 @@ Reference `ShelteredAPI.dll` for scenario definitions, XML authoring, registrati
 
 Editor workflow metadata such as the author test checklist is not part of `ScenarioDefinition`. The editor keeps it in adjacent `scenario.editor.xml` files and excludes those files from exported packages, so mods must not read, write, or package that sidecar. The editor's runtime playtest uses a disposable `IScenarioPreviewSession`; owners close it with `Dispose`, not a legacy `EndPreview` call.
 
-## Player-Facing Compatibility Text
+## Update player-facing compatibility text
 
 Use plain language on Nexus pages:
 

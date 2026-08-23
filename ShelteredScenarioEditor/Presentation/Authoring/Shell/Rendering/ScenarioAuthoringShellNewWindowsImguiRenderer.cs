@@ -10,7 +10,7 @@ using ShelteredScenarioEditor.Presentation.UiKit.Widgets;
 
 namespace ShelteredScenarioEditor.Presentation.Authoring.Shell
 {
-    /// <summary>Purpose-built layouts for the editor's compact utility surfaces.</summary>
+    /// <summary>Layouts for the editor's compact utility windows.</summary>
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
         private const string AssetFilterAll = "all";

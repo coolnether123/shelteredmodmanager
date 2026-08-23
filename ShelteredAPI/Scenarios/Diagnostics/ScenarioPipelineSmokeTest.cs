@@ -10,9 +10,8 @@ using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Diagnostics{
     /// <summary>
-    /// Developer-only smoke harness for Sprint 1. It is not wired into startup because
-    /// bad scenario XML should never block normal game boot; call this from a debug mod
-    /// or immediate window when validating a handmade scenario.xml.
+    /// Developer-only scenario XML smoke test. Invoke it from a debug mod or the immediate
+    /// window; it does not run during startup because invalid test data must not block boot.
     /// </summary>
     internal static class ScenarioPipelineSmokeTest
     {

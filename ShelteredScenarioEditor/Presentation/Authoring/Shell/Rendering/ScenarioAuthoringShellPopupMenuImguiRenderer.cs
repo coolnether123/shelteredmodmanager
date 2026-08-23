@@ -66,8 +66,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
         private Rect BuildWindowMenuRectCore(Rect buttonRect, ScenarioAuthoringInspectorAction[] actions, float width, float height, Rect hudReserveRect)
         {
-            // TODO(centralize): Window menu is still a panel-management popup from the
-            // multi-window shell. Fold these choices into central workspace navigation.
+            // The window menu controls panel visibility in the multi-window shell.
             float rectWidth = 220f;
             for (int i = 0; actions != null && i < actions.Length; i++)
                 rectWidth = Math.Max(rectWidth, MeasureMenuActionWidth(actions[i]) + 24f);

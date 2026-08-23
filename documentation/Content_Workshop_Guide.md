@@ -1,4 +1,4 @@
-# Content Workshop Guide
+# Content Workshop guide
 
 Content Workshop is the desktop manager's data-driven authoring workspace for custom Sheltered items, recipes, and item icons. It creates normal mod packages and does not require a custom scenario or a compiled plugin for the supported static fields.
 
@@ -32,7 +32,7 @@ com.example.survivalitems/
   README.md
 ```
 
-`Assemblies/` is optional. A content-only package has no DLL. A hybrid mod can add an ordinary plugin assembly for behavior that the data schema does not describe.
+Content Workshop does not export or install an `Assemblies/` folder. If the mod also needs code, export the content pack and add the plugin assembly through the normal mod packaging workflow. Do not reopen that combined package in Content Workshop and expect it to preserve the assembly.
 
 ## Content-pack contract
 

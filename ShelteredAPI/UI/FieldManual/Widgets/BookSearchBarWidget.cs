@@ -159,7 +159,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
             // NGUI updates hoveredObject after regular MonoBehaviour.Update. Defer
             // the focus decision one frame so an outside click is evaluated against
-            // the object that was actually clicked instead of the previous hover.
+            // the clicked object instead of the previous hover target.
             if (_evaluatePointerFocus)
             {
                 _hasFocus = IsHoveredWithin(_inputRoot);

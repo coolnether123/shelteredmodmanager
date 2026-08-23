@@ -1,6 +1,6 @@
-# ShelteredAPI Actors Guide (v2.0)
+# ShelteredAPI actors and characters
 
-The 2.0 line is a breaking clean API line. See the canonical [assembly boundary and typed escape-hatch rule](README.md#assembly-boundary-canonical); this guide covers actor and character usage.
+SMM 2.0 moved Sheltered-specific character access out of ModAPI. See the canonical [assembly boundary and typed escape-hatch rule](README.md#assembly-boundary-canonical) before choosing an API.
 
 This guide covers the actor system exposed through:
 
@@ -8,11 +8,14 @@ This guide covers the actor system exposed through:
 IPluginContext.Actors
 ```
 
-## 1. Getting Started
+## 1. Getting started
 
 ```csharp
+using System;
 using ModAPI.Actors;
 using ModAPI.Core;
+using ShelteredAPI.Actors;
+using ShelteredAPI.Characters.Abstractions;
 
 public class MyMod : IModPlugin
 {
@@ -29,7 +32,7 @@ public class MyMod : IModPlugin
 }
 ```
 
-## 2. Actor Identity
+## 2. Actor identity
 
 Every actor uses a typed `ActorId`:
 
@@ -56,7 +59,7 @@ if (ShelteredActors.TryGetCharacter(alice, out character))
 }
 ```
 
-## 3. Creating Actors
+## 3. Creating actors
 
 ```csharp
 var actor = _actors.Create(new ActorCreateRequest
@@ -75,7 +78,7 @@ var actor = _actors.Create(new ActorCreateRequest
 });
 ```
 
-## 4. Built-In Components
+## 4. Built-in components
 
 Profile data:
 
@@ -99,7 +102,7 @@ attrs.SetValue("mymod.courage", 8f, "mymod");
 _actors.Set(actor.Id, attrs, "mymod");
 ```
 
-## 5. Custom Components
+## 5. Custom components
 
 Define a namespaced component:
 
@@ -223,7 +226,7 @@ _actors.RegisterSystem(new LoyaltyDecaySystem());
 _actors.Tick(1, "mymod.sim");
 ```
 
-## 10. Events and Persistence
+## 10. Events and persistence
 
 ```csharp
 _actors.Subscribe(evt =>
@@ -239,7 +242,7 @@ _actors.Subscribe(evt =>
 - Unknown component payloads are preserved until a serializer is available.
 - Component ids must be namespaced like `modid.component_name`.
 
-## 11. Sheltered Characters
+## 11. Sheltered characters
 
 `ModAPI.Actors` is the neutral registry/component/event/simulation layer. Use
 `ShelteredAPI.Characters.ShelteredCharacters` when the API needs actual
@@ -247,6 +250,8 @@ Sheltered character data.
 
 ```csharp
 using ShelteredAPI.Characters;
+using ShelteredAPI.Characters.Abstractions;
+using ShelteredAPI.Characters.Models;
 
 ICharacterProxy firstShelterMember = ShelteredCharacters.Query()
     .FromSource(CharacterSource.RealFamily)
@@ -260,7 +265,7 @@ ICharacterProxy persistentNpc = ShelteredCharacters.CreateSyntheticCharacter(
     "mymod");
 ```
 
-The stable character surface is `ICharacterProxy`, `ICharacterData`,
+The stable character API consists of `ICharacterProxy`, `ICharacterData`,
 `ICharacterEffects`, `ICharacterAttributes`, `AttributeModifier`, and
 `EffectInstance`. The implementation service and save DTOs are internal.
 

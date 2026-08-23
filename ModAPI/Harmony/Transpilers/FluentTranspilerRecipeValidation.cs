@@ -115,7 +115,7 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Validates a call redirect whose replacement takes one extra <b>trailing</b> argument beyond
-        /// the original call's stack inputs, such as a domain tag pushed just before the call.
+        /// the original call's stack inputs, such as a domain tag pushed immediately before the call.
         /// The replacement must be static, consume the original stack shape followed by
         /// <paramref name="appendedType"/>, and return a compatible type.
         /// </summary>

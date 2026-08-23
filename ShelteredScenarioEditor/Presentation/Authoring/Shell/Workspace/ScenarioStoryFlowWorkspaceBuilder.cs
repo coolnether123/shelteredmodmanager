@@ -357,7 +357,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell
                 : code.IndexOf("no_starting", StringComparison.OrdinalIgnoreCase) >= 0 ? "Add the first stage"
                 : code.IndexOf("route", StringComparison.OrdinalIgnoreCase) >= 0 ? "Routing needs attention"
                 : "Needs attention";
-            return owner + " — " + problem;
+            return owner + ": " + problem;
         }
 
         private static int CountIssues(ScenarioStoryFlowIssue[] issues, int stageIndex, int sceneIndex, bool exactScene)

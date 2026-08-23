@@ -17,7 +17,7 @@ namespace ShelteredAPI.Saves.Runtime
         {
             string slotName = type.ToString();
             SaveRuntimeState.Target operationPendingTarget = null;
-            MMLog.WriteInfo(string.Format("Saving triggered! Saving to {0}", slotName));
+            MMLog.WriteInfo(string.Format("Saving to {0}.", slotName));
 
             if (ModRuntime.IsQuitting)
             {

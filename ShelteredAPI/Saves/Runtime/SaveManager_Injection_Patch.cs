@@ -42,7 +42,7 @@ namespace ShelteredAPI.Saves.Runtime
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("FATAL ERROR during proxy injection: " + ex);
+                MMLog.WriteError("Save proxy injection failed: " + ex);
             }
         }
     }

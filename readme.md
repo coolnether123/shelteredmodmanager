@@ -1,4 +1,3 @@
-![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
 # Sheltered Mod Manager v2.0
 
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
@@ -6,28 +5,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![ModAPI Version](https://img.shields.io/badge/ModAPI-v2.0-blue)
 
-> **Credit:** Originally created by benjaminfoo (2019)
-> **Maintained by:** Coolnether123 (2025-Present)
+> **Credit:** Original loader by benjaminfoo (2019); maintained by Coolnether123 since 2025.
 
-## License & Attribution
+## Project history and license
 
-This project is licensed under the MIT License (see LICENSE).
+SMM continues benjaminfoo's 2019 Sheltered mod loader. Coolnether123 resumed development in 2025 with permission to maintain and redistribute the project. SMM is licensed under the [MIT License](LICENSE); third-party components retain their own licenses.
 
-The original 2019 Sheltered mod loader foundation was created by benjaminfoo. Continued development and public redistribution are performed with the original author's permission.
-
-Third-party components retain their own licenses (see the Credits section).
-
-## Legacy
-
-This project is considered legacy because the original Sheltered mod-loader effort from 2019 was left unmaintained and never grew into an active modding framework. At the time, a Unicube developer (on Reddit as UnicubeSheltered) expressed interest in mod support, but no official framework was shipped. On the original mod-loader GitHub repo, Tiller4363 attempted in 2023 to contact benjaminfoo for guidance, but from what I can find, there was no reply and benjaminfoo deleted his reddit account.
-
-In 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The only thing I found was the abandoned mod loader, so I decided to pick it up and continue development to enable modding for the game.
-
-## About
+## Overview
 
 Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs non-destructively alongside the game.
 
-**Key Features:**
+### Highlights
 
 - Plugin loader with dependency resolution and load order management
 - Unlimited custom save slots with mod tracking and verification
@@ -35,31 +23,28 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 - Custom scenario browser, XML scenario packs, trigger runtime, scheduled effects, and win/loss runtime support, with advanced authoring available as an opt-in preview
 - Desktop Content Workshop for data-driven items, recipes, crafting costs, icons, validation, export, and local installation without requiring a scenario
 - Rebindable Sheltered and mod-defined keybindings with conflict detection and persistence
-- Zero-boilerplate mod development with `ModManagerBase`, attribute settings, and Spine settings UI
+- Attributed settings holders and the Spine settings UI
 - Per-mod isolated persistence and save-backed compatibility helpers
 - Desktop and in-game mod managers
 - Runtime inspector (F9) for debugging
 
-![Desktop Manager](documentation/screenshots/mod_manager_gui_mods.png)
-*The Mod Manager mods tab allows you to customize your load order, resolve dependencies, and view detailed mod information.*
+### SMM 2.0
 
-### New in ModAPI v2.0
-
-The 2.0 line is a breaking clean API line. It separates the neutral modding framework from Sheltered-specific runtime integrations and expands the in-game authoring surface.
+SMM 2.0 breaks compatibility with some older mods by moving Sheltered-specific APIs out of `ModAPI.dll` and into `ShelteredAPI.dll`.
 
 - **ModAPI/ShelteredAPI split:** `ModAPI.dll` owns neutral contracts; `ShelteredAPI.dll` owns Sheltered content, saves, input, UI, events, actors, and scenarios.
 - **Custom scenarios:** XML packs and code registrations appear in the in-game scenario browser, with dependency lockout, custom save binding, triggers, scheduled effects, and win/loss outcomes.
 - **Content Workshop:** the desktop manager can create content-only or hybrid mod packages with custom items, recipes, costs, recycling, and icons through a shared pixel editor.
 - **Release-gated safety fixes:** custom-scenario save APIs reject built-in save ids, scenario XML saves use temp/validate/replace with backups, Unity log filtering never suppresses errors/asserts/exceptions, and Nexus installs verify copied files before success.
 - **Rebindable controls:** Vanilla Sheltered actions and mod-defined input actions share one keybinding UI with persisted bindings and conflict handling.
-- **Modern developer experience:** `ModManagerBase`, attribute settings, Spine settings UI, event bus, isolated persistence, Harmony helpers, and runtime diagnostics remain supported.
+- **Mod development:** Attribute settings, Spine settings UI, the event bus, isolated persistence, Harmony helpers, and runtime diagnostics are available in the 2.0 APIs.
 
 > [!TIP]
 > Mod authors should start with the [Documentation Index](documentation/README.md), which gives the first-mod path and the canonical ModAPI/ShelteredAPI boundary rule before linking advanced guides.
 
-The API is stable for the 2.0 release line. See the documentation for current capabilities.
+SMM 2.0 is still in prerelease review. Core APIs are documented for mod testing, while the [API status](documentation/README.md#api-status) identifies preview areas that may still change.
 
-### Release Safety Notes
+### Release safety notes
 
 Back up saves before upgrading major framework versions, especially when testing custom scenarios, Stasis/Surrounded expanded saves, or mods built against 1.2.2.
 
@@ -78,11 +63,11 @@ Epic users: install the 64-bit package named Epic.
 
 If your executable is `Sheltered.exe`, you are on Steam/GOG. If it is `ShelteredWindows64_EOS.exe`, you are on Epic.
 
-### Antivirus Note
+### Antivirus note
 
 SMM uses Unity Doorstop injection through `winhttp.dll` so it can load `SMM\Doorstop.dll` before Sheltered starts. Some antivirus tools may flag this DLL injection pattern even when the file is from the official SMM release. If that happens, verify the archive source, restore the quarantined `winhttp.dll`, and allowlist the Sheltered install folder for SMM.
 
-### Installing Mods
+### Installing mods
 
 1. Download Sheltered mods from [Nexus Mods](https://www.nexusmods.com/games/sheltered).
 2. Move the mod folder or zip file into the `mods` folder.
@@ -91,30 +76,30 @@ SMM uses Unity Doorstop injection through `winhttp.dll` so it can load `SMM\Door
 
 ## Features
 
-### Save Protection
+### Save protection
 
 Each save records which mods were active when it was created.
 
 - Warns if required mods are missing
 - Warns on version mismatches
 - Visual status icons per save:
-  - `[OK]` All mods match
+  - `OK` All mods match
   - `~` Version mismatch
-  - `[MISSING]` Missing mods
+  - `X` Missing mods
 - Save Details window shows differences
-- One-click "Reload with Save Mods" option
+- **AUTO-LOAD MODS** activates the save's recorded mod list
 
 ![Save Verification](documentation/screenshots/mod_ingame_modverification_menu.png)
-*The in-game verification system ensures your active mod list matches your save file exactly to prevent corruption.*
+*The verification dialog compares the active and recorded mod lists, warns about differences, and lets you decide whether to continue.*
 
-### Unlimited Save Slots
+### Unlimited save slots
 
 Removes the vanilla 3-slot limit.
 
 - Paging UI for unlimited saves
 - Works alongside vanilla saves
 
-### In-Game Mod Manager
+### In-game mod manager
 
 A "Mods" button is added to the main menu.
 
@@ -126,13 +111,14 @@ A "Mods" button is added to the main menu.
 
 ## Uninstall
 
-1. Delete the `mods` and `SMM` folders.
-2. Remove `doorstop_config.ini`, `SMM\mod_manager.log`, and `winhttp.dll`.
-3. Verify game files via Steam/GOG/Epic if any issues arise.
+1. Back up `mods`, especially `mods/ModAPI`, if you want to keep installed mods, custom saves, or framework settings.
+2. Remove `winhttp.dll`, `doorstop_config.ini`, and the `SMM` folder.
+3. Remove `mods` only if you also want to erase installed mods and framework-owned data.
+4. Verify the game files through Steam, GOG, or Epic if Sheltered does not start normally.
 
 Your vanilla save files are not deleted. Custom saves are stored in `mods/ModAPI/...`; back this folder up if you want to keep them.
 
-## Vanilla Launch Note
+## Vanilla launch note
 
 If `winhttp.dll` is present, Sheltered will always start with ModAPI enabled, even when launched directly.
 
@@ -148,9 +134,9 @@ To start the game fully vanilla, temporarily move `winhttp.dll` out of the game 
 - **OS:** Windows 10 / 11
 - **Unity:** 5.3 and 5.6+ supported
 
-## Developer Tools
+## Developer tools
 
-### Runtime Inspector
+### Runtime inspector
 
 Press **F9** in-game.
 
@@ -159,7 +145,7 @@ Press **F9** in-game.
 - Component and field inspection
 - Bounds visualization
 
-### Building From Source
+### Build from source
 
 Use Visual Studio 2022 MSBuild for this legacy solution, not `dotnet build`.
 
@@ -187,7 +173,7 @@ tools\test-shelteredapi-contracts.cmd
 tools\verify-runtimecompat-rect.cmd
 ```
 
-## Mod Structure
+## Mod structure
 
 Mods follow a standardized folder layout:
 
@@ -197,20 +183,20 @@ Sheltered/
     `-- MyCoolMod/                <- Mod root folder
         |-- About/
         |   |-- About.json        <- Mod metadata (REQUIRED)
-        |   |-- preview.png       <- Preview image for Manager
-        |   `-- icon.png          <- Optional icon
-        |-- Assemblies/           <- Compiled mod code
+        |   `-- preview.png       <- Optional Manager preview image
+        |-- Assemblies/           <- Optional compiled mod code
         |   `-- MyCoolMod.dll
-        |-- Assets/               <- Custom content
+        |-- Assets/               <- Optional assets used by mod code
         |   |-- Textures/
         |   |-- Audio/
         |   `-- Localization/
-        `-- Config/               <- Configuration files
-            |-- default.json      <- Default settings
-            `-- user.json         <- User overrides
+        `-- Content/              <- Optional content-only pack
+            `-- content-pack.json
 ```
 
-### About.json Format
+Global per-mod Spine settings are stored at `mods/ModAPI/User/<mod-id>/settings.json`. Save-scoped settings use `mods/<mod-id>/settings.json` inside the active save slot. ModAPI's own preferences use `mods/ModAPI/User/settings.json`.
+
+### About.json format
 
 ```json
 {
@@ -218,33 +204,33 @@ Sheltered/
   "name": "My Cool Mod",
   "version": "1.0.0",
   "authors": ["Your Name"],
-  "description": "Adds cool features to Sheltered!",
-  "entryType": "MyCoolMod.MyPlugin",
+  "description": "Adds new features to Sheltered.",
   "dependsOn": ["OtherAuthor.SomeMod>=2.0.0"],
   "loadBefore": ["SomeMod"],
   "loadAfter": ["CoreAPI"],
   "tags": ["QoL", "Items"],
   "website": "https://www.nexusmods.com/games/sheltered/mods/123",
-  "missingModWarning": "This save uses custom items that will be lost!"
+  "missingModWarning": "This save uses custom items that may be unavailable without this mod."
 }
 ```
 
-**Required Fields:** `id`, `name`, `version`, `authors`, `description`
+Required fields: `id`, `name`, `version`, `authors`, `description`.
 
-**Optional Fields:**
+Optional fields:
 
-- `entryType` - Fully qualified class name implementing `IModPlugin`
-- `dependsOn` - Array of mod IDs with optional version constraints, such as `">=1.0.0"`
+- `dependsOn` - Array of mod IDs with optional version constraints, such as `"OtherAuthor.SomeMod>=1.0.0"`
 - `loadBefore` / `loadAfter` - Load order hints for compatibility
 - `tags` - Categories for filtering, such as `"QoL"`, `"UI"`, `"Content"`
 - `website` - Link to your mod page or documentation
 - `missingModWarning` - Custom message shown when loading a save that used this mod but it is now disabled or missing
 
-## For Mod Authors
+The current loader scans every concrete `IModPlugin` implementation in the mod's assemblies. It parses the legacy `entryType` field but does not use it to select a plugin.
+
+## For mod authors
 
 Start with the [Documentation Index](documentation/README.md) and its canonical [assembly boundary](documentation/README.md#assembly-boundary-canonical). The API is split between the neutral framework (`ModAPI.dll`) and the Sheltered integration layer (`ShelteredAPI.dll`).
 
-Currently available:
+Available APIs include:
 
 - Neutral plugin lifecycle, settings, persistence, event-bus, actor-contract, and Harmony helper APIs via `ModAPI.dll`
 - Item, food, recipe, scenario, save, UI, input, event, and manager-backed hooks via `ShelteredAPI.dll`
@@ -264,7 +250,7 @@ Currently available:
 - **[NeighTools](https://github.com/NeighTools)** - UnityDoorstop injection framework
 - **[Andreas Pardeike](https://github.com/pardeike)** - Harmony runtime patching library
 
-## Support & Community
+## Support and community
 
 - **Issues:** [GitHub Issues](https://github.com/coolnether123/shelteredmodmanager/issues)
 - **Sheltered Mods:** [Nexus Mods - Sheltered](https://www.nexusmods.com/games/sheltered)
@@ -276,7 +262,7 @@ Use [Documentation Index](documentation/README.md) for the ordered first-mod, ad
 
 | Task | Start Here |
 |------|------------|
-| Make your first mod | [Start Here / First Mod](documentation/README.md#start-here--first-mod) |
+| Make your first mod | [Start here: first mod](documentation/README.md#start-here-first-mod) |
 | Understand ModAPI/ShelteredAPI split | [Canonical Assembly Boundary](documentation/README.md#assembly-boundary-canonical) |
 | Choose a Sheltered-specific facade | [When to Use ShelteredAPI](documentation/ShelteredAPI_Guide.md) |
 | Add items, recipes, loot, or assets | [ShelteredAPI Content Guide](documentation/ShelteredAPI_Content_Guide.md) |
@@ -290,4 +276,4 @@ Use [Documentation Index](documentation/README.md) for the ordered first-mod, ad
 | Upgrade from older SMM | [SMM 2.0 Migration](documentation/SMM_2.0_Migration.md) |
 | Known issues | [Known Issues](documentation/Known_Issues.md) |
 | Modder migration | [For Modders: 2.0 API Migration](documentation/For_Modders_2.0_API_Migration.md) |
-| Nexus app registration readiness | [Nexus Official Registration Readiness](documentation/Nexus_Official_Readiness.md) |
+| Nexus application review | [Nexus registration submission](documentation/Nexus_Registration_Submission.md) |

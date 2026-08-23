@@ -36,9 +36,9 @@ namespace ShelteredAPI.Saves.Paging
             public string MismatchLoadHint = "(Override warnings)";
             public string BlockedLoadHint = "(Resolve required mod issues)";
             public string UnknownBlockedHint = "(Metadata unavailable)";
-            public string MatchStatusText = "Mods match - safe to play";
+            public string MatchStatusText = "Required mods match";
             public string UnknownBlockedStatusText = "Save metadata missing - load blocked";
-            public string UnknownRecoverStatusText = "Save metadata missing - you can regenerate it from the current mods";
+            public string UnknownRecoverStatusText = "Save metadata missing - rebuild it from the enabled mod list";
             public bool IncludeExtraMods = true;
             public bool AllowMismatchLoad = true;
             public bool AllowUnknownRecovery = true;
@@ -132,7 +132,7 @@ namespace ShelteredAPI.Saves.Paging
             var panel = UIUtil.EnsureOverlayPanel("ModAPI_SaveDetailsWindow", 10000);
             if (panel == null) 
             {
-                MMLog.WriteError("[SaveDetailsWindow] Failed to create overlay panel!");
+                MMLog.WriteError("[SaveDetailsWindow] Failed to create the overlay panel.");
                 return;
             }
             
@@ -355,7 +355,7 @@ namespace ShelteredAPI.Saves.Paging
                 
                 // Construct the warning label within the scrollable area
                 string warningText = string.Join("\n", warnings.ToArray());
-                // Local Z -1 to be slightly in front of the panel just in case
+                // Place the warning label in front of the panel.
                 var warnLabel = NguiModalPrimitives.CreateLabel(warnClippedGO.transform, "WarningText", warningText,
                     new Vector3(0, 0, -1), 15, COLOR_TEXT, uiFont, ttfFont, 120);
                 
@@ -454,7 +454,7 @@ namespace ShelteredAPI.Saves.Paging
                 ? (canRecoverUnknown ? "RECOVER & LOAD" : options.UnknownLoadButtonText)
                 : (allMatch ? options.MatchLoadButtonText : (mismatchBlocked ? options.BlockedLoadButtonText : options.MismatchLoadButtonText));
             string loadHintText = hasUnknownState
-                ? (canRecoverUnknown ? "(Rebuild manifest from current mods)" : options.UnknownBlockedHint)
+                ? (canRecoverUnknown ? "(Rebuild manifest from enabled mod list)" : options.UnknownBlockedHint)
                 : (allMatch ? options.MatchLoadHint : (mismatchBlocked ? options.BlockedLoadHint : options.MismatchLoadHint));
              
             NguiModalPrimitives.CreateButton(root, "LoadBtn", loadButtonText,
@@ -468,7 +468,7 @@ namespace ShelteredAPI.Saves.Paging
                 .alignment = NGUIText.Alignment.Center;
             
             // === STATUS LINE ===
-            string statusText = allMatch ? STATUS_MATCH + " Mods match - safe to play" :
+            string statusText = allMatch ? STATUS_MATCH + " Required mods match" :
                                hasMissing && hasVersionDiff ? $"{STATUS_WARNING} {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} missing, {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.VersionDiff)} version diff" :
                                hasMissing ? $"{STATUS_WARNING} {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} mod(s) missing" :
                                hasExtra && !hasMissing ? $"{STATUS_WARNING} {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Extra)} extra mod(s) active" :
@@ -477,7 +477,7 @@ namespace ShelteredAPI.Saves.Paging
             if (hasUnknownState)
             {
                 statusText = canRecoverUnknown
-                    ? "? Save metadata missing - you can regenerate it from the current mods"
+                    ? "? Save metadata missing - rebuild it from the enabled mod list"
                     : "? Save metadata missing - load blocked";
             }
             if (allMatch)
@@ -664,11 +664,11 @@ namespace ShelteredAPI.Saves.Paging
                 string scenarioId = ResolveManifestScenarioId(entry);
                 if (!SaveRegistryCore.TryWriteSlotManifest(scenarioId, slotNumber, manifest, out manifestPath, out error))
                 {
-                    MMLog.WriteError("[SaveDetailsWindow] Failed to recover manifest from current mods: " + error);
+                    MMLog.WriteError("[SaveDetailsWindow] Failed to rebuild the manifest from the enabled mod list: " + error);
                     return false;
                 }
 
-                MMLog.Write("[SaveDetailsWindow] Recovered manifest from current mods at: " + manifestPath);
+                MMLog.Write("[SaveDetailsWindow] Rebuilt the manifest from the enabled mod list at: " + manifestPath);
                 return true;
             }
             catch (Exception ex)
@@ -692,19 +692,9 @@ namespace ShelteredAPI.Saves.Paging
         {
             try
             {
-                // We don't overwrite loadorder.json. 
-                // We create a restart.json file in SMM/Bin for the Manager to handle.
-                
-                // Assuming standard path: Sheltered/SMM/Bin/restart.json
                 var gameRoot = Directory.GetParent(Application.dataPath).FullName;
                 var smmBin = Path.Combine(Path.Combine(gameRoot, "SMM"), "Bin");
 
-                if (!Directory.Exists(smmBin))
-                {
-                    // Fallback try - maybe SMM is elsewhere?
-                    // But usually mod tools are in root.
-                }
-                
                 string scenarioId = ResolveManifestScenarioId(entry);
                 var manifestPath = Path.Combine(DirectoryProvider.SlotRoot(scenarioId, slotNumber, false), "manifest.json");
 
@@ -745,10 +735,8 @@ namespace ShelteredAPI.Saves.Paging
                 
                 string json = JsonUtility.ToJson(req, true);
                 
-                // Write to SMM/Bin/restart.json
                 string restartPath = Path.Combine(smmBin, "restart.json");
                 
-                // Ensure directory exists
                 Directory.CreateDirectory(smmBin);
                 
                 File.WriteAllText(restartPath, json);
@@ -760,7 +748,6 @@ namespace ShelteredAPI.Saves.Paging
             catch (Exception ex)
             {
                 MMLog.WriteError("Failed to create restart request: " + ex);
-                // Show error to user? For now just log.
             }
         }
 

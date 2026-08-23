@@ -8,7 +8,7 @@ namespace ShelteredScenarioEditor.Presentation.UiKit.Widgets{
     /// Reusable IMGUI draw helpers for scenario authoring windows. Stateless
     /// static methods that take a <see cref="ScenarioUiStyleSheet"/> and a rect.
     /// Each helper draws and returns the body region the caller can keep
-    /// filling. Composing widgets is just chaining rect math.
+    /// filling. Widget composition chains rectangle calculations.
     /// </summary>
     internal static class ScenarioUiWidgets
     {

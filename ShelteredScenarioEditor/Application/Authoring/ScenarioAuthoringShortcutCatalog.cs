@@ -1,13 +1,9 @@
 using System.Collections.Generic;
 
 namespace ShelteredScenarioEditor.Application.Authoring{
-    // Enumerable, metadata-carrying registry for the context-aware authoring
-    // keyboard router (ScenarioAuthoringShortcutRouter). Each descriptor records
-    // the key chord, a human-readable description, and the context/surface where
-    // the shortcut applies. This catalog is the single source of truth that the
-    // Keyboard Shortcuts help overlay is generated from, so the overlay can never
-    // drift from a separately hand-maintained list. ScenarioAuthoringShortcutCatalogVerification
-    // asserts every descriptor carries a chord + description and surfaces in the overlay.
+    // Registry for context-aware authoring shortcuts. Each descriptor records its
+    // chord, description, and context. The help overlay is generated from this catalog.
+    // ScenarioAuthoringShortcutCatalogVerification checks that every descriptor is complete.
     internal enum ScenarioAuthoringShortcutContext
     {
         Global = 0,
@@ -108,8 +104,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             }
         }
 
-        // Maps the router's resolved surface to a catalog context so the overlay
-        // can highlight the group that matches the live keyboard surface.
+        // Map the router's resolved view to the catalog context highlighted in the overlay.
         public static ScenarioAuthoringShortcutContext FromSurfaceKind(ScenarioAuthoringSurfaceKind kind)
         {
             switch (kind)
@@ -131,9 +126,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             }
         }
 
-        // Best-effort active context resolved from the authoring state alone (the
-        // help overlay owns the live keyboard surface while it is open, so the
-        // group we highlight is the editing surface the author will return to).
+        // While the help overlay is open, highlight the editing context the author will return to.
         public static ScenarioAuthoringShortcutContext ResolveActiveContext(ScenarioAuthoringState state, bool placementActive)
         {
             if (state == null || !state.IsActive)

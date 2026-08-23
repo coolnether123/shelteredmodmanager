@@ -25,7 +25,7 @@ namespace ModAPI.Harmony
             if (vectorType != typeof(Vector2) && vectorType != typeof(Vector3))
                 throw new ArgumentException($"Expected Vector2 or Vector3, got {vectorType.Name}");
 
-            // Note: In modern Unity, Vector2.zero is a property.
+            // Unity exposes Vector2.zero through a property getter.
             // This method attempts to replace the property getter call with a direct field access 
             // IF a static field 'zero' exists (rare/specific builds).
             // If the field doesn't exist, we do nothing to avoid breaking valid code.

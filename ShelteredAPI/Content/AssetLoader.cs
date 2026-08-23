@@ -20,7 +20,7 @@ namespace ShelteredAPI.Content
         private static readonly Dictionary<string, AssetBundle> _bundleCache = new Dictionary<string, AssetBundle>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Loads a Texture2D from a relative path under the mod root (e.g., Assets/Textures/icon.png). Cached per mod.
+        /// Loads a cached <see cref="Texture2D"/> from a path under the mod root, such as <c>Assets/Textures/icon.png</c>.
         /// </summary>
         public static Texture2D LoadTexture(Assembly asm, string relativePath)
         {
@@ -85,7 +85,7 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Loads an AssetBundle from a relative path under the mod root (e.g., Assets/Bundles/mybundle.bundle). Cached per mod.
+        /// Loads a cached <see cref="AssetBundle"/> from a path under the mod root, such as <c>Assets/Bundles/mybundle.bundle</c>.
         /// </summary>
         public static AssetBundle LoadBundle(Assembly asm, string relativePath)
         {

@@ -85,7 +85,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell
             Assert(live != null && live.Document != null
                     && Contains(live.Document.Subtitle, "READ-ONLY")
                     && HasChip(live.Document.StatusChips, "Read-only"),
-                "Live Reference is not clearly marked read-only.", result);
+                "Live Reference is not marked read-only.", result);
             Assert(IsAdvancedLast(live != null && live.Document != null ? live.Document.Sections : null),
                 "Live Reference must finish with Advanced.", result);
             AssertUniqueActions(live, "Live Reference", result);

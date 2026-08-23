@@ -69,7 +69,7 @@ namespace ShelteredAPI.UI.Compatibility
                 // Upon review of decompiled code, it uses GetLeftSideItems callback.
                 // If the callback returns our items, ItemGrid.UpdateItems -> AddItem_Stacked will handle it.
             }
-            catch (Exception ex) { MMLog.Write($"ERROR in ItemTransferPanel.OnShow: {ex}"); }
+            catch (Exception ex) { MMLog.WriteError($"ItemTransferPanel.OnShow failed: {ex}"); }
         }
         
         // ============================================================================
@@ -124,7 +124,7 @@ namespace ShelteredAPI.UI.Compatibility
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[UIPatches] ERROR in BasePanel.OnPause postfix: {ex}");
+                MMLog.WriteError($"[UIPatches] BasePanel.OnPause postfix failed: {ex}");
             }
         }
         */

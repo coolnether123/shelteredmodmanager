@@ -5,7 +5,7 @@ namespace ShelteredAPI.Saves.Runtime
 {
     /// <summary>
     /// Owns custom-save session state and exposes synchronized state transitions.
-    /// PlatformSaveProxy is limited to adapting the game's platform I/O surface.
+    /// PlatformSaveProxy is limited to adapting the game's platform I/O.
     /// </summary>
     internal static class SaveRuntimeState
     {

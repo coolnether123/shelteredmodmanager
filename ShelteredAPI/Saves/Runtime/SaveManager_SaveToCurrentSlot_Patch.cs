@@ -45,7 +45,7 @@ namespace ShelteredAPI.Saves.Runtime
             {
                 // We have a pending custom REDIRECT. Let the proxy handle this in PlatformSave.
                 // The redirect target has already been queued by SlotSelectionPanel, MainMenuPanel, etc.
-                // Just return true and let vanilla code call into the proxy.
+                // Continue into vanilla code, which calls the save proxy.
                 if (ModRuntime.IsQuitting) ModRuntime.MarkSaveExit("SaveToCurrentSlot.Prefix", "Pending NEW GAME for " + slot);
                 return true;
             }

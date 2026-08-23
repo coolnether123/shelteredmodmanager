@@ -21,7 +21,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation
                 || string.IsNullOrEmpty(Trim(definition.Author)))
                 summary.AddWarning("metadata.author.placeholder", "Scenario metadata still lists the author as 'unknown'.");
             if (string.IsNullOrEmpty(Trim(definition.Description)))
-                summary.AddWarning("metadata.description.empty", "Scenario metadata has no description for people you share it with.");
+                summary.AddWarning("metadata.description.empty", "Scenario description is empty.");
             if (string.Equals(Trim(definition.Version), ScenarioMetadataDefaults.DefaultVersion, StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrEmpty(Trim(definition.Version)))
                 summary.AddWarning("metadata.version.default", "Scenario metadata still uses the default version 0.1.0.");

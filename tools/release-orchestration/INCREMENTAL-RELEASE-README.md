@@ -1,11 +1,11 @@
 # Incremental 2.0 release orchestration
 
-`Invoke-IncrementalRelease.ps1` turns changed repository files into a small, ordered release plan across the sibling repositories in the Sheltered umbrella folder. The graph is machine-readable in `incremental-release-graph.json`; the runner emits JSON so an agent can hand the result to another agent without repeating discovery. This directory is the canonical, Git-tracked copy of the orchestration layer.
+`Invoke-IncrementalRelease.ps1` turns changed repository files into an ordered release plan across sibling Sheltered repositories. The graph is stored in `incremental-release-graph.json`, and the JSON result can be reused by downstream tools without repeating discovery.
 
 ## Dry run
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Invoke-IncrementalRelease.ps1 `
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\Invoke-IncrementalRelease.ps1 `
   -ChangedFile 'Lifespan/Lifespan/Lifespan.cs' `
   -OutputPath .\release-plan.json
 ```
@@ -17,7 +17,7 @@ The JSON plan contains selected owners, change classes, targeted gameplay fixtur
 ## Execute a selected plan
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Invoke-IncrementalRelease.ps1 `
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\Invoke-IncrementalRelease.ps1 `
   -ChangedFile 'TradingAmount/TradingAmount/TradingPanelPatch.cs' `
   -SteamHarnessUrl 'http://127.0.0.1:37421' `
   -EpicHarnessUrl 'http://127.0.0.1:37422' `
@@ -35,7 +35,7 @@ Focused repositories can define `scenarioRules`. For example, a change to `Tradi
 ## Self-tests
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-IncrementalReleaseOrchestrator.ps1
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\Test-IncrementalReleaseOrchestrator.ps1
 ```
 
 The self-tests use representative source, test-only, documentation-only, Manager OAuth, dependency-edge, and release-graph changes. They invoke the runner in dry-run mode and verify that unrelated state-heavy matrices are absent.

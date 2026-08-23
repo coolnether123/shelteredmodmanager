@@ -1,10 +1,10 @@
-# ModAPI Transpiler and Debugging Guide (v2.0)
+# ModAPI transpiler and debugging guide
 
-This guide focuses on the current transpiler stack under `ModAPI.Harmony.Transpilers`.
+The transpiler source is under `ModAPI/Harmony/Transpilers`. Its public types use the `ModAPI.Harmony` namespace.
 
 Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
-## Compatibility Matrix
+## Compatibility matrix
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
@@ -12,7 +12,7 @@ Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 | Intent API helpers | Current `ModAPI.dll` | Supported |
 | Cooperative transpiler pipeline | Current `ModAPI.dll` | Supported |
 
-## 1. Recommended Workflow
+## 1. Recommended workflow
 
 1. Start with `FluentTranspiler.For(...)`.
 2. Match using explicit anchors.
@@ -23,6 +23,19 @@ Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 Minimal template:
 
 ```csharp
+using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
+using HarmonyLib;
+using ModAPI.Harmony;
+
+[PatchPolicy(
+    PatchDomain.World,
+    "Example transpiler",
+    TargetBehavior = "Replace SomeType.OldCall with MyHooks.NewCall.",
+    FailureMode = "The original call remains active.",
+    RollbackStrategy = "Disable the owning mod or feature.",
+    StartupTiming = PatchStartupTiming.GameplayDeferred)]
 [HarmonyPatch(typeof(SomeType), "TargetMethod")]
 public static class TargetMethod_Patch
 {
@@ -40,7 +53,7 @@ public static class TargetMethod_Patch
 }
 ```
 
-## 2. Core Types
+## 2. Core types
 
 - `FluentTranspiler`: primary match/edit API
 - `IntentAPI`: high-level helpers such as `RedirectCall` and `ChangeConstant`
@@ -49,7 +62,7 @@ public static class TargetMethod_Patch
 - `TranspilerDebugger`: before/after dumps and diagnostics
 - `TranspilerTestHarness`: isolated testing without launching the game
 
-## 3. Matching Correctly
+## 3. Matching correctly
 
 Use the strongest anchor available:
 - method calls
@@ -95,7 +108,7 @@ t.ChangeConstantAll(5, 10);
 t.RemoveCall(typeof(Analytics), "TrackEvent");
 ```
 
-Use them whenever an intent helper expresses the change clearly.
+Use them when an intent helper can express the change.
 
 ## 6. Validation
 
@@ -104,7 +117,7 @@ Default guidance:
 - compatibility-sensitive patches: keep stack validation on
 - only relax strictness when you have a concrete reason and have inspected the result
 
-## 7. Cooperative Patching
+## 7. Cooperative patching
 
 When multiple mods need to transpile the same method, prefer `CooperativePatcher`.
 
@@ -117,10 +130,11 @@ Benefits:
 ## 8. Debugging
 
 Useful tools:
-- `RuntimeILInspector` (`F10`)
+- `RuntimeILInspector` (`F10`) when the decompiler executable is installed
 - `TranspilerDebugger`
 - `TranspilerTestHarness`
-- `UIDebugInspector` (`F11`) when patch results surface through UI
+- `RuntimeDebuggerUI` (`F12`) when the decompiler executable is installed
+- `UIDebugInspector` (`F11`) when ShelteredAPI is loaded and patch results appear in the UI
 
 When a transpiler misbehaves:
 1. dump original IL
@@ -128,7 +142,7 @@ When a transpiler misbehaves:
 3. reduce the edit to the smallest reproducer
 4. re-enable validation if it was disabled
 
-## 9. Common Failure Modes
+## 9. Common failure modes
 
 - no match found: target method changed or overload mismatch
 - invalid stack: replacement left pushes/pops unbalanced

@@ -4,7 +4,7 @@ namespace ModAPI.Persistence
 {
     /// <summary>
     /// Optional lifecycle hook for mod objects that mirror save data into runtime managers.
-    /// Use this when simple JSON registration is not enough and load/save needs explicit coordination.
+    /// Use this when JSON registration cannot represent the required load and save behavior.
     /// </summary>
     public interface IModPersistenceLogic
     {

@@ -11,7 +11,7 @@ using Manager.Views;
 namespace Manager
 {
     /// <summary>
-    /// Modern, refactored main form for Sheltered Mod Manager.
+    /// Main application window for Sheltered Mod Manager.
     /// Uses separation of concerns with dedicated services and custom controls.
     /// </summary>
     public class MainForm : Form
@@ -850,8 +850,6 @@ namespace Manager
                 // Setup doorstop
                 try
                 {
-                    // Note: Doorstop setup would be called here from ManagerGUI.LaunchAndPreflight.cs
-                    // SetupDoorstop();
                 }
                 catch { }
                 
@@ -938,10 +936,6 @@ namespace Manager
                     lines.Add("SaveBackupRetention=" + AppSettings.FormatSaveBackupRetention(_settings.SaveBackupRetention));
                     
                     // LogCategories disabled in v1.0 - category filtering not currently used
-                    // var catList = new System.Collections.Generic.List<string>();
-                    // foreach (string cat in _settings.LogCategories)
-                    //     catList.Add(cat);
-                    // lines.Add("LogCategories=" + string.Join(",", catList.ToArray()));
                     lines.Add("IgnoreOrderChecks=" + (_settings.IgnoreOrderChecks ? "True" : "False"));
                     lines.Add("AutoLoadSaveSlot=" + _settings.AutoLoadSaveSlot);
                     File.WriteAllLines(iniPath, lines.ToArray());
@@ -2179,7 +2173,7 @@ namespace Manager
                     }
 
                     // The in-game requester writes this file before asking Unity to quit.
-                    // Keep the request queued until the process has actually exited; consuming
+                    // Keep the request queued until the process exits; consuming
                     // it earlier would delete the request and LaunchWithMods would reject the
                     // relaunch because the old game process is still alive.
                     if (CheckGameRunning())

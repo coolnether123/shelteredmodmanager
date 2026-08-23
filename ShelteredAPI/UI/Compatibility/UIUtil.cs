@@ -281,8 +281,7 @@ namespace ShelteredAPI.UI.Compatibility
         }
 
         /// <summary>
-        /// Create an NGUI UILabel under 'parent' with sensible defaults.
-        /// Matches v1.0 logic but integrated with modern API.
+        /// Creates an NGUI <see cref="UILabel"/> under <paramref name="parent"/> with the compatibility defaults.
         /// </summary>
         public static UILabel CreateLabel(GameObject parent, UILabelOptions opts, out UIPanel usedPanel)
         {

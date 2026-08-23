@@ -31,7 +31,7 @@ namespace ShelteredAPI.Saves.Paging
             var panel = UIUtil.EnsureOverlayPanel("ModAPI_CondensePromptDialog", 10001);
             if (panel == null) 
             {
-                MMLog.WriteError("[CondensePromptDialog] Failed to create overlay panel!");
+                MMLog.WriteError("[CondensePromptDialog] Failed to create the overlay panel.");
                 return;
             }
             
@@ -68,8 +68,8 @@ namespace ShelteredAPI.Saves.Paging
                 "Gaps were detected in your save slot numbers.\n\n" +
                 "Would you like to automatically reorganize\n" +
                 "your saves to fill these gaps?\n\n" +
-                "This will renumber slot positions but won't\n" +
-                "delete or modify your actual save data.",
+                "This renumbers the slot folders but does not\n" +
+                "change the save contents.",
                 new Vector3(0, 15, 0), 20, COLOR_TEXT, uiFont, ttfFont, 100);
             descLabel.alignment = NGUIText.Alignment.Center;
             

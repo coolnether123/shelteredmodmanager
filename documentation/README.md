@@ -1,117 +1,81 @@
-# Sheltered Mod Manager Documentation
+# Sheltered Mod Manager documentation
 
-This index is the mod-author entry point for SMM v2.0. Start with the shortest path below, then open a task or reference guide only when your mod needs it.
+This index separates mod-author tasks from maintainer and release work. Start with the shortest guide that matches your task.
 
-> **Upgrade safety:** Back up saves before testing mods or framework upgrades. Custom scenarios and expanded vanilla save modes should first be smoke tested with disposable saves.
+Back up saves before testing a framework upgrade, a custom scenario, or a mod that changes save behavior.
 
-## Start Here / First Mod
+## Start here: first mod
 
-For a first mod:
+1. Create a C# class library that targets .NET Framework 3.5.
+2. Reference `ModAPI.dll` and implement `IModPlugin`.
+3. Package `About/About.json` and your DLL under `Assemblies/`.
+4. Load the minimal plugin before you add Sheltered-specific code.
 
-1. Create a C# class library targeting **.NET Framework 3.5**.
-2. Reference `ModAPI.dll`, implement `IModPlugin`, and package a required `About/About.json` plus your DLL under `Assemblies/`.
-3. Build and load the minimal plugin before adding Sheltered-specific features.
-4. Use the boundary table below to decide whether to add `ShelteredAPI.dll` or `Assembly-CSharp.dll`.
+Use these guides in order:
 
-| Need | Read This |
-|------|-----------|
-| Build and package a first plugin | [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md) |
-| Understand the minimal lifecycle and context | [Core ModAPI Basics](ModAPI_Developer_Guide.md) |
-| Build SMM itself from source | [Root README build section](../readme.md#building-from-source) |
+1. [Develop a plugin](how%20to%20develop%20a%20plugin.md)
+2. [Core ModAPI basics](ModAPI_Developer_Guide.md)
+3. [API reference](API_Signatures_Reference.md) when you need a namespace or exact symbol
 
-SMM itself is a legacy solution: build it with Visual Studio 2022 MSBuild, not `dotnet build`, and install .NET Framework 3.5 targeting support. A mod project targeting the framework should also target .NET Framework 3.5 unless its deployment strategy deliberately provides otherwise.
+Build SMM with Visual Studio 2022 MSBuild and the .NET Framework 3.5 targeting pack. Do not use `dotnet build`. See the [root build instructions](../readme.md#build-from-source).
 
-## Core ModAPI Basics
+## Assembly boundary: canonical
 
-Use `ModAPI.dll` for the host-neutral framework:
+| Your mod uses | Compile references |
+| --- | --- |
+| Lifecycle, settings, `ctx.SaveSystem`, inter-mod APIs, neutral input actions, neutral actors, or neutral Harmony helpers | `ModAPI.dll` |
+| Sheltered content, saves, events, input, UI, characters, maps, queues, or scenarios | `ModAPI.dll` and `ShelteredAPI.dll` |
+| Vanilla types such as `FamilyMember`, `ItemManager.ItemType`, `ObjectManager.ObjectType`, or `ScenarioDef` | The API assemblies used by the mod and `Assembly-CSharp.dll` |
+| Harmony without Sheltered types | `ModAPI.dll` and `0Harmony.dll` |
 
-- plugin lifecycle, logging, and loader context
-- settings and ordinary per-mod persistence through `ctx.SaveSystem`
-- inter-mod events and registry services
-- neutral input-action, actor-contract, Harmony, diagnostics, and background-work surfaces that exist in the current build
+`ModAPI.dll` owns game-neutral contracts. `ShelteredAPI.dll` owns Sheltered integrations. `ShelteredScenarioEditor.dll` is an optional editor application; mods do not reference it.
+
+Prefer public facades such as `ShelteredContent`, `ShelteredSaves`, `ShelteredEvents`, `ShelteredInput`, `ShelteredRuntimeUI`, `ShelteredActors`, `ShelteredCharacters`, `ShelteredScenarios`, `ShelteredMap`, and `ShelteredMapMarkers`. Treat serializers, repositories, patch hosts, controllers, and other implementation services as internal.
+
+Use a vanilla type only when a documented facade exposes it for direct game-object integration. Do not make vanilla runtime objects the default data model for a mod.
+
+## Mod-author tasks
 
 | Task | Guide |
-|------|-------|
-| Lifecycle, context, and choosing the next guide | [ModAPI Developer Guide](ModAPI_Developer_Guide.md) |
-| Settings, per-mod persisted state, and save lifecycle hooks | [Settings and Persistence](SETTINGS.md) |
-| Harmony patches | [Harmony Patch Guide](how%20to%20develop%20a%20patch%20with%20harmony.md) |
-| Transpiler debugging and safety | [Transpiler and Debugging](Transpiler_and_Debugging_Guide.md) |
+| --- | --- |
+| Add settings or persisted mod data | [Settings and persistence](SETTINGS.md) |
+| Register items, recipes, loot, assets, or localization | [Content guide](ShelteredAPI_Content_Guide.md) |
+| Build a data-only content pack | [Content Workshop](Content_Workshop_Guide.md) |
+| Subscribe to game, UI, save, or time events | [Events guide](Events_Guide.md) |
+| Add rebindable controls | [Input keybindings](Input_Keybindings_Guide.md) |
+| Work with actors or Sheltered characters | [Actors guide](ShelteredAPI_Characters_Guide.md) |
+| Add mod-owned panels, stores, or cooking stations | [Runtime UI and stores](ShelteredAPI_Runtime_UI_Stores_Guide.md) |
+| Create custom scenarios | [Custom scenarios](Custom_Scenarios_Guide.md) |
+| Patch game code | [Harmony patch guide](how%20to%20develop%20a%20patch%20with%20harmony.md) |
+| Debug a transpiler | [Transpiler and debugging guide](Transpiler_and_Debugging_Guide.md) |
+| Choose a Sheltered facade | [ShelteredAPI guide](ShelteredAPI_Guide.md) |
+| Diagnose a runtime failure | [API troubleshooting](API_Troubleshooting.md) |
 
-## When To Use ShelteredAPI
+The [API reference](API_Signatures_Reference.md) is an index for lookup. The task guides contain the examples and constraints needed to use each API.
 
-### Assembly Boundary (Canonical)
+## API status
 
-This is the canonical mod-author rule for the SMM 2.0 assembly split. Other guides link here rather than restating it.
+The 2.0 assembly split is the supported line. Runtime UI, stores, cooking stations, map helpers, queues, and support-bundle APIs remain in preview. Custom scenario registration, XML and code authoring, playback, runtime bindings, and scoring snapshots are supported. The separate in-game scenario editor remains optional and defaults off.
 
-| Your mod does this | Compile references |
-|--------------------|--------------------|
-| Uses only lifecycle, settings, `ctx.SaveSystem`, inter-mod APIs, neutral input actions, neutral actor contracts, or neutral Harmony helpers | `ModAPI.dll` |
-| Registers Sheltered items/recipes/assets, accesses Sheltered save slots, listens for Sheltered game/UI events, adds Sheltered input/UI behavior, works with Sheltered characters, or registers custom scenarios | `ModAPI.dll` and `ShelteredAPI.dll` |
-| Directly names vanilla game types such as `FamilyMember`, `ItemManager.ItemType`, `ObjectManager.ObjectType`, `ScenarioDef`, or a Harmony patch target in game code | `ModAPI.dll`, `ShelteredAPI.dll` when using its facades, and `Assembly-CSharp.dll` |
-| Applies Harmony patches without naming Sheltered game types | `ModAPI.dll` and `0Harmony.dll` |
-
-Rules:
-
-- `ModAPI.dll` owns neutral contracts. `ShelteredAPI.dll` owns Sheltered integrations and supplies game-specific runtime implementations behind neutral contracts.
-- `ShelteredScenarioEditor.dll` is an optional downstream application component. Mods never reference it; XML/code scenario authoring remains available through ShelteredAPI.
-- The runtime dependency direction is `ShelteredScenarioEditor -> ShelteredAPI -> ModAPI`. ShelteredAPI must build and run when the editor DLL is absent.
-- Prefer public facades such as `ShelteredContent`, `ShelteredSaves`, `ShelteredEvents`, `ShelteredInput`, `ShelteredRuntimeUI`, `ShelteredActors`, `ShelteredCharacters`, `ShelteredScenarios`, `ShelteredMap`, and `ShelteredMapMarkers`.
-- Treat implementation services, serializers, patch hosts, repositories, and controllers as internal even if their source is visible.
-- A typed Sheltered escape hatch is appropriate only when a facade explicitly exposes a vanilla type for deliberate game-object integration, for example `FindFamilyMember(...)`. Do not make raw vanilla types the default data model for ordinary mod logic.
-
-For the internal ownership history and verifier policy, see [ModAPI/ShelteredAPI Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md). For facade selection examples, see [ShelteredAPI Guide](ShelteredAPI_Guide.md).
-
-## Common Tasks
-
-| I want to... | Use... | Guide |
-|--------------|--------|-------|
-| Register items, recipes, loot, assets, or localization | `ShelteredContent` | [Content Guide](ShelteredAPI_Content_Guide.md) |
-| Create data-driven items, recipes, costs, and icons without writing a plugin | Desktop Content Workshop | [Content Workshop Guide](Content_Workshop_Guide.md) |
-| Store ordinary mod state with a save | `ctx.SaveSystem` | [Settings and Persistence](SETTINGS.md) |
-| Inspect or operate on Sheltered save slots | `ShelteredSaves`, `ShelteredSaveEvents` | [ShelteredAPI Guide](ShelteredAPI_Guide.md#facade-chooser) |
-| Listen for game, UI, faction, or scheduled time events | `ShelteredEvents` | [Events Guide](Events_Guide.md) |
-| Add configurable keybindings | `InputActionRegistry`, optionally `ShelteredInput` | [Input Keybindings Guide](Input_Keybindings_Guide.md) |
-| Work with actors or actual Sheltered characters | `ctx.Actors`, `ShelteredActors`, `ShelteredCharacters` | [Actors Guide](ShelteredAPI_Characters_Guide.md) |
-| Query expedition map context or project map markers | `ShelteredMap`, `ShelteredMapMarkers` | [ShelteredAPI Guide](ShelteredAPI_Guide.md), [map context signatures](API_Signatures_Reference.md#expedition-map-context-smm-20), and [marker signatures](API_Signatures_Reference.md#map-markers-smm-20) |
-
-## Advanced Systems
-
-These surfaces are useful after a first plugin is working. Preview or experimental status matters when publishing a mod.
-
-| System | Status | Guide |
-|--------|--------|-------|
-| Deterministic feature streams | Current neutral API | [`ModRandom` signatures](API_Signatures_Reference.md#modrandom-deterministic-streams-modapicore) |
-| Background work, cancellation, stale-result handling, and diagnostics | Current neutral API | [`ModThreads` signatures](API_Signatures_Reference.md#background-work-smm-20) |
-| Mod-owned panels, storage, item reservations, character item assignments, and cooking stations | API preview | [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md) |
-| Focused UI clone/bind/color/lifecycle helpers | API preview | [`ShelteredUI` signatures](API_Signatures_Reference.md#ui-extensions-smm-20) |
-| Expedition map context, generation intent, markers, and actor projections | API preview | [`ShelteredMap` signatures](API_Signatures_Reference.md#expedition-map-context-smm-20) and [`ShelteredMapMarkers` signatures](API_Signatures_Reference.md#map-markers-smm-20) |
-| Player queue snapshots, conservative restore, and change notification | API preview | [`ShelteredQueues` signatures](API_Signatures_Reference.md#player-queues-smm-20) |
-| Custom scenario XML/code registration, installed-scenario browsing, playback, runtime triggers, and scoring snapshots | Supported 2.0 ShelteredAPI surface; the separate in-game editor is an optional preview | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
-| Spine settings UI | Supported | [Spine Settings Guide](Spine_Settings_Guide.md) |
-| Patch metadata, conflict reports, and cooperative patching | Current neutral API | [Patch Governance](Patch_Governance.md) |
-| Save manifests and structured support-bundle capture | API preview / support tooling | [`ShelteredSupportBundle` signatures](API_Signatures_Reference.md#save-manifest--support-bundle-smm-20) |
-| Loader and runtime internals | Maintainer/advanced | [Architecture Ownership Guide](Architecture_Ownership_Guide.md), [ModAPI Architecture Guide](ModAPI_Architecture_guide.md), and [Project Map](ModAPI_Documentation.md) |
-
-Services should be treated as public authoring surfaces only when they appear in a guide and the signature reference.
-
-## API Reference
-
-| Need | Document |
-|------|----------|
-| Exact public type and method signatures | [API Signatures Reference](API_Signatures_Reference.md) |
-| Sheltered facade selection | [ShelteredAPI Guide](ShelteredAPI_Guide.md) |
-| Canonical internal owners and extension rules | [Architecture Ownership Guide](Architecture_Ownership_Guide.md) |
-| Module ownership and runtime design | [ModAPI Project Map](ModAPI_Documentation.md) |
-| Internal boundary/refactor record | [ModAPI/ShelteredAPI Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md) |
-
-The signature reference is a lookup sheet, not a tutorial. Begin with a task guide, then use it when you need exact names and overloads.
-
-## Migration / Troubleshooting
+## Migration and release information
 
 | Situation | Document |
-|-----------|----------|
-| Player upgrading to 2.0 | [SMM 2.0 Migration](SMM_2.0_Migration.md) |
-| Mod author rebuilding a 1.x mod | [For Modders: 2.0 API Migration](For_Modders_2.0_API_Migration.md) |
-| Runtime/log failure investigation | [API Troubleshooting](API_Troubleshooting.md) |
-| Known release issues and reporting data | [Known Issues](Known_Issues.md) |
-| 2.0 release scope/checklist | [2.0 Release Notes](Release_2.0.md) |
+| --- | --- |
+| A player is upgrading to 2.0 | [SMM 2.0 migration](SMM_2.0_Migration.md) |
+| A mod author is rebuilding a 1.x mod | [Modder 2.0 API migration](For_Modders_2.0_API_Migration.md) |
+| A player needs current limitations | [Known issues](Known_Issues.md) |
+| A maintainer is preparing the 2.0 release | [2.0 release notes](Release_2.0.md) |
+
+## Maintainer documents
+
+| Work | Document |
+| --- | --- |
+| Find the owner of a subsystem | [Architecture ownership](Architecture_Ownership_Guide.md) |
+| Follow loader and runtime startup | [ModAPI architecture](ModAPI_Architecture_guide.md) |
+| Find source by module | [Project map](ModAPI_Documentation.md) |
+| Enforce the ModAPI and ShelteredAPI split | [Assembly boundary record](ModAPI_Sheltered_Boundary_Refactor.md) |
+| Extend scenario authoring | [Scenario authoring architecture](Scenario_Authoring_Architecture.md) |
+| Review patch ownership and conflicts | [Patch governance](Patch_Governance.md) |
+| Maintain comment style | [Developer commenting standard](Developer_Commenting_Standard.md) |
+| Review OAuth security and behavior | [Nexus OAuth implementation](Nexus_OAuth_Implementation.md) |
+| Prepare Nexus application review | [Nexus registration submission](Nexus_Registration_Submission.md) |

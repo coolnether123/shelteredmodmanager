@@ -3,8 +3,8 @@ using UnityEngine;
 namespace ShelteredAPI.UI.FieldManual.Textures.Generators
 {
     /// <summary>
-    /// Mutable 8-bit pixel buffer with helpers for primitive drawing. Keeps generator code
-    /// declarative — generators describe pixels, not Texture2D plumbing.
+    /// Mutable 8-bit pixel buffer with basic drawing operations. Generators describe pixels
+    /// without managing <see cref="Texture2D"/> allocation or upload details.
     /// </summary>
     internal sealed class TextureCanvas
     {

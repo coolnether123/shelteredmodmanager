@@ -14,7 +14,7 @@ using ShelteredModManager.Shared.PixelEditing;
 namespace Manager.Views
 {
     /// <summary>
-    /// Thin Content Workshop preview surface. Project I/O, validation, packaging and
+    /// Content Workshop preview panel. Project I/O, validation, packaging, and
     /// installs are delegated to ContentWorkshopProjectService.
     /// </summary>
     public sealed class ContentWorkshopTab : UserControl

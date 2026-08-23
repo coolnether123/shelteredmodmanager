@@ -53,7 +53,7 @@ namespace ModAPI.Harmony
             
             if (!_matcher.IsValid)
             {
-                AddSoftFailure("GoToLabelTarget: no instruction in the method carries the requested branch-target label. Fix: pass a Label that is actually attached to an instruction in this stream (labels created for edits you have not yet inserted will not be found), or search with SearchMode.Start.");
+                AddSoftFailure("GoToLabelTarget: no instruction in the method carries the requested branch-target label. Fix: pass a Label attached to an instruction in this stream (labels for edits not yet inserted will not be found), or search with SearchMode.Start.");
             }
             
             return this;

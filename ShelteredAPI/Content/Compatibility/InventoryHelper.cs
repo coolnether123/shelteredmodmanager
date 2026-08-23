@@ -23,7 +23,7 @@ namespace ShelteredAPI.Content.Compatibility{
 
         /// <summary>
         /// Create a new ItemInstance for the given item ID.
-        /// Note: This does NOT add the item to any inventory.
+        /// Does not add the item to an inventory.
         /// </summary>
         public static ItemInstance CreateItem(string itemId)
         {

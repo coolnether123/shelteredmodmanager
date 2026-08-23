@@ -341,7 +341,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
                 Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
                 Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
                 Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
-                // The workshop's top chrome is the persistent navigation surface.  Major
+                // The workshop's top bar provides persistent navigation. Major
                 // workspaces (notably Home at compact resolutions) must not animate it
                 // away, or the user loses the only visible route between editor areas.
                 float chromeProgress = _animations.GetChromeProgress(ShellChromeAnimationKey, true);
@@ -461,8 +461,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
                 }
                 else
                 {
-                // TODO(centralize): This is the legacy multi-surface path. Merge the tool rail,
-                // command dock, docked windows, and floating overlays into the central workspace
+                // Legacy shell regions remain separate from the central workspace.
                 // once the remaining scenario editor migration plan is defined.
                 int restoreChipCount = CountCollapsedWorldToolWindows(shell.Windows);
                 Rect toolRailRect;
@@ -516,8 +515,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
                 DrawPlacementPointerAidCore(scaledWidth, scaledHeight);
 
             Rect windowMenuRect = RuntimeCompat.ZeroRect();
-            // TODO(centralize): Window menu still exposes separate panel toggles. Re-home these
-            // controls into central workspace navigation when the window model is consolidated.
+            // Window navigation still uses separate panel toggles.
             if (_windowMenuOpen && shell.WindowMenuActions != null && shell.WindowMenuActions.Length > 0)
             {
                 windowMenuRect = BuildWindowMenuRectCore(windowMenuButtonRect, shell.WindowMenuActions, scaledWidth, scaledHeight, hudReserveRect);
@@ -583,8 +581,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
             ScenarioAuthoringInspectorDocument modalDocument = shell.FocusedEditorDocument ?? shell.SpritePickerDocument;
             string modalScrollId = shell.FocusedEditorDocument != null ? "focused_editor" : "sprite_picker";
-            // TODO(centralize): Focused editor and sprite picker documents still open as modal
-            // panels. Merge them into a central workspace surface when ownership is clear.
+            // Focused editors and the sprite picker open as modal panels.
             if (modalDocument != null)
             {
                 float dimAlpha = _animations.GetModalDimAlpha(true);
@@ -878,8 +875,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
             if (!workspaceStageActive)
             {
-                // TODO(centralize): Right-side inspector remains outside the central workspace.
-                // Marked for merge once selection details have a central panel destination.
+                // Selection details render outside the central workspace.
                 if (!showBottomTray && !IsEmptyInspector(inspectorWindow))
                 {
                     AppendStackRect(
@@ -898,8 +894,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
             Rect workspaceRect = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, placeflowBrowseMode, inspectorWidth);
             AppendWorkspaceRects(rects, windows, workspaceRect);
-            // TODO(centralize): Floating windows are still resolved independently from the
-            // workspace page. Fold remaining floating tools into central workspace regions.
+            // Floating windows are positioned independently from the workspace page.
             AppendFloatingRects(rects, windows, contentRect);
             foreach (KeyValuePair<string, Rect> windowRect in rects)
                 RegisterTourTarget("window:" + windowRect.Key, windowRect.Value);
@@ -929,8 +924,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
 
                 if (floating)
                 {
-                    // TODO(centralize): Floating windows remain movable/resizable overlays.
-                    // Replace with central workspace panels once each tool has a target region.
+                    // Floating windows remain movable and resizable overlays.
                     bool canInteract = visual == null || visual.Alpha > WindowInteractionAlphaThreshold;
                     if (canInteract)
                     {

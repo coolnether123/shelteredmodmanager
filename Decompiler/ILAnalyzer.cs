@@ -10,7 +10,7 @@ namespace ModAPI.Decompiler
 {
     /// <summary>
     /// Extracts IL-level data for a method:
-    /// raw IL bytes, instruction boundaries, and best-effort variable table.
+    /// raw IL bytes, instruction boundaries, and the variable table when available.
     /// </summary>
     public sealed class ILAnalyzer
     {

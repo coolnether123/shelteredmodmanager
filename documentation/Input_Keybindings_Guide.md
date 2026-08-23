@@ -1,6 +1,6 @@
-# Input Keybindings Guide
+# Input keybindings guide
 
-The 2.0 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical); this guide covers the input workflow only.
+SMM 2.0 moved Sheltered input integrations from `ModAPI.dll` to `ShelteredAPI.dll`. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical); this guide covers the input workflow.
 
 Sheltered Mod Manager v2.0 exposes rebindable controls through a split runtime:
 
@@ -9,7 +9,7 @@ Sheltered Mod Manager v2.0 exposes rebindable controls through a split runtime:
 
 Use `ModAPI.InputActions` when your mod needs a configurable action. Reference `ShelteredAPI.dll` only when you need Sheltered-specific action ids, context lookup, or runtime tuning through `ShelteredAPI.Input.ShelteredInput`.
 
-## Registering A Mod Action
+## Registering a mod action
 
 Register actions during plugin initialization/startup before players open the Controls UI:
 
@@ -27,7 +27,7 @@ public sealed class MyPlugin : IModPlugin
             label: "Quick Toggle",
             description: "Toggles the example mod overlay.",
             category: "Mods",
-            defaultBinding: new InputBinding(KeyCode.F10, KeyCode.None)));
+            defaultBinding: new InputBinding(KeyCode.None, KeyCode.None)));
     }
 
     public void Start(IPluginContext ctx) { }
@@ -36,7 +36,7 @@ public sealed class MyPlugin : IModPlugin
 
 Action ids should be stable, unique, and namespaced to your mod id. Changing an action id breaks persisted user bindings for that action.
 
-## Reading Input
+## Reading input
 
 Read actions by id instead of calling Unity input directly:
 
@@ -62,7 +62,7 @@ The provider listens for late `InputActionRegistry.OnActionRegistered` events. I
 
 Built-in Sheltered actions are grouped ahead of mod actions. Third-party actions appear under the Mods keybindings section unless they use a recognized Sheltered category.
 
-## Validation And Conflicts
+## Validation and conflicts
 
 ShelteredAPI applies this pipeline for binding changes:
 
@@ -82,13 +82,13 @@ Bindings are stored in `ModPrefs` with the `ShelteredAPI.Keybind.` prefix. `Shel
 
 Because bindings are global preferences, do not encode save-slot-specific behavior into action ids.
 
-## Vanilla Sheltered Input
+## Vanilla Sheltered input
 
 ShelteredAPI maps vanilla `PlatformInput.InputButton` and `PlatformInput.MenuInputButton` values to registered actions and patches `PlatformInput_PC` button/axis reads. This makes vanilla controls and mod controls share the same registry, conflict policy, and persistence path.
 
 The optional scenario editor can temporarily own gameplay input. Editor-owned patches perform that blocking while an authoring session is active; ShelteredAPI's ordinary input implementation does not contain an editor-state branch.
 
-## Runtime Tuning
+## Runtime tuning
 
 Sheltered runtime tuning is exposed through `ShelteredInput`:
 
@@ -106,7 +106,7 @@ ShelteredInput.MouseScrollSpeed = ShelteredInput.NormalizeSpeedScale(1.1f, Shelt
 
 These values are persisted by the Controls provider when changed through the settings UI and applied when settings load.
 
-## Sheltered-Specific Helpers
+## Sheltered-specific helpers
 
 Most mods do not need Sheltered-specific input APIs. When needed:
 

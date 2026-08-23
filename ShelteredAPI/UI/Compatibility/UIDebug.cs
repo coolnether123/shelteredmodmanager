@@ -45,11 +45,10 @@ namespace ShelteredAPI.UI.Compatibility
             MMLog.WriteDebug($"[UIDebug] [T+{elapsed:F1}ms F{Time.frameCount}] {message}");
         }
 
-        // ==================== CAMERA & RAYCAST (Feature 1) ====================
+        // Camera and raycast diagnostics
         
         /// <summary>
         /// Checks if a GameObject's layer is visible to any UICamera's event mask.
-        /// This is the #1 reason clicks don't work.
         /// </summary>
         public static bool CanUICameraSee(GameObject go, out string diagnosis)
         {
@@ -72,7 +71,7 @@ namespace ShelteredAPI.UI.Compatibility
             
             // Build detailed diagnosis
             var sb = new StringBuilder();
-            sb.AppendLine($"Layer {layer} ({LayerMask.LayerToName(layer)}) is NOT in any UICamera event mask!");
+            sb.AppendLine($"Layer {layer} ({LayerMask.LayerToName(layer)}) is not in a UICamera event mask.");
             sb.AppendLine($"  Active UICameras ({cameras.size}):");
             for (int i = 0; i < cameras.size; i++)
             {
@@ -127,7 +126,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (Enabled) MMLog.WriteDebug(sb.ToString());
         }
 
-        // ==================== EFFECTIVE DEPTH (Feature 2) ====================
+        // Effective depth diagnostics
         
         /// <summary>
         /// Calculates the effective render depth: (panel.depth * 1000) + widget.depth.
@@ -161,7 +160,7 @@ namespace ShelteredAPI.UI.Compatibility
             }
         }
 
-        // ==================== PARENT ACTIVE CHAIN (Feature 3) ====================
+        // Parent activity diagnostics
         
         /// <summary>
         /// Checks every parent in the hierarchy to ensure all are active.
@@ -211,7 +210,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (Enabled) MMLog.WriteDebug(sb.ToString());
         }
 
-        // ==================== WORLD/SCREEN POSITION (Feature 4) ====================
+        // World and screen position diagnostics
         
         /// <summary>
         /// Converts a widget's position to screen coordinates and checks if it's visible.
@@ -255,7 +254,7 @@ namespace ShelteredAPI.UI.Compatibility
             
             if (!inViewport)
             {
-                diagnosis = $"Off-screen! Screen pos: {screenPos}, Screen: {Screen.width}x{Screen.height}";
+                diagnosis = $"Off-screen. Position: {screenPos}; screen: {Screen.width}x{Screen.height}.";
                 return false;
             }
             
@@ -263,7 +262,7 @@ namespace ShelteredAPI.UI.Compatibility
             return true;
         }
 
-        // ==================== CLICK PATH TRACING (Feature 5) ====================
+        // Click-path diagnostics
         
         /// <summary>
         /// Traces what NGUI would hit at a specific screen position.
@@ -310,16 +309,14 @@ namespace ShelteredAPI.UI.Compatibility
         }
         
         /// <summary>
-        /// Attaches a one-shot click tracer that logs what gets hit on next click.
+        /// Logs that click tracing was requested. Call <see cref="TraceClickAt"/> from a click handler to capture a hit.
         /// </summary>
         public static void TraceNextClick()
         {
-            if (Enabled) MMLog.WriteDebug("[UIDebug] Click tracing enabled - next click will be logged");
-            // This would need a MonoBehaviour to implement properly
-            // For now, call TraceClickAt(UnityEngine.Input.mousePosition) manually in your onClick handler
+            if (Enabled) MMLog.WriteDebug("[UIDebug] Call TraceClickAt from a click handler to log the next hit.");
         }
 
-        // ==================== DELEGATE VERIFICATION (Feature 8) ====================
+        // Delegate diagnostics
         
         /// <summary>
         /// Verifies that an EventDelegate was successfully added to a button.
@@ -336,19 +333,18 @@ namespace ShelteredAPI.UI.Compatibility
             int actual = button.onClick.Count;
             if (actual != expectedCount)
             {
-                MMLog.WriteError($"[UIDebug] VerifyDelegateCount({label}): Expected {expectedCount} delegates, found {actual}!");
+                MMLog.WriteError($"[UIDebug] VerifyDelegateCount({label}): Expected {expectedCount}; found {actual}.");
                 return false;
             }
             
-            if (Enabled) MMLog.WriteDebug($"[UIDebug] VerifyDelegateCount({label}): OK - Has {actual} delegate(s) as expected");
+            if (Enabled) MMLog.WriteDebug($"[UIDebug] VerifyDelegateCount({label}): Delegate count: {actual}.");
             return true;
         }
 
-        // ==================== CONSOLIDATED SNAPSHOT (Feature 10) ====================
+        // Consolidated snapshot
         
         /// <summary>
-        /// Creates a comprehensive one-shot diagnostic of a UI element.
-        /// This is the "tell me everything" function.
+        /// Logs the hierarchy, components, bounds, and widget state for a UI element.
         /// </summary>
         public static void TakeSnapshot(GameObject go, string label = "")
         {
@@ -373,11 +369,11 @@ namespace ShelteredAPI.UI.Compatibility
             
             // Panel
             var panel = NGUITools.FindInParents<UIPanel>(go);
-            sb.AppendLine($"[Panel] {(panel != null ? $"{panel.name} (Depth={panel.depth}, Clip={panel.clipping}, Alpha={panel.alpha})" : "NONE - NOT UNDER PANEL")}");
+            sb.AppendLine($"[Panel] {(panel != null ? $"{panel.name} (Depth={panel.depth}, Clip={panel.clipping}, Alpha={panel.alpha})" : "None")}");
             
             // UIRoot
             var root = NGUITools.FindInParents<UIRoot>(go);
-            sb.AppendLine($"[UIRoot] {(root != null ? root.name : "NONE - NOT UNDER UIROOT")}");
+            sb.AppendLine($"[UIRoot] {(root != null ? root.name : "None")}");
             
             // Widget
             var widget = go.GetComponent<UIWidget>();
@@ -405,7 +401,7 @@ namespace ShelteredAPI.UI.Compatibility
             }
             else
             {
-                sb.AppendLine("[Collider] NONE");
+                sb.AppendLine("[Collider] None");
             }
             
             // Button
@@ -570,7 +566,7 @@ namespace ShelteredAPI.UI.Compatibility
             
             if (issues.Count > 0)
             {
-                MMLog.WriteError($"[UIDebug] Validation FAILED for '{go.name}' ({label}):");
+                MMLog.WriteError($"[UIDebug] Validation failed for '{go.name}' ({label}):");
                 foreach (var issue in issues) MMLog.WriteError($"  X {issue}");
                 return false;
             }

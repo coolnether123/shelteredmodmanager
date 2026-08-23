@@ -1,4 +1,4 @@
-# Nexus OAuth Implementation
+# Nexus OAuth implementation
 
 Sheltered Mod Manager is a public Windows desktop OAuth client. It uses the authorization-code flow with PKCE and does not have a client secret.
 
@@ -35,7 +35,7 @@ All Nexus clients share one credential provider. It:
 - clears the session and requires reconnection when refresh fails or Nexus rejects authorization;
 - returns no credential for public metadata requests when OAuth is not configured.
 
-Request headers always include the application name, version, and user agent. Authenticated requests use `Authorization: Bearer`. Production request code has no personal-key header, constructor, override, or fallback branch.
+Nexus API requests include the application name, version, and user agent. Authenticated requests use `Authorization: Bearer`. Presigned upload requests omit Nexus authentication and application headers. Production request code has no personal-key header, constructor, override, or fallback branch.
 
 The v1, v2 GraphQL, and v3 clients share credential-scoped rate-limit state inside the active Nexus service. They consume the hourly and daily remaining-request response headers, reserve known capacity across concurrent requests, and stop locally when Nexus reports an exhausted quota. OAuth token-endpoint throttling is handled separately and preserves `Retry-After` guidance rather than mixing user-service limits into API quota state.
 
@@ -54,7 +54,7 @@ The v1, v2 GraphQL, and v3 clients share credential-scoped rate-limit state insi
 Run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\Test-NexusOAuthContracts.ps1
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools\Test-NexusOAuthContracts.ps1
 ```
 
 The contract tests exercise PKCE construction, callback acceptance/rejection, DPAPI round-tripping, loopback binding, protected storage, bearer headers, successful and failed refresh behavior, logout, legacy-state scrubbing, public-client constraints, and UI wiring without requiring a live client ID.

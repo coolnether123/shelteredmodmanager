@@ -24,7 +24,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
     /// base (Blank/Standard/Stasis/Surrounded/installed copy), and flips a few
     /// quick settings. Picking a non-current base while loading retargets the
     /// world through the existing base-mode reload machinery. When the world +
-    /// editor session for the selected base are actually ready, a prominent
+    /// editor session for the selected base are ready, a prominent
     /// OPEN EDITOR button appears at the bottom and pulses until clicked;
     /// clicking commits name/settings into the draft and drops into the shell.
     ///
@@ -292,7 +292,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             // Do not clear _worldReady here: a no-op pick (Blank, or a base that
             // is already loaded) triggers no reload, so nothing would restore it.
             // A real base change clears readiness via BeginReload when the reload
-            // is queued; a no-op pick keeps the world ready and simply re-selects.
+            // is queued; a no-op pick keeps the world ready and reselects it.
 
             ScenarioEditorSession editorSession = _editorService != null ? _editorService.CurrentSession : null;
             if (editorSession != null && editorSession.WorkingDefinition != null)

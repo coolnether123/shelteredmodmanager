@@ -1,61 +1,37 @@
-# How to Develop a Plugin | Sheltered Mod Manager v2.0
+# Develop a plugin
 
-This guide is for writing a mod plugin that runs under the current `IModPlugin` lifecycle.
+This guide builds the smallest plugin that uses the current `IModPlugin` lifecycle.
 
-Exact API signatures: [API Signatures Reference](API_Signatures_Reference.md). Reference decisions for later features are centralized in the [assembly boundary](README.md#assembly-boundary-canonical).
+## Create the project
 
-## Compatibility Matrix
+Create a C# class library that targets .NET Framework 3.5. Add references to:
 
-| This Guide Section | Applies To | Status |
-|--------------------|------------|--------|
-| `IModPlugin` lifecycle and context usage | Current `ModAPI.dll` | Supported |
-| `ModManagerBase` usage | Current `ModAPI.dll` | Supported |
-| Actor access via `IPluginContext.Actors` | Current `ModAPI.dll` + `ShelteredAPI` runtime | Supported |
+- `ModAPI.dll`;
+- `UnityEngine.dll` from the game's managed folder.
 
-If this file conflicts with signatures in `API_Signatures_Reference.md`, follow the signature reference.
+Load this minimal project before adding more references. Use the [assembly boundary](README.md#assembly-boundary-canonical) when the mod needs ShelteredAPI, vanilla game types, or Harmony.
 
-## 1. Project Setup
+The managed folder is usually:
 
-Create a C# Class Library targeting `.NET Framework 3.5`.
-
-For a first plugin, add references to:
-
-- `ModAPI.dll` for the lifecycle and framework contracts
-- `UnityEngine.dll` from the game managed folder
-
-Load that minimal plugin before adding feature references. When the mod later needs Sheltered facades, vanilla game types, or Harmony, follow the [canonical boundary table](README.md#assembly-boundary-canonical).
-
-Game managed folder examples:
-- Steam/GOG: `<Sheltered>/Sheltered_Data/Managed`
+- Steam or GOG: `<Sheltered>/Sheltered_Data/Managed`
 - Epic: `<Sheltered>/ShelteredWindows64_EOS_Data/Managed`
 
-## 2. Folder Layout Required by Loader
+## Package the mod
 
-Place your mod here:
+The loader expects:
 
 ```text
 Sheltered/
-\- mods/
-   \- MyPlugin/
-      |- About/
-      |  \- About.json
-      |- Assemblies/
-      |  \- MyPlugin.dll
-      \- Config/             (optional)
+  mods/
+    MyPlugin/
+      About/
+        About.json
+      Assemblies/
+        MyPlugin.dll
+      Config/              optional
 ```
 
-Loader discovery requires `About/About.json`.
-
-## 3. `About.json` Requirements
-
-Required fields:
-- `id`
-- `name`
-- `version`
-- `description`
-- `authors` (non-empty array)
-
-Example:
+`About/About.json` requires a non-empty `id`, `name`, `version`, `description`, and `authors` array:
 
 ```json
 {
@@ -63,92 +39,21 @@ Example:
   "name": "My Plugin",
   "version": "1.0.0",
   "authors": ["Your Name"],
-  "description": "What this plugin does"
+  "description": "What this plugin does",
+  "requiredModApiVersion": "2.0.0.0"
 }
 ```
 
-Optional fields supported by `ModAbout` include `entryType`, `dependsOn`, `loadBefore`, `loadAfter`, `tags`, `website`, `missingModWarning`, and `debugLogging`. Use `dependsOn`, `loadBefore`, and `loadAfter` only for other mods; ModAPI and ShelteredAPI are supplied by SMM and should not be listed as mod dependencies.
+Add `requiredShelteredApiVersion` when the mod references `ShelteredAPI.dll`. `dependsOn`, `loadBefore`, and `loadAfter` name other mods, not the API assemblies supplied by SMM.
 
-## 4. Lifecycle Contract
+`entryType` is a parsed legacy field, but the current loader does not use it to select a plugin. The loader activates every concrete `IModPlugin` type found in the mod's assemblies.
 
-Every plugin must implement `IModPlugin`:
-
-```csharp
-public interface IModPlugin
-{
-    void Initialize(IPluginContext ctx);
-    void Start(IPluginContext ctx);
-}
-```
-
-`IPluginContext` high-value members (exact shape):
-
-```csharp
-public interface IPluginContext
-{
-    GameObject LoaderRoot { get; }
-    GameObject PluginRoot { get; }
-    ModEntry Mod { get; }
-    ISettingsProvider Settings { get; }
-    IModLogger Log { get; }
-    IGameHelper Game { get; }
-    IActorSystem Actors { get; }
-    ISaveSystem SaveSystem { get; }
-    string GameRoot { get; }
-    string ModsRoot { get; }
-    bool IsModernUnity { get; }
-    void RunNextFrame(Action action);
-    Coroutine StartCoroutine(IEnumerator routine);
-    GameObject FindPanel(string nameOrPath);
-    T AddComponentToPanel<T>(string nameOrPath) where T : Component;
-}
-```
-
-Runtime order is:
-1. `Initialize(ctx)`
-2. `Start(ctx)`
-
-`Initialize` should wire dependencies and cache context/log.
-`Start` is where you usually apply Harmony patches and begin runtime behavior.
-
-## 5. Recommended Base Class: `ModManagerBase`
-
-Use `ModManagerBase` if you want built-in settings and save helpers.
-
-```csharp
-using ModAPI.Core;
-using ModAPI.Spine;
-using UnityEngine;
-
-public class MyMod : ModManagerBase, IModPlugin
-{
-    [ModSetting("Enable Boost", Tooltip = "Enable or disable speed boost")]
-    public bool BoostActive = true;
-
-    [ModSetting("Speed", Min = 1f, Max = 10f, StepSize = 0.1f)]
-    public float SpeedValue = 5f;
-
-    public override void Initialize(IPluginContext ctx)
-    {
-        base.Initialize(ctx); // Important: wires settings + random stream + persistence scan
-        Log.Info("MyMod initialized");
-    }
-
-    public void Start(IPluginContext ctx)
-    {
-        Log.Info("MyMod started");
-    }
-}
-```
-
-## 6. Manual Style: `IModPlugin` Directly
-
-Use this when you want full explicit control.
+## Implement the lifecycle
 
 ```csharp
 using ModAPI.Core;
 
-public class MyPlugin : IModPlugin
+public sealed class MyPlugin : IModPlugin, IModShutdown
 {
     private IPluginContext _ctx;
 
@@ -162,34 +67,63 @@ public class MyPlugin : IModPlugin
     {
         _ctx.Log.Info("Start");
     }
+
+    public void Shutdown()
+    {
+        _ctx.Log.Info("Shutdown");
+    }
 }
 ```
 
-## 7. Optional Interfaces
+The loader calls `Initialize(...)` and then `Start(...)`.
 
-Implement only what you need:
-- `IModUpdate`: per-frame `Update()` callback from loader
-- `IModShutdown`: cleanup during quit/teardown
-- `IModSceneEvents`: `OnSceneLoaded/OnSceneUnloaded`
-- `IModSessionEvents`: `OnSessionStarted/OnNewGame`
+- Use `Initialize(...)` to cache the context and register neutral mod data.
+- Use `Start(...)` to subscribe runtime behavior, register content, and apply patches.
+- Use `Shutdown()` to unsubscribe events, remove owned patches, and release resources.
 
-## 8. `IPluginContext` Quick Use
+Keep constructors free of runtime work. Scene objects may not exist during startup. Use `RunNextFrame(...)` or `IModSceneEvents` when code needs a loaded scene.
 
-High-value members:
-- `Log`: mod-prefixed logging
-- `SaveSystem`: neutral per-save mod data stored under the active host slot path
-- `Actors`: registry/components/bindings/adapters/simulation facade
-- `RunNextFrame(Action)`: defer to next Unity frame
-- `StartCoroutine(...)`: run coroutine from loader host
-- `FindPanel(...)` and `AddComponentToPanel<T>(...)`: UI integration
-- `GameRoot` / `ModsRoot`: path roots
+## Use the plugin context
 
-For Sheltered save-slot, game-state, event, UI, content, character, or scenario work, proceed to [When To Use ShelteredAPI](ShelteredAPI_Guide.md).
+Common members are:
 
-## 9. Common Pitfalls
+| Member | Use |
+| --- | --- |
+| `Log` | Mod-scoped logging |
+| `SaveSystem` | Ordinary per-save mod data |
+| `Actors` | Neutral actor registry and components |
+| `RunNextFrame(...)` | Defer work to the next Unity frame |
+| `StartCoroutine(...)` | Run a coroutine through the loader host |
+| `FindPanel(...)`, `AddComponentToPanel<T>(...)` | Focused Unity panel integration |
+| `GameRoot`, `ModsRoot` | Resolved installation paths |
 
-- Forgetting `base.Initialize(ctx)` when using `ModManagerBase`.
-- Doing heavy work in constructors instead of lifecycle methods.
-- Assuming scene objects exist immediately; use `RunNextFrame` or scene callbacks.
-- Not implementing `IModShutdown` for event unsubscription.
+Use [Settings and persistence](SETTINGS.md) for configuration and save data. Use the [ShelteredAPI guide](ShelteredAPI_Guide.md) for content, Sheltered saves, events, UI, input, characters, maps, or scenarios.
 
+## Optional lifecycle interfaces
+
+Implement only the callbacks the mod needs:
+
+| Interface | Callback |
+| --- | --- |
+| `IModUpdate` | Per-frame `Update()` |
+| `IModShutdown` | Application-quit cleanup |
+| `IModSceneEvents` | Scene load and unload |
+| `IModSessionEvents` | Session start and new game |
+
+The current loader calls `IModShutdown.Shutdown()` at application quit, not on every loader teardown.
+
+## `ModManagerBase` status
+
+Do not use `ModManagerBase` as a new-plugin template yet. It derives from `MonoBehaviour`, while the current loader creates plugin types with `Activator.CreateInstance(...)` instead of attaching them to a `GameObject`. Its Unity lifecycle and `OnDestroy()` cleanup need an in-game activation test or a loader fix before the base class can be recommended.
+
+Use `IModPlugin` directly and register settings, persistence, patches, and cleanup explicitly.
+
+## Check the first load
+
+Confirm that:
+
+1. The manager discovers the mod without a manifest warning.
+2. The log shows both lifecycle messages.
+3. No work runs from the constructor.
+4. Event subscriptions and Harmony patches have matching shutdown cleanup.
+5. A second game session in the same process does not duplicate handlers or content.

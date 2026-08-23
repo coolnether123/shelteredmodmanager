@@ -96,7 +96,7 @@ namespace ModAPI.Harmony
             {
                 if (!Directory.Exists(dumpDir)) Directory.CreateDirectory(dumpDir);
                 
-                // Attempt stack analysis (best effort)
+                // Run stack analysis when the method shape supports it.
                 Dictionary<int, List<Type>> stacksBefore = null;
                 Dictionary<int, List<Type>> stacksAfter = null;
                 HashSet<int> targetsBefore = null;

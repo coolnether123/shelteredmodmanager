@@ -21,8 +21,7 @@ namespace ShelteredScenarioEditor.Presentation.Authoring.Shell{
     {
         private Rect DrawCommandDockCore(Rect contentRect, ScenarioAuthoringState state, float openProgress)
         {
-            // TODO(centralize): Command dock is still a separate bottom-center action strip.
-            // Merge these selection/build commands into the central workspace command area.
+            // The command dock uses a separate bottom-center action strip.
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
                 return RuntimeCompat.ZeroRect();
 

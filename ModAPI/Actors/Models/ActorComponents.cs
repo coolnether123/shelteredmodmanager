@@ -63,7 +63,7 @@ namespace ModAPI.Actors
     }
 
     /// <summary>
-    /// JsonUtility-backed serializer for simple Unity-serializable actor components.
+    /// JsonUtility-backed serializer for Unity-serializable actor components.
     /// Use a custom serializer when component data needs migration or non-Unity JSON behavior.
     /// </summary>
     public sealed class ActorJsonComponentSerializer<TComponent> : IActorComponentSerializer

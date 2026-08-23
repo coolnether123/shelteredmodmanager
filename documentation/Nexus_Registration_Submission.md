@@ -1,4 +1,4 @@
-# Sheltered Mod Manager — Nexus Application Registration Review
+# Sheltered Mod Manager Nexus application review
 
 ## Application identity
 
@@ -25,11 +25,11 @@ The client ID remains intentionally empty until Nexus approves and registers the
 ## Reviewer setup
 
 1. Place the included `SMM` folder inside a Sheltered installation directory, or launch `SMM\Manager.exe` directly to review metadata browsing without a game install.
-2. Open Settings > Nexus and enable Nexus features.
-3. Before registration, the UI reports that OAuth registration is pending and displays the exact loopback callback. No alternate authenticated credential can be entered or selected.
-4. After Nexus supplies the client ID, choose **Sign in with Nexus**. SMM opens the system browser and waits locally for the OAuth callback.
-5. Open the Nexus tab and verify Discover, the Manager update check, and an installed-mod update check.
-6. Select an installable Sheltered mod and choose Install.
+2. Open **Settings**. Under **Nexus**, select **Enable Nexus features**.
+3. Before registration, the UI reports `Nexus sign-in is not available yet.` No alternate authenticated credential can be entered or selected.
+4. After Nexus supplies the client ID, choose **Sign in to Nexus**. SMM opens the system browser and waits locally for the OAuth callback.
+5. Open the Nexus tab and verify Discover, **Check SMM Update**, and an installed-mod update check.
+6. Select an installable Sheltered mod and choose **Install from Nexus**, **Update via Nexus**, or **Reinstall from Nexus**.
 
 ## Download behavior
 

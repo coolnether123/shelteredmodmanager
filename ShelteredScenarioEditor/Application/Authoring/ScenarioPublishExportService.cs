@@ -191,7 +191,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
 
         // Reports whether a validated export folder already exists for a draft identity,
         // reusing the same export-path convention as ExportActiveDraft so the scenario
-        // book can surface "last export" facts without an active editor session.
+        // book can show the last export without an active editor session.
         internal static bool TryGetExistingExportInfo(string scenarioId, string displayName, out string exportRoot, out DateTime lastWriteUtc)
         {
             exportRoot = null;

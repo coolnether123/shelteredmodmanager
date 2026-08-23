@@ -1,26 +1,26 @@
-# ShelteredAPI Runtime UI, Stores, and Cooking Stations
+# ShelteredAPI runtime UI, stores, and cooking stations
 
 This guide covers the supported path for mod-owned panels and object-linked item flows. Use these APIs when a mod needs a fridge, container, cooking UI, quest inventory, event inventory, or any workflow where cloning vanilla NGUI would otherwise be required.
 
-Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
+See the [API reference](API_Signatures_Reference.md) and [assembly boundary](README.md#assembly-boundary-canonical).
 
-See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical).
-
-> Dev/API-preview warning: runtime UI stores and cooking stations are part of the current ShelteredAPI preview surface. Names and behavior are intended for mod-author testing in the 2.0 line, but may still change before the API is declared stable.
+> Dev/API-preview warning: runtime UI stores and cooking stations are preview APIs. Names and behavior may change before SMM 2.0 is declared stable.
 
 Import the namespaces you use:
 
 ```csharp
-using ShelteredAPI.Content;
+using System.Collections.Generic;
 using ModAPI.Actors;
 using ShelteredAPI.Actors;
+using ShelteredAPI.Content;
 using ShelteredAPI.Storage;
 using ShelteredAPI.UI;
 using ShelteredAPI.UI.Runtime;
 using ShelteredAPI.Workstations;
+using UnityEngine;
 ```
 
-## Design Rule
+## Design rule
 
 Runtime UI is mod-owned UI. Mods pass DTOs, callbacks, stores, and recipes. ShelteredAPI owns the NGUI objects, panel depth, refresh lifecycle, close handling, and object-menu integration.
 
@@ -29,11 +29,11 @@ Use this instead of:
 - patching panel `Update` loops to keep copied UI alive
 - storing custom item data inside vanilla objects that only save fixed fields
 
-For fridge-like custom storage, the important split is:
+Fridge-like custom storage has two models:
 - vanilla freezer store: an adapter over `Obj_Freezer`, limited to vanilla freezer food fields
 - mod-owned object store: ShelteredAPI persistence keyed to an object, able to hold string-ID items owned by mods
 
-## Augmenting Existing Panels
+## Augmenting existing panels
 
 Prefer the runtime panel APIs below for mod-owned UI. If an integration must augment an existing Sheltered panel, use `ShelteredAPI.UI.ShelteredUI` for focused template reuse and cleanup:
 
@@ -46,9 +46,9 @@ if (row.Success)
 }
 ```
 
-`CloneElement(...)` clears inherited listener/button callbacks by default and reports best-effort warnings. `SnapshotColors(...)` plus `RestoreColors(...)` handles temporary label/widget/tween color edits, and `SubscribePanelLifecycle(...)` provides a disposable typed close-cleanup hook.
+`CloneElement(...)` clears inherited listener and button callbacks by default and reports non-fatal warnings. `SnapshotColors(...)` plus `RestoreColors(...)` handles temporary label, widget, and tween color edits. `SubscribePanelLifecycle(...)` provides a disposable typed close-cleanup hook.
 
-## Runtime Panel Chrome
+## Runtime panel chrome
 
 Every runtime container or crafting panel can accept `RuntimePanelOptions`.
 
@@ -73,12 +73,12 @@ var panelOptions = new RuntimePanelOptions
 For a lightweight text icon, opt in without loading a sprite:
 
 ```csharp
-new RuntimePanelOptions { HeaderIconText = "🍳", ShowHeaderIcon = true }
+new RuntimePanelOptions { HeaderIconText = "Cook", ShowHeaderIcon = true }
 ```
 
 Unset values use ShelteredAPI defaults.
 
-## Mod-Owned Stores
+## Mod-owned stores
 
 Use `ShelteredStores.ForMod(...)` for arbitrary stored contents. This is the right model for a custom fridge that can hold cooked meat, vegetables, quest items, or any other mod item.
 
@@ -118,7 +118,7 @@ IItemStore nearestFridge = ShelteredStores.FindNearestObjectStore(
     capacity: 24);
 ```
 
-## Vanilla Store Adapters
+## Vanilla store adapters
 
 ShelteredAPI also exposes adapters for real vanilla stores:
 
@@ -127,9 +127,9 @@ IItemStore inventory = ShelteredStores.ForInventory();
 IItemStore nearestFreezer = ShelteredStores.FindNearestFreezer(stove.transform.position);
 ```
 
-Important: vanilla `Obj_Freezer` only supports `Meat` and `DesperateMeat`. The freezer adapter intentionally preserves that rule. Use a mod-owned store for a fridge with arbitrary item IDs.
+Vanilla `Obj_Freezer` supports only `Meat` and `DesperateMeat`. The freezer adapter preserves that rule. Use a mod-owned store for a fridge with arbitrary item IDs.
 
-## Character Item Assignments
+## Character item assignments
 
 Use `ShelteredCharacterItems` when a mod needs to tag existing stored items as associated with a survivor. This is an assignment/classification layer over `IItemStore`; it is not a separate physical inventory and does not move, delete, duplicate, or apply equipment effects.
 
@@ -168,7 +168,7 @@ Assignment metadata persists with ShelteredAPI save data. `Unassign(...)`, `Rele
 
 Container category filters use vanilla item categories. A `Food` filter also includes vanilla `Meat`/`DesperateMeat` rows so fridge-style panels do not hide freezer food.
 
-## Container Panel
+## Container panel
 
 Create a container panel from any `IItemStore`:
 
@@ -185,39 +185,11 @@ The default helper wires the row transfer button between the container and shelt
 
 For custom transfer behavior, create `ContainerUiRequest` directly and use `ItemSource`, `OnTransferRequested`, and footer `Actions`.
 
-## Object-Attached Fridge UI
+## Object-attached fridge UI
 
-Register an object interaction that opens a mod-owned fridge panel without editing the vanilla freezer UI.
+Register an `ObjectPanelRegistration` with `ShelteredRuntimeUI.RegisterObjectPanel(...)`. In its `Open` callback, resolve `ShelteredStores.ForObject(...)`, create a `ContainerUiRequest`, and open it with `ShelteredRuntimeUI.OpenContainer(...)`. The complete example below uses this pattern.
 
-```csharp
-ShelteredRuntimeUI.RegisterObjectPanel(new ObjectPanelRegistration
-{
-    ObjectType = ObjectManager.ObjectType.Freezer,
-    InteractionId = "com.example.cooking.open_fridge",
-    InteractionText = "Open Fridge",
-    Open = context =>
-    {
-        IItemStore store = ShelteredStores.ForObject(
-            "com.example.cooking",
-            context.TargetObject,
-            "Fridge",
-            24);
-
-        ContainerUiRequest request = ShelteredStores.CreateContainerRequest(
-            store,
-            "com.example.cooking",
-            "com.example.cooking.fridge." + context.TargetObject.objectId,
-            "Fridge");
-        request.PanelOptions = panelOptions;
-        request.RefreshEveryFrame = true;
-        return ShelteredRuntimeUI.OpenContainer(request);
-    }
-});
-```
-
-This keeps fridge content separate from `Obj_Freezer` internals while still attaching the UI to the world object.
-
-## Minimal Fridge-Backed Cooking Flow
+## Minimal fridge-backed cooking flow
 
 This pattern uses a vanilla freezer/fridge object as the world anchor, but stores the contents in a mod-owned object store. The stove looks up the nearest freezer object, resolves the same object-attached store, consumes `Meat x1` from that store, and outputs `Ration x1` to global shelter inventory after a vanilla-style timed job.
 
@@ -323,64 +295,19 @@ ShelteredCooking.RegisterStation(new CookingStationRegistration
 });
 ```
 
-With those options, pressing Cook queues a survivor job with `JobType = "cook_food"`, plays the `Rummage` animation, waits `3f` seconds, then consumes meat from the fridge store and adds the ration to the global shelter inventory. If you want the stove UI to open when no fridge exists, return a deliberate empty mod store and show a clear unavailable reason; do not silently fall back to global inventory or write into `Obj_Freezer`.
+With those options, pressing Cook queues a survivor job, plays the `Rummage` animation, waits `3f` seconds, then consumes meat from the fridge store and adds the ration to the global shelter inventory. `JobOptions.JobType` controls the interaction value stored in `Job.type`; it does not make the queued callback state restorable after a save and load. If the stove should open without a fridge, return an empty mod store and state why cooking is unavailable. Do not fall back to global inventory or write custom items into `Obj_Freezer`.
 
-## Cooking Station
+## Cooking station options
 
-Use `ShelteredCooking.RegisterStation(...)` when a world object should open a recipe panel backed by stores.
+Use `ShelteredCooking.RegisterStation(...)` when a world object should open a recipe panel backed by stores. The full example above shows the required registration shape.
 
-```csharp
-ShelteredCooking.RegisterStation(new CookingStationRegistration
-{
-    OwnerId = "com.example.cooking",
-    ObjectType = ObjectManager.ObjectType.Stove,
-    InteractionId = "com.example.cooking.stove",
-    InteractionText = "Cook",
-    Title = "Stove",
-    PanelOptions = panelOptions,
-    CanOpen = context =>
-        ShelteredStores.FindNearestObject(
-            ObjectManager.ObjectType.Freezer,
-            context.TargetObject.transform.position) != null,
-    JobOptions = new CookingStationJobOptions
-    {
-        DurationSeconds = 3f,
-        AnimationTrigger = "Rummage",
-        JobType = "cook_food",
-        ClosePanelOnQueue = true,
-        TargetIntegrityCost = 2
-    },
-    IngredientStore = context =>
-        ShelteredStores.FindNearestObjectStore(
-            "com.example.cooking",
-            ObjectManager.ObjectType.Freezer,
-            context.TargetObject.transform.position,
-            "Fridge",
-            24),
-    OutputStore = context => ShelteredStores.ForInventory(),
-    RecipeSource = context => new[]
-    {
-        new CookingStationRecipe
-        {
-            RecipeId = "com.example.cooking.meat_to_ration",
-            DisplayName = "Cook Meat",
-            Subtitle = "Turns stored meat into rations",
-            DurationSeconds = 3f,
-            OutputItemId = VanillaItems.Ration,
-            OutputCount = 1,
-            Ingredients = new[]
-            {
-                new RecipeIngredient { ItemId = VanillaItems.Meat, Count = 1 }
-            }
-        }
-    },
-    OnCrafted = craft =>
-    {
-        if (craft.Result != null && craft.Result.Success)
-            craft.Panel.Refresh();
-    }
-});
-```
+| Option | Behavior |
+| --- | --- |
+| `CanOpen` | Decides whether the object interaction can open the station. |
+| `IngredientStore` / `OutputStore` | Select the stores used for each craft. |
+| `Recipes` / `RecipeSource` | Supply fixed or context-dependent recipes. |
+| `JobOptions` | Queue timed survivor work. Without it, crafting applies immediately. |
+| `OnCraftQueued` / `OnCrafted` / `OnCraftFailed` | Add feedback or follow-up behavior at each result. |
 
 With `JobOptions` enabled, pressing Cook queues a real character job. ShelteredAPI picks the selected idle member, or the first idle family member, walks them to the workstation, shows vanilla interaction progress, plays the configured animation, and only applies the recipe when the timer completes. If the job is cancelled, the recipe is not applied.
 
@@ -392,9 +319,9 @@ Without `JobOptions`, the default behavior applies immediately: it checks ingred
 
 Use `OnCraftQueued` for UI/sound feedback when the job is accepted, `OnCrafted` for completion behavior, and `OnCraftFailed` for missing ingredients, full output stores, or cancelled jobs.
 
-## What This Does Not Hide
+## Save and vanilla limits
 
 - Vanilla cooking is an eating-stage interaction, not a real crafting station.
 - Vanilla freezers cannot store arbitrary item IDs.
 - ShelteredAPI avoids patching `Obj_Freezer` to support custom item types. `Obj_Freezer` remains the vanilla meat/desperate-meat store; mod-owned object stores are the extension point for fridge-backed custom storage.
-- ShelteredAPI timed cooking jobs are runtime jobs. If a save is loaded while one is in progress, the vanilla queue loader does not know how to restore ShelteredAPI callback state, so the job may safely fall back to a no-op/failed vanilla-style job instead of duplicating outputs.
+- ShelteredAPI timed cooking jobs are runtime jobs. If a save is loaded while one is in progress, the vanilla queue loader cannot restore the ShelteredAPI callback state. The callback-based craft state is lost; the fallback base job may still start an interaction on its target.

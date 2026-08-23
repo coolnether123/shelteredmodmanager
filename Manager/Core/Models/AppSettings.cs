@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Manager.Core.Models
 {
     /// <summary>
-    /// Application settings model - single source of truth for all configuration
+    /// Canonical application settings model.
     /// </summary>
     public class AppSettings
     {
