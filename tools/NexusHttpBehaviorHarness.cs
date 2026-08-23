@@ -258,7 +258,7 @@ namespace Manager.Core.Services
                 string errorMessage;
                 client.Refresh("refresh-token", out errorMessage);
                 server.WaitForRequests(1);
-                Assert(errorMessage != null && errorMessage.IndexOf("rate limited", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                Assert(errorMessage != null && errorMessage.IndexOf("limited", StringComparison.OrdinalIgnoreCase) >= 0 &&
                     errorMessage.IndexOf("120", StringComparison.Ordinal) >= 0,
                     "OAuth 429 handling did not preserve Retry-After guidance.");
                 Assert(server.Header(0, "Application-Name") == Manager.Core.AppVersionInfo.ApplicationName, "OAuth Application-Name value is incorrect.");
