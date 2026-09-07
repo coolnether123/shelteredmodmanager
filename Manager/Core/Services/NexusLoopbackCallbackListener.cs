@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace Manager.Core.Services
 {
@@ -15,6 +16,28 @@ namespace Manager.Core.Services
     {
         private const int MaximumRequestLineLength = 8192;
         private const int MaximumHeaderLength = 32768;
+        private readonly Action<Uri> _openBrowser;
+        private readonly TimeSpan _peerTimeout;
+
+        internal NexusLoopbackCallbackListener()
+            : this(delegate(Uri uri) { Process.Start(uri.AbsoluteUri); })
+        {
+        }
+
+        internal NexusLoopbackCallbackListener(Action<Uri> openBrowser)
+            : this(openBrowser, TimeSpan.FromSeconds(5))
+        {
+        }
+
+        internal NexusLoopbackCallbackListener(Action<Uri> openBrowser, TimeSpan peerTimeout)
+        {
+            if (openBrowser == null)
+                throw new ArgumentNullException("openBrowser");
+            if (peerTimeout <= TimeSpan.Zero || peerTimeout.TotalMilliseconds > int.MaxValue)
+                throw new ArgumentOutOfRangeException("peerTimeout");
+            _openBrowser = openBrowser;
+            _peerTimeout = peerTimeout;
+        }
 
         internal NexusOAuthCallbackResult WaitForCallback(
             NexusOAuthAuthorizationRequest authorization,
@@ -33,35 +56,43 @@ namespace Manager.Core.Services
             {
                 listener = new TcpListener(IPAddress.Loopback, NexusOAuthConfiguration.CallbackPort);
                 listener.Start(1);
-                Process.Start(authorization.AuthorizationUri.AbsoluteUri);
+                var elapsed = Stopwatch.StartNew();
+                _openBrowser(authorization.AuthorizationUri);
 
-                DateTime deadlineUtc = DateTime.UtcNow.Add(timeout);
-                while (DateTime.UtcNow < deadlineUtc)
+                while (true)
                 {
+                    Remaining(elapsed, timeout);
                     IAsyncResult pending = listener.BeginAcceptTcpClient(null, null);
-                    TimeSpan remaining = deadlineUtc - DateTime.UtcNow;
-                    if (remaining <= TimeSpan.Zero || !pending.AsyncWaitHandle.WaitOne(remaining, false))
+                    using (WaitHandle completed = pending.AsyncWaitHandle)
                     {
-                        errorMessage = "Nexus sign-in timed out before the browser returned.";
-                        return null;
+                        if (!completed.WaitOne(Remaining(elapsed, timeout), false))
+                            throw new TimeoutException();
                     }
 
                     using (TcpClient client = listener.EndAcceptTcpClient(pending))
                     {
-                        NexusOAuthCallbackResult result = ReadCallback(client, authorization.State);
-                        WriteResponse(client, result);
-                        if (result != null && result.Success)
-                            return result;
-
-                        if (result != null &&
-                            result.ErrorMessage != "The OAuth callback path was not recognized.")
+                        try
                         {
-                            errorMessage = result.ErrorMessage;
-                            return result;
+                            NexusOAuthCallbackResult result = ReadCallback(client, authorization.State, elapsed, timeout, _peerTimeout);
+                            WriteResponse(client, result, elapsed, timeout, _peerTimeout);
+                            if (result != null && result.Success)
+                                return result;
+
+                            if (result != null &&
+                                result.ErrorMessage != "The OAuth callback path was not recognized.")
+                            {
+                                errorMessage = result.ErrorMessage;
+                                return result;
+                            }
                         }
+                        catch (IOException) { }
+                        catch (SocketException) { }
+                        catch (ObjectDisposedException) { }
                     }
                 }
-
+            }
+            catch (TimeoutException)
+            {
                 errorMessage = "Nexus sign-in timed out before the browser returned.";
                 return null;
             }
@@ -83,7 +114,8 @@ namespace Manager.Core.Services
             }
         }
 
-        private static NexusOAuthCallbackResult ReadCallback(TcpClient client, string expectedState)
+        private static NexusOAuthCallbackResult ReadCallback(TcpClient client, string expectedState,
+            Stopwatch elapsed, TimeSpan timeout, TimeSpan peerTimeout)
         {
             if (client == null || client.Client == null ||
                 client.Client.RemoteEndPoint == null ||
@@ -92,23 +124,19 @@ namespace Manager.Core.Services
                 return Failure("The OAuth callback did not originate from this computer.");
             }
 
-            client.ReceiveTimeout = 5000;
-            NetworkStream stream = client.GetStream();
-            stream.ReadTimeout = 5000;
-
-            string requestLine;
-            var reader = new StreamReader(stream, Encoding.ASCII, false, 1024);
-            requestLine = reader.ReadLine();
-            if (requestLine != null && requestLine.Length > MaximumRequestLineLength)
+            var reader = new CallbackReader(client.GetStream(), elapsed, timeout, peerTimeout);
+            int requestBudget = MaximumRequestLineLength;
+            bool tooLarge;
+            string requestLine = reader.ReadLine(ref requestBudget, out tooLarge);
+            if (tooLarge)
                 return Failure("The OAuth callback request was too large.");
 
             string header;
-            int headerLength = 0;
+            int headerBudget = MaximumHeaderLength;
             do
             {
-                header = reader.ReadLine();
-                headerLength += header != null ? header.Length : 0;
-                if (headerLength > MaximumHeaderLength)
+                header = reader.ReadLine(ref headerBudget, out tooLarge);
+                if (tooLarge)
                     return Failure("The OAuth callback headers were too large.");
             }
             while (!string.IsNullOrEmpty(header));
@@ -123,7 +151,8 @@ namespace Manager.Core.Services
             return NexusOAuthProtocol.ParseCallback(parts[1], expectedState);
         }
 
-        private static void WriteResponse(TcpClient client, NexusOAuthCallbackResult result)
+        private static void WriteResponse(TcpClient client, NexusOAuthCallbackResult result,
+            Stopwatch elapsed, TimeSpan timeout, TimeSpan peerTimeout)
         {
             bool success = result != null && result.Success;
             string title = success ? "Nexus sign-in complete" : "Nexus sign-in was not completed";
@@ -141,10 +170,128 @@ namespace Manager.Core.Services
                 "Connection: close\r\n\r\n";
 
             NetworkStream stream = client.GetStream();
-            byte[] headerBytes = Encoding.ASCII.GetBytes(headers);
-            stream.Write(headerBytes, 0, headerBytes.Length);
-            stream.Write(bodyBytes, 0, bodyBytes.Length);
-            stream.Flush();
+            byte[] responseBytes = Encoding.UTF8.GetBytes(headers + body);
+            Remaining(elapsed, timeout);
+            IAsyncResult pending = stream.BeginWrite(responseBytes, 0, responseBytes.Length, null, null);
+            bool waitCompleted = false;
+            try
+            {
+                WaitForIo(pending, stream, elapsed, timeout, peerTimeout);
+                waitCompleted = true;
+            }
+            finally
+            {
+                try { stream.EndWrite(pending); }
+                catch (IOException) { if (waitCompleted) throw; }
+                catch (ObjectDisposedException) { if (waitCompleted) throw; }
+            }
+            Remaining(elapsed, timeout);
+        }
+
+        private static TimeSpan Remaining(Stopwatch elapsed, TimeSpan timeout)
+        {
+            TimeSpan remaining = timeout - elapsed.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+                throw new TimeoutException();
+            return remaining;
+        }
+
+        private static void WaitForIo(IAsyncResult pending, NetworkStream stream,
+            Stopwatch elapsed, TimeSpan timeout, TimeSpan peerTimeout)
+        {
+            try
+            {
+                using (WaitHandle completed = pending.AsyncWaitHandle)
+                {
+                    TimeSpan remaining = Remaining(elapsed, timeout);
+                    TimeSpan wait = remaining < peerTimeout ? remaining : peerTimeout;
+                    if (!completed.WaitOne((int)Math.Ceiling(wait.TotalMilliseconds), false))
+                    {
+                        if (wait == remaining)
+                            throw new TimeoutException();
+                        throw new IOException("The OAuth callback connection timed out.");
+                    }
+                }
+            }
+            catch
+            {
+                stream.Close();
+                throw;
+            }
+        }
+
+        private sealed class CallbackReader
+        {
+            private readonly NetworkStream _stream;
+            private readonly Stopwatch _elapsed;
+            private readonly TimeSpan _timeout;
+            private readonly TimeSpan _peerTimeout;
+            private readonly byte[] _buffer = new byte[1024];
+            private int _position;
+            private int _length;
+            private bool _skipLineFeed;
+
+            internal CallbackReader(NetworkStream stream, Stopwatch elapsed, TimeSpan timeout, TimeSpan peerTimeout)
+            {
+                _stream = stream;
+                _elapsed = elapsed;
+                _timeout = timeout;
+                _peerTimeout = peerTimeout;
+            }
+
+            internal string ReadLine(ref int budget, out bool tooLarge)
+            {
+                var line = new StringBuilder();
+                tooLarge = false;
+                while (true)
+                {
+                    int value = ReadByte();
+                    if (_skipLineFeed)
+                    {
+                        _skipLineFeed = false;
+                        if (value == '\n')
+                            continue;
+                    }
+                    if (value == '\r' || value == '\n')
+                    {
+                        _skipLineFeed = value == '\r';
+                        return line.ToString();
+                    }
+                    if (budget == 0)
+                    {
+                        tooLarge = true;
+                        return null;
+                    }
+                    budget--;
+                    line.Append(value < 128 ? (char)value : '?');
+                }
+            }
+
+            private int ReadByte()
+            {
+                Remaining(_elapsed, _timeout);
+                if (_position == _length)
+                {
+                    IAsyncResult pending = _stream.BeginRead(_buffer, 0, _buffer.Length, null, null);
+                    bool waitCompleted = false;
+                    try
+                    {
+                        WaitForIo(pending, _stream, _elapsed, _timeout, _peerTimeout);
+                        waitCompleted = true;
+                    }
+                    finally
+                    {
+                        try { _length = _stream.EndRead(pending); }
+                        catch (IOException) { if (waitCompleted) throw; }
+                        catch (ObjectDisposedException) { if (waitCompleted) throw; }
+                    }
+                    Remaining(_elapsed, _timeout);
+                    _position = 0;
+                    if (_length == 0)
+                        throw new EndOfStreamException();
+                }
+                return _buffer[_position++];
+            }
         }
 
         private static NexusOAuthCallbackResult Failure(string message)

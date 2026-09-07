@@ -16,6 +16,7 @@ namespace Manager.Core.Services
             TestFailedRefreshDisconnectsWithoutFallback();
             TestLogoutClearsOAuthState();
             TestLegacyPersonalKeyStateIsScrubbed();
+            NexusOAuthCallbackHarness.Run();
 
             if (_failures > 0)
             {

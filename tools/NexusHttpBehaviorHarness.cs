@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -21,6 +22,7 @@ namespace Manager.Core.Services
             TestConcurrentReservationAndStaleResponses();
             TestDefinitelyUnsentReservationRollback();
             TestRateLimitResponses();
+            TestPublishingDisabledAtServiceBoundary();
             TestV3ApplicationHeaders();
             TestLegacyV1OAuthAuthentication();
             TestUnauthorizedOAuthInvalidation();
@@ -139,19 +141,100 @@ namespace Manager.Core.Services
         private static void TestRateLimitResponses()
         {
             DateTime nowUtc = new DateTime(2026, 8, 5, 3, 0, 0, DateTimeKind.Utc);
-            using (var withHeaders = new ScriptedServer(Response.RateLimited(0, 20, nowUtc)))
+            string[] retryHeaders = {
+                "120", "0", "9223372036854775807",
+                "Thu, 06 Aug 2026 03:00:00 GMT",
+                "Thursday, 06-Aug-26 03:00:00 GMT", "Thu Aug  6 03:00:00 2026",
+                null, "-1", "1.5", "9223372036854775808", "not-a-date", "2026-08-06"
+            };
+            string[] guidance = {
+                "Wait at least 120 seconds", "Wait at least 0 seconds", "Wait at least 9223372036854775807 seconds",
+                "Retry no earlier than 2026-08-06 03:00:00 UTC",
+                "Retry no earlier than 2026-08-06 03:00:00 UTC", "Retry no earlier than 2026-08-06 03:00:00 UTC",
+                null, null, null, null, null, null
+            };
+            for (int api = 0; api < 3; api++)
+            for (int quota = 0; quota < 3; quota++)
+            for (int retry = 0; retry < retryHeaders.Length; retry++)
             {
-                NexusGraphQlResponse result = CreateGraphQl("429-with", new NexusRateLimitTracker(delegate { return nowUtc; }), withHeaders.Url)
-                    .Execute("query { test }", null);
-                Assert(result.ErrorMessage != null && result.ErrorMessage.IndexOf("hourly rate limit", StringComparison.OrdinalIgnoreCase) >= 0,
-                    "A 429 with quota headers did not return the quota reset message.");
-            }
+                Response response = quota == 0 ? Response.RateLimitedWithoutQuota(nowUtc)
+                    : Response.RateLimited(quota == 1 ? 0 : 20, quota == 2 ? 0 : 20, nowUtc);
+                response.RetryAfter = retryHeaders[retry];
+                using (var server = new ScriptedServer(response))
+                {
+                    var provider = new TestOAuthCredentialProvider("api-429");
+                    var tracker = new NexusRateLimitTracker(delegate { return nowUtc; });
+                    HttpStatusCode responseStatus = 0;
+                    Func<string> request;
+                    if (api == 0)
+                    {
+                        var service = new NexusModsService(provider, tracker, server.Url.TrimEnd('/'));
+                        request = delegate { string error; service.GetAccountStatus(out error); return error; };
+                    }
+                    else if (api == 1)
+                    {
+                        var client = new NexusGraphQlClient(provider, tracker, server.Url);
+                        request = delegate { return client.Execute("query { test }", null).ErrorMessage; };
+                    }
+                    else
+                    {
+                        var client = new NexusV3RestClient(provider, tracker, server.Url.TrimEnd('/'));
+                        request = delegate
+                        {
+                            NexusV3RestResult result = client.Get("/test");
+                            responseStatus = result.StatusCode;
+                            return result.ErrorMessage;
+                        };
+                    }
 
-            using (var withoutHeaders = new ScriptedServer(Response.RateLimitedWithoutQuota(nowUtc)))
+                    string label = "API " + api + ", quota " + quota + ", Retry-After " + (retryHeaders[retry] ?? "absent");
+                    string errorMessage = request();
+                    server.WaitForRequests(1);
+                    if (api == 2)
+                        Assert((int)responseStatus == 429, label + " did not preserve the HTTP 429 status.");
+                    string quotaMessage = quota == 0 ? "Nexus rate limited the request."
+                        : "Nexus API " + (quota == 1 ? "hourly" : "daily") + " rate limit reached. Try again after " +
+                            (quota == 1 ? nowUtc.AddHours(1) : nowUtc.Date.AddDays(1)).ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture) + ".";
+                    Assert(errorMessage != null && errorMessage.StartsWith(quotaMessage, StringComparison.Ordinal),
+                        label + " lost the rate-limit or quota-reset message.");
+                    if (guidance[retry] != null)
+                        Assert(errorMessage != null && errorMessage.IndexOf(guidance[retry], StringComparison.Ordinal) >= 0,
+                            label + " lost valid retry guidance.");
+                    else
+                        Assert(errorMessage == quotaMessage + (quota == 0 ? " Wait and try again." : string.Empty),
+                            label + " did not safely ignore invalid or absent retry guidance.");
+                    if (quota != 0)
+                        Assert(request() == quotaMessage, label + " changed subsequent quota blocking.");
+                    Assert(server.AcceptedCount == 1, label + " caused an automatic retry or bypassed exhausted quota.");
+                    Assert(provider.Invalidations == 0, label + " invalidated the OAuth session.");
+                }
+            }
+        }
+
+        private static void TestPublishingDisabledAtServiceBoundary()
+        {
+            string[] tokens = { "", "signed-in-oauth" };
+            foreach (string token in tokens)
             {
-                NexusGraphQlResponse result = CreateGraphQl("429-without", new NexusRateLimitTracker(delegate { return nowUtc; }), withoutHeaders.Url)
-                    .Execute("query { test }", null);
-                Assert(!string.IsNullOrEmpty(result.ErrorMessage), "A 429 without quota headers did not return an error.");
+                var provider = new TestOAuthCredentialProvider(token);
+                provider.RejectCredentialAccess = true;
+                var service = new NexusModsService(provider);
+                NexusUploadDraft[] drafts = {
+                    null,
+                    new NexusUploadDraft { GameDomain = "sheltered", NexusModId = 1,
+                        PackagePath = typeof(NexusHttpBehaviorHarness).Assembly.Location },
+                    new NexusUploadDraft { GameDomain = "sheltered", NexusModId = 1,
+                        PackagePath = typeof(NexusHttpBehaviorHarness).Assembly.Location, ExistingModFileId = "existing-file" }
+                };
+                foreach (NexusUploadDraft draft in drafts)
+                {
+                    string error;
+                    NexusUploadPublishResult result = service.PublishPackage(draft, out error);
+                    Assert(result == null && error == "Nexus API publishing is disabled in this public build. Publish through the Nexus website.",
+                        "Publishing was not disabled at the service boundary for all draft and authentication states.");
+                }
+                Assert(provider.CredentialReads == 0 && provider.ConfigurationReads == 0,
+                    "Disabled publishing inspected authentication state or attempted a Nexus request.");
             }
         }
 
@@ -329,6 +412,9 @@ namespace Manager.Core.Services
         {
             private string _bearerToken;
             internal int Invalidations;
+            internal int CredentialReads;
+            internal int ConfigurationReads;
+            internal bool RejectCredentialAccess;
 
             internal TestOAuthCredentialProvider(string bearerToken)
             {
@@ -337,6 +423,9 @@ namespace Manager.Core.Services
 
             public NexusRequestCredential GetCredential(out string errorMessage)
             {
+                CredentialReads++;
+                if (RejectCredentialAccess)
+                    throw new InvalidOperationException("Publishing must stop before requesting credentials.");
                 errorMessage = null;
                 return new NexusRequestCredential
                 {
@@ -347,7 +436,7 @@ namespace Manager.Core.Services
 
             public bool HasConfiguredCredential
             {
-                get { return !string.IsNullOrEmpty(_bearerToken); }
+                get { ConfigurationReads++; return !string.IsNullOrEmpty(_bearerToken); }
             }
 
             public void InvalidateCredential()

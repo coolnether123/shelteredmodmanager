@@ -33,6 +33,7 @@ namespace Manager.Core.Services
       thumbnailUrl
       game { id domainName }";
         private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
+        private static readonly bool ApiPublishingEnabled = false;
         private readonly NexusGraphQlClient _v2Client;
         private readonly NexusV3RestClient _v3Client;
         private readonly INexusCredentialProvider _credentialProvider;
@@ -563,10 +564,10 @@ namespace Manager.Core.Services
 
                         if ((int)response.StatusCode == 429)
                         {
-                            if (!_rateLimits.TryGetBlockingMessage(
+                            _rateLimits.TryGetBlockingMessage(
                                 rateLimitLease != null ? rateLimitLease.CredentialScope : string.Empty,
-                                out errorMessage))
-                                errorMessage = "Nexus rate limited the request. Wait and try again.";
+                                out errorMessage);
+                            errorMessage = NexusRequestFailurePolicy.BuildRateLimitMessage(response, errorMessage);
                             return null;
                         }
                     }
@@ -586,6 +587,12 @@ namespace Manager.Core.Services
 
         public NexusUploadPublishResult PublishPackage(NexusUploadDraft draft, out string errorMessage)
         {
+            if (!ApiPublishingEnabled)
+            {
+                errorMessage = "Nexus API publishing is disabled in this public build. Publish through the Nexus website.";
+                return null;
+            }
+
             errorMessage = null;
             if (draft == null)
             {
