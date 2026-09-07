@@ -238,15 +238,16 @@ namespace Manager.Core.Services
                         }
                     }
 
-                    string responseRateLimitMessage;
-                    if ((int)status == 429 && _rateLimits.TryGetBlockingMessage(
-                        rateLimitLease != null ? rateLimitLease.CredentialScope : string.Empty,
-                        out responseRateLimitMessage))
+                    if ((int)status == 429)
                     {
+                        string responseRateLimitMessage;
+                        _rateLimits.TryGetBlockingMessage(
+                            rateLimitLease != null ? rateLimitLease.CredentialScope : string.Empty,
+                            out responseRateLimitMessage);
                         return new NexusV3RestResult
                         {
                             StatusCode = status,
-                            ErrorMessage = responseRateLimitMessage
+                            ErrorMessage = NexusRequestFailurePolicy.BuildRateLimitMessage(http, responseRateLimitMessage)
                         };
                     }
 

@@ -31,7 +31,8 @@ $sources = @(
     'Manager\Core\Services\NexusLoopbackCallbackListener.cs',
     'Manager\Core\Services\NexusOAuthClient.cs',
     'Manager\Core\Services\NexusOAuthService.cs',
-    'tools\NexusOAuthSessionHarness.cs'
+    'tools\NexusOAuthSessionHarness.cs',
+    'tools\NexusOAuthCallbackHarness.cs'
 ) | ForEach-Object { Join-Path $RepoRoot $_ }
 
 try {

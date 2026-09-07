@@ -150,13 +150,16 @@ namespace Manager.Core.Services
                             return new NexusGraphQlResponse { ErrorMessage = "Your Nexus sign-in expired. Sign in again." };
                         }
 
-                        string blockedMessage;
-                        if (response != null && (int)response.StatusCode == 429 &&
+                        if (response != null && (int)response.StatusCode == 429)
+                        {
+                            string blockedMessage;
                             _rateLimits.TryGetBlockingMessage(
                                 rateLimitLease != null ? rateLimitLease.CredentialScope : string.Empty,
-                                out blockedMessage))
-                        {
-                            return new NexusGraphQlResponse { ErrorMessage = blockedMessage };
+                                out blockedMessage);
+                            return new NexusGraphQlResponse
+                            {
+                                ErrorMessage = NexusRequestFailurePolicy.BuildRateLimitMessage(response, blockedMessage)
+                            };
                         }
 
                         string details = reader != null ? reader.ReadToEnd() : string.Empty;
