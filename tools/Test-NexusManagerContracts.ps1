@@ -94,7 +94,7 @@ if ($failures.Count -gt 0) {
 }
 
 $httpBehaviorTest = Join-Path $RepoRoot 'tools\Test-NexusHttpBehavior.ps1'
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $httpBehaviorTest -RepoRoot $RepoRoot
+& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File $httpBehaviorTest -RepoRoot $RepoRoot
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
