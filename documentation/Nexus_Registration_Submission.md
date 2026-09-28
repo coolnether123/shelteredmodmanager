@@ -16,20 +16,20 @@ Sheltered Mod Manager is a Windows desktop manager and modding framework for She
 - Application type: public Windows desktop application
 - OAuth flow: authorization code with PKCE (`S256`)
 - Callback URI: `http://127.0.0.1:52147/callback`
-- Client secret: none; SMM is a public client and never embeds or transmits one
+- Client ID: `sheltered_mod_manager`
+- Client secret: SMM does not embed or transmit one; the installed desktop app cannot keep one confidential
 
 The callback receiver is implemented in the review source. It binds a temporary TCP listener exclusively to `127.0.0.1`, starts only while the user is signing in, accepts only the expected `/callback` GET request, validates a cryptographically random `state`, and stops after success or a five-minute timeout. PKCE verifiers and state values are created with `RandomNumberGenerator`; the authorization code is exchanged only with `https://users.nexusmods.com/oauth/token`.
 
-The client ID remains intentionally empty until Nexus approves and registers the application. Once issued, it is inserted in `NexusOAuthConfiguration.ClientId`; no other OAuth code or callback change is required.
+Nexus verified the manager and issued the public client ID. `NexusOAuthConfiguration.ClientId` contains that ID; the callback and PKCE flow are unchanged.
 
 ## Reviewer setup
 
 1. Place the included `SMM` folder inside a Sheltered installation directory, or launch `SMM\Manager.exe` directly to review metadata browsing without a game install.
 2. Open **Settings**. Under **Nexus**, select **Enable Nexus features**.
-3. Before registration, the UI reports `Nexus sign-in is not available yet.` No alternate authenticated credential can be entered or selected.
-4. After Nexus supplies the client ID, choose **Sign in to Nexus**. SMM opens the system browser and waits locally for the OAuth callback.
-5. Open the Nexus tab and verify Discover, **Check SMM Update**, and an installed-mod update check.
-6. Select an installable Sheltered mod and choose **Install from Nexus**, **Update via Nexus**, or **Reinstall from Nexus**.
+3. Choose **Sign in to Nexus**. SMM opens the system browser and waits locally for the OAuth callback. No alternate authenticated credential can be entered or selected.
+4. Open the Nexus tab and verify Discover, **Check SMM Update**, and an installed-mod update check.
+5. Select an installable Sheltered mod and choose **Install from Nexus**, **Update via Nexus**, or **Reinstall from Nexus**.
 
 ## Download behavior
 

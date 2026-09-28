@@ -26,7 +26,7 @@ Mods built for SMM 1.2.2 or the old 1.3 beta may need a 2.0 rebuild. Back up sav
 
 ## Nexus limitation
 
-Nexus has not issued the public OAuth client ID. Metadata browsing works, but sign-in and direct install remain unavailable. Stable promotion stays blocked until registration and real-account evidence are complete.
+Nexus verified SMM and issued the public OAuth client ID. Stable promotion stays blocked until real-account sign-in, token refresh and revocation, and authorized downloads are verified.
 
 ## Build release packages
 
@@ -36,7 +36,7 @@ Run the canonical packaging script from the repository root:
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools\New-ReleasePackages.ps1 -Configuration Release
 ```
 
-The script rebuilds the solution, runs the Nexus, updater, and scenario-editor contracts, checks the package allowlist and PE architectures, and writes hashes under `artifacts/release-packages`.
+The script rebuilds the four release products, runs the Nexus, updater, and scenario-editor contracts, checks the package allowlist and PE architectures, and writes hashes under `artifacts/release-packages`.
 
 Also run the assembly guardrails:
 

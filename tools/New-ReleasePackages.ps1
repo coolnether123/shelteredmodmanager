@@ -43,7 +43,11 @@ if (-not $SkipBuild) {
     )
     $msbuild = $msbuildCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $msbuild) { throw 'Visual Studio MSBuild was not found.' }
-    & $msbuild (Join-Path $repoRoot 'ShelteredModManager.sln') /t:Rebuild /restore "/p:Configuration=$Configuration" /m /v:minimal
+    # The Decompiler project is developer tooling, not part of the shipped
+    # product. Build the package owners explicitly so an optional .NET SDK
+    # installation cannot decide whether a release package is reproducible.
+    $releaseTargets = 'ManagerGUI:Rebuild;ShelteredAPI:Rebuild;ShelteredScenarioEditor:Rebuild;ManagerUpdater:Rebuild'
+    & $msbuild (Join-Path $repoRoot 'ShelteredModManager.sln') "/t:$releaseTargets" "/p:Configuration=$Configuration" /m /v:quiet /clp:ErrorsOnly
     if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE." }
 }
 

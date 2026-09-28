@@ -5,12 +5,13 @@ Sheltered Mod Manager is a public Windows desktop OAuth client. It uses the auth
 ## Registration values
 
 - Application: `Sheltered Mod Manager`
+- Public client ID: `sheltered_mod_manager`
 - Callback URI: `http://127.0.0.1:52147/callback`
 - Authorization endpoint: `https://users.nexusmods.com/oauth/authorize`
 - Token endpoint: `https://users.nexusmods.com/oauth/token`
 - PKCE method: `S256`
 
-`NexusOAuthConfiguration.ClientId` remains empty in review builds until Nexus issues the application registration. The Manager disables the sign-in button while that value is empty, while still exposing the completed callback and storage implementation for review.
+Nexus verified the manager and issued the public client ID. `NexusOAuthConfiguration.ClientId` contains it. The Manager enables sign-in when the ID is present. The desktop app does not use a client secret.
 
 ## Sign-in sequence
 
