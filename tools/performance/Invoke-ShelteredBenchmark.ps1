@@ -61,6 +61,22 @@ if ($Profile.Count -gt 0) {
     $profiles = @($profiles | Where-Object { $item = $_; $Profile | Where-Object { $_ -ieq $item.name } })
 }
 if (-not $platforms.Count -or -not $profiles.Count) { throw 'The selected benchmark plan has no cases.' }
+$build = Get-ObjectPropertyValue $config 'build'
+if ($null -ne $build -and [bool](Get-ObjectPropertyValue $build 'enabled' $false)) {
+    $buildArguments = @((Get-ObjectPropertyValue $build 'arguments' @()) | ForEach-Object { [string]$_ })
+    $platformArgumentIndex = -1
+    for ($i = 0; $i -lt $buildArguments.Count; $i++) {
+        if ($buildArguments[$i] -ieq '-Platform') {
+            if ($platformArgumentIndex -ge 0) { throw 'Build command contains more than one -Platform option.' }
+            $platformArgumentIndex = $i
+        }
+    }
+    if ($platformArgumentIndex -ge 0) {
+        if ($platformArgumentIndex + 1 -ge $buildArguments.Count) { throw 'Build command has no -Platform value.' }
+        $buildArguments[$platformArgumentIndex + 1] = (@($platforms | ForEach-Object { [string]$_.name }) -join ',')
+        $build.arguments = $buildArguments
+    }
+}
 foreach ($target in $platforms) {
     $target.installRoot = Resolve-ConfiguredPath ([string]$target.installRoot) ([string]$config._configRoot)
 }
@@ -93,7 +109,7 @@ foreach ($iteration in 1..$iterationCount) {
     }
 }
 if ($DryRun) {
-    [pscustomobject]@{ ConfigPath = $config._configPath; ParallelPlatforms = $useParallel; Cases = $plan.ToArray() } | ConvertTo-Json -Depth 10
+    [pscustomobject]@{ ConfigPath = $config._configPath; ParallelPlatforms = $useParallel; BuildArguments = @(Get-ObjectPropertyValue $build 'arguments' @()); Cases = $plan.ToArray() } | ConvertTo-Json -Depth 10
     return
 }
 

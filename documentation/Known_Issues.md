@@ -4,7 +4,7 @@ SMM 2.0 is still in prerelease review. The repository does not yet have a final 
 
 ## Nexus sign-in and direct install
 
-Nexus has not issued the public OAuth client ID. Metadata browsing works without sign-in, but direct install, update, and reinstall remain unavailable until registration is complete. The manager reports that Nexus sign-in is not available.
+Nexus verified SMM and issued the public OAuth client ID. Metadata browsing works without sign-in. Real-account sign-in, token refresh and revocation, and authorized downloads still need live verification before stable release.
 
 The implemented installer accepts ZIP archives only. It rejects missing `About/About.json`, duplicate mod IDs, reserved folder names, unsafe archive paths, and unwritable mod folders.
 

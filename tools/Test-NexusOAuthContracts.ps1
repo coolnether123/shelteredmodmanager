@@ -79,6 +79,7 @@ Assert-True ($challenge -match '^[A-Za-z0-9_-]{43}$') 'PKCE S256 challenge must 
 Assert-True ($state.Length -ge 32 -and $state -match '^[A-Za-z0-9_-]+$') 'OAuth state must be a high-entropy base64url value.'
 Assert-True ($authorizationUri.Scheme -eq 'https' -and $authorizationUri.Host -eq 'users.nexusmods.com') 'Authorization must use the Nexus HTTPS user service.'
 Assert-True ($authorizationUri.Query -match 'code_challenge_method=S256') 'Authorization URL must require PKCE S256.'
+Assert-True ($authorizationUri.Query -match '(?:^|[?&])client_id=sheltered_mod_manager(?:&|$)') 'Authorization URL must use the registered public Nexus client ID.'
 Assert-True ($authorizationUri.Query -match [regex]::Escape([Uri]::EscapeDataString('http://127.0.0.1:52147/callback'))) 'Authorization URL must use the registered loopback callback.'
 
 $parseMethod = $protocolType.GetMethod('ParseCallback', $staticNonPublic)
@@ -113,11 +114,13 @@ Assert-NotContains $headersPath 'APIKEY|X-API-Key|FromApiKey' 'Production reques
 Assert-Contains $servicePath '(?s)tokens\.Clear\(\).*PersistSettings' 'Failed OAuth recovery must clear and persist disconnected state.'
 Assert-Contains $settingsUiPath 'Sign in to Nexus' 'Settings must expose Nexus OAuth sign-in.'
 Assert-Contains $settingsUiPath 'NexusOAuthSignOutRequested' 'Settings must expose Nexus OAuth sign-out.'
-Assert-True ([string]::IsNullOrEmpty([string]$configurationType.GetField('ClientId', $staticNonPublic).GetRawConstantValue())) 'Review source must not invent an unissued Nexus client ID.'
+Assert-True ([string]$configurationType.GetField('ClientId', $staticNonPublic).GetRawConstantValue() -eq 'sheltered_mod_manager') 'Source must use the issued public Nexus client ID.'
 
 $managerAssemblyPath = Join-Path $RepoRoot 'Dist\SMM\Manager.exe'
 if (Test-Path -LiteralPath $managerAssemblyPath) {
     $managerAssembly = [Reflection.Assembly]::LoadFile($managerAssemblyPath)
+    $builtConfigurationType = $managerAssembly.GetType('Manager.Core.Services.NexusOAuthConfiguration', $true)
+    Assert-True ([string]$builtConfigurationType.GetField('ClientId', $staticNonPublic).GetRawConstantValue() -eq 'sheltered_mod_manager') 'Built Manager.exe must use the issued public Nexus client ID.'
     $oauthProtectorType = $managerAssembly.GetType('Manager.Core.Security.NexusOAuthTokenProtector', $true)
     $protectAccess = $oauthProtectorType.GetMethod('ProtectAccessToken', $staticNonPublic)
     $unprotectAccess = $oauthProtectorType.GetMethod('TryUnprotectAccessToken', $staticNonPublic)

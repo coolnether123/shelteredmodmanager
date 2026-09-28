@@ -1,12 +1,12 @@
 namespace Manager.Core.Services
 {
     /// <summary>
-    /// Public-client registration values reviewed by Nexus Mods. The client ID
-    /// is intentionally empty until Nexus approves and registers the app.
+    /// Public-client registration values approved by Nexus Mods. The desktop
+    /// client uses PKCE and never embeds the issued client secret.
     /// </summary>
     internal static class NexusOAuthConfiguration
     {
-        internal const string ClientId = "";
+        internal const string ClientId = "sheltered_mod_manager";
         internal const string RedirectUri = "http://127.0.0.1:52147/callback";
         internal const string AuthorizationEndpoint = "https://users.nexusmods.com/oauth/authorize";
         internal const string TokenEndpoint = "https://users.nexusmods.com/oauth/token";

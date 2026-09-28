@@ -46,6 +46,10 @@ function Get-Classification {
         return "keep: intentional first-run migration warning"
     }
 
+    if ($RelativePath -eq "documentation/Release_2.0.md" -and $Line -match "Mods built for SMM 1\.2\.2 or the old 1\.3 beta") {
+        return "keep: intentional 2.0 migration warning"
+    }
+
     if ($RelativePath -like "documentation/Release_2.0.md" -and $Line -match "supersedes|previous") {
         return "keep: explicitly references superseded release"
     }
@@ -59,7 +63,9 @@ function Get-Classification {
         return "keep: intentional 2.0 migration warning"
     }
 
-    if ($RelativePath -like "ShelteredAPI/Scenarios/Diagnostics/*") {
+    if ($RelativePath -like "ShelteredAPI/Scenarios/Diagnostics/*" -or
+        ($RelativePath -eq "ShelteredScenarioEditor/Diagnostics/ScenarioEditorFrameworkVerification.cs" -and
+         $Line -match 'Required\.Mod@1\.3\.0')) {
         return "keep: test fixture/example dependency version"
     }
 

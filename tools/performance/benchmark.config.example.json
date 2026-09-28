@@ -12,9 +12,13 @@
     "enabled": true,
     "executable": "powershell.exe",
     "arguments": [
+      "-NoLogo",
       "-NoProfile",
+      "-NonInteractive",
       "-ExecutionPolicy",
       "Bypass",
+      "-WindowStyle",
+      "Hidden",
       "-File",
       "tools/performance/Deploy-ShelteredBenchmarkBuild.ps1",
       "-Platform",

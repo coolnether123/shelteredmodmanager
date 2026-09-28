@@ -90,7 +90,8 @@ foreach ($target in $selectedTargets) {
 
 if (-not $SkipManagerBuild) {
     $compatibilityTarget = $targets.steam
-    & $msbuild (Join-Path $repoRoot 'ShelteredModManager.sln') /t:Rebuild "/p:Configuration=$Configuration" '/p:Platform=Any CPU' /m /v:minimal `
+    $releaseTargets = 'ManagerGUI:Rebuild;ShelteredAPI:Rebuild;ShelteredScenarioEditor:Rebuild;ManagerUpdater:Rebuild'
+    & $msbuild (Join-Path $repoRoot 'ShelteredModManager.sln') "/t:$releaseTargets" "/p:Configuration=$Configuration" '/p:Platform=Any CPU' /m /v:quiet /clp:ErrorsOnly `
         "/p:ShelteredInstallDir=$($compatibilityTarget.Root)\" `
         "/p:ShelteredManagedDir=$($compatibilityTarget.ManagedRoot)\"
     if ($LASTEXITCODE -ne 0) { throw "SMM rebuild failed with exit code $LASTEXITCODE." }
