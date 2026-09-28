@@ -165,13 +165,13 @@ else {
 }
 
 $sessionBehaviorTest = Join-Path $RepoRoot 'tools\Test-NexusOAuthSession.ps1'
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $sessionBehaviorTest -RepoRoot $RepoRoot
+& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File $sessionBehaviorTest -RepoRoot $RepoRoot
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
 $artifactBehaviorTest = Join-Path $RepoRoot 'tools\Test-NexusOAuthOnlyArtifact.ps1'
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $artifactBehaviorTest -ArtifactPath $managerAssemblyPath
+& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File $artifactBehaviorTest -ArtifactPath $managerAssemblyPath
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
