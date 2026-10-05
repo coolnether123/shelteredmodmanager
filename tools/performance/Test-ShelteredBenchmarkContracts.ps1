@@ -401,7 +401,12 @@ try {
     }
 
     Invoke-Contract 'shared session refuses PID reuse and remains retryable' {
-        $owned = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 30') -PassThru
+        $start = New-Object Diagnostics.ProcessStartInfo
+        $start.FileName = 'powershell.exe'
+        $start.Arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Sleep -Seconds 30"'
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $owned = [Diagnostics.Process]::Start($start)
         $ownedId = $owned.Id
         try {
             $actualStart = [DateTimeOffset]$owned.StartTime.ToUniversalTime()
@@ -434,6 +439,28 @@ try {
         $mutationIndex = $runnerSource.IndexOf('Set-DoorstopEnabled', $startIndex)
         Assert-True ($preflightIndex -ge 0 -and $preflightIndex -lt $snapshotIndex -and $preflightIndex -lt $mutationIndex) 'Existing-process preflight occurs after snapshot or install mutation.'
         Assert-True ($runnerSource -match 'Transactional cleanup also failed:[\s\S]*transactionErrors') 'Startup cleanup failures are no longer aggregated with the initiating failure.'
+    }
+
+    Invoke-Contract 'missing native reference refuses before snapshot and launch' {
+        $locks = Enter-BenchmarkInstallLocks @($install)
+        $stateRoot = Join-Path $tempRoot 'missing-reference-state'
+        $before = (Get-FileHash -LiteralPath (Join-Path $install 'doorstop_config.ini') -Algorithm SHA256).Hash
+        try {
+            $failure = ''
+            try {
+                Start-ShelteredPlatformSession -Platform ([pscustomobject]@{
+                    name = 'synthetic'; installRoot = $install; processName = 'smm-fixture-not-running'
+                    executable = 'must-not-launch.exe'; vanillaMenuReferenceImage = 'missing.png'
+                }) -Profile ([pscustomobject]@{ name = 'vanilla'; mode = 'vanilla'; harness = $false }) `
+                    -Config ([pscustomobject]@{ _configRoot = $tempRoot }) -StateRoot $stateRoot `
+                    -ArtifactRoot $tempRoot -LeaseOwner 'missing-reference-contract' -InstallLocks $locks -StartNativeReadiness | Out-Null
+            }
+            catch { $failure = $_.Exception.Message }
+            Assert-True ($failure -match 'Configured native menu reference is missing') 'The missing reference did not stop preparation.'
+            Assert-True (-not (Test-Path -LiteralPath $stateRoot)) 'Reference validation happened after the install snapshot.'
+            Assert-Equal $before (Get-FileHash -LiteralPath (Join-Path $install 'doorstop_config.ini') -Algorithm SHA256).Hash 'Reference failure changed the synthetic install.'
+        }
+        finally { Exit-BenchmarkInstallLocks $locks }
     }
 
     Invoke-Contract 'single process sample retains collection shape' {

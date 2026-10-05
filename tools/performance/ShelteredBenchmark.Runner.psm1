@@ -122,44 +122,37 @@ function New-NativeWindowBitmap {
     if ($width -le 0 -or $height -le 0) { throw "Window has invalid dimensions ${width}x${height}." }
     $bitmap = New-Object Drawing.Bitmap $width, $height, ([Drawing.Imaging.PixelFormat]::Format24bppRgb)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
-    $rendered = $false
     try {
-        $device = $graphics.GetHdc()
-        try {
-            $rendered = [ShelteredBenchmark.NativeWindow]::PrintWindow($Handle, $device, 2)
-        }
-        finally { $graphics.ReleaseHdc($device) }
-    }
-    finally { $graphics.Dispose() }
-
-    # Some Unity/DWM combinations report success for PW_RENDERFULLCONTENT but
-    # return an entirely black surface. Retry with the classic PrintWindow mode
-    # before rejecting the sample so a transient compositor state cannot poison
-    # the complete readiness window.
-    $samplePoints = @(
-        @(0.1, 0.1), @(0.5, 0.1), @(0.9, 0.1),
-        @(0.1, 0.5), @(0.5, 0.5), @(0.9, 0.5),
-        @(0.1, 0.9), @(0.5, 0.9), @(0.9, 0.9)
-    )
-    $hasVisiblePixel = $false
-    foreach ($point in $samplePoints) {
-        $pixel = $bitmap.GetPixel(
-            [math]::Min($width - 1, [math]::Floor($width * [double]$point[0])),
-            [math]::Min($height - 1, [math]::Floor($height * [double]$point[1])))
-        if ([math]::Max($pixel.R, [math]::Max($pixel.G, $pixel.B)) -gt 8) { $hasVisiblePixel = $true; break }
-    }
-    if (-not $rendered -or -not $hasVisiblePixel) {
-        $graphics = [Drawing.Graphics]::FromImage($bitmap)
-        try {
+        # PrintWindow can report success while returning a blank Unity surface.
+        # Validate both modes before passing a frame to the reference gate.
+        foreach ($mode in @(2, 0)) {
             $graphics.Clear([Drawing.Color]::Black)
             $device = $graphics.GetHdc()
-            try { $rendered = [ShelteredBenchmark.NativeWindow]::PrintWindow($Handle, $device, 0) }
+            try { $rendered = [ShelteredBenchmark.NativeWindow]::PrintWindow($Handle, $device, $mode) }
             finally { $graphics.ReleaseHdc($device) }
+            if ($rendered -and (Test-NativeBitmapContent -Bitmap $bitmap)) { return $bitmap }
         }
-        finally { $graphics.Dispose() }
+        throw 'PrintWindow returned no usable frame in either capture mode.'
     }
-    if (-not $rendered) { $bitmap.Dispose(); throw 'PrintWindow failed in both capture modes.' }
-    return $bitmap
+    catch {
+        $bitmap.Dispose()
+        throw
+    }
+    finally { $graphics.Dispose() }
+}
+
+function Test-NativeBitmapContent {
+    param([Parameter(Mandatory = $true)][Drawing.Bitmap]$Bitmap)
+    # Sample away from the window edges.
+    foreach ($y in @(0.1, 0.5, 0.9)) {
+        foreach ($x in @(0.1, 0.5, 0.9)) {
+            $pixel = $Bitmap.GetPixel(
+                [math]::Min($Bitmap.Width - 1, [math]::Floor($Bitmap.Width * $x)),
+                [math]::Min($Bitmap.Height - 1, [math]::Floor($Bitmap.Height * $y)))
+            if ([math]::Max($pixel.R, [math]::Max($pixel.G, $pixel.B)) -gt 8) { return $true }
+        }
+    }
+    return $false
 }
 
 function Get-NativeFrameRmse {
@@ -170,10 +163,14 @@ function Get-NativeFrameRmse {
     )
     Add-Type -AssemblyName System.Drawing
     $capture = New-NativeWindowBitmap -Handle $Handle
-    $reference = [Drawing.Bitmap]::FromFile($ReferencePath)
-    $smallCapture = New-Object Drawing.Bitmap 64, 36
-    $smallReference = New-Object Drawing.Bitmap 64, 36
+    $reference = $null
+    $smallCapture = $null
+    $smallReference = $null
     try {
+        $reference = [Drawing.Bitmap]::FromFile($ReferencePath)
+        if (-not (Test-NativeBitmapContent -Bitmap $reference)) { throw 'Native menu reference is blank.' }
+        $smallCapture = New-Object Drawing.Bitmap 64, 36
+        $smallReference = New-Object Drawing.Bitmap 64, 36
         $graphics = [Drawing.Graphics]::FromImage($smallCapture)
         try { $graphics.DrawImage($capture, 0, 0, 64, 36) } finally { $graphics.Dispose() }
         $graphics = [Drawing.Graphics]::FromImage($smallReference)
@@ -189,7 +186,9 @@ function Get-NativeFrameRmse {
         return [math]::Round([math]::Sqrt($sum / (64 * 36 * 3)), 3)
     }
     finally {
-        $smallCapture.Dispose(); $smallReference.Dispose(); $capture.Dispose(); $reference.Dispose()
+        foreach ($bitmap in @($smallCapture, $smallReference, $capture, $reference)) {
+            if ($null -ne $bitmap) { $bitmap.Dispose() }
+        }
     }
 }
 
@@ -203,6 +202,10 @@ function Wait-NativeMenuReady {
         [int]$TimeoutSeconds = 90,
         [int]$PollMilliseconds = 250
     )
+    if (-not [string]::IsNullOrWhiteSpace($ReferencePath) -and
+        -not (Test-Path -LiteralPath $ReferencePath -PathType Leaf)) {
+        throw "Configured native menu reference is missing: $ReferencePath"
+    }
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
     $firstWindowAt = $null
     $consecutiveMatches = 0
@@ -216,10 +219,10 @@ function Wait-NativeMenuReady {
         if ($Process.HasExited) { throw "Game process exited with code $($Process.ExitCode) before menu readiness." }
         if ($Process.MainWindowHandle -ne [IntPtr]::Zero -and $Process.Responding) {
             if ($null -eq $firstWindowAt) { $firstWindowAt = [DateTimeOffset]::UtcNow }
-            if (-not [string]::IsNullOrWhiteSpace($ReferencePath) -and (Test-Path -LiteralPath $ReferencePath -PathType Leaf)) {
+            if (-not [string]::IsNullOrWhiteSpace($ReferencePath)) {
                 try {
-                    $rmse = Get-NativeFrameRmse -Handle $Process.MainWindowHandle -ReferencePath $ReferencePath
                     $captureAttempts++
+                    $rmse = Get-NativeFrameRmse -Handle $Process.MainWindowHandle -ReferencePath $ReferencePath
                     $lastRmse = $rmse
                     if ($rmse -lt $bestRmse) { $bestRmse = $rmse }
                     if ($rmse -le $RmseThreshold) { $consecutiveMatches++ } else { $consecutiveMatches = 0 }
@@ -528,6 +531,17 @@ function Start-ShelteredPlatformSession {
         $existingProcesses = @(Get-Process -Name ([string]$Platform.processName) -ErrorAction SilentlyContinue)
         if ($existingProcesses.Count -gt 0) { throw "Refusing to launch because $platformName already has process(es): $($existingProcesses.Id -join ', ')." }
 
+        $reference = ''
+        if ($StartNativeReadiness) {
+            $reference = [string](Get-ObjectPropertyValue $Platform 'vanillaMenuReferenceImage' '')
+            if (-not [string]::IsNullOrWhiteSpace($reference)) {
+                $reference = Resolve-ConfiguredPath -Path $reference -BasePath ([string]$Config._configRoot)
+                if (-not (Test-Path -LiteralPath $reference -PathType Leaf)) {
+                    throw "Configured native menu reference is missing: $reference"
+                }
+            }
+        }
+
         $session.Snapshot = New-InstallStateSnapshot -InstallRoot $installRoot -BackupRoot $StateRoot
         $catalog = Get-InstalledModCatalog -InstallRoot $installRoot
         $existingState = Get-LoadOrderState -InstallRoot $installRoot
@@ -576,8 +590,6 @@ function Start-ShelteredPlatformSession {
         $session.Sampler = Start-BenchmarkProcessSampler -ProcessId $session.Process.Id -ProcessStartUtc $session.ProcessStartUtc -IntervalMilliseconds $ProcessIntervalMilliseconds
 
         if ($StartNativeReadiness) {
-            $reference = [string](Get-ObjectPropertyValue $Platform 'vanillaMenuReferenceImage' '')
-            if (-not [string]::IsNullOrWhiteSpace($reference)) { $reference = Resolve-ConfiguredPath -Path $reference -BasePath ([string]$Config._configRoot) }
             $sampling = Get-ObjectPropertyValue $Config 'sampling'
             $session.NativeReadinessProbe = Start-NativeMenuReadyProbe -ProcessId $session.Process.Id -ReferencePath $reference `
                 -RmseThreshold ([double](Get-ObjectPropertyValue $Platform 'vanillaMenuRmseThreshold' 15)) `
