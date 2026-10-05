@@ -48,16 +48,15 @@ namespace Manager.Core.Services
             {
                 EnsureProjectDirectories(project.RootPath);
                 JavaScriptSerializer serializer = CreateSerializer();
-                WriteAllTextAtomic(
-                    ResolveContained(project.RootPath, AboutRelativePath),
-                    serializer.Serialize(project.About));
-                WriteAllTextAtomic(
-                    ResolveContained(project.RootPath, ContentRelativePath),
-                    contentResult.Json);
-
                 string readmePath = ResolveContained(project.RootPath, ReadmeRelativePath);
                 if (!File.Exists(readmePath))
                     WriteAllTextAtomic(readmePath, CreateReadme(project));
+
+                WriteProjectDocumentsWithRollback(
+                    ResolveContained(project.RootPath, AboutRelativePath),
+                    StableJson.Serialize(serializer, project.About),
+                    ResolveContained(project.RootPath, ContentRelativePath),
+                    contentResult.Json);
 
                 project.IsDirty = false;
                 return ContentWorkshopOperationResult.Succeeded(project.RootPath);
@@ -143,6 +142,7 @@ namespace Manager.Core.Services
                 return ContentWorkshopOperationResult.Failed("The icon name has no valid filename characters.");
             relativePath = "Assets/Icons/" + safeName + ".png";
 
+            string stagedPath = null;
             try
             {
                 using (Image image = Image.FromFile(sourcePngPath))
@@ -156,18 +156,23 @@ namespace Manager.Core.Services
 
                     EnsureProjectDirectories(project.RootPath);
                     string destination = ResolveContained(project.RootPath, relativePath);
+                    string stagedRelativePath = "Assets/Icons/.stage-" +
+                        Guid.NewGuid().ToString("N") + ".png";
+                    stagedPath = ResolveContained(project.RootPath, stagedRelativePath);
                     using (Bitmap normalized = new Bitmap(image.Width, image.Height, PixelFormat.Format32bppArgb))
                     using (Graphics graphics = Graphics.FromImage(normalized))
                     {
                         graphics.DrawImageUnscaled(image, 0, 0);
-                        SavePngAtomic(normalized, destination);
+                        normalized.Save(stagedPath, ImageFormat.Png);
                     }
-                }
 
-                ContentPackAssetValidationResult validation = ContentPackPathPolicy.ValidateIcon(
-                    project.RootPath, relativePath, true, 4L * 1024L * 1024L, 2048);
-                if (!validation.Success)
-                    return ContentWorkshopOperationResult.Failed(validation.ErrorMessage);
+                    ContentPackAssetValidationResult validation = ContentPackPathPolicy.ValidateIcon(
+                        project.RootPath, stagedRelativePath, true, 4L * 1024L * 1024L, 2048);
+                    if (!validation.Success)
+                        return ContentWorkshopOperationResult.Failed(validation.ErrorMessage);
+
+                    ReplaceFileFromStage(stagedPath, destination);
+                }
 
                 project.IsDirty = true;
                 return ContentWorkshopOperationResult.Succeeded(
@@ -176,6 +181,11 @@ namespace Manager.Core.Services
             catch (Exception ex)
             {
                 return ContentWorkshopOperationResult.Failed("Icon import failed: " + ex.Message);
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(stagedPath))
+                    TryDeleteFile(stagedPath);
             }
         }
 
@@ -419,6 +429,149 @@ namespace Manager.Core.Services
                 "Install it as a normal mod folder. Categories requiring custom behavior may also need a code plugin.\r\n";
         }
 
+        private sealed class StagedProjectDocument
+        {
+            public string DestinationPath;
+            public string TemporaryPath;
+            public string BackupPath;
+            public bool DestinationExisted;
+            public bool Committed;
+        }
+
+        private static void WriteProjectDocumentsWithRollback(
+            string aboutPath,
+            string aboutContent,
+            string contentPath,
+            string contentContent)
+        {
+            string token = Guid.NewGuid().ToString("N");
+            StagedProjectDocument about = CreateStagedProjectDocument(aboutPath, token + "-about");
+            StagedProjectDocument content = CreateStagedProjectDocument(contentPath, token + "-content");
+            bool preserveBackups = false;
+
+            try
+            {
+                File.WriteAllText(about.TemporaryPath, aboutContent ?? string.Empty, new UTF8Encoding(false));
+                File.WriteAllText(content.TemporaryPath, contentContent ?? string.Empty, new UTF8Encoding(false));
+
+                CommitStagedProjectDocument(about);
+                CommitStagedProjectDocument(content);
+            }
+            catch (Exception saveError)
+            {
+                StringBuilder rollbackErrors = new StringBuilder();
+                RollbackStagedProjectDocument(content, rollbackErrors);
+                RollbackStagedProjectDocument(about, rollbackErrors);
+
+                if (rollbackErrors.Length > 0)
+                {
+                    preserveBackups = true;
+                    StringBuilder recoveryPaths = new StringBuilder();
+                    if (File.Exists(about.BackupPath))
+                        recoveryPaths.Append(about.BackupPath);
+                    if (File.Exists(content.BackupPath))
+                    {
+                        if (recoveryPaths.Length > 0)
+                            recoveryPaths.Append("; ");
+                        recoveryPaths.Append(content.BackupPath);
+                    }
+                    string recovery = recoveryPaths.Length > 0
+                        ? " Recovery backup(s) were retained at: " + recoveryPaths + "."
+                        : " No recovery backup is available; inspect both project document paths before retrying.";
+                    throw new IOException(
+                        "The project save failed and automatic rollback was incomplete. " +
+                        rollbackErrors.ToString().Trim() + recovery,
+                        saveError);
+                }
+
+                throw;
+            }
+            finally
+            {
+                TryDeleteFile(about.TemporaryPath);
+                TryDeleteFile(content.TemporaryPath);
+                if (!preserveBackups)
+                {
+                    TryDeleteFile(about.BackupPath);
+                    TryDeleteFile(content.BackupPath);
+                }
+            }
+        }
+
+        private static StagedProjectDocument CreateStagedProjectDocument(string path, string token)
+        {
+            return new StagedProjectDocument
+            {
+                DestinationPath = path,
+                TemporaryPath = path + ".tmp-" + token,
+                BackupPath = path + ".backup-" + token,
+                DestinationExisted = File.Exists(path)
+            };
+        }
+
+        private static void CommitStagedProjectDocument(StagedProjectDocument document)
+        {
+            if (document.DestinationExisted)
+                File.Replace(document.TemporaryPath, document.DestinationPath, document.BackupPath);
+            else
+                File.Move(document.TemporaryPath, document.DestinationPath);
+            document.Committed = true;
+        }
+
+        private static void RollbackStagedProjectDocument(
+            StagedProjectDocument document,
+            StringBuilder rollbackErrors)
+        {
+            bool backupExists = File.Exists(document.BackupPath);
+            if (document.DestinationExisted)
+            {
+                if (!backupExists)
+                {
+                    if (document.Committed)
+                    {
+                        rollbackErrors.Append("Could not restore ")
+                            .Append(document.DestinationPath)
+                            .Append(" because its recovery backup is missing at ")
+                            .Append(document.BackupPath)
+                            .AppendLine(".");
+                    }
+                    return;
+                }
+
+                try
+                {
+                    if (File.Exists(document.DestinationPath))
+                        File.Replace(document.BackupPath, document.DestinationPath, null);
+                    else
+                        File.Move(document.BackupPath, document.DestinationPath);
+                }
+                catch (Exception ex)
+                {
+                    rollbackErrors.Append("Could not restore ")
+                        .Append(document.DestinationPath)
+                        .Append(" from ")
+                        .Append(document.BackupPath)
+                        .Append(": ")
+                        .AppendLine(ex.Message);
+                }
+            }
+            else if (document.Committed)
+            {
+                try
+                {
+                    if (File.Exists(document.DestinationPath))
+                        File.Delete(document.DestinationPath);
+                }
+                catch (Exception ex)
+                {
+                    rollbackErrors.Append("Could not remove newly created project document ")
+                        .Append(document.DestinationPath)
+                        .Append(": ")
+                        .AppendLine(ex.Message);
+                }
+            }
+        }
+
         private static void WriteAllTextAtomic(string path, string content)
         {
             string temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
@@ -436,13 +589,30 @@ namespace Manager.Core.Services
             }
         }
 
-        private static void SavePngAtomic(Bitmap bitmap, string path)
+        private static void ReplaceFileFromStage(string stagedPath, string destination)
         {
-            string temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
-            bitmap.Save(temporary, ImageFormat.Png);
-            if (File.Exists(path))
-                File.Delete(path);
-            File.Move(temporary, path);
+            if (!File.Exists(destination))
+            {
+                File.Move(stagedPath, destination);
+                return;
+            }
+
+            string backup = destination + ".backup-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.Replace(stagedPath, destination, backup);
+            }
+            catch (Exception ex)
+            {
+                if (File.Exists(backup))
+                {
+                    throw new IOException(
+                        "Icon replacement failed. The previous icon is recoverable at " + backup + ".",
+                        ex);
+                }
+                throw;
+            }
+            TryDeleteFile(backup);
         }
 
         private static void TryDeleteFile(string path)
@@ -458,85 +628,20 @@ namespace Manager.Core.Services
         }
     }
 
-    /// <summary>Minimal stored-entry ZIP writer compatible with .NET 3.5.</summary>
+    /// <summary>Writes a project's package roots as a stored-entry ZIP.</summary>
     internal static class ContentWorkshopZipWriter
     {
-        private sealed class Entry
-        {
-            public string Name;
-            public byte[] Data;
-            public uint Crc;
-            public uint Offset;
-        }
-
         public static void WriteProject(string projectRoot, string modId, string outputPath)
         {
-            List<Entry> entries = new List<Entry>();
+            List<ZipFileWriter.Entry> entries = new List<ZipFileWriter.Entry>();
             AddTree(entries, projectRoot, "About", modId);
             AddTree(entries, projectRoot, "Content", modId);
             AddTree(entries, projectRoot, "Assets", modId);
             AddFile(entries, projectRoot, "README.md", modId);
-
-            using (FileStream stream = File.Create(outputPath))
-            using (BinaryWriter writer = new BinaryWriter(stream))
-            {
-                for (int i = 0; i < entries.Count; i++)
-                {
-                    Entry entry = entries[i];
-                    entry.Offset = (uint)stream.Position;
-                    byte[] name = Encoding.UTF8.GetBytes(entry.Name);
-                    writer.Write(0x04034b50u);
-                    writer.Write((ushort)20);
-                    writer.Write((ushort)0x0800);
-                    writer.Write((ushort)0);
-                    writer.Write((ushort)0);
-                    writer.Write((ushort)0);
-                    writer.Write(entry.Crc);
-                    writer.Write((uint)entry.Data.Length);
-                    writer.Write((uint)entry.Data.Length);
-                    writer.Write((ushort)name.Length);
-                    writer.Write((ushort)0);
-                    writer.Write(name);
-                    writer.Write(entry.Data);
-                }
-
-                uint centralOffset = (uint)stream.Position;
-                for (int i = 0; i < entries.Count; i++)
-                {
-                    Entry entry = entries[i];
-                    byte[] name = Encoding.UTF8.GetBytes(entry.Name);
-                    writer.Write(0x02014b50u);
-                    writer.Write((ushort)20);
-                    writer.Write((ushort)20);
-                    writer.Write((ushort)0x0800);
-                    writer.Write((ushort)0);
-                    writer.Write((ushort)0);
-                    writer.Write((ushort)0);
-                    writer.Write(entry.Crc);
-                    writer.Write((uint)entry.Data.Length);
-                    writer.Write((uint)entry.Data.Length);
-                    writer.Write((ushort)name.Length);
-                    writer.Write((ushort)0);
-                    writer.Write((ushort)0);
-                    writer.Write((ushort)0);
-                    writer.Write((ushort)0);
-                    writer.Write(0u);
-                    writer.Write(entry.Offset);
-                    writer.Write(name);
-                }
-                uint centralSize = (uint)stream.Position - centralOffset;
-                writer.Write(0x06054b50u);
-                writer.Write((ushort)0);
-                writer.Write((ushort)0);
-                writer.Write((ushort)entries.Count);
-                writer.Write((ushort)entries.Count);
-                writer.Write(centralSize);
-                writer.Write(centralOffset);
-                writer.Write((ushort)0);
-            }
+            ZipFileWriter.Write(outputPath, entries, false);
         }
 
-        private static void AddTree(List<Entry> entries, string root, string folder, string modId)
+        private static void AddTree(List<ZipFileWriter.Entry> entries, string root, string folder, string modId)
         {
             string source = ContentWorkshopProjectService.ResolveContained(root, folder);
             if (!Directory.Exists(source))
@@ -544,36 +649,20 @@ namespace Manager.Core.Services
             string prefix = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) +
                 Path.DirectorySeparatorChar;
             string[] files = Directory.GetFiles(source, "*", SearchOption.AllDirectories);
+            // File systems differ in listing order; a fixed order keeps exports identical.
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < files.Length; i++)
             {
                 string relative = Path.GetFullPath(files[i]).Substring(prefix.Length).Replace('\\', '/');
-                Add(entries, files[i], modId + "/" + relative);
+                entries.Add(new ZipFileWriter.Entry(modId + "/" + relative, File.ReadAllBytes(files[i])));
             }
         }
 
-        private static void AddFile(List<Entry> entries, string root, string relative, string modId)
+        private static void AddFile(List<ZipFileWriter.Entry> entries, string root, string relative, string modId)
         {
             string source = ContentWorkshopProjectService.ResolveContained(root, relative);
             if (File.Exists(source))
-                Add(entries, source, modId + "/" + relative);
-        }
-
-        private static void Add(List<Entry> entries, string path, string entryName)
-        {
-            byte[] data = File.ReadAllBytes(path);
-            entries.Add(new Entry { Name = entryName, Data = data, Crc = Crc32(data) });
-        }
-
-        private static uint Crc32(byte[] bytes)
-        {
-            uint crc = 0xffffffffu;
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                crc ^= bytes[i];
-                for (int bit = 0; bit < 8; bit++)
-                    crc = (crc >> 1) ^ ((crc & 1) == 0 ? 0u : 0xedb88320u);
-            }
-            return ~crc;
+                entries.Add(new ZipFileWriter.Entry(modId + "/" + relative, File.ReadAllBytes(source)));
         }
     }
 }

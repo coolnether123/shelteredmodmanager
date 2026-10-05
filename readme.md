@@ -69,10 +69,9 @@ SMM uses Unity Doorstop injection through `winhttp.dll` so it can load `SMM\Door
 
 ### Installing mods
 
-1. Download Sheltered mods from [Nexus Mods](https://www.nexusmods.com/games/sheltered).
-2. Move the mod folder or zip file into the `mods` folder.
-3. If the mod is zipped, unzip it so the mod's `About` and `Assemblies` folders are inside one mod folder.
-4. Enable it in `SMM\Manager.exe`.
+1. Download Sheltered mods from [Nexus Mods](https://www.nexusmods.com/games/sheltered), or install them from the **Nexus** tab in `SMM\Manager.exe`.
+2. Drag the mod's zip file (or its folder) onto the **Mod manager** tab. SMM installs it and turns it on.
+3. To install by hand instead, unzip the mod into the `mods` folder so its `About` and `Assemblies` folders are inside one mod folder, then turn it on in the Mod manager.
 
 ## Features
 

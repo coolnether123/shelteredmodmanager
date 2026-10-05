@@ -76,6 +76,8 @@ namespace Manager.Controls
             _iconLabel.Size = new Size(24, 24);
             _iconLabel.TextAlign = ContentAlignment.MiddleCenter;
             _iconLabel.Location = new Point(2, 2);
+            // The magnifier is painted in OnPaint; the label stays for layout compatibility.
+            _iconLabel.Visible = false;
 
             // Text input
             _textBox = new TextBox();
@@ -98,6 +100,10 @@ namespace Manager.Controls
             _clearButton.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             _clearButton.FlatAppearance.BorderSize = 0;
             _clearButton.Click += ClearButton_Click;
+            _clearButton.AccessibleName = "Clear filter";
+            _clearButton.TabStop = false;
+            _textBox.GotFocus += delegate { Invalidate(); };
+            _textBox.LostFocus += delegate { Invalidate(); };
 
             this.Controls.Add(_iconLabel);
             this.Controls.Add(_textBox);
@@ -118,11 +124,21 @@ namespace Manager.Controls
         {
             base.OnPaint(e);
             
-            // Draw border
-            using (var pen = new Pen(Color.FromArgb(200, 200, 200), 1))
+            ThemePalette palette = ManagerTheme.Current;
+            using (var pen = new Pen(_textBox.Focused ? palette.AccentText : palette.BorderStrong, 1))
             {
                 e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
             }
+
+            // Magnifier glyph.
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            int cy = Height / 2;
+            using (var glyph = new Pen(palette.TextMuted, 1.6f))
+            {
+                e.Graphics.DrawEllipse(glyph, 8, cy - 6, 9, 9);
+                e.Graphics.DrawLine(glyph, 16, cy + 2, 20, cy + 6);
+            }
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
         }
 
         private void SetupDebounce()
@@ -196,7 +212,7 @@ namespace Manager.Controls
         {
             _showingPlaceholder = true;
             _textBox.Text = _placeholder;
-            _textBox.ForeColor = Color.Gray;
+            _textBox.ForeColor = ManagerTheme.Current.TextMuted;
         }
 
         private void HidePlaceholder()
@@ -212,24 +228,22 @@ namespace Manager.Controls
         /// </summary>
         public void ApplyTheme(bool isDark)
         {
-            if (isDark)
-            {
-                this.BackColor = Color.FromArgb(60, 60, 60);
-                _textBox.BackColor = Color.FromArgb(60, 60, 60);
-                _textBox.ForeColor = _showingPlaceholder ? Color.Gray : Color.White;
-                _iconLabel.ForeColor = Color.LightGray;
-                _clearButton.BackColor = Color.FromArgb(60, 60, 60);
-                _clearButton.ForeColor = Color.LightGray;
-            }
-            else
-            {
-                this.BackColor = Color.White;
-                _textBox.BackColor = Color.White;
-                _textBox.ForeColor = _showingPlaceholder ? Color.Gray : Color.Black;
-                _iconLabel.ForeColor = Color.Gray;
-                _clearButton.BackColor = Color.White;
-                _clearButton.ForeColor = Color.Gray;
-            }
+            ThemePalette palette = ManagerTheme.Current;
+            this.BackColor = palette.Input;
+            this.ForeColor = palette.Text;
+            _textBox.BackColor = palette.Input;
+            _textBox.ForeColor = _showingPlaceholder ? palette.TextMuted : palette.Text;
+            _iconLabel.ForeColor = palette.TextMuted;
+            _clearButton.BackColor = palette.Input;
+            _clearButton.ForeColor = palette.TextMuted;
+            _clearButton.FlatAppearance.MouseOverBackColor = palette.SurfaceHover;
+            Invalidate();
+        }
+
+        /// <summary>Names the inner text field for screen readers.</summary>
+        public void SetFieldName(string name)
+        {
+            _textBox.AccessibleName = name;
         }
         protected override void Dispose(bool disposing)
         {

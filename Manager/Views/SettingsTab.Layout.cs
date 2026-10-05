@@ -142,12 +142,19 @@ namespace Manager.Views
             _includeNexusPrereleaseCheckBox.Location = new Point(x + 10, y);
             y += 30;
 
-            _nexusAdvancedToggleLink.Location = new Point(x + 10, y);
-            y += 24;
+            // Game domain and manager mod ID are for developers only.
+            bool developer = _devModeCheckBox.Checked;
+            _nexusAdvancedToggleLink.Visible = developer;
+            if (developer)
+            {
+                _nexusAdvancedToggleLink.Location = new Point(x + 10, y);
+                y += 24;
+            }
 
             _nexusAdvancedPanel.Location = new Point(x + 10, y);
-            _nexusAdvancedPanel.Visible = _showAdvancedNexusOptions;
-            if (_showAdvancedNexusOptions)
+            bool showAdvanced = developer && _showAdvancedNexusOptions;
+            _nexusAdvancedPanel.Visible = showAdvanced;
+            if (showAdvanced)
                 y += _nexusAdvancedPanel.Height + 14;
             else
                 y += 6;
@@ -160,6 +167,15 @@ namespace Manager.Views
 
         private int LayoutRuntimeFeaturesSection(int x, int y, int contentWidth)
         {
+            // Runtime feature switches (log suppression, experimental editors) are
+            // developer tools.
+            bool show = _devModeCheckBox.Checked;
+            _runtimeFeaturesLabel.Visible = show;
+            _runtimeFeaturesRefreshButton.Visible = show;
+            _runtimeFeaturesPanel.Visible = show;
+            if (!show)
+                return y;
+
             int panelWidth = GetUsableWidth(contentWidth);
 
             _runtimeFeaturesLabel.Location = new Point(x, y);
@@ -181,8 +197,9 @@ namespace Manager.Views
             y += 36;
 
             _devSettingsGroup.Location = new Point(x, y);
+            // Test the setting, not Visible: Visible reads false while the tab is hidden.
             _devSettingsGroup.Visible = _devModeCheckBox.Checked;
-            if (_devSettingsGroup.Visible)
+            if (_devModeCheckBox.Checked)
                 y += _devSettingsGroup.Height + 15;
 
             return y;

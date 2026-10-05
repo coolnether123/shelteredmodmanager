@@ -6,13 +6,15 @@ Use a code plugin when an item needs custom runtime behavior. Content Workshop s
 
 ## Authoring workflow
 
-1. Open **Content Workshop** in `SMM\Manager.exe`.
-2. Select **New** and choose an empty project folder.
-3. Set a lowercase dotted mod ID, such as `com.example.survivalitems`.
-4. Add items and recipes.
-5. Import a PNG or create/edit a 32x32 icon in the pixel editor.
-6. Select **Validate** and resolve all errors.
-7. Export a mod folder or ZIP, or install it into the manager's configured mods folder.
+1. Open **Content workshop** in `SMM\Manager.exe`.
+2. Select **New pack**. Packs are kept in `Documents\Sheltered Mod Manager\Workshop`, and the start screen lists them for one-click opening. The pack's folder follows its name until the first save.
+3. Give the pack a name and add yourself under **Authors**. The pack ID (for example `yourname.survivalitems`) and the item and recipe IDs fill themselves in from those names. They stop changing once the pack is first installed or exported, because saves and other mods refer to them.
+4. Add items and recipes. Choose what a recipe makes, and its materials, from lists of your own items and base-game items, or type the ID of an item from another mod.
+5. Import a PNG or draw a 32x32 icon in **Icon Studio**.
+6. On **Install & share**, select **Run check** and fix anything it lists. Double-click a result to jump to the field.
+7. Select **Install to my game** to copy the pack into the mods folder and turn it on, or **Save as ZIP** to share it.
+
+**Developer mode** (Settings) adds the tools mod makers need: New pack asks for an empty folder; the pack, item and recipe ID fields are shown; items gain burn and scrap value, carry slots, crafting and fabrication, contamination and raw-food fields; recipes gain unique-result and unlock settings; and **Export folder** is available.
 
 The editor warns before discarding an unsaved project. Local install never overwrites an existing mod; remove or back up the installed copy explicitly before installing a replacement.
 

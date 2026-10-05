@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using Manager.Controls;
 
 namespace Manager.Views
 {
@@ -17,13 +18,11 @@ namespace Manager.Views
         private Label _versionLabel;
         private Label _authorLabel;
         private RichTextBox _descriptionBox;
-        private Label _linksLabel;
 
         private LinkLabel _issuesLink;
         private LinkLabel _nexusModsLink;
         private LinkLabel _nexusManagerLink;
 
-        private Label _creditsLabel;
         private RichTextBox _creditsBox;
 
         private bool _isDarkMode = false;
@@ -60,77 +59,80 @@ namespace Manager.Views
         private void InitializeComponent()
         {
             this.SuspendLayout();
-            this.Padding = new Padding(20);
+            this.Padding = new Padding(16, 14, 16, 12);
+            this.Font = ManagerTheme.UiFont(9f);
 
-            int yPos = 20;
+            TableLayoutPanel root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 2,
+                Margin = new Padding(0)
+            };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58f));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42f));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-            _titleLabel = new Label();
-            _titleLabel.Text = "Sheltered Mod Manager";
-            _titleLabel.Font = new Font("Segoe UI", 18f, FontStyle.Bold);
-            _titleLabel.AutoSize = true;
-            _titleLabel.Location = new Point(20, yPos);
-            yPos += 45;
+            TableLayoutPanel header = new TableLayoutPanel
+            {
+                ColumnCount = 1,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0, 0, 0, 14)
+            };
+            _titleLabel = UiFactory.Heading("Sheltered Mod Manager", 18f);
+            _versionLabel = UiFactory.Text("Version " + _appVersion, ThemeRole.Muted, 10f, false);
+            _authorLabel = UiFactory.Text("Maintained by " + _author, ThemeRole.Default, 10f, false);
+            header.Controls.Add(_titleLabel, 0, 0);
+            header.Controls.Add(_versionLabel, 0, 1);
+            header.Controls.Add(_authorLabel, 0, 2);
 
-            _versionLabel = new Label();
-            _versionLabel.Text = "Version " + _appVersion;
-            _versionLabel.Font = new Font("Segoe UI", 11f);
-            _versionLabel.ForeColor = Color.Gray;
-            _versionLabel.AutoSize = true;
-            _versionLabel.Location = new Point(20, yPos);
-            yPos += 30;
-
-            _authorLabel = new Label();
-            _authorLabel.Text = "Maintained by " + _author;
-            _authorLabel.Font = new Font("Segoe UI", 10f);
-            _authorLabel.AutoSize = true;
-            _authorLabel.Location = new Point(20, yPos);
-            yPos += 40;
-
-            int rightColumnX = 600;
-            int rightColumnY = 135;
-
+            CardPanel about = new CardPanel("About this manager", null);
+            about.FillsHeight = true;
+            about.Dock = DockStyle.Fill;
+            about.Margin = new Padding(0, 0, 14, 0);
             _descriptionBox = new RichTextBox();
             _descriptionBox.Text =
                 "Sheltered Mod Manager installs alongside Sheltered by Unicube and Team17. It supports Steam and GOG 32-bit builds plus Epic 64-bit builds.\n\n" +
                 "Use it to install and organize mods, manage load order, track modded saves, and launch the game. It also includes a Content Workshop for creating items, recipes, and icons without writing code.\n\n" +
                 "Custom scenarios are supported. Advanced in-game authoring is still a preview and is off by default.\n\n" +
                 "benjaminfoo created the original mod loader in 2019. Coolnether123 has maintained it since 2025 with the original author's permission.";
-
-            _descriptionBox.Font = new Font("Segoe UI", 10f);
-            _descriptionBox.Location = new Point(20, yPos);
-            _descriptionBox.Size = new Size(rightColumnX - 60, this.Height - yPos - 20);
+            _descriptionBox.Font = ManagerTheme.UiFont(10f);
+            _descriptionBox.Dock = DockStyle.Fill;
             _descriptionBox.ReadOnly = true;
             _descriptionBox.Multiline = true;
             _descriptionBox.WordWrap = true;
             _descriptionBox.BorderStyle = BorderStyle.None;
             _descriptionBox.ScrollBars = RichTextBoxScrollBars.Vertical;
-            _descriptionBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom;
+            _descriptionBox.AccessibleName = "About Sheltered Mod Manager";
+            about.AddBody(_descriptionBox);
 
-            _linksLabel = new Label();
-            _linksLabel.Text = "Resources and community";
-            _linksLabel.UseMnemonic = false;
-            _linksLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _linksLabel.AutoSize = true;
-            _linksLabel.Location = new Point(rightColumnX, rightColumnY);
-            rightColumnY += 30;
+            TableLayoutPanel side = new TableLayoutPanel
+            {
+                ColumnCount = 1,
+                RowCount = 2,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0)
+            };
+            side.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            side.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-            _issuesLink = CreateLinkLabel("GitHub Issues", rightColumnX + 10, rightColumnY, IssuesLink_LinkClicked);
-            rightColumnY += 25;
+            CardPanel links = new CardPanel("Resources and community", null);
+            links.Dock = DockStyle.Top;
+            _issuesLink = CreateLinkLabel("GitHub Issues", IssuesLink_LinkClicked);
+            _nexusModsLink = CreateLinkLabel("Nexus Mods - Sheltered", NexusModsLink_LinkClicked);
+            _nexusManagerLink = CreateLinkLabel("Sheltered Mod Manager on Nexus", NexusManagerLink_LinkClicked);
+            links.AddBody(_issuesLink);
+            links.AddBody(_nexusModsLink);
+            links.AddBody(_nexusManagerLink);
 
-            _nexusModsLink = CreateLinkLabel("Nexus Mods - Sheltered", rightColumnX + 10, rightColumnY, NexusModsLink_LinkClicked);
-            rightColumnY += 25;
-
-            _nexusManagerLink = CreateLinkLabel("Sheltered Mod Manager on Nexus", rightColumnX + 10, rightColumnY, NexusManagerLink_LinkClicked);
-            rightColumnY += 50;
-
-            _creditsLabel = new Label();
-            _creditsLabel.Text = "Credits and acknowledgments";
-            _creditsLabel.UseMnemonic = false;
-            _creditsLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _creditsLabel.AutoSize = true;
-            _creditsLabel.Location = new Point(rightColumnX, rightColumnY);
-            rightColumnY += 30;
-
+            CardPanel credits = new CardPanel("Credits and acknowledgments", null);
+            credits.FillsHeight = true;
+            credits.Dock = DockStyle.Fill;
+            credits.Margin = new Padding(0);
             _creditsBox = new RichTextBox();
             _creditsBox.Text = "- Coolnether123: 2025 maintenance and development.\n" +
                    "- benjaminfoo: Original 2019 mod loader foundation.\n" +
@@ -138,37 +140,34 @@ namespace Manager.Views
                    "- Unicube: Original game developers.\n" +
                    "- NeighTools: UnityDoorstop injection framework.\n" +
                    "- Andreas Pardeike: Harmony runtime patching library.";
-            _creditsBox.Font = new Font("Segoe UI", 10f);
-            _creditsBox.Location = new Point(rightColumnX, rightColumnY);
-            _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20);
+            _creditsBox.Font = ManagerTheme.UiFont(9.5f);
+            _creditsBox.Dock = DockStyle.Fill;
             _creditsBox.ReadOnly = true;
             _creditsBox.Multiline = true;
             _creditsBox.WordWrap = true;
             _creditsBox.BorderStyle = BorderStyle.None;
             _creditsBox.ScrollBars = RichTextBoxScrollBars.Vertical;
-            _creditsBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
+            _creditsBox.AccessibleName = "Credits and acknowledgments";
+            credits.AddBody(_creditsBox);
 
-            this.Controls.Add(_titleLabel);
-            this.Controls.Add(_versionLabel);
-            this.Controls.Add(_authorLabel);
-            this.Controls.Add(_descriptionBox);
-            this.Controls.Add(_linksLabel);
-            this.Controls.Add(_issuesLink);
-            this.Controls.Add(_nexusModsLink);
-            this.Controls.Add(_nexusManagerLink);
-            this.Controls.Add(_creditsLabel);
-            this.Controls.Add(_creditsBox);
-
+            side.Controls.Add(links, 0, 0);
+            side.Controls.Add(credits, 0, 1);
+            root.Controls.Add(header, 0, 0);
+            root.SetColumnSpan(header, 2);
+            root.Controls.Add(about, 0, 1);
+            root.Controls.Add(side, 1, 1);
+            this.Controls.Add(root);
             this.ResumeLayout();
         }
 
-        private LinkLabel CreateLinkLabel(string text, int x, int y, LinkLabelLinkClickedEventHandler handler)
+        private LinkLabel CreateLinkLabel(string text, LinkLabelLinkClickedEventHandler handler)
         {
-            LinkLabel link = new LinkLabel();
+            LinkLabel link = new ThemedLinkLabel();
             link.Text = text;
-            link.Font = new Font("Segoe UI", 10f);
+            link.Font = ManagerTheme.UiFont(10f);
             link.AutoSize = true;
-            link.Location = new Point(x, y);
+            link.Margin = new Padding(0, 0, 0, 8);
+            link.Anchor = AnchorStyles.Left;
             link.LinkClicked += handler;
             return link;
         }
@@ -207,41 +206,13 @@ namespace Manager.Views
         public void ApplyTheme(bool isDark)
         {
             _isDarkMode = isDark;
-
-            if (isDark)
-            {
-                this.BackColor = Color.FromArgb(45, 45, 48);
-                _titleLabel.ForeColor = Color.White;
-                _versionLabel.ForeColor = Color.Gray;
-                _authorLabel.ForeColor = Color.LightGray;
-                _descriptionBox.BackColor = Color.FromArgb(45, 45, 48);
-                _descriptionBox.ForeColor = Color.White;
-                _linksLabel.ForeColor = Color.White;
-                _creditsLabel.ForeColor = Color.White;
-                _creditsBox.BackColor = Color.FromArgb(45, 45, 48);
-                _creditsBox.ForeColor = Color.White;
-
-                _issuesLink.LinkColor = Color.LightBlue;
-                _nexusModsLink.LinkColor = Color.LightBlue;
-                _nexusManagerLink.LinkColor = Color.LightBlue;
-            }
-            else
-            {
-                this.BackColor = SystemColors.Control;
-                _titleLabel.ForeColor = SystemColors.ControlText;
-                _versionLabel.ForeColor = Color.Gray;
-                _authorLabel.ForeColor = SystemColors.ControlText;
-                _descriptionBox.BackColor = SystemColors.Control;
-                _descriptionBox.ForeColor = SystemColors.ControlText;
-                _linksLabel.ForeColor = SystemColors.ControlText;
-                _creditsLabel.ForeColor = SystemColors.ControlText;
-                _creditsBox.BackColor = SystemColors.Control;
-                _creditsBox.ForeColor = SystemColors.ControlText;
-
-                _issuesLink.LinkColor = SystemColors.HotTrack;
-                _nexusModsLink.LinkColor = SystemColors.HotTrack;
-                _nexusManagerLink.LinkColor = SystemColors.HotTrack;
-            }
+            ThemePalette palette = ManagerTheme.Current;
+            ManagerTheme.Apply(this);
+            this.BackColor = palette.Window;
+            _descriptionBox.BackColor = palette.Surface;
+            _descriptionBox.ForeColor = palette.Text;
+            _creditsBox.BackColor = palette.Surface;
+            _creditsBox.ForeColor = palette.Text;
         }
     }
 }

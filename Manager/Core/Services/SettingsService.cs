@@ -319,6 +319,9 @@ namespace Manager.Core.Services
                     settings.WindowMaximized = maximized;
             }
 
+            settings.LastSessionUtc = ReadUtc(raw, "LastSessionUtc");
+            settings.LastCrashCheckUtc = ReadUtc(raw, "LastCrashCheckUtc");
+
             if (settingsSanitized)
                 WriteIniFile(raw);
 
@@ -400,11 +403,28 @@ namespace Manager.Core.Services
             data["WindowWidth"] = settings.WindowWidth.ToString();
             data["WindowHeight"] = settings.WindowHeight.ToString();
             data["WindowMaximized"] = settings.WindowMaximized.ToString();
+            data["LastSessionUtc"] = FormatUtc(settings.LastSessionUtc);
+            data["LastCrashCheckUtc"] = FormatUtc(settings.LastCrashCheckUtc);
 
             WriteIniFile(data);
             
             if (SettingsChanged != null)
                 SettingsChanged(settings);
+        }
+
+        private static DateTime ReadUtc(Dictionary<string, string> raw, string key)
+        {
+            string value;
+            DateTime parsed;
+            if (raw.TryGetValue(key, out value) &&
+                DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out parsed))
+                return parsed.ToUniversalTime();
+            return DateTime.MinValue;
+        }
+
+        private static string FormatUtc(DateTime value)
+        {
+            return value == DateTime.MinValue ? string.Empty : value.ToUniversalTime().ToString("o", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         private static void PersistProtectedSecret(

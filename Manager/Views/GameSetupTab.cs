@@ -11,7 +11,7 @@ namespace Manager.Views
     /// Delegate for string path events
     /// </summary>
     public delegate void StringPathHandler(string path);
-    
+
     /// <summary>
     /// Delegate for bool events
     /// </summary>
@@ -23,18 +23,14 @@ namespace Manager.Views
     public class GameSetupTab : UserControl
     {
         // Path controls
-        private Label _gamePathLabel;
         private TextBox _gamePathTextBox;
-        private Button _browseButton;
-        private Button _detectButton;
-        
-        private Label _modsPathLabel;
+        private ActionButton _browseButton;
+        private ActionButton _detectButton;
         private TextBox _modsPathTextBox;
-        private Button _openModsFolderButton;
-        private Button _openGameFolderButton;
+        private ActionButton _openModsFolderButton;
+        private ActionButton _openGameFolderButton;
 
         // Status
-        private Panel _statusPanel;
         private Label _statusLabel;
         private Label _modsCountLabel;
         private Label _modApiVersionLabel;
@@ -44,22 +40,27 @@ namespace Manager.Views
         private ActionButton _launchVanillaButton;
 
         // Log viewer
-        private Label _logLabel;
-        private Panel _logContainer;
+        private Panel _logFrame;
         private RichTextBox _logTextBox;
-        private Button _clearLogButton;
-        private Button _loadGameLogButton;
+        private ActionButton _clearLogButton;
+        private ActionButton _loadGameLogButton;
 
         // Auto-load selection
-        private Label _autoLoadLabel;
         private ComboBox _autoLoadComboBox;
-        private Button _refreshSavesButton;
+        private ActionButton _refreshSavesButton;
         private const int AUTO_LOAD_NONE = 0;
         private const int AUTO_LOAD_NEW_SAVE = -1;
+        private const int MinimumPageHeight = 470;
+        private const string InstallHelp =
+            "Choose Sheltered.exe (Steam or GOG) or ShelteredWindows64_EOS.exe (Epic). You can also drop the file or its folder on the path box.";
+        private TableLayoutPanel _root;
+        private CardPanel _installCard;
+        private CardPanel _playCard;
+
+        private ToolTip _toolTip;
 
         // State
         private AppSettings _settings;
-        private bool _isDarkMode = false;
         private bool _isUpdating = false;
         private string _lastLoggedPath = null;
 
@@ -84,6 +85,13 @@ namespace Manager.Views
             WireEvents();
         }
 
+        /// <summary>Developer mode adds the shortcut to the game's own SMM log.</summary>
+        public bool DeveloperMode
+        {
+            get { return _loadGameLogButton.Visible; }
+            set { _loadGameLogButton.Visible = value; }
+        }
+
         public void Initialize(AppSettings settings)
         {
             _settings = settings;
@@ -93,223 +101,246 @@ namespace Manager.Views
         private void InitializeComponent()
         {
             this.SuspendLayout();
-            this.Padding = new Padding(20);
+            this.Padding = new Padding(16, 14, 16, 12);
+            this.Font = ManagerTheme.UiFont(9f);
+            ManagerTheme.SetRole(this, ThemeRole.Window);
+            _toolTip = new ToolTip { AutoPopDelay = 12000, InitialDelay = 400, ShowAlways = true };
 
-            // Game Path Section
-            _gamePathLabel = new Label();
-            _gamePathLabel.Text = "Sheltered installation";
-            _gamePathLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _gamePathLabel.AutoSize = true;
-            _gamePathLabel.Location = new Point(20, 20);
+            TableLayoutPanel root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-            _gamePathTextBox = new TextBox();
-            _gamePathTextBox.Font = new Font("Segoe UI", 10f);
-            _gamePathTextBox.Location = new Point(20, 50);
-            _gamePathTextBox.Size = new Size(500, 26);
-            _gamePathTextBox.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            _gamePathTextBox.BorderStyle = BorderStyle.FixedSingle;
-            _gamePathTextBox.ReadOnly = false;
+            // Installation card: game executable, derived mods folder, and folder shortcuts.
+            CardPanel install = new CardPanel("Sheltered installation", InstallHelp);
+            install.Dock = DockStyle.Fill;
+
+            _gamePathTextBox = UiFactory.TextField();
+            _gamePathTextBox.AccessibleName = "Sheltered executable path";
             _gamePathTextBox.AllowDrop = true;
+            _gamePathTextBox.Margin = new Padding(0, 3, 8, 3);
             _gamePathTextBox.DragEnter += (s, e) => { if (e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect = DragDropEffects.Copy; };
-            _gamePathTextBox.DragDrop += (s, e) => 
+            _gamePathTextBox.DragDrop += (s, e) =>
             {
                 string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
                 if (files.Length > 0) _gamePathTextBox.Text = files[0];
             };
+            _browseButton = UiFactory.Button("Browse...", ActionButtonKind.Secondary, null);
+            _detectButton = UiFactory.Button("Auto-detect", ActionButtonKind.Quiet, null);
+            _browseButton.Margin = new Padding(0, 0, 6, 0);
+            _detectButton.Margin = new Padding(0);
+            _toolTip.SetToolTip(_detectButton, "Search the usual Steam, GOG, and Epic install folders");
+            install.AddBody(Row(null, UiFactory.Framed(_gamePathTextBox), _browseButton, _detectButton));
 
-            _browseButton = new Button();
-            _browseButton.Text = "Browse...";
-            _browseButton.Font = new Font("Segoe UI", 9f);
-            _browseButton.Location = new Point(530, 48);
-            _browseButton.Width = 90;
-            _browseButton.Height = 28;
-            _browseButton.FlatStyle = FlatStyle.Flat;
-            _browseButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            
-            _detectButton = new Button();
-            _detectButton.Text = "Auto-detect";
-            _detectButton.Font = new Font("Segoe UI", 9f);
-            _detectButton.Location = new Point(625, 48);
-            _detectButton.Width = 100;
-            _detectButton.Height = 28;
-            _detectButton.FlatStyle = FlatStyle.Flat;
-            _detectButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _statusLabel = UiFactory.Text("Game not found.", ThemeRole.Danger, 9f, true);
+            _statusLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            _statusLabel.Margin = new Padding(0, 4, 0, 10);
+            install.AddBody(_statusLabel);
 
-            // Mods Path Section
-            _modsPathLabel = new Label();
-            _modsPathLabel.Text = "Mods directory";
-            _modsPathLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _modsPathLabel.AutoSize = true;
-            _modsPathLabel.Location = new Point(20, 90);
-
-            _modsPathTextBox = new TextBox();
-            _modsPathTextBox.Font = new Font("Segoe UI", 10f);
-            _modsPathTextBox.Location = new Point(20, 115);
-            _modsPathTextBox.Size = new Size(500, 26);
-            _modsPathTextBox.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            _modsPathTextBox.BorderStyle = BorderStyle.FixedSingle;
+            Label modsCaption = UiFactory.Text("Mods folder", ThemeRole.Default, 9f, true);
+            modsCaption.Anchor = AnchorStyles.Left;
+            modsCaption.Margin = new Padding(0, 0, 10, 0);
+            _modsPathTextBox = UiFactory.TextField();
             _modsPathTextBox.ReadOnly = true;
+            _modsPathTextBox.AccessibleName = "Mods folder path";
+            _modsPathTextBox.Margin = new Padding(0, 3, 8, 3);
+            _openModsFolderButton = UiFactory.Button("Open mods folder", ActionButtonKind.Secondary, null);
+            _openGameFolderButton = UiFactory.Button("Open game folder", ActionButtonKind.Quiet, null);
+            _openModsFolderButton.Margin = new Padding(0, 0, 6, 0);
+            _openGameFolderButton.Margin = new Padding(0);
+            install.AddBody(Row(modsCaption, UiFactory.Framed(_modsPathTextBox), _openModsFolderButton, _openGameFolderButton));
 
-            _openModsFolderButton = new Button();
-            _openModsFolderButton.Text = "Open folder";
-            _openModsFolderButton.Font = new Font("Segoe UI", 9f);
-            _openModsFolderButton.Location = new Point(530, 113);
-            _openModsFolderButton.Width = 90;
-            _openModsFolderButton.Height = 28;
-            _openModsFolderButton.FlatStyle = FlatStyle.Flat;
-            _openModsFolderButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
-            _openGameFolderButton = new Button();
-            _openGameFolderButton.Text = "Open game folder";
-            _openGameFolderButton.Font = new Font("Segoe UI", 9f);
-            _openGameFolderButton.Location = new Point(20, 155);
-            _openGameFolderButton.Width = 150;
-            _openGameFolderButton.Height = 28;
-            _openGameFolderButton.FlatStyle = FlatStyle.Flat;
-
-            // Status Panel
-            _statusPanel = new Panel();
-            _statusPanel.Location = new Point(20, 195);
-            _statusPanel.Size = new Size(600, 90);
-            _statusPanel.BorderStyle = BorderStyle.FixedSingle;
-            _statusPanel.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-
-            _statusLabel = new Label();
-            _statusLabel.Text = "Status: Not configured";
-            _statusLabel.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            _statusLabel.AutoSize = true;
-            _statusLabel.Location = new Point(15, 12);
-
-            _modsCountLabel = new Label();
-            _modsCountLabel.Text = "Active Mods: 0";
-            _modsCountLabel.Font = new Font("Segoe UI", 10f);
-            _modsCountLabel.AutoSize = true;
-            _modsCountLabel.Location = new Point(15, 35);
-
-            _modApiVersionLabel = new Label();
-            _modApiVersionLabel.Text = "ModAPI Version: Unknown";
-            _modApiVersionLabel.Font = new Font("Segoe UI", 10f);
-            _modApiVersionLabel.AutoSize = true;
-            _modApiVersionLabel.Location = new Point(15, 58);
-
-            _statusPanel.Controls.Add(_statusLabel);
-            _statusPanel.Controls.Add(_modsCountLabel);
-            _statusPanel.Controls.Add(_modApiVersionLabel);
-
-            // Launch Buttons
-            _launchButton = new ActionButton();
-            _launchButton.Text = "Launch Sheltered (modded)";
-            _launchButton.IsPrimary = true;
-            _launchButton.Location = new Point(20, 200);
-            _launchButton.Width = 250;
-            _launchButton.Height = 45;
-            _launchButton.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            // Play card: launch actions and auto-load choice.
+            CardPanel play = new CardPanel("Play", null);
+            play.Dock = DockStyle.Fill;
+            play.Margin = new Padding(0, 0, 0, 12);
+            _launchButton = UiFactory.Button("Launch Sheltered (modded)", ActionButtonKind.Primary, null);
+            _launchButton.Font = ManagerTheme.Semibold(10.5f);
+            _launchButton.MinimumSize = new Size(0, 40);
+            _launchButton.Padding = new Padding(20, 0, 20, 0);
             _launchButton.Enabled = false;
-
-            _launchVanillaButton = new ActionButton();
-            _launchVanillaButton.Text = "Launch vanilla (no mods)";
-            _launchVanillaButton.Location = new Point(280, 200);
-            _launchVanillaButton.Width = 200;
-            _launchVanillaButton.Height = 45;
-            _launchVanillaButton.Font = new Font("Segoe UI", 10f);
+            _launchVanillaButton = UiFactory.Button("Launch vanilla (no mods)", ActionButtonKind.Secondary, null);
+            _launchVanillaButton.MinimumSize = new Size(0, 40);
+            _launchVanillaButton.Padding = new Padding(16, 0, 16, 0);
             _launchVanillaButton.Enabled = false;
 
-            // Log section
-            _logLabel = new Label();
-            _logLabel.Text = "Activity log";
-            _logLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _logLabel.AutoSize = true;
-            _logLabel.Location = new Point(20, 260);
+            _modsCountLabel = UiFactory.Text("Active mods: 0", ThemeRole.Default, 9f, true);
+            _modApiVersionLabel = UiFactory.Text(string.Empty, ThemeRole.Warning, 9f, false);
+            _modApiVersionLabel.Visible = false;
+            _modsCountLabel.AutoEllipsis = true;
+            _modApiVersionLabel.AutoEllipsis = true;
+            TableLayoutPanel launchInfo = new TableLayoutPanel
+            {
+                ColumnCount = 1,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(12, 0, 0, 0),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right
+            };
+            launchInfo.Controls.Add(_modsCountLabel, 0, 0);
+            launchInfo.Controls.Add(_modApiVersionLabel, 0, 1);
+            _launchButton.Margin = new Padding(0, 0, 8, 0);
+            _launchVanillaButton.Margin = new Padding(0);
+            TableLayoutPanel launchRow = new TableLayoutPanel
+            {
+                ColumnCount = 3,
+                RowCount = 1,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top
+            };
+            launchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            launchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            launchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            launchRow.Controls.Add(_launchButton, 0, 0);
+            launchRow.Controls.Add(_launchVanillaButton, 1, 0);
+            launchRow.Controls.Add(launchInfo, 2, 0);
+            launchRow.Margin = new Padding(0, 0, 0, 10);
+            play.AddBody(launchRow);
 
-            _clearLogButton = new Button();
-            _clearLogButton.Text = "Clear log";
-            _clearLogButton.Font = new Font("Segoe UI", 9f);
-            _clearLogButton.Location = new Point(440, 258);
-            _clearLogButton.Width = 90;
-            _clearLogButton.Height = 24;
-            _clearLogButton.FlatStyle = FlatStyle.Flat;
-            _clearLogButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
-            _loadGameLogButton = new Button();
-            _loadGameLogButton.Text = "View game log";
-            _loadGameLogButton.Font = new Font("Segoe UI", 9f);
-            _loadGameLogButton.Location = new Point(540, 258);
-            _loadGameLogButton.Width = 100;
-            _loadGameLogButton.Height = 24;
-            _loadGameLogButton.FlatStyle = FlatStyle.Flat;
-            _loadGameLogButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
-            // Log container with square border
-            _logContainer = new Panel();
-            _logContainer.Location = new Point(20, 285);
-            _logContainer.Size = new Size(600, 100); 
-            _logContainer.BorderStyle = BorderStyle.FixedSingle;
-            _logContainer.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom;
-
-            _logTextBox = new RichTextBox();
-            _logTextBox.Location = new Point(0, 0);
-            _logTextBox.Dock = DockStyle.Fill;
-            _logTextBox.Font = new Font("Consolas", 9f);
-            _logTextBox.ReadOnly = true;
-            _logTextBox.Multiline = true;
-            _logTextBox.WordWrap = true;
-            _logTextBox.BorderStyle = BorderStyle.None;
-            _logTextBox.ScrollBars = RichTextBoxScrollBars.ForcedVertical;
-
-            _logContainer.Controls.Add(_logTextBox);
-
-            // Add controls
-            this.Controls.Add(_gamePathLabel);
-            this.Controls.Add(_gamePathTextBox);
-            this.Controls.Add(_browseButton);
-            this.Controls.Add(_detectButton);
-            this.Controls.Add(_modsPathLabel);
-            this.Controls.Add(_modsPathTextBox);
-            this.Controls.Add(_openModsFolderButton);
-            this.Controls.Add(_openGameFolderButton);
-            // _statusPanel removed as it's now in the header
-            this.Controls.Add(_launchButton);
-            this.Controls.Add(_launchVanillaButton);
-            this.Controls.Add(_logLabel);
-            this.Controls.Add(_clearLogButton);
-            this.Controls.Add(_loadGameLogButton);
-            this.Controls.Add(_logContainer);
-
-            // Auto-load UI (positioned near launch buttons)
-            _autoLoadLabel = new Label();
-            _autoLoadLabel.Text = "Auto-load save on start:";
-            _autoLoadLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _autoLoadLabel.AutoSize = true;
-            _autoLoadLabel.Location = new Point(20, 260);
-
-            _autoLoadComboBox = new ComboBox();
-            _autoLoadComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            _autoLoadComboBox.Font = new Font("Segoe UI", 9f);
-            _autoLoadComboBox.Location = new Point(20, 280);
-            _autoLoadComboBox.Width = 350;
+            Label autoLoadLabel = UiFactory.Text("Auto-load on start", ThemeRole.Default, 9f, false);
+            autoLoadLabel.Anchor = AnchorStyles.Left;
+            autoLoadLabel.Margin = new Padding(0, 0, 10, 0);
+            _autoLoadComboBox = UiFactory.ChoiceField(null);
+            _autoLoadComboBox.AccessibleName = "Auto-load on start";
+            _autoLoadComboBox.Width = 360;
+            _autoLoadComboBox.Anchor = AnchorStyles.Left;
+            _autoLoadComboBox.Margin = new Padding(0, 0, 6, 0);
             // Keep 10 actual save slots visible before scroll starts.
             // The list also includes "(None)" + "(New Save)" as extra items.
             _autoLoadComboBox.MaxDropDownItems = 12;
+            _refreshSavesButton = UiFactory.Button("Refresh saves", ActionButtonKind.Quiet, null);
+            _refreshSavesButton.Margin = new Padding(0);
+            _refreshSavesButton.Anchor = AnchorStyles.Left;
+            _toolTip.SetToolTip(_refreshSavesButton, "Read the save slots from the game folder again");
+            TableLayoutPanel autoLoadRow = new TableLayoutPanel
+            {
+                ColumnCount = 4,
+                RowCount = 1,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0)
+            };
+            autoLoadRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            autoLoadRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            autoLoadRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            autoLoadRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            autoLoadRow.Controls.Add(autoLoadLabel, 0, 0);
+            autoLoadRow.Controls.Add(_autoLoadComboBox, 1, 0);
+            autoLoadRow.Controls.Add(_refreshSavesButton, 2, 0);
+            play.AddBody(autoLoadRow);
 
-            _refreshSavesButton = new Button();
-            _refreshSavesButton.Text = "Refresh";
-            _refreshSavesButton.Font = new Font("Segoe UI", 8f);
-            _refreshSavesButton.Location = new Point(375, 279);
-            _refreshSavesButton.Width = 70;
-            _refreshSavesButton.Height = 24;
-            _refreshSavesButton.FlatStyle = FlatStyle.Flat;
+            // Activity log card fills the remaining height.
+            CardPanel log = new CardPanel(null, null);
+            log.FillsHeight = true;
+            log.Dock = DockStyle.Fill;
+            log.Margin = new Padding(0);
+            TableLayoutPanel logHeader = new TableLayoutPanel
+            {
+                ColumnCount = 3,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            // Styled like a card title (tan serif caps over a rule) with the log actions beside it.
+            Label logTitle = UiFactory.Text("ACTIVITY LOG", ThemeRole.Accent, 9.5f, false);
+            logTitle.Font = ManagerTheme.Display(9.5f);
+            logTitle.AccessibleName = "Activity log";
+            logTitle.Anchor = AnchorStyles.Left;
+            logTitle.Margin = new Padding(0);
+            logHeader.Paint += delegate(object sender, PaintEventArgs e)
+            {
+                using (Pen rule = new Pen(ManagerTheme.Current.Border))
+                    e.Graphics.DrawLine(rule, 0, logHeader.Height - 1, logHeader.Width, logHeader.Height - 1);
+            };
+            _clearLogButton = UiFactory.Button("Clear", ActionButtonKind.Quiet, null);
+            _loadGameLogButton = UiFactory.Button("View game log", ActionButtonKind.Quiet, null);
+            _toolTip.SetToolTip(_loadGameLogButton, "Show SMM/mod_manager.log from the game folder");
+            _loadGameLogButton.Margin = new Padding(0, 0, 4, 4);
+            _clearLogButton.Margin = new Padding(0, 0, 0, 4);
+            logHeader.Controls.Add(logTitle, 0, 0);
+            logHeader.Controls.Add(_loadGameLogButton, 1, 0);
+            logHeader.Controls.Add(_clearLogButton, 2, 0);
+            log.AddBody(logHeader);
 
-            this.Controls.Add(_autoLoadLabel);
-            this.Controls.Add(_autoLoadComboBox);
-            this.Controls.Add(_refreshSavesButton);
+            _logTextBox = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
+                Font = ManagerTheme.UiFont(9f),
+                ReadOnly = true,
+                Multiline = true,
+                WordWrap = true,
+                BorderStyle = BorderStyle.None,
+                ScrollBars = RichTextBoxScrollBars.Vertical,
+                AccessibleName = "Activity log"
+            };
+            _logFrame = new Panel { Dock = DockStyle.Fill, Padding = new Padding(1), MinimumSize = new Size(0, 60) };
+            _logFrame.Controls.Add(_logTextBox);
+            log.AddBody(_logFrame);
 
-            // Shift Log UI down to make room
-            _logLabel.Location = new Point(20, 320);
-            _clearLogButton.Location = new Point(440, 318);
-            _loadGameLogButton.Location = new Point(540, 318);
-            _logContainer.Location = new Point(20, 345);
+            root.Controls.Add(install, 0, 0);
+            root.Controls.Add(play, 0, 1);
+            root.Controls.Add(log, 0, 2);
+            install.Margin = new Padding(0, 0, 0, 12);
+            log.TabIndex = 2;
+            _root = root;
+            _installCard = install;
+            _playCard = play;
 
+            // Below MinimumPageHeight the page scrolls instead of squeezing the activity log away.
+            Panel host = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            root.Dock = DockStyle.Top;
+            root.Height = MinimumPageHeight;
+            host.Controls.Add(root);
+            host.Resize += delegate
+            {
+                // Toggling AutoScroll clears a scrollbar left over from a smaller size.
+                host.AutoScroll = host.Height < MinimumPageHeight;
+                root.Height = Math.Max(host.ClientSize.Height, MinimumPageHeight);
+            };
+            this.Controls.Add(host);
             this.ResumeLayout();
+        }
+
+        // One row: optional leading label, a stretching field, then trailing buttons.
+        private static TableLayoutPanel Row(Control leading, Control fill, params Control[] trailing)
+        {
+            int first = leading == null ? 0 : 1;
+            TableLayoutPanel row = new TableLayoutPanel
+            {
+                ColumnCount = first + 1 + trailing.Length,
+                RowCount = 1,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0)
+            };
+            if (leading != null)
+            {
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                row.Controls.Add(leading, 0, 0);
+            }
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            row.Controls.Add(fill, first, 0);
+            for (int i = 0; i < trailing.Length; i++)
+            {
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                row.Controls.Add(trailing[i], first + 1 + i, 0);
+            }
+            return row;
         }
 
         private void WireEvents()
@@ -331,7 +362,7 @@ namespace Manager.Views
         private void AutoLoadComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (_isUpdating || _settings == null) return;
-            
+
             var selected = _autoLoadComboBox.SelectedItem as SaveSlotItem;
             if (selected != null)
             {
@@ -398,11 +429,6 @@ namespace Manager.Views
 
         private void GameSetupTab_Load(object sender, EventArgs e)
         {
-            // Sync log container size to parent tab dimensions with standard 20px padding.
-            // This establishes the correct relative distance for the Bottom anchor.
-            _logContainer.Width = this.ClientSize.Width - 40; // 20px on each side
-            _logContainer.Height = this.ClientSize.Height - _logContainer.Top - 20; // 20px margin from bottom
-
             RefreshSavesList();
         }
 
@@ -431,7 +457,7 @@ namespace Manager.Views
             string timestamp = DateTime.Now.ToString("HH:mm:ss");
             bool atBottom = _logTextBox.SelectionStart == _logTextBox.TextLength;
             _logTextBox.AppendText("[" + timestamp + "] " + message + "\n");
-            
+
             if (atBottom)
                 _logTextBox.ScrollToCaret();
         }
@@ -462,7 +488,7 @@ namespace Manager.Views
             Log("Searching for Sheltered installation...");
             var settingsService = new Manager.Core.Services.SettingsService();
             string detected = settingsService.Load().GamePath; // This triggers auto-detect if current is invalid
-            
+
             if (!string.IsNullOrEmpty(detected) && File.Exists(detected))
             {
                 _gamePathTextBox.Text = detected;
@@ -470,7 +496,7 @@ namespace Manager.Views
             }
             else
             {
-                MessageBox.Show("Could not find Sheltered automatically. Please use 'Browse' to locate Sheltered.exe.", 
+                MessageBox.Show("Could not find Sheltered automatically. Please use 'Browse' to locate Sheltered.exe.",
                     "Detection Failed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -481,7 +507,7 @@ namespace Manager.Views
 
             string path = _gamePathTextBox.Text;
             if (path != null) path = path.Trim();
-            
+
             if (string.IsNullOrEmpty(path))
             {
                 _modsPathTextBox.Text = string.Empty;
@@ -512,15 +538,15 @@ namespace Manager.Views
             {
                 string gameDir = Path.GetDirectoryName(path);
                 string modsPath = Path.Combine(gameDir, "mods");
-                
+
                 _modsPathTextBox.Text = modsPath;
-                
+
                 if (_settings != null)
                 {
                     _settings.GamePath = path;
                     _settings.ModsPath = modsPath;
                 }
-                
+
                 UpdateStatus(true);
                 RefreshSavesList();
                 if (GamePathChanged != null)
@@ -541,7 +567,7 @@ namespace Manager.Views
                 {
                     if (!Directory.Exists(_modsPathTextBox.Text))
                         Directory.CreateDirectory(_modsPathTextBox.Text);
-                    
+
                     System.Diagnostics.Process.Start("explorer.exe", _modsPathTextBox.Text);
                     Log("Opened mods folder");
                 }
@@ -564,9 +590,9 @@ namespace Manager.Views
             }
 
             string path = _gamePathTextBox.Text;
-            if (string.IsNullOrEmpty(path)) 
+            if (string.IsNullOrEmpty(path))
             {
-                _settings.GamePath = string.Empty; 
+                _settings.GamePath = string.Empty;
                 BrowseForGame();
                 return;
             }
@@ -617,12 +643,19 @@ namespace Manager.Views
             {
                 _gamePathTextBox.Text = _settings.GamePath ?? string.Empty;
                 _modsPathTextBox.Text = _settings.ModsPath ?? string.Empty;
+                // Show the end of long paths (the executable name) instead of a selected block.
+                _gamePathTextBox.Select(_gamePathTextBox.TextLength, 0);
+                _gamePathTextBox.ScrollToCaret();
+                _modsPathTextBox.Select(_modsPathTextBox.TextLength, 0);
+                _modsPathTextBox.ScrollToCaret();
+                _toolTip.SetToolTip(_gamePathTextBox, _gamePathTextBox.Text);
+                _toolTip.SetToolTip(_modsPathTextBox, _modsPathTextBox.Text);
             }
             finally
             {
                 _isUpdating = false;
             }
-            
+
             UpdateStatus(_settings.IsGamePathValid);
 
             if (_settings.IsGamePathValid && _settings.GamePath != _lastLoggedPath)
@@ -641,25 +674,43 @@ namespace Manager.Views
         {
             if (isValid)
             {
-                _statusLabel.Text = "Status: Ready";
-                _statusLabel.ForeColor = _isDarkMode ? Color.LightGreen : Color.Green;
+                _statusLabel.Text = "Game found. Mods load from the folder below.";
+                ManagerTheme.SetRole(_statusLabel, ThemeRole.Success);
                 _launchButton.Enabled = true;
                 _launchVanillaButton.Enabled = true;
                 _openGameFolderButton.Text = "Open game folder";
-                _openGameFolderButton.Width = 150;
+                _modsCountLabel.Text = enabledModCount == 0
+                    ? "No mods active. Plain Sheltered will start."
+                    : (enabledModCount == 1 ? "1 mod will load" : enabledModCount + " mods will load");
             }
             else
             {
-                _statusLabel.Text = "Status: Game not found";
-                _statusLabel.ForeColor = Color.Red;
+                _statusLabel.Text = "Game not found. Choose Browse and select Sheltered.exe or ShelteredWindows64_EOS.exe.";
+                ManagerTheme.SetRole(_statusLabel, ThemeRole.Danger);
                 _launchButton.Enabled = false;
                 _launchVanillaButton.Enabled = false;
                 _openGameFolderButton.Text = "Set game path (.exe)";
-                _openGameFolderButton.Width = 180;
+                _modsCountLabel.Text = "Set the game path to launch";
             }
 
-            _modsCountLabel.Text = "Active Mods: " + enabledModCount;
-            _modApiVersionLabel.Text = "ModAPI Version: " + (modApiVersion ?? "Unknown");
+            // Loader versions only matter when something is missing; otherwise they sit in a tooltip.
+            bool loaderMissing = isValid && (modApiVersion ?? string.Empty).IndexOf("missing", StringComparison.OrdinalIgnoreCase) >= 0;
+            _modApiVersionLabel.Text = loaderMissing ? "Mod loader not detected in the game folder." : string.Empty;
+            _modApiVersionLabel.Visible = loaderMissing;
+            ManagerTheme.SetRole(_modApiVersionLabel, ThemeRole.Warning);
+            _toolTip.SetToolTip(_modsCountLabel, "Mod loader: " + (modApiVersion ?? "unknown"));
+
+            // Once the game is found, Play leads and the setup instructions step aside.
+            if (_root != null)
+            {
+                _root.SuspendLayout();
+                _root.SetRow(_playCard, isValid ? 0 : 1);
+                _root.SetRow(_installCard, isValid ? 1 : 0);
+                _playCard.TabIndex = isValid ? 0 : 1;
+                _installCard.TabIndex = isValid ? 1 : 0;
+                _installCard.Description = isValid ? null : InstallHelp;
+                _root.ResumeLayout(true);
+            }
         }
 
         /// <summary>
@@ -675,85 +726,12 @@ namespace Manager.Views
         /// </summary>
         public void ApplyTheme(bool isDark)
         {
-            _isDarkMode = isDark;
-
-            if (isDark)
-            {
-                this.BackColor = Color.FromArgb(45, 45, 48);
-                _gamePathLabel.ForeColor = Color.White;
-                _gamePathTextBox.BackColor = Color.FromArgb(60, 60, 60);
-                _gamePathTextBox.ForeColor = Color.White;
-                _modsPathLabel.ForeColor = Color.White;
-                _modsPathTextBox.BackColor = Color.FromArgb(60, 60, 60);
-                _modsPathTextBox.ForeColor = Color.White;
-                _statusPanel.BackColor = Color.FromArgb(50, 50, 52);
-                _modsCountLabel.ForeColor = Color.LightGray;
-                _modApiVersionLabel.ForeColor = Color.LightGray;
-                _logLabel.ForeColor = Color.White;
-                _logContainer.BackColor = Color.FromArgb(60, 60, 60);
-                _logTextBox.BackColor = Color.FromArgb(30, 30, 32);
-                _logTextBox.ForeColor = Color.LightGray;
-                
-                ApplyDarkThemeToButton(_browseButton);
-                ApplyDarkThemeToButton(_detectButton);
-                ApplyDarkThemeToButton(_openModsFolderButton);
-                ApplyDarkThemeToButton(_openGameFolderButton);
-                ApplyDarkThemeToButton(_clearLogButton);
-                ApplyDarkThemeToButton(_loadGameLogButton);
-                ApplyDarkThemeToButton(_refreshSavesButton);
-
-                _autoLoadLabel.ForeColor = Color.White;
-                _autoLoadComboBox.BackColor = Color.FromArgb(60, 60, 60);
-                _autoLoadComboBox.ForeColor = Color.White;
-                _autoLoadComboBox.FlatStyle = FlatStyle.Flat;
-            }
-            else
-            {
-                this.BackColor = SystemColors.Control;
-                _gamePathLabel.ForeColor = SystemColors.ControlText;
-                _gamePathTextBox.BackColor = SystemColors.Window;
-                _gamePathTextBox.ForeColor = SystemColors.WindowText;
-                _modsPathLabel.ForeColor = SystemColors.ControlText;
-                _modsPathTextBox.BackColor = SystemColors.Window;
-                _modsPathTextBox.ForeColor = SystemColors.WindowText;
-                _statusPanel.BackColor = Color.FromArgb(250, 250, 250);
-                _modsCountLabel.ForeColor = SystemColors.ControlText;
-                _modApiVersionLabel.ForeColor = SystemColors.ControlText;
-                _logLabel.ForeColor = SystemColors.ControlText;
-                _logContainer.BackColor = SystemColors.ControlDark;
-                _logTextBox.BackColor = SystemColors.Window;
-                _logTextBox.ForeColor = SystemColors.WindowText;
-                
-                ApplyLightThemeToButton(_browseButton);
-                ApplyLightThemeToButton(_detectButton);
-                ApplyLightThemeToButton(_openModsFolderButton);
-                ApplyLightThemeToButton(_openGameFolderButton);
-                ApplyLightThemeToButton(_clearLogButton);
-                ApplyLightThemeToButton(_loadGameLogButton);
-                ApplyLightThemeToButton(_refreshSavesButton);
-
-                _autoLoadLabel.ForeColor = SystemColors.ControlText;
-                _autoLoadComboBox.BackColor = SystemColors.Window;
-                _autoLoadComboBox.ForeColor = SystemColors.WindowText;
-                _autoLoadComboBox.FlatStyle = FlatStyle.Standard;
-            }
-
-            _launchButton.ApplyTheme(isDark);
-            _launchVanillaButton.ApplyTheme(isDark);
-        }
-
-        private void ApplyDarkThemeToButton(Button btn)
-        {
-            btn.BackColor = Color.FromArgb(70, 70, 70);
-            btn.ForeColor = Color.White;
-            btn.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
-        }
-
-        private void ApplyLightThemeToButton(Button btn)
-        {
-            btn.BackColor = SystemColors.Control;
-            btn.ForeColor = SystemColors.ControlText;
-            btn.FlatAppearance.BorderColor = SystemColors.ControlDark;
+            ThemePalette palette = ManagerTheme.Current;
+            ManagerTheme.Apply(this);
+            _logFrame.BackColor = palette.Border;
+            _logTextBox.BackColor = palette.Input;
+            _logTextBox.ForeColor = palette.Text;
+            ManagerTheme.SetRole(_statusLabel, ManagerTheme.GetRole(_statusLabel));
         }
     }
 }

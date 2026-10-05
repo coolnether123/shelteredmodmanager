@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using Manager.Controls;
 using Manager.Core.Models;
 using Manager.Core.Services;
 using ModAPI.Core;
@@ -188,11 +189,11 @@ namespace Manager.Views
         private void BuildAppearanceControls()
         {
             _themeLabel = new Label();
-            _themeLabel.Text = "Appearance";
-            _themeLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _themeLabel.Text = "APPEARANCE";
+            _themeLabel.Font = ManagerTheme.Display(10f);
             _themeLabel.AutoSize = true;
 
-            _darkModeCheckBox = new CheckBox();
+            _darkModeCheckBox = new ThemedCheckBox();
             _darkModeCheckBox.Text = "Dark mode";
             _darkModeCheckBox.Font = new Font("Segoe UI", 10f);
             _darkModeCheckBox.AutoSize = true;
@@ -204,27 +205,27 @@ namespace Manager.Views
         private void BuildSavesControls()
         {
             _savesLabel = new Label();
-            _savesLabel.Text = "Saves";
-            _savesLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _savesLabel.Text = "SAVES";
+            _savesLabel.Font = ManagerTheme.Display(10f);
             _savesLabel.AutoSize = true;
 
             _autoCondenseLabel = new Label();
-            _autoCondenseLabel.Text = "Auto-Organize Save Slots:";
+            _autoCondenseLabel.Text = "Organize save slots";
             _autoCondenseLabel.Font = new Font("Segoe UI", 10f);
             _autoCondenseLabel.AutoSize = true;
 
-            _autoCondenseCombo = new ComboBox();
+            _autoCondenseCombo = new ThemedComboBox();
             _autoCondenseCombo.Font = new Font("Segoe UI", 10f);
             _autoCondenseCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             _autoCondenseCombo.Items.AddRange(new object[] { "Ask each time", "Always organize", "Never organize" });
             _autoCondenseCombo.SelectedIndex = 0;
 
             _saveBackupRetentionLabel = new Label();
-            _saveBackupRetentionLabel.Text = "Backup Retention:";
+            _saveBackupRetentionLabel.Text = "Save backups";
             _saveBackupRetentionLabel.Font = new Font("Segoe UI", 10f);
             _saveBackupRetentionLabel.AutoSize = true;
 
-            _saveBackupRetentionCombo = new ComboBox();
+            _saveBackupRetentionCombo = new ThemedComboBox();
             _saveBackupRetentionCombo.Font = new Font("Segoe UI", 10f);
             _saveBackupRetentionCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             _saveBackupRetentionCombo.Items.AddRange(new object[] { "Keep limited snapshots", "No automatic backups", "Keep all snapshots" });
@@ -232,11 +233,11 @@ namespace Manager.Views
             _helpToolTip.SetToolTip(_saveBackupRetentionCombo, "Controls automatic pre-overwrite save snapshots stored under Mods/ModAPI/Backups/Saves.");
 
             _saveBackupRetentionCountLabel = new Label();
-            _saveBackupRetentionCountLabel.Text = "Snapshots per save:";
+            _saveBackupRetentionCountLabel.Text = "Backups per save";
             _saveBackupRetentionCountLabel.Font = new Font("Segoe UI", 10f);
             _saveBackupRetentionCountLabel.AutoSize = true;
 
-            _saveBackupRetentionCountNumeric = new NumericUpDown();
+            _saveBackupRetentionCountNumeric = new ThemedNumericUpDown();
             _saveBackupRetentionCountNumeric.Font = new Font("Segoe UI", 10f);
             _saveBackupRetentionCountNumeric.Minimum = 1;
             _saveBackupRetentionCountNumeric.Maximum = 999;
@@ -252,16 +253,16 @@ namespace Manager.Views
         private void BuildNexusControls()
         {
             _nexusLabel = new Label();
-            _nexusLabel.Text = "Nexus";
-            _nexusLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _nexusLabel.Text = "NEXUS";
+            _nexusLabel.Font = ManagerTheme.Display(10f);
             _nexusLabel.AutoSize = true;
 
-            _enableNexusCheckBox = new CheckBox();
+            _enableNexusCheckBox = new ThemedCheckBox();
             _enableNexusCheckBox.Text = "Enable Nexus features";
             _enableNexusCheckBox.Font = new Font("Segoe UI", 10f);
             _enableNexusCheckBox.AutoSize = true;
 
-            _nexusOAuthSignInButton = new Button();
+            _nexusOAuthSignInButton = new ActionButton { Kind = ActionButtonKind.Primary };
             _nexusOAuthSignInButton.Text = "Sign in to Nexus";
             _nexusOAuthSignInButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _nexusOAuthSignInButton.Size = new Size(150, 29);
@@ -269,7 +270,7 @@ namespace Manager.Views
             _nexusOAuthSignInButton.Cursor = Cursors.Hand;
             _helpToolTip.SetToolTip(_nexusOAuthSignInButton, "Sign in securely through Nexus in your browser.");
 
-            _nexusOAuthSignOutButton = new Button();
+            _nexusOAuthSignOutButton = new ActionButton { Kind = ActionButtonKind.Secondary };
             _nexusOAuthSignOutButton.Text = "Sign out";
             _nexusOAuthSignOutButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _nexusOAuthSignOutButton.Size = new Size(95, 29);
@@ -296,13 +297,13 @@ namespace Manager.Views
 
             // Update-channel opt-in: lives with Nexus (not Developer) because it
             // changes which Nexus files surface as available updates.
-            _includeNexusPrereleaseCheckBox = new CheckBox();
+            _includeNexusPrereleaseCheckBox = new ThemedCheckBox();
             _includeNexusPrereleaseCheckBox.Text = "Include Nexus beta/prerelease files in update checks";
             _includeNexusPrereleaseCheckBox.Font = new Font("Segoe UI", 10f);
             _includeNexusPrereleaseCheckBox.AutoSize = true;
             _helpToolTip.SetToolTip(_includeNexusPrereleaseCheckBox, "Also inspect Nexus file versions so beta/prerelease uploads can appear as updates.");
 
-            _nexusAdvancedToggleLink = new LinkLabel();
+            _nexusAdvancedToggleLink = new ThemedLinkLabel();
             _nexusAdvancedToggleLink.Text = "Show advanced Nexus options";
             _nexusAdvancedToggleLink.Font = new Font("Segoe UI", 9f);
             _nexusAdvancedToggleLink.AutoSize = true;
@@ -320,7 +321,7 @@ namespace Manager.Views
             _nexusDomainLabel.AutoSize = true;
             _nexusDomainLabel.Location = new Point(12, 12);
 
-            _nexusDomainTextBox = new TextBox();
+            _nexusDomainTextBox = new ThemedTextBox();
             _nexusDomainTextBox.Font = new Font("Segoe UI", 9f);
             _nexusDomainTextBox.Location = new Point(130, 9);
             _nexusDomainTextBox.Width = 170;
@@ -331,15 +332,15 @@ namespace Manager.Views
             _managerNexusModIdLabel.AutoSize = true;
             _managerNexusModIdLabel.Location = new Point(12, 44);
 
-            _managerNexusModIdTextBox = new TextBox();
+            _managerNexusModIdTextBox = new ThemedTextBox();
             _managerNexusModIdTextBox.Font = new Font("Segoe UI", 9f);
             _managerNexusModIdTextBox.Location = new Point(130, 41);
             _managerNexusModIdTextBox.Width = 170;
 
             _nexusAdvancedPanel.Controls.Add(_nexusDomainLabel);
-            _nexusAdvancedPanel.Controls.Add(_nexusDomainTextBox);
+            _nexusAdvancedPanel.Controls.Add(UiFactory.Framed(_nexusDomainTextBox));
             _nexusAdvancedPanel.Controls.Add(_managerNexusModIdLabel);
-            _nexusAdvancedPanel.Controls.Add(_managerNexusModIdTextBox);
+            _nexusAdvancedPanel.Controls.Add(UiFactory.Framed(_managerNexusModIdTextBox));
 
             // Divider closing out the Nexus section.
             _separator = new Panel();
@@ -353,11 +354,11 @@ namespace Manager.Views
         private void BuildRuntimeFeaturesControls()
         {
             _runtimeFeaturesLabel = new Label();
-            _runtimeFeaturesLabel.Text = "Runtime Features";
-            _runtimeFeaturesLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _runtimeFeaturesLabel.Text = "RUNTIME FEATURES";
+            _runtimeFeaturesLabel.Font = ManagerTheme.Display(10f);
             _runtimeFeaturesLabel.AutoSize = true;
 
-            _runtimeFeaturesRefreshButton = new Button();
+            _runtimeFeaturesRefreshButton = new ActionButton { Kind = ActionButtonKind.Quiet };
             _runtimeFeaturesRefreshButton.Text = "Refresh";
             _runtimeFeaturesRefreshButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
             _runtimeFeaturesRefreshButton.Size = new Size(82, 27);
@@ -383,10 +384,11 @@ namespace Manager.Views
         // value cannot corrupt saves or mods (logging, dependency/order skips).
         private void BuildDeveloperControls()
         {
-            _devModeCheckBox = new CheckBox();
-            _devModeCheckBox.Text = "Developer mode (advanced)";
-            _devModeCheckBox.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _devModeCheckBox = new ThemedCheckBox();
+            _devModeCheckBox.Text = "Developer mode";
+            _devModeCheckBox.Font = ManagerTheme.Semibold(10f);
             _devModeCheckBox.AutoSize = true;
+            _helpToolTip.SetToolTip(_devModeCheckBox, "For mod makers: shows IDs, logs, runtime feature switches, Nexus developer options and advanced Content Workshop fields.");
 
             _devSettingsGroup = new GroupBox();
             _devSettingsGroup.Text = "Developer options";
@@ -394,7 +396,7 @@ namespace Manager.Views
             _devSettingsGroup.Size = new Size(500, 160);
             _devSettingsGroup.Visible = false;
 
-            _verboseLoggingCheckBox = new CheckBox();
+            _verboseLoggingCheckBox = new ThemedCheckBox();
             _verboseLoggingCheckBox.Text = "Debug logging";
             _verboseLoggingCheckBox.Font = new Font("Segoe UI", 10f);
             _verboseLoggingCheckBox.AutoSize = true;
@@ -406,7 +408,7 @@ namespace Manager.Views
             _debugLogScopeLabel.AutoSize = true;
             _debugLogScopeLabel.Location = new Point(35, 57);
 
-            _debugLogScopeCombo = new ComboBox();
+            _debugLogScopeCombo = new ThemedComboBox();
             _debugLogScopeCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             _debugLogScopeCombo.Font = new Font("Segoe UI", 9f);
             _debugLogScopeCombo.Items.Add("Mod logs only");
@@ -416,13 +418,13 @@ namespace Manager.Views
             _debugLogScopeCombo.Size = new Size(170, 25);
             _helpToolTip.SetToolTip(_debugLogScopeCombo, "Mod logs only keeps plugin debug output and suppresses ModAPI/ShelteredAPI framework debug noise. All logs includes loader, patch, UI, save, and framework debug traces.");
 
-            _skipHarmonyCheckBox = new CheckBox();
+            _skipHarmonyCheckBox = new ThemedCheckBox();
             _skipHarmonyCheckBox.Text = "Skip Harmony dependency check";
             _skipHarmonyCheckBox.Font = new Font("Segoe UI", 10f);
             _skipHarmonyCheckBox.AutoSize = true;
             _skipHarmonyCheckBox.Location = new Point(15, 88);
 
-            _ignoreOrderCheckBox = new CheckBox();
+            _ignoreOrderCheckBox = new ThemedCheckBox();
             _ignoreOrderCheckBox.Text = "Ignore load order checks";
             _ignoreOrderCheckBox.Font = new Font("Segoe UI", 10f);
             _ignoreOrderCheckBox.AutoSize = true;
@@ -439,13 +441,13 @@ namespace Manager.Views
         // Destructive/reset buttons. Always rendered last.
         private void BuildActionControls()
         {
-            _resetButton = new Button();
+            _resetButton = new ActionButton { Kind = ActionButtonKind.Secondary };
             _resetButton.Text = "Reset to defaults";
             _resetButton.Font = new Font("Segoe UI", 10f);
             _resetButton.Size = new Size(140, 35);
             _resetButton.FlatStyle = FlatStyle.Flat;
 
-            _resetWindowButton = new Button();
+            _resetWindowButton = new ActionButton { Kind = ActionButtonKind.Secondary };
             _resetWindowButton.Text = "Reset manager window";
             _resetWindowButton.Font = new Font("Segoe UI", 10f);
             _resetWindowButton.Size = new Size(190, 35);
@@ -554,15 +556,15 @@ namespace Manager.Views
             _nexusOAuthSignInButton.Enabled = enabled && _nexusOAuthRegistrationAvailable &&
                 (_settings == null || !_settings.HasNexusOAuthSession);
             _nexusOAuthSignOutButton.Enabled = enabled && _settings != null && _settings.HasNexusOAuthSession;
-            _nexusOAuthStatusLabel.Enabled = enabled;
-            _nexusAccountSummaryLabel.Enabled = enabled;
-            _nexusDownloadSummaryLabel.Enabled = enabled;
+            SetLabelEnabled(_nexusOAuthStatusLabel, enabled);
+            SetLabelEnabled(_nexusAccountSummaryLabel, enabled);
+            SetLabelEnabled(_nexusDownloadSummaryLabel, enabled);
             _includeNexusPrereleaseCheckBox.Enabled = enabled;
             _nexusAdvancedToggleLink.Enabled = enabled;
             _nexusAdvancedPanel.Enabled = enabled;
-            _nexusDomainLabel.Enabled = enabled;
+            SetLabelEnabled(_nexusDomainLabel, enabled);
             _nexusDomainTextBox.Enabled = enabled;
-            _managerNexusModIdLabel.Enabled = enabled;
+            SetLabelEnabled(_managerNexusModIdLabel, enabled);
             _managerNexusModIdTextBox.Enabled = enabled;
         }
 
@@ -595,7 +597,7 @@ namespace Manager.Views
                 if (option == null || string.IsNullOrEmpty(option.id))
                     continue;
 
-                CheckBox checkBox = new CheckBox();
+                CheckBox checkBox = new ThemedCheckBox();
                 checkBox.Text = BuildRuntimeOptionText(option);
                 checkBox.Checked = option.value;
                 checkBox.Tag = option;
@@ -759,14 +761,14 @@ namespace Manager.Views
         private void UpdateSaveBackupRetentionInputs()
         {
             bool limited = _saveBackupRetentionCombo.SelectedIndex == 0;
-            _saveBackupRetentionCountLabel.Enabled = limited;
+            SetLabelEnabled(_saveBackupRetentionCountLabel, limited);
             _saveBackupRetentionCountNumeric.Enabled = limited;
         }
 
         private void UpdateDebugLogScopeInputs()
         {
             bool enabled = _verboseLoggingCheckBox.Checked;
-            _debugLogScopeLabel.Enabled = enabled;
+            SetLabelEnabled(_debugLogScopeLabel, enabled);
             _debugLogScopeCombo.Enabled = enabled;
         }
 

@@ -108,7 +108,7 @@ namespace Manager.Core.Services
                 int posB = orderIndex.ContainsKey(b.Id) ? orderIndex[b.Id] : int.MaxValue;
                 int cmp = posA.CompareTo(posB);
                 if (cmp != 0) return cmp;
-                return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
+                return CompareByNameThenIdentity(a, b);
             });
 
             foreach (var mod in enabled)
@@ -137,12 +137,22 @@ namespace Manager.Core.Services
                 }
             }
 
-            disabled.Sort(delegate(ModItem a, ModItem b)
-            {
-                return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
-            });
+            disabled.Sort(CompareByNameThenIdentity);
 
             return disabled;
+        }
+
+        /// <summary>
+        /// Name order with ID and folder as tie-breaks. List.Sort is not stable, so
+        /// without them two mods with the same name could swap between runs.
+        /// </summary>
+        private static int CompareByNameThenIdentity(ModItem a, ModItem b)
+        {
+            int cmp = string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.Id, b.Id, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+            return string.Compare(a.RootPath, b.RootPath, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -288,6 +298,9 @@ namespace Manager.Core.Services
                 {
                     foreach (var errorMsg in evalResult.MissingHardDependencies)
                     {
+                        string dependencyId = ExtractDependencyId(errorMsg);
+                        if (IsBundledDependency(dependencyId))
+                            continue;
                         if (skipHarmony && errorMsg.ToLowerInvariant().Contains("harmony"))
                             continue;
 
@@ -296,6 +309,11 @@ namespace Manager.Core.Services
                         {
                             validation.HardIssueModIds.Add(match.Groups[1].Value);
                             validation.MissingDependencies.Add(errorMsg);
+                            var problem = new DependencyProblem();
+                            problem.ModId = match.Groups[1].Value;
+                            problem.DependencyId = dependencyId;
+                            problem.NeedsNewerVersion = errorMsg.IndexOf(" requires dependency ", StringComparison.Ordinal) >= 0;
+                            validation.DependencyProblems.Add(problem);
                         }
                     }
                 }
@@ -308,11 +326,168 @@ namespace Manager.Core.Services
             return validation;
         }
 
+        /// <summary>
+        /// Returns the active mods (given in their current load order) in an
+        /// order that meets every dependsOn / loadAfter / loadBefore rule
+        /// between them, keeping the current order wherever the rules allow.
+        /// A mod that others need takes the earliest position of the mods that
+        /// need it, so a fix moves the dependency up instead of pushing
+        /// unrelated mods around. A dependency loop is broken at its earliest
+        /// mod. The result depends only on the input order and the rules, so
+        /// the same setup always gives the same order, and fixing a fixed
+        /// order changes nothing.
+        /// </summary>
+        public static List<string> FixOrder(IList<ModItem> active)
+        {
+            List<string> ids = new List<string>();
+            Dictionary<string, int> position = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (ModItem mod in active ?? new ModItem[0])
+            {
+                if (mod == null || string.IsNullOrEmpty(mod.Id) || position.ContainsKey(mod.Id))
+                    continue;
+                position[mod.Id] = ids.Count;
+                ids.Add(mod.Id);
+            }
+
+            // before[a] holds every mod that must load after a.
+            Dictionary<string, List<string>> before = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, int> waiting = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (string id in ids)
+            {
+                before[id] = new List<string>();
+                waiting[id] = 0;
+            }
+            foreach (ModItem mod in active ?? new ModItem[0])
+            {
+                if (mod == null || string.IsNullOrEmpty(mod.Id))
+                    continue;
+                foreach (string rule in mod.DependsOn ?? new string[0])
+                    AddOrderRule(before, waiting, RuleId(rule), mod.Id);
+                foreach (string rule in mod.LoadAfter ?? new string[0])
+                    AddOrderRule(before, waiting, RuleId(rule), mod.Id);
+                foreach (string rule in mod.LoadBefore ?? new string[0])
+                    AddOrderRule(before, waiting, mod.Id, RuleId(rule));
+            }
+
+            // A mod inherits the earliest position of anything that must load after it.
+            Dictionary<string, int> rank = new Dictionary<string, int>(position, StringComparer.OrdinalIgnoreCase);
+            for (int pass = 0; pass < ids.Count; pass++)
+            {
+                bool changed = false;
+                foreach (string id in ids)
+                {
+                    foreach (string later in before[id])
+                    {
+                        if (rank[later] < rank[id])
+                        {
+                            rank[id] = rank[later];
+                            changed = true;
+                        }
+                    }
+                }
+                if (!changed)
+                    break;
+            }
+
+            Comparison<string> earliest = delegate(string a, string b)
+            {
+                int byRank = rank[a].CompareTo(rank[b]);
+                return byRank != 0 ? byRank : position[a].CompareTo(position[b]);
+            };
+            List<string> result = new List<string>(ids.Count);
+            HashSet<string> placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            List<string> ready = new List<string>();
+            foreach (string id in ids)
+                if (waiting[id] == 0)
+                    ready.Add(id);
+            while (result.Count < ids.Count)
+            {
+                if (ready.Count == 0)
+                {
+                    // Only a loop is left: treat its earliest mod as ready.
+                    string forced = null;
+                    foreach (string id in ids)
+                        if (!placed.Contains(id) && (forced == null || earliest(id, forced) < 0))
+                            forced = id;
+                    waiting[forced] = 0;
+                    ready.Add(forced);
+                }
+                ready.Sort(earliest);
+                string next = ready[0];
+                ready.RemoveAt(0);
+                result.Add(next);
+                placed.Add(next);
+                foreach (string later in before[next])
+                {
+                    if (placed.Contains(later))
+                        continue;
+                    waiting[later]--;
+                    if (waiting[later] == 0)
+                        ready.Add(later);
+                }
+            }
+            return result;
+        }
+
+        private static void AddOrderRule(Dictionary<string, List<string>> before, Dictionary<string, int> waiting, string first, string second)
+        {
+            if (string.IsNullOrEmpty(first) || string.IsNullOrEmpty(second) ||
+                string.Equals(first, second, StringComparison.OrdinalIgnoreCase) ||
+                !before.ContainsKey(first) || !before.ContainsKey(second))
+                return;
+            foreach (string existing in before[first])
+                if (string.Equals(existing, second, StringComparison.OrdinalIgnoreCase))
+                    return;
+            before[first].Add(second);
+            waiting[second]++;
+        }
+
+        /// <summary>The mod ID at the start of a rule such as "coolnether123.lifespan >= 1.2".</summary>
+        private static string RuleId(string rule)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(rule ?? string.Empty, @"^\s*([A-Za-z0-9_.-]+)");
+            return match.Success ? match.Groups[1].Value.ToLowerInvariant() : null;
+        }
+
+        // SMM ships Harmony (SMM\bin\0Harmony.dll) and shares it with every mod,
+        // so a declared dependency on the Harmony library is always satisfied.
+        private static readonly HashSet<string> BundledDependencyIds = new HashSet<string>(
+            new string[]
+            {
+                "harmony", "0harmony", "harmonylib", "lib.harmony", "com.harmony",
+                "com.harmony.0harmony", "brrainz.harmony", "pardeike.harmony"
+            },
+            StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>True for dependencies SMM always provides, such as the Harmony library.</summary>
+        public static bool IsBundledDependency(string dependencyId)
+        {
+            return !string.IsNullOrEmpty(dependencyId) && BundledDependencyIds.Contains(dependencyId.Trim());
+        }
+
+        private static string ExtractDependencyId(string message)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                message ?? string.Empty,
+                @"(?:missing hard dependency: '|requires dependency ')([^']+)'");
+            return match.Success ? match.Groups[1].Value : string.Empty;
+        }
+
         // Internal JSON model
         private class LoadOrderData
         {
             public string[] order { get; set; }
         }
+    }
+
+    /// <summary>
+    /// One mod's unmet dependency: missing, turned off, or too old.
+    /// </summary>
+    public class DependencyProblem
+    {
+        public string ModId { get; set; }
+        public string DependencyId { get; set; }
+        public bool NeedsNewerVersion { get; set; }
     }
 
     /// <summary>
@@ -343,15 +518,23 @@ namespace Manager.Core.Services
             set { _softIssueModIds = value; } 
         }
         
-        public List<string> MissingDependencies 
-        { 
-            get { return _missingDependencies; } 
-            set { _missingDependencies = value; } 
+        public List<string> MissingDependencies
+        {
+            get { return _missingDependencies; }
+            set { _missingDependencies = value; }
         }
-        
+
+        private readonly List<DependencyProblem> _dependencyProblems = new List<DependencyProblem>();
+
+        /// <summary>Each unmet dependency, for offering a fix.</summary>
+        public List<DependencyProblem> DependencyProblems
+        {
+            get { return _dependencyProblems; }
+        }
+
         public bool HasIssues 
         { 
-            get { return _hardIssueModIds.Count > 0 || _softIssueModIds.Count > 0; } 
+            get { return _hardIssueModIds.Count > 0 || _softIssueModIds.Count > 0; }
         }
     }
 }

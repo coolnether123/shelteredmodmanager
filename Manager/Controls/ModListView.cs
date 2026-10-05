@@ -17,6 +17,7 @@ namespace Manager.Controls
     public class ModListView : UserControl
     {
         private ListBox _listBox;
+        private Panel _frame;
         private Label _headerLabel;
         private Label _countLabel;
         private SearchBox _searchBox;
@@ -25,7 +26,6 @@ namespace Manager.Controls
         private List<ModItem> _filteredItems = new List<ModItem>();
         private string _currentFilter = string.Empty;
         private bool _showSearch = true;
-        private bool _isDarkMode = false;
         private string _title = "Mods";
         
         // Status indicators
@@ -128,9 +128,9 @@ namespace Manager.Controls
             // Header
             _headerLabel = new Label();
             _headerLabel.Text = "Mods";
-            _headerLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _headerLabel.Font = ManagerTheme.Display(11f);
             _headerLabel.AutoSize = false;
-            _headerLabel.Height = 25;
+            _headerLabel.Height = 30;
             _headerLabel.Dock = DockStyle.Top;
             _headerLabel.TextAlign = ContentAlignment.MiddleLeft;
 
@@ -146,6 +146,7 @@ namespace Manager.Controls
             _searchBox = new SearchBox();
             _searchBox.Height = 28;
             _searchBox.Dock = DockStyle.Top;
+            _searchBox.Margin = new Padding(0);
             _searchBox.Placeholder = "Type to filter...";
             _searchBox.SearchChanged += SearchBox_SearchChanged;
 
@@ -153,7 +154,7 @@ namespace Manager.Controls
             _listBox = new ListBox();
             _listBox.Dock = DockStyle.Fill;
             _listBox.Font = new Font("Segoe UI", 10f);
-            _listBox.BorderStyle = BorderStyle.FixedSingle;
+            _listBox.BorderStyle = BorderStyle.None;
             _listBox.SelectionMode = SelectionMode.MultiExtended;
             _listBox.DrawMode = DrawMode.OwnerDrawFixed;
             _listBox.ItemHeight = 26;
@@ -162,8 +163,15 @@ namespace Manager.Controls
             _listBox.SelectedIndexChanged += ListBox_SelectedIndexChanged;
             _listBox.DoubleClick += ListBox_DoubleClick;
 
+            // A 1px themed frame instead of the system border.
+            _frame = new Panel();
+            _frame.Dock = DockStyle.Fill;
+            _frame.Padding = new Padding(1);
+            _frame.Controls.Add(_listBox);
+
             // Add controls in order
-            this.Controls.Add(_listBox);
+            this.Controls.Add(_frame);
+            this.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 6 });
             this.Controls.Add(_searchBox);
             this.Controls.Add(_headerLabel);
             
@@ -187,6 +195,8 @@ namespace Manager.Controls
         private void UpdateHeader()
         {
             _headerLabel.Text = _title;
+            _listBox.AccessibleName = _title;
+            _searchBox.SetFieldName("Filter " + _title);
             UpdateCountLabel();
         }
 
@@ -229,73 +239,66 @@ namespace Manager.Controls
             ModItem mod = _listBox.Items[e.Index] as ModItem;
             if (mod == null) return;
 
-            e.DrawBackground();
-
-            // Determine colors
-            Color bgColor = e.BackColor;
-            Color textColor = e.ForeColor;
-            
+            ThemePalette palette = ManagerTheme.Current;
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
             bool hasUpdate = mod.HasUpdateAvailable || mod.Status == ModStatus.UpdateAvailable;
 
-            if (!isSelected)
-            {
-                if (hasUpdate)
-                {
-                    bgColor = _isDarkMode ? Color.FromArgb(25, 55, 85) : Color.FromArgb(232, 243, 255);
-                }
-                else
-                {
-                    bgColor = _isDarkMode ? Color.FromArgb(45, 45, 48) : SystemColors.Window;
-                }
-                textColor = _isDarkMode ? Color.White : SystemColors.WindowText;
-            }
-
+            Color bgColor = isSelected ? palette.Selection : (hasUpdate ? palette.InfoBack : palette.Input);
+            Color textColor = isSelected ? palette.SelectionText : palette.Text;
             using (var brush = new SolidBrush(bgColor))
             {
                 e.Graphics.FillRectangle(brush, e.Bounds);
             }
 
-            // Draw status icon
-            string icon = "OK";
-            Color iconColor = _isDarkMode ? Color.LightGreen : Color.Green;
-            
+            // Healthy mods show just their name. Anything needing attention gets a
+            // coloured dot and a word, so the state never depends on colour alone.
+            string status = null;
+            Color statusColor = palette.TextMuted;
             if (_hardIssueIds.Contains(mod.Id) || mod.Status == ModStatus.Error || mod.Status == ModStatus.MissingDependency)
             {
-                icon = "X";
-                iconColor = Color.Red;
+                status = "Problem";
+                statusColor = palette.Danger;
             }
             else if (_softIssueIds.Contains(mod.Id) || mod.Status == ModStatus.Warning || mod.Status == ModStatus.VersionMismatch)
             {
-                icon = "!";
-                iconColor = Color.Orange;
+                status = "Warning";
+                statusColor = palette.Warning;
             }
-            else if (mod.HasUpdateAvailable || mod.Status == ModStatus.UpdateAvailable)
+            else if (hasUpdate)
             {
-                icon = "UPD";
-                iconColor = _isDarkMode ? Color.DeepSkyBlue : Color.RoyalBlue;
+                status = "Update";
+                statusColor = palette.AccentText;
             }
+            if (isSelected)
+                statusColor = palette.SelectionText;
 
-            using (var iconFont = new Font("Segoe UI", 9f, FontStyle.Bold))
-            using (var iconBrush = new SolidBrush(iconColor))
+            int nameLeft = e.Bounds.X + 22;
+            int nameRight = e.Bounds.Right - 8;
+            if (status != null)
             {
-                float iconX = e.Bounds.X + 5;
-                float textY = e.Bounds.Y + 4;
-                e.Graphics.DrawString(icon, iconFont, iconBrush, new PointF(iconX, textY));
+                int dot = 8;
+                Rectangle dotBounds = new Rectangle(e.Bounds.X + 8, e.Bounds.Y + (e.Bounds.Height - dot) / 2, dot, dot);
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using (var dotBrush = new SolidBrush(statusColor))
+                    e.Graphics.FillEllipse(dotBrush, dotBounds);
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
 
-                // Keep a safe gap so long markers like "UPD" never overlap names.
-                int iconWidth = (int)Math.Ceiling(e.Graphics.MeasureString(icon, iconFont).Width);
-                int nameX = e.Bounds.X + 5 + iconWidth + 8;
-
-                // Draw mod name
-                using (var textBrush = new SolidBrush(textColor))
-                {
-                    e.Graphics.DrawString(mod.DisplayName, e.Font, textBrush, 
-                        new PointF(nameX, textY));
-                }
+                Font statusFont = ManagerTheme.UiFont(8.5f, FontStyle.Bold);
+                Size statusSize = TextRenderer.MeasureText(e.Graphics, status, statusFont, Size.Empty, TextFormatFlags.NoPadding);
+                Rectangle statusBounds = new Rectangle(e.Bounds.Right - statusSize.Width - 10, e.Bounds.Y, statusSize.Width + 4, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, status, statusFont, statusBounds, statusColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+                nameRight = statusBounds.Left - 8;
             }
+            Rectangle nameBounds = new Rectangle(nameLeft, e.Bounds.Y, Math.Max(0, nameRight - nameLeft), e.Bounds.Height);
+            TextRenderer.DrawText(e.Graphics, mod.DisplayName, e.Font, nameBounds, textColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
 
-            e.DrawFocusRectangle();
+            if ((e.State & DrawItemState.Focus) == DrawItemState.Focus && _listBox.Focused)
+            {
+                using (Pen focus = new Pen(palette.AccentText))
+                    e.Graphics.DrawRectangle(focus, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+            }
         }
 
         /// <summary>
@@ -357,22 +360,16 @@ namespace Manager.Controls
         /// </summary>
         public void ApplyTheme(bool isDark)
         {
-            _isDarkMode = isDark;
-
-            if (isDark)
-            {
-                this.BackColor = Color.FromArgb(45, 45, 48);
-                _headerLabel.ForeColor = Color.White;
-                _listBox.BackColor = Color.FromArgb(45, 45, 48);
-                _listBox.ForeColor = Color.White;
-            }
-            else
-            {
-                this.BackColor = SystemColors.Control;
-                _headerLabel.ForeColor = SystemColors.ControlText;
-                _listBox.BackColor = SystemColors.Window;
-                _listBox.ForeColor = SystemColors.WindowText;
-            }
+            ThemePalette palette = ManagerTheme.Current;
+            this.BackColor = palette.Window;
+            _headerLabel.BackColor = palette.Window;
+            _headerLabel.ForeColor = palette.Text;
+            _countLabel.ForeColor = palette.TextMuted;
+            _countLabel.BackColor = palette.Window;
+            _frame.BackColor = palette.Border;
+            _listBox.BackColor = palette.Input;
+            _listBox.ForeColor = palette.Text;
+            ManagerTheme.ApplyNativeScrollbars(_listBox);
 
             _searchBox.ApplyTheme(isDark);
             _listBox.Invalidate();

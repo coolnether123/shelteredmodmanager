@@ -214,6 +214,12 @@ namespace Manager.Core.Models
             get { return _windowMaximized; }
             set { _windowMaximized = value; }
         }
+
+        /// <summary>When this manager last started (UTC); mods installed later show as new.</summary>
+        public DateTime LastSessionUtc { get; set; }
+
+        /// <summary>Game crash folders older than this (UTC) have already been offered for reporting.</summary>
+        public DateTime LastCrashCheckUtc { get; set; }
         
         /// <summary>
         /// All available log categories
