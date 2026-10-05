@@ -104,12 +104,12 @@ namespace Manager.Views
         public void ApplyTheme(bool isDark)
         {
             _isDark = isDark;
-            BackColor = isDark ? Color.FromArgb(46, 48, 53) : SystemColors.Control;
+            BackColor = isDark ? ManagerTheme.Current.Window : SystemColors.Control;
             ForeColor = isDark ? Color.White : SystemColors.ControlText;
             _stagePanel.BackColor = BackColor;
             _localList.ApplyTheme(isDark);
             ApplyComboBoxTheme(_authorFilter);
-            _ownedList.BackColor = isDark ? Color.FromArgb(38, 40, 44) : SystemColors.Window;
+            _ownedList.BackColor = isDark ? ManagerTheme.Current.Input : SystemColors.Window;
             _ownedList.ForeColor = isDark ? Color.White : SystemColors.WindowText;
             ApplyPanelTheme(_detailsPanel);
             ApplyPanelTheme(_filesPanel);
@@ -790,7 +790,7 @@ namespace Manager.Views
 
         private void ApplyStageButton(Button button, bool selected)
         {
-            button.BackColor = selected ? Color.FromArgb(0, 122, 204) : (_isDark ? Color.FromArgb(58, 60, 64) : SystemColors.Control);
+            button.BackColor = selected ? ManagerTheme.Current.Accent : (_isDark ? ManagerTheme.Current.SurfaceAlt : SystemColors.Control);
             button.ForeColor = selected ? Color.White : (_isDark ? Color.White : SystemColors.ControlText);
         }
 
@@ -802,12 +802,12 @@ namespace Manager.Views
             {
                 if (control is TextBox)
                 {
-                    control.BackColor = _isDark ? Color.FromArgb(38, 40, 44) : SystemColors.Window;
+                    control.BackColor = _isDark ? ManagerTheme.Current.Input : SystemColors.Window;
                     control.ForeColor = _isDark ? Color.White : SystemColors.WindowText;
                 }
                 else if (control is Button)
                 {
-                    control.BackColor = _isDark ? Color.FromArgb(58, 60, 64) : SystemColors.Control;
+                    control.BackColor = _isDark ? ManagerTheme.Current.SurfaceAlt : SystemColors.Control;
                     control.ForeColor = _isDark ? Color.White : SystemColors.ControlText;
                 }
                 else if (control is ComboBox)
@@ -841,7 +841,7 @@ namespace Manager.Views
             if (comboBox == null)
                 return;
 
-            comboBox.BackColor = _isDark ? Color.FromArgb(38, 40, 44) : SystemColors.Window;
+            comboBox.BackColor = _isDark ? ManagerTheme.Current.Input : SystemColors.Window;
             comboBox.ForeColor = _isDark ? Color.White : SystemColors.WindowText;
             comboBox.Invalidate();
         }
@@ -858,8 +858,8 @@ namespace Manager.Views
                 editArea = true;
             bool highlightItem = selected && comboBox.DroppedDown && !editArea;
             Color backColor = highlightItem
-                ? Color.FromArgb(0, 122, 204)
-                : (_isDark ? Color.FromArgb(38, 40, 44) : SystemColors.Window);
+                ? ManagerTheme.Current.Accent
+                : (_isDark ? ManagerTheme.Current.Input : SystemColors.Window);
             Color foreColor = highlightItem
                 ? Color.White
                 : (_isDark ? Color.White : SystemColors.WindowText);

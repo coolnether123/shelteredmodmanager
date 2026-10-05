@@ -39,7 +39,10 @@ namespace Manager.Core.Services
 
             try
             {
-                foreach (var dir in Directory.GetDirectories(modsRootPath))
+                // Enumeration order is not guaranteed by Windows; sort so every run sees the same list.
+                string[] directories = Directory.GetDirectories(modsRootPath);
+                Array.Sort(directories, StringComparer.OrdinalIgnoreCase);
+                foreach (var dir in directories)
                 {
                     var folderName = Path.GetFileName(dir);
 

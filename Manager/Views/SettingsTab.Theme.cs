@@ -1,130 +1,73 @@
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using Manager.Controls;
 
 namespace Manager.Views
 {
     public partial class SettingsTab
     {
+        // Labels are dimmed with a legible colour instead of Enabled = false,
+        // which WinForms paints darker than a dark background.
+        private readonly HashSet<Label> _dimmedLabels = new HashSet<Label>();
+        private readonly Dictionary<Label, Color> _labelColors = new Dictionary<Label, Color>();
+        private bool _sectionRulesHooked;
+
+        private Label[] SectionHeadings()
+        {
+            return new Label[] { _themeLabel, _savesLabel, _nexusLabel, _runtimeFeaturesLabel };
+        }
+
+        private void PaintSectionRules(object sender, PaintEventArgs e)
+        {
+            using (Pen rule = new Pen(ManagerTheme.Current.Border))
+            {
+                foreach (Label heading in SectionHeadings())
+                {
+                    if (heading == null || !heading.Visible)
+                        continue;
+                    int y = heading.Bottom + 3;
+                    e.Graphics.DrawLine(rule, heading.Left, y, _contentPanel.Width - SettingsTabLayout.Margin, y);
+                }
+            }
+        }
+
         public void ApplyTheme(bool isDark)
         {
             _isDarkMode = isDark;
+            ThemePalette palette = ManagerTheme.Current;
 
-            if (isDark)
-                ApplyDarkTheme();
-            else
-                ApplyLightTheme();
-        }
+            ManagerTheme.Apply(this);
+            BackColor = palette.Window;
+            if (_scrollPanel != null) _scrollPanel.BackColor = palette.Window;
+            if (_contentPanel != null) _contentPanel.BackColor = palette.Window;
 
-        private void ApplyDarkTheme()
-        {
-            BackColor = Color.FromArgb(45, 45, 48);
-            if (_scrollPanel != null) _scrollPanel.BackColor = BackColor;
-            if (_contentPanel != null) _contentPanel.BackColor = BackColor;
+            // Section headings match card titles elsewhere: tan serif over a rule.
+            foreach (Label heading in SectionHeadings())
+                SetLabelColor(heading, palette.AccentText);
+            if (!_sectionRulesHooked && _contentPanel != null)
+            {
+                _contentPanel.Paint += PaintSectionRules;
+                _sectionRulesHooked = true;
+            }
+            _separator.Visible = false;
+            SetLabelColor(_autoCondenseLabel, palette.Text);
+            SetLabelColor(_saveBackupRetentionLabel, palette.Text);
+            SetLabelColor(_saveBackupRetentionCountLabel, palette.Text);
+            SetLabelColor(_nexusOAuthStatusLabel, palette.TextMuted);
+            SetLabelColor(_nexusAccountSummaryLabel, palette.Text);
+            SetLabelColor(_nexusDownloadSummaryLabel, palette.TextMuted);
+            SetLabelColor(_nexusDomainLabel, palette.Text);
+            SetLabelColor(_managerNexusModIdLabel, palette.Text);
+            SetLabelColor(_debugLogScopeLabel, palette.Text);
 
-            _themeLabel.ForeColor = Color.White;
-            _darkModeCheckBox.ForeColor = Color.White;
-            _autoCondenseLabel.ForeColor = Color.White;
-            _autoCondenseCombo.BackColor = Color.FromArgb(60, 60, 62);
-            _autoCondenseCombo.ForeColor = Color.White;
-            _autoCondenseCombo.FlatStyle = FlatStyle.Flat;
-            _savesLabel.ForeColor = Color.White;
-            _saveBackupRetentionLabel.ForeColor = Color.White;
-            _saveBackupRetentionCombo.BackColor = Color.FromArgb(60, 60, 62);
-            _saveBackupRetentionCombo.ForeColor = Color.White;
-            _saveBackupRetentionCombo.FlatStyle = FlatStyle.Flat;
-            _saveBackupRetentionCountLabel.ForeColor = Color.White;
-            _saveBackupRetentionCountNumeric.BackColor = Color.FromArgb(60, 60, 62);
-            _saveBackupRetentionCountNumeric.ForeColor = Color.White;
+            // Grouped surfaces.
+            _nexusAdvancedPanel.BackColor = palette.Surface;
+            _separator.BackColor = palette.Border;
+            _devSettingsGroup.BackColor = palette.Surface;
+            _devSettingsGroup.ForeColor = palette.Text;
 
-            _nexusLabel.ForeColor = Color.White;
-            _enableNexusCheckBox.ForeColor = Color.White;
-            _nexusOAuthStatusLabel.ForeColor = Color.Gainsboro;
-            _nexusAccountSummaryLabel.ForeColor = Color.White;
-            _nexusDownloadSummaryLabel.ForeColor = Color.Gainsboro;
-            _includeNexusPrereleaseCheckBox.ForeColor = Color.White;
-            _nexusAdvancedToggleLink.LinkColor = Color.LightBlue;
-            _nexusAdvancedPanel.BackColor = Color.FromArgb(50, 50, 52);
-            _nexusDomainLabel.ForeColor = Color.White;
-            _nexusDomainTextBox.BackColor = Color.FromArgb(60, 60, 62);
-            _nexusDomainTextBox.ForeColor = Color.White;
-            _managerNexusModIdLabel.ForeColor = Color.White;
-            _managerNexusModIdTextBox.BackColor = Color.FromArgb(60, 60, 62);
-            _managerNexusModIdTextBox.ForeColor = Color.White;
-            _separator.BackColor = Color.FromArgb(92, 92, 96);
-
-            ApplyRuntimeFeatureTheme(true);
-
-            _devModeCheckBox.ForeColor = Color.White;
-            _devSettingsGroup.ForeColor = Color.White;
-            _devSettingsGroup.BackColor = Color.FromArgb(50, 50, 52);
-            _verboseLoggingCheckBox.ForeColor = Color.White;
-            _debugLogScopeLabel.ForeColor = Color.Gainsboro;
-            _debugLogScopeCombo.BackColor = Color.FromArgb(60, 60, 62);
-            _debugLogScopeCombo.ForeColor = Color.White;
-            _debugLogScopeCombo.FlatStyle = FlatStyle.Flat;
-            _skipHarmonyCheckBox.ForeColor = Color.White;
-            _ignoreOrderCheckBox.ForeColor = Color.White;
-
-            ApplyButtonTheme(_nexusOAuthSignInButton, true);
-            ApplyButtonTheme(_nexusOAuthSignOutButton, true);
-            ApplyButtonTheme(_resetButton, true);
-            ApplyButtonTheme(_resetWindowButton, true);
-        }
-
-        private void ApplyLightTheme()
-        {
-            BackColor = SystemColors.Control;
-            if (_scrollPanel != null) _scrollPanel.BackColor = BackColor;
-            if (_contentPanel != null) _contentPanel.BackColor = BackColor;
-
-            _themeLabel.ForeColor = SystemColors.ControlText;
-            _darkModeCheckBox.ForeColor = SystemColors.ControlText;
-            _autoCondenseLabel.ForeColor = SystemColors.ControlText;
-            _autoCondenseCombo.BackColor = SystemColors.Window;
-            _autoCondenseCombo.ForeColor = SystemColors.WindowText;
-            _autoCondenseCombo.FlatStyle = FlatStyle.Standard;
-            _savesLabel.ForeColor = SystemColors.ControlText;
-            _saveBackupRetentionLabel.ForeColor = SystemColors.ControlText;
-            _saveBackupRetentionCombo.BackColor = SystemColors.Window;
-            _saveBackupRetentionCombo.ForeColor = SystemColors.WindowText;
-            _saveBackupRetentionCombo.FlatStyle = FlatStyle.Standard;
-            _saveBackupRetentionCountLabel.ForeColor = SystemColors.ControlText;
-            _saveBackupRetentionCountNumeric.BackColor = SystemColors.Window;
-            _saveBackupRetentionCountNumeric.ForeColor = SystemColors.WindowText;
-
-            _nexusLabel.ForeColor = SystemColors.ControlText;
-            _enableNexusCheckBox.ForeColor = SystemColors.ControlText;
-            _nexusOAuthStatusLabel.ForeColor = SystemColors.ControlText;
-            _nexusAccountSummaryLabel.ForeColor = SystemColors.ControlText;
-            _nexusDownloadSummaryLabel.ForeColor = SystemColors.ControlText;
-            _includeNexusPrereleaseCheckBox.ForeColor = SystemColors.ControlText;
-            _nexusAdvancedToggleLink.LinkColor = SystemColors.HotTrack;
-            _nexusAdvancedPanel.BackColor = SystemColors.Control;
-            _nexusDomainLabel.ForeColor = SystemColors.ControlText;
-            _nexusDomainTextBox.BackColor = SystemColors.Window;
-            _nexusDomainTextBox.ForeColor = SystemColors.WindowText;
-            _managerNexusModIdLabel.ForeColor = SystemColors.ControlText;
-            _managerNexusModIdTextBox.BackColor = SystemColors.Window;
-            _managerNexusModIdTextBox.ForeColor = SystemColors.WindowText;
-            _separator.BackColor = SystemColors.ControlDark;
-
-            ApplyRuntimeFeatureTheme(false);
-
-            _devModeCheckBox.ForeColor = SystemColors.ControlText;
-            _devSettingsGroup.ForeColor = SystemColors.ControlText;
-            _devSettingsGroup.BackColor = SystemColors.Control;
-            _verboseLoggingCheckBox.ForeColor = SystemColors.ControlText;
-            _debugLogScopeLabel.ForeColor = SystemColors.ControlText;
-            _debugLogScopeCombo.BackColor = SystemColors.Window;
-            _debugLogScopeCombo.ForeColor = SystemColors.WindowText;
-            _debugLogScopeCombo.FlatStyle = FlatStyle.Standard;
-            _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
-            _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
-
-            ApplyButtonTheme(_nexusOAuthSignInButton, false);
-            ApplyButtonTheme(_nexusOAuthSignOutButton, false);
-            ApplyButtonTheme(_resetButton, false);
-            ApplyButtonTheme(_resetWindowButton, false);
+            ApplyRuntimeFeatureTheme(isDark);
         }
 
         private void ApplyRuntimeFeatureTheme(bool isDark)
@@ -132,51 +75,39 @@ namespace Manager.Views
             if (_runtimeFeaturesLabel == null)
                 return;
 
-            if (isDark)
-            {
-                _runtimeFeaturesLabel.ForeColor = Color.White;
-                _runtimeFeaturesPanel.BackColor = Color.FromArgb(50, 50, 52);
-                _runtimeFeaturesEmptyLabel.ForeColor = Color.Gainsboro;
-                ApplyButtonTheme(_runtimeFeaturesRefreshButton, true);
-                ApplyRuntimeFeatureCheckBoxColor(Color.White);
-            }
-            else
-            {
-                _runtimeFeaturesLabel.ForeColor = SystemColors.ControlText;
-                _runtimeFeaturesPanel.BackColor = SystemColors.Control;
-                _runtimeFeaturesEmptyLabel.ForeColor = SystemColors.ControlText;
-                ApplyButtonTheme(_runtimeFeaturesRefreshButton, false);
-                ApplyRuntimeFeatureCheckBoxColor(SystemColors.ControlText);
-            }
-        }
-
-        private void ApplyRuntimeFeatureCheckBoxColor(Color color)
-        {
+            ThemePalette palette = ManagerTheme.Current;
+            SetLabelColor(_runtimeFeaturesLabel, palette.AccentText);
+            _runtimeFeaturesPanel.BackColor = palette.Surface;
+            SetLabelColor(_runtimeFeaturesEmptyLabel, palette.TextMuted);
+            _runtimeFeaturesRefreshButton.Invalidate();
             for (int i = 0; i < _runtimeFeatureCheckBoxes.Count; i++)
             {
                 CheckBox checkBox = _runtimeFeatureCheckBoxes[i];
                 if (checkBox != null)
-                    checkBox.ForeColor = color;
+                    checkBox.ForeColor = palette.Text;
             }
         }
 
-        private static void ApplyButtonTheme(Button button, bool isDark)
+        private void SetLabelColor(Label label, Color color)
         {
-            if (button == null)
+            if (label == null)
                 return;
+            _labelColors[label] = color;
+            label.ForeColor = _dimmedLabels.Contains(label) ? ManagerTheme.Current.TextDisabled : color;
+        }
 
-            if (isDark)
-            {
-                button.BackColor = Color.FromArgb(70, 70, 70);
-                button.ForeColor = Color.White;
-                button.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
-            }
+        private void SetLabelEnabled(Label label, bool enabled)
+        {
+            if (label == null)
+                return;
+            if (enabled)
+                _dimmedLabels.Remove(label);
             else
-            {
-                button.BackColor = SystemColors.Control;
-                button.ForeColor = SystemColors.ControlText;
-                button.FlatAppearance.BorderColor = SystemColors.ControlDark;
-            }
+                _dimmedLabels.Add(label);
+            Color normal;
+            if (!_labelColors.TryGetValue(label, out normal))
+                normal = ManagerTheme.Current.Text;
+            label.ForeColor = enabled ? normal : ManagerTheme.Current.TextDisabled;
         }
     }
 }

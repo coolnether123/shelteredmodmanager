@@ -47,14 +47,23 @@ namespace Manager.Core.Services
     {
         private readonly IArchiveExtractor _archiveExtractor;
 
+        // Archives a player drops on the manager come from anywhere, so extraction
+        // is bounded: a crafted zip cannot fill the disk.
+        private const int LocalMaximumEntries = 20000;
+        private const long LocalMaximumEntryBytes = 512L * 1024 * 1024;
+        private const long LocalMaximumExpandedBytes = 2L * 1024 * 1024 * 1024;
+        private readonly IArchiveExtractor _localArchiveExtractor;
+
         public NexusInstallService()
-            : this(new ZipArchiveExtractor())
+            : this(null)
         {
         }
 
+        /// <param name="archiveExtractor">Replaces both extractors (for tests); null keeps the defaults, with dropped files bounded.</param>
         internal NexusInstallService(IArchiveExtractor archiveExtractor)
         {
             _archiveExtractor = archiveExtractor ?? new ZipArchiveExtractor();
+            _localArchiveExtractor = archiveExtractor ?? new ZipArchiveExtractor(LocalMaximumEntries, LocalMaximumEntryBytes, LocalMaximumExpandedBytes);
         }
 
         public static void CleanupStartupArtifacts()
@@ -144,13 +153,14 @@ namespace Manager.Core.Services
             if (!Directory.Exists(tempRoot))
                 Directory.CreateDirectory(tempRoot);
 
+            string attemptId = Guid.NewGuid().ToString("N");
             string archivePath = Path.Combine(
                 tempRoot,
-                "nexus_" + mod.ModId + "_" + file.FileId + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".download");
+                "nexus_" + mod.ModId + "_" + file.FileId + "_" + attemptId + ".download");
 
             string extractPath = Path.Combine(
                 tempRoot,
-                "extract_" + mod.ModId + "_" + file.FileId + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+                "extract_" + mod.ModId + "_" + file.FileId + "_" + attemptId);
 
             try
             {
@@ -260,6 +270,178 @@ namespace Manager.Core.Services
             result.DownloadedArchivePath = string.Empty;
             result.VerificationSummary = verificationSummary;
             return result;
+        }
+
+        /// <summary>
+        /// Installs a mod the user dropped on the manager: a .zip or a mod
+        /// folder. It goes through the same checks as Nexus installs (About.json,
+        /// reserved names, duplicate IDs, backup and rollback). When a mod with
+        /// the same ID is installed, <paramref name="confirmReplace"/> is asked
+        /// with the mod's name and installed folder; returning false cancels
+        /// with no error.
+        /// </summary>
+        public NexusInstallResult InstallLocalPackage(
+            string packagePath,
+            string modsPath,
+            Func<string, string, bool> confirmReplace,
+            out string installedModId,
+            out string errorMessage)
+        {
+            installedModId = null;
+            errorMessage = null;
+            if (string.IsNullOrEmpty(modsPath) || !Directory.Exists(modsPath))
+            {
+                errorMessage = "The mods folder is not set. Choose the game in Game setup first.";
+                return null;
+            }
+            if (!CanWriteToDirectory(modsPath, out errorMessage))
+                return null;
+
+            bool isFolder = Directory.Exists(packagePath);
+            if (!isFolder && !File.Exists(packagePath))
+            {
+                errorMessage = "The file no longer exists.";
+                return null;
+            }
+            if (isFolder && IsInsideDirectory(packagePath, modsPath))
+            {
+                errorMessage = "That folder is already inside the mods folder.";
+                return null;
+            }
+
+            string extractPath = null;
+            string sourceRoot = packagePath;
+            try
+            {
+                if (!isFolder)
+                {
+                    if (!IsSupportedZipArchive(packagePath))
+                    {
+                        errorMessage = "Only .zip archives can be installed this way. Extract other archives and drop the mod folder instead.";
+                        return null;
+                    }
+                    string tempRoot = Path.Combine(GetManagerBinPath(), "_smm_temp");
+                    if (!Directory.Exists(tempRoot))
+                        Directory.CreateDirectory(tempRoot);
+                    extractPath = Path.Combine(tempRoot, "extract_local_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture) + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
+                    if (!_localArchiveExtractor.TryExtract(packagePath, extractPath, out errorMessage))
+                        return null;
+                    sourceRoot = extractPath;
+                }
+
+                string modRoot = FindModRoot(sourceRoot);
+                if (string.IsNullOrEmpty(modRoot) || !Directory.Exists(modRoot))
+                {
+                    errorMessage = "This doesn't look like a Sheltered mod: no About/About.json was found inside.";
+                    return null;
+                }
+
+                global::Manager.ModTypes.ModAboutInfo about;
+                string modId;
+                if (!ModPackageSafety.TryReadRequiredAbout(modRoot, out about, out modId, out errorMessage))
+                {
+                    errorMessage = "This isn't a valid SMM mod: " + errorMessage;
+                    return null;
+                }
+
+                NexusInstallTargetContext targetContext = null;
+                string existingPath = FindInstalledModFolder(modsPath, modId);
+                if (existingPath != null)
+                {
+                    if (confirmReplace == null || !confirmReplace(about.name, existingPath))
+                        return null;
+                    targetContext = new NexusInstallTargetContext();
+                    targetContext.ExpectedLocalModId = modId;
+                    targetContext.ExistingInstalledPath = existingPath;
+                }
+
+                string folderName = SanitizeFolderName(IsSameDirectory(modRoot, sourceRoot) && !isFolder
+                    ? FirstNonEmpty(about.id, about.name, "Mod")
+                    : Path.GetFileName(modRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+                if (string.IsNullOrEmpty(folderName))
+                    folderName = SanitizeFolderName(about.id);
+                string targetPath = ResolveTargetPath(modsPath, targetContext, folderName);
+                if (existingPath == null && Directory.Exists(targetPath))
+                {
+                    errorMessage = "A different mod already uses the folder name \"" + folderName + "\".";
+                    return null;
+                }
+                if (!ModPackageSafety.ValidateInstallTarget(modsPath, targetPath, modId, targetContext, out errorMessage))
+                    return null;
+
+                string backupPath = null;
+                bool movedToBackup = false;
+                try
+                {
+                    if (Directory.Exists(targetPath))
+                    {
+                        string backupRoot = Path.Combine(modsPath, "_smm_backup");
+                        if (!Directory.Exists(backupRoot))
+                            Directory.CreateDirectory(backupRoot);
+                        backupPath = CreateUniqueBackupPath(backupRoot, folderName);
+                        Directory.Move(targetPath, backupPath);
+                        movedToBackup = true;
+                    }
+
+                    CopyDirectoryRecursive(modRoot, targetPath);
+                    if (!VerifyCopiedFiles(modRoot, targetPath, out errorMessage))
+                    {
+                        errorMessage = "Install check failed: " + errorMessage;
+                        RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
+                        return null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = "Install failed: " + ex.Message;
+                    RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
+                    return null;
+                }
+
+                installedModId = modId;
+                var result = new NexusInstallResult();
+                result.InstalledPath = targetPath;
+                result.BackupPath = backupPath;
+                result.DownloadedArchivePath = string.Empty;
+                result.VerificationSummary = "About.json id=" + about.id + ", version=" + about.version + ", copied file set verified.";
+                return result;
+            }
+            finally
+            {
+                TryDeleteDirectory(extractPath);
+            }
+        }
+
+        private static string FindInstalledModFolder(string modsPath, string modId)
+        {
+            string[] directories;
+            try
+            {
+                directories = Directory.GetDirectories(modsPath);
+            }
+            catch
+            {
+                return null;
+            }
+            for (int i = 0; i < directories.Length; i++)
+            {
+                if (ModPackageSafety.IsReservedModFolderName(Path.GetFileName(directories[i])))
+                    continue;
+                global::Manager.ModTypes.ModAboutInfo about;
+                string normalizedId;
+                string readError;
+                if (ModPackageSafety.TryReadRequiredAbout(directories[i], out about, out normalizedId, out readError) &&
+                    string.Equals(normalizedId, modId, StringComparison.OrdinalIgnoreCase))
+                    return directories[i];
+            }
+            return null;
+        }
+
+        private static bool IsInsideDirectory(string path, string directory)
+        {
+            string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string fullDirectory = EnsureTrailingDirectorySeparator(Path.GetFullPath(directory));
+            return fullPath.StartsWith(fullDirectory, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool ValidateTargetContext(string modsPath, NexusInstallTargetContext targetContext, out string errorMessage)
@@ -663,6 +845,9 @@ namespace Manager.Core.Services
             string best = null;
             int bestDepth = int.MaxValue;
 
+            // Shallowest mod wins; among equally shallow ones the first by path,
+            // so the same archive always installs the same folder.
+            Array.Sort(aboutFiles, StringComparer.OrdinalIgnoreCase);
             foreach (var about in aboutFiles)
             {
                 string aboutDir = Path.GetDirectoryName(about);

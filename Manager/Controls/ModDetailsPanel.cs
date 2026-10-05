@@ -26,6 +26,8 @@ namespace Manager.Controls
         private Label _versionLabel;
         private Label _authorsLabel;
         private Label _idLabel;
+        private bool _showTechnicalDetails;
+        private bool _placeholderShown;
 
         // Info section
         private Label _dependsOnLabel;
@@ -47,11 +49,11 @@ namespace Manager.Controls
 
         // Actions
         private Button _openFolderButton;
-        private Panel _placeholderPanel;
+        private TableLayoutPanel _placeholderPanel;
+        private Label _placeholderTitle;
         private Label _placeholderLabel;
 
         private ModItem _currentMod;
-        private bool _isDarkMode = false;
         private string _installedModApiVersion;
         private bool _showNexusActionButtons = false;
 
@@ -89,22 +91,42 @@ namespace Manager.Controls
         private void InitializeComponent()
         {
             this.SuspendLayout();
-            this.MinimumSize = new Size(300, 400);
+            this.MinimumSize = Size.Empty;
             this.Padding = new Padding(12);
+            this.AutoScroll = true;
+            this.ResizeRedraw = true;
 
-            // Create placeholder panel
-            _placeholderPanel = new Panel();
+            // Placeholder: shown when nothing is selected, or with a status message.
+            _placeholderPanel = new TableLayoutPanel();
             _placeholderPanel.Dock = DockStyle.Fill;
             _placeholderPanel.Visible = true;
+            _placeholderShown = true;
+            _placeholderPanel.ColumnCount = 1;
+            _placeholderPanel.RowCount = 4;
+            _placeholderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            _placeholderPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 40f));
+            _placeholderPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _placeholderPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _placeholderPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 60f));
+
+            _placeholderTitle = new Label();
+            _placeholderTitle.Font = ManagerTheme.Display(12f);
+            _placeholderTitle.AutoSize = true;
+            _placeholderTitle.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            _placeholderTitle.TextAlign = ContentAlignment.MiddleCenter;
+            _placeholderTitle.UseMnemonic = false;
+            _placeholderTitle.Margin = new Padding(12, 0, 12, 6);
 
             _placeholderLabel = new Label();
             _placeholderLabel.Text = "Select a mod to view details";
-            _placeholderLabel.Font = new Font("Segoe UI", 11f);
-            _placeholderLabel.ForeColor = Color.Gray;
-            _placeholderLabel.AutoSize = false;
+            _placeholderLabel.Font = ManagerTheme.UiFont(9.5f);
+            _placeholderLabel.AutoSize = true;
+            _placeholderLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             _placeholderLabel.TextAlign = ContentAlignment.MiddleCenter;
-            _placeholderLabel.Dock = DockStyle.Fill;
-            _placeholderPanel.Controls.Add(_placeholderLabel);
+            _placeholderLabel.UseMnemonic = false;
+            _placeholderLabel.Margin = new Padding(12, 0, 12, 0);
+            _placeholderPanel.Controls.Add(_placeholderTitle, 0, 1);
+            _placeholderPanel.Controls.Add(_placeholderLabel, 0, 2);
 
             // Preview image
             _previewImage = new PictureBox();
@@ -115,7 +137,7 @@ namespace Manager.Controls
 
             // Name - large title
             _nameLabel = new Label();
-            _nameLabel.Font = new Font("Segoe UI", 14f, FontStyle.Bold);
+            _nameLabel.Font = ManagerTheme.Display(14f);
             _nameLabel.AutoSize = false;
             _nameLabel.Location = new Point(12, 115);
             _nameLabel.Size = new Size(280, 30);
@@ -152,7 +174,7 @@ namespace Manager.Controls
             // Depends On
             _dependsOnLabel = new Label();
             _dependsOnLabel.Text = "Dependencies:";
-            _dependsOnLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _dependsOnLabel.Font = ManagerTheme.Semibold(9f);
             _dependsOnLabel.AutoSize = true;
             _dependsOnLabel.Location = new Point(12, 213);
 
@@ -166,7 +188,7 @@ namespace Manager.Controls
             // Compatibility status
             _modApiLabel = new Label();
             _modApiLabel.Text = "Compatibility:";
-            _modApiLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _modApiLabel.Font = ManagerTheme.Semibold(9f);
             _modApiLabel.AutoSize = true;
             _modApiLabel.Location = new Point(12, 253);
 
@@ -179,7 +201,7 @@ namespace Manager.Controls
             // Tags
             _tagsLabel = new Label();
             _tagsLabel.Text = "Tags:";
-            _tagsLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _tagsLabel.Font = ManagerTheme.Semibold(9f);
             _tagsLabel.AutoSize = true;
             _tagsLabel.Location = new Point(12, 275);
 
@@ -191,7 +213,7 @@ namespace Manager.Controls
             _tagsValue.AutoEllipsis = true;
 
             // Website link
-            _websiteLink = new LinkLabel();
+            _websiteLink = new ThemedLinkLabel();
             _websiteLink.Text = "Visit website";
             _websiteLink.Font = new Font("Segoe UI", 9f);
             _websiteLink.AutoSize = true;
@@ -200,11 +222,11 @@ namespace Manager.Controls
             _websiteLink.LinkClicked += WebsiteLink_LinkClicked;
 
             _nexusStatusLabel = new Label();
-            _nexusStatusLabel.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            _nexusStatusLabel.Font = ManagerTheme.Semibold(8.5f);
             _nexusStatusLabel.AutoSize = true;
             _nexusStatusLabel.Location = new Point(12, 315);
 
-            _nexusLink = new LinkLabel();
+            _nexusLink = new ThemedLinkLabel();
             _nexusLink.Text = "Open Nexus page";
             _nexusLink.Font = new Font("Segoe UI", 9f);
             _nexusLink.AutoSize = true;
@@ -212,20 +234,18 @@ namespace Manager.Controls
             _nexusLink.Visible = false;
             _nexusLink.LinkClicked += NexusLink_LinkClicked;
 
-            _nexusUpdateButton = new Button();
+            _nexusUpdateButton = new ActionButton { Kind = ActionButtonKind.Primary };
             _nexusUpdateButton.Text = "Update from Nexus";
-            _nexusUpdateButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _nexusUpdateButton.FlatStyle = FlatStyle.Flat;
-            _nexusUpdateButton.Size = new Size(145, 28);
+            _nexusUpdateButton.AutoSize = true;
+            _nexusUpdateButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             _nexusUpdateButton.Visible = false;
             _nexusUpdateButton.Cursor = Cursors.Hand;
             _nexusUpdateButton.Click += NexusUpdateButton_Click;
 
-            _nexusStableButton = new Button();
+            _nexusStableButton = new ActionButton { Kind = ActionButtonKind.Secondary };
             _nexusStableButton.Text = "Revert to stable";
-            _nexusStableButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _nexusStableButton.FlatStyle = FlatStyle.Flat;
-            _nexusStableButton.Size = new Size(135, 28);
+            _nexusStableButton.AutoSize = true;
+            _nexusStableButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             _nexusStableButton.Visible = false;
             _nexusStableButton.Cursor = Cursors.Hand;
             _nexusStableButton.Click += NexusStableButton_Click;
@@ -233,7 +253,7 @@ namespace Manager.Controls
             // Description
             _descLabel = new Label();
             _descLabel.Text = "Description";
-            _descLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _descLabel.Font = ManagerTheme.Semibold(9f);
             _descLabel.AutoSize = true;
             _descLabel.Location = new Point(12, 356);
 
@@ -244,15 +264,14 @@ namespace Manager.Controls
             _descriptionBox.ReadOnly = true;
             _descriptionBox.Multiline = true;
             _descriptionBox.WordWrap = true;
-            _descriptionBox.BorderStyle = BorderStyle.FixedSingle;
-            _descriptionBox.ScrollBars = RichTextBoxScrollBars.ForcedVertical;
+            _descriptionBox.BorderStyle = BorderStyle.None;
+            _descriptionBox.ScrollBars = RichTextBoxScrollBars.Vertical;
 
             // Open folder button
-            _openFolderButton = new Button();
+            _openFolderButton = new ActionButton { Kind = ActionButtonKind.Secondary };
             _openFolderButton.Text = "Open mod folder";
-            _openFolderButton.Font = new Font("Segoe UI", 9f);
-            _openFolderButton.FlatStyle = FlatStyle.Flat;
-            _openFolderButton.Size = new Size(140, 28);
+            _openFolderButton.AutoSize = true;
+            _openFolderButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             _openFolderButton.Location = new Point(12, 525);
             _openFolderButton.Cursor = Cursors.Hand;
             _openFolderButton.Click += OpenFolderButton_Click;
@@ -346,6 +365,7 @@ namespace Manager.Controls
             }
 
             _currentMod = mod;
+            AutoScrollPosition = Point.Empty;
             HidePlaceholder();
 
             // Preview image
@@ -385,7 +405,15 @@ namespace Manager.Controls
             // Dependencies
             if (mod.DependsOn != null && mod.DependsOn.Length > 0)
             {
-                _dependsOnValue.Text = string.Join(", ", mod.DependsOn);
+                string[] names = new string[mod.DependsOn.Length];
+                for (int i = 0; i < names.Length; i++)
+                {
+                    string dependency = mod.DependsOn[i] ?? string.Empty;
+                    names[i] = LoadOrderService.IsBundledDependency(dependency.Trim())
+                        ? "Harmony (included with SMM)"
+                        : dependency;
+                }
+                _dependsOnValue.Text = string.Join(", ", names);
             }
             else
             {
@@ -434,11 +462,11 @@ namespace Manager.Controls
                 string statusText = GetCompatibilityStatusText(mod.ApiCompatibility);
                 Color statusColor;
                 if (mod.ApiCompatibility.Severity == ApiCompatibilitySeverity.Error)
-                    statusColor = Color.Orange;
+                    statusColor = ManagerTheme.Current.Danger;
                 else if (mod.ApiCompatibility.Severity == ApiCompatibilitySeverity.Warning)
-                    statusColor = Color.Goldenrod;
+                    statusColor = ManagerTheme.Current.Warning;
                 else
-                    statusColor = _isDarkMode ? Color.LightGreen : Color.Green;
+                    statusColor = ManagerTheme.Current.Success;
 
                 _modApiValue.Text = statusText;
                 _modApiValue.ForeColor = statusColor;
@@ -447,8 +475,8 @@ namespace Manager.Controls
             {
                 string statusText = mod.IsModApiCompatible ? "Compatible" : "Needs mod update";
                 Color statusColor = mod.IsModApiCompatible
-                    ? (_isDarkMode ? Color.LightGreen : Color.Green)
-                    : Color.Orange;
+                    ? (ManagerTheme.Current.Success)
+                    : ManagerTheme.Current.Danger;
 
                 _modApiValue.Text = statusText;
                 _modApiValue.ForeColor = statusColor;
@@ -456,7 +484,7 @@ namespace Manager.Controls
             else
             {
                 _modApiValue.Text = "Not declared";
-                _modApiValue.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
+                _modApiValue.ForeColor = ManagerTheme.Current.TextMuted;
             }
         }
 
@@ -502,7 +530,7 @@ namespace Manager.Controls
             if (!mod.HasNexusReference)
             {
                 _nexusStatusLabel.Text = "Nexus: Not linked";
-                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.Gray : Color.DimGray;
+                _nexusStatusLabel.ForeColor = ManagerTheme.Current.TextMuted;
                 return;
             }
 
@@ -523,7 +551,7 @@ namespace Manager.Controls
                     ? "Update"
                     : ToTitleCase(NexusReleaseClassifier.GetDisplayLabel(channel)) + " update";
                 _nexusStatusLabel.Text = "Nexus: " + channelLabel + " available (" + latest + ")";
-                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.DeepSkyBlue : Color.RoyalBlue;
+                _nexusStatusLabel.ForeColor = ManagerTheme.Current.AccentText;
                 if (_showNexusActionButtons)
                 {
                     _nexusUpdateButton.Text = channel == NexusReleaseChannel.Stable
@@ -543,19 +571,19 @@ namespace Manager.Controls
             if (!string.IsNullOrEmpty(mod.NexusRemoteVersion) && installedMod)
             {
                 _nexusStatusLabel.Text = "Nexus: Installed and current (" + mod.NexusRemoteVersion + ")";
-                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGreen : Color.Green;
+                _nexusStatusLabel.ForeColor = ManagerTheme.Current.Success;
                 return;
             }
 
             if (!installedMod && !string.IsNullOrEmpty(mod.NexusRemoteVersion))
             {
                 _nexusStatusLabel.Text = "Available on Nexus (" + mod.NexusRemoteVersion + ")";
-                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
+                _nexusStatusLabel.ForeColor = ManagerTheme.Current.TextMuted;
                 return;
             }
 
             _nexusStatusLabel.Text = "Nexus: Linked (" + mod.NexusGameDomain + "/" + mod.NexusModId + ")";
-            _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
+            _nexusStatusLabel.ForeColor = ManagerTheme.Current.TextMuted;
         }
 
         private static string ToTitleCase(string value)
@@ -581,10 +609,27 @@ namespace Manager.Controls
             return "v" + value;
         }
 
+        /// <summary>
+        /// Shows a titled status message (empty lists, failed refreshes) instead of mod details.
+        /// </summary>
+        public void ShowMessage(string title, string message)
+        {
+            ShowPlaceholder();
+            _placeholderTitle.Text = title ?? string.Empty;
+            _placeholderTitle.Visible = !string.IsNullOrEmpty(title);
+            _placeholderLabel.Text = message ?? string.Empty;
+        }
+
         private void ShowPlaceholder()
         {
             _currentMod = null;
+            AutoScrollMinSize = Size.Empty;
+            AutoScrollPosition = Point.Empty;
+            _placeholderTitle.Text = "Nothing selected";
+            _placeholderTitle.Visible = true;
+            _placeholderLabel.Text = "Select a mod to see its details.";
             _placeholderPanel.Visible = true;
+            _placeholderShown = true;
             _placeholderPanel.BringToFront();
             
             foreach (Control c in this.Controls)
@@ -592,11 +637,17 @@ namespace Manager.Controls
                 if (c != _placeholderPanel)
                     c.Visible = false;
             }
+
+            // Re-evaluate scrolling now the detail controls are hidden, so a
+            // scrollbar from the previous mod does not linger on the message.
+            AutoScroll = false;
+            AutoScroll = true;
         }
 
         private void HidePlaceholder()
         {
             _placeholderPanel.Visible = false;
+            _placeholderShown = false;
             _placeholderPanel.SendToBack();
             
             // Show all other controls
@@ -604,7 +655,7 @@ namespace Manager.Controls
             _nameLabel.Visible = true;
             _versionLabel.Visible = true;
             _authorsLabel.Visible = true;
-            _idLabel.Visible = true;
+            _idLabel.Visible = _showTechnicalDetails;
             _separator.Visible = true;
             _dependsOnLabel.Visible = true;
             _dependsOnValue.Visible = true;
@@ -657,14 +708,34 @@ namespace Manager.Controls
             return value.Trim().TrimEnd('/').ToLowerInvariant();
         }
 
+        /// <summary>Shows the mod ID line; on in developer mode only.</summary>
+        public bool ShowTechnicalDetails
+        {
+            get { return _showTechnicalDetails; }
+            set
+            {
+                _showTechnicalDetails = value;
+                if (!_placeholderShown)
+                    _idLabel.Visible = value;
+                LayoutDetailContent();
+            }
+        }
+
         private void LayoutDetailContent()
         {
-            if (_placeholderPanel.Visible)
+            // A flag, not Visible: Visible reads false whenever the tab itself is hidden.
+            if (_placeholderShown)
+            {
+                // The placeholder fills the panel; a size left from the last mod would add a scrollbar.
+                AutoScrollMinSize = Size.Empty;
                 return;
+            }
 
+            // Positions include the scroll offset so a short panel scrolls instead of overlapping.
+            int scrollY = AutoScrollPosition.Y;
             int left = 12;
-            int top = 10;
-            int contentWidth = Math.Max(120, this.Width - 24);
+            int top = 10 + scrollY;
+            int contentWidth = Math.Max(120, this.ClientSize.Width - 24);
 
             bool showPreview = _previewImage.Visible && contentWidth >= 430;
             int previewWidth = 140;
@@ -688,7 +759,7 @@ namespace Manager.Controls
             _authorsLabel.Width = textWidth;
             _idLabel.Location = new Point(left, top + 76);
 
-            int separatorY = _idLabel.Bottom + 10;
+            int separatorY = (_idLabel.Visible ? _idLabel.Bottom : _authorsLabel.Bottom) + 10;
             if (showPreview)
                 separatorY = Math.Max(separatorY, _previewImage.Bottom + 10);
 
@@ -750,9 +821,24 @@ namespace Manager.Controls
             _descriptionBox.Location = new Point(left, descTitleY + 20);
             _descriptionBox.Width = contentWidth;
 
+            const int minimumDescriptionHeight = 44;
+            int fitTop = this.ClientSize.Height - 42 + scrollY;
+            int descriptionMinimum = minimumDescriptionHeight;
+            // A few pixels short: squeeze the description rather than add a scrollbar.
+            int shortfall = _descriptionBox.Top + descriptionMinimum + 10 - fitTop;
+            if (shortfall > 0 && shortfall <= 16)
+                descriptionMinimum -= shortfall;
+            int buttonTop = Math.Max(fitTop, _descriptionBox.Top + descriptionMinimum + 10);
             _openFolderButton.Left = left;
-            _openFolderButton.Top = this.Height - 42;
-            _descriptionBox.Height = Math.Max(60, _openFolderButton.Top - _descriptionBox.Top - 10);
+            _openFolderButton.Top = buttonTop;
+            _descriptionBox.Height = Math.Max(descriptionMinimum, buttonTop - _descriptionBox.Top - 10);
+            AutoScrollMinSize = new Size(0, buttonTop - scrollY + 42);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            ManagerTheme.DrawOutline(e.Graphics, ClientRectangle, ManagerTheme.Current.Border);
         }
 
         /// <summary>
@@ -760,80 +846,41 @@ namespace Manager.Controls
         /// </summary>
         public void ApplyTheme(bool isDark)
         {
-            _isDarkMode = isDark;
+            ThemePalette palette = ManagerTheme.Current;
 
-            if (isDark)
+            this.BackColor = palette.Surface;
+            _placeholderPanel.BackColor = palette.Surface;
+            _placeholderTitle.ForeColor = palette.Text;
+            _placeholderLabel.ForeColor = palette.TextMuted;
+            _nameLabel.ForeColor = palette.Text;
+            _versionLabel.ForeColor = palette.Text;
+            _authorsLabel.ForeColor = palette.TextMuted;
+            _idLabel.ForeColor = palette.TextMuted;
+            _separator.BackColor = palette.Border;
+            _dependsOnLabel.ForeColor = palette.Text;
+            _dependsOnValue.ForeColor = palette.TextMuted;
+            _modApiLabel.ForeColor = palette.Text;
+            _tagsLabel.ForeColor = palette.Text;
+            _tagsValue.ForeColor = palette.TextMuted;
+            _descLabel.ForeColor = palette.Text;
+            _descriptionBox.BackColor = palette.Input;
+            _descriptionBox.ForeColor = palette.Text;
+            ManagerTheme.ApplyNativeScrollbars(_descriptionBox);
+            foreach (LinkLabel link in new LinkLabel[] { _websiteLink, _nexusLink })
             {
-                this.BackColor = Color.FromArgb(45, 45, 48);
-                _placeholderLabel.ForeColor = Color.Gray;
-                _nameLabel.ForeColor = Color.White;
-                _versionLabel.ForeColor = Color.LightGray;
-                _authorsLabel.ForeColor = Color.Gray;
-                _idLabel.ForeColor = Color.DimGray;
-                _dependsOnLabel.ForeColor = Color.White;
-                _dependsOnValue.ForeColor = Color.LightGray;
-                _modApiLabel.ForeColor = Color.White;
-                _tagsLabel.ForeColor = Color.White;
-                _tagsValue.ForeColor = Color.LightGray;
-                _descLabel.ForeColor = Color.White;
-                _descriptionBox.BackColor = Color.FromArgb(60, 60, 60);
-                _descriptionBox.ForeColor = Color.White;
-                _openFolderButton.BackColor = Color.FromArgb(60, 60, 60);
-                _openFolderButton.ForeColor = Color.White;
-                _websiteLink.LinkColor = Color.LightBlue;
-                _nexusLink.LinkColor = Color.LightBlue;
-                ApplyButtonTheme(_nexusUpdateButton, true, true);
-                ApplyButtonTheme(_nexusStableButton, true, false);
+                link.LinkColor = palette.AccentText;
+                link.ActiveLinkColor = palette.AccentText;
+                link.VisitedLinkColor = palette.AccentText;
             }
-            else
-            {
-                this.BackColor = SystemColors.Control;
-                _placeholderLabel.ForeColor = Color.Gray;
-                _nameLabel.ForeColor = SystemColors.ControlText;
-                _versionLabel.ForeColor = SystemColors.ControlText;
-                _authorsLabel.ForeColor = Color.Gray;
-                _idLabel.ForeColor = Color.DimGray;
-                _dependsOnLabel.ForeColor = SystemColors.ControlText;
-                _dependsOnValue.ForeColor = SystemColors.ControlText;
-                _modApiLabel.ForeColor = SystemColors.ControlText;
-                _tagsLabel.ForeColor = SystemColors.ControlText;
-                _tagsValue.ForeColor = SystemColors.ControlText;
-                _descLabel.ForeColor = SystemColors.ControlText;
-                _descriptionBox.BackColor = SystemColors.Window;
-                _descriptionBox.ForeColor = SystemColors.WindowText;
-                _openFolderButton.BackColor = SystemColors.Control;
-                _openFolderButton.ForeColor = SystemColors.ControlText;
-                _websiteLink.LinkColor = SystemColors.HotTrack;
-                _nexusLink.LinkColor = SystemColors.HotTrack;
-                ApplyButtonTheme(_nexusUpdateButton, false, true);
-                ApplyButtonTheme(_nexusStableButton, false, false);
-            }
+            _nexusUpdateButton.Invalidate();
+            _nexusStableButton.Invalidate();
+            _openFolderButton.Invalidate();
 
             // Update ModAPI status color if showing mod
             if (_currentMod != null)
             {
                 UpdateModApiStatus(_currentMod);
                 UpdateNexusStatus(_currentMod);
-            }
-        }
-
-        private static void ApplyButtonTheme(Button button, bool isDark, bool primary)
-        {
-            if (button == null)
-                return;
-
-            button.UseVisualStyleBackColor = false;
-            if (isDark)
-            {
-                button.BackColor = primary ? Color.FromArgb(0, 122, 204) : Color.FromArgb(70, 70, 70);
-                button.ForeColor = Color.White;
-                button.FlatAppearance.BorderColor = primary ? Color.FromArgb(0, 92, 164) : Color.FromArgb(100, 100, 100);
-            }
-            else
-            {
-                button.BackColor = primary ? Color.FromArgb(225, 235, 248) : SystemColors.Control;
-                button.ForeColor = SystemColors.ControlText;
-                button.FlatAppearance.BorderColor = SystemColors.ControlDark;
             }
         }
     }

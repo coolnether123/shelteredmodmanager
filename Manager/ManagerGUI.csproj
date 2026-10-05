@@ -173,6 +173,10 @@
     <Compile Include="Core\Services\ContentWorkshopProjectService.cs" />
     <Compile Include="Core\Services\ModDiscoveryService.cs" />
     <Compile Include="Core\Services\LoadOrderService.cs" />
+    <Compile Include="Core\Services\ContentWorkshopIds.cs" />
+    <Compile Include="Core\Services\CrashReportService.cs" />
+    <Compile Include="Core\Services\ModListFileService.cs" />
+    <Compile Include="Core\Services\ZipFileWriter.cs" />
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />
     <Compile Include="Core\Services\NexusGraphQlClient.cs" />
     <Compile Include="Core\Services\NexusV3RestClient.cs" />
@@ -213,6 +217,42 @@
     <Compile Include="Controls\PixelEditorCanvas.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <Compile Include="Controls\ManagerTheme.cs" />
+    <Compile Include="Controls\UiFactory.cs" />
+    <Compile Include="Controls\ThemedTabControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\CardPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\CardColumns.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\NoticeBanner.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\IconPreview.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\ThemedCheckBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\PixelSprite.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\ThemedInputs.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\ItemPickers.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\ManagerDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Controls\ModSwitchList.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ThemedMenu.cs" />
     <!-- View Tabs -->
     <Compile Include="Views\GameSetupTab.cs">
       <SubType>UserControl</SubType>
@@ -222,6 +262,10 @@
     </Compile>
     <Compile Include="Views\ContentWorkshopTab.cs">
       <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\ContentWorkshopTab.Layout.cs">
+      <SubType>UserControl</SubType>
+      <DependentUpon>ContentWorkshopTab.cs</DependentUpon>
     </Compile>
     <Compile Include="Views\NexusModsTab.cs">
       <SubType>UserControl</SubType>

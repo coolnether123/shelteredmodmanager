@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using Manager.Controls;
 using Manager.Core;
 using Manager.Core.Models;
 using Manager.Core.Services;
@@ -19,6 +20,7 @@ namespace Manager
         // Header
         private PictureBox _logoBox;
         private Label _titleLabel;
+        private Label _subtitleLabel;
 
         // Tab control
         private TabControl _tabControl;
@@ -35,7 +37,7 @@ namespace Manager
         private Label _modsCountLabel;
         private Label _modApiVersionLabel;
         private Label _nexusUpdatesLabel;
-        private Panel _headerStatusPanel;
+        private TableLayoutPanel _headerStatusPanel;
         private ModManagerTab _modManagerTab;
         private ContentWorkshopTab _contentWorkshopTab;
         private NexusModsTab _nexusTab;
@@ -62,6 +64,12 @@ namespace Manager
         private DateTime _lastNoChangeSettingsReloadLogUtc = DateTime.MinValue;
         private bool _startupNexusUpdateAnnouncementsPending = true;
         private int _nexusAccountRequestToken;
+        private bool _statusReady = true;
+        private bool _loaderMissing;
+        private ActionButton _headerPlayButton;
+        private TableLayoutPanel _headerPlayHost;
+        private readonly CrashReportService _crashReports = new CrashReportService();
+        private readonly ToolTip _headerToolTip = new ToolTip { AutoPopDelay = 12000, InitialDelay = 400, ShowAlways = true };
         private string _startupPreviousInstalledModApiVersion;
         private readonly string _startupNexusLink;
         private const string APP_VERSION = AppVersionInfo.Display;
@@ -83,8 +91,75 @@ namespace Manager
             _startupNexusLink = startupNexusLink;
             InitializeServices();
             InitializeComponent();
+            BuildHeaderPlayButton();
             InitializeCustomResources();
             WireEvents();
+        }
+
+        /// <summary>Play sits in the header so launching is one click away on every tab (F5 anywhere).</summary>
+        private void BuildHeaderPlayButton()
+        {
+            _headerPlayButton = new ActionButton
+            {
+                Kind = ActionButtonKind.Primary,
+                Text = "Play",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Font = ManagerTheme.Semibold(10.5f),
+                MinimumSize = new Size(112, 38),
+                Padding = new Padding(18, 0, 18, 0),
+                Anchor = AnchorStyles.None,
+                Margin = new Padding(0),
+                AccessibleName = "Play Sheltered with your mods"
+            };
+            _headerPlayButton.Click += HeaderPlayButton_Click;
+            _headerToolTip.SetToolTip(_headerPlayButton, "Launch Sheltered with your active mods (F5)");
+            _headerPlayHost = new TableLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1,
+                RowCount = 1,
+                Margin = new Padding(0),
+                Padding = new Padding(20, 0, 0, 0)
+            };
+            _headerPlayHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            _headerPlayHost.Controls.Add(_headerPlayButton, 0, 0);
+            // Added after the status panel, so it docks at the far right.
+            headerPanel.Controls.Add(_headerPlayHost);
+        }
+
+        private void HeaderPlayButton_Click(object sender, EventArgs e)
+        {
+            if (_settings == null || !_settings.IsGamePathValid)
+            {
+                _tabControl.SelectedTab = _gameSetupPage;
+                return;
+            }
+            GameSetupTab_LaunchRequested(true);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.F5)
+            {
+                HeaderPlayButton_Click(this, EventArgs.Empty);
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void UpdateHeaderPlayButton(int activeMods)
+        {
+            if (_headerPlayButton == null)
+                return;
+            bool ready = _settings != null && _settings.IsGamePathValid;
+            _headerPlayButton.Text = ready ? "Play" : "Set up game";
+            _headerPlayButton.Kind = ready ? ActionButtonKind.Primary : ActionButtonKind.Secondary;
+            _headerToolTip.SetToolTip(_headerPlayButton, ready
+                ? "Launch Sheltered with your " + FormatCount(activeMods, "active mod") + " (F5)"
+                : "Choose the game in Game setup first");
         }
 
         private void InitializeCustomResources()
@@ -252,12 +327,13 @@ namespace Manager
             this.headerPanel = new System.Windows.Forms.Panel();
             this._logoBox = new System.Windows.Forms.PictureBox();
             this._titleLabel = new System.Windows.Forms.Label();
-            this._headerStatusPanel = new System.Windows.Forms.Panel();
+            this._subtitleLabel = new System.Windows.Forms.Label();
+            this._headerStatusPanel = new System.Windows.Forms.TableLayoutPanel();
             this._nexusUpdatesLabel = new System.Windows.Forms.Label();
             this._modApiVersionLabel = new System.Windows.Forms.Label();
             this._modsCountLabel = new System.Windows.Forms.Label();
             this._statusLabel = new System.Windows.Forms.Label();
-            this._tabControl = new System.Windows.Forms.TabControl();
+            this._tabControl = new Manager.Controls.ThemedTabControl();
             this._gameSetupPage = new System.Windows.Forms.TabPage();
             this._modManagerPage = new System.Windows.Forms.TabPage();
             this._modManagerTab = new Manager.Views.ModManagerTab();
@@ -284,95 +360,117 @@ namespace Manager
             this._settingsPage.SuspendLayout();
             this._aboutPage.SuspendLayout();
             this.SuspendLayout();
-            // 
+            //
             // headerPanel
-            // 
+            //
             this.headerPanel.Controls.Add(this._logoBox);
             this.headerPanel.Controls.Add(this._titleLabel);
+            this.headerPanel.Controls.Add(this._subtitleLabel);
             this.headerPanel.Controls.Add(this._headerStatusPanel);
             this.headerPanel.Dock = System.Windows.Forms.DockStyle.Top;
             this.headerPanel.Location = new System.Drawing.Point(0, 0);
             this.headerPanel.Name = "headerPanel";
-            this.headerPanel.Padding = new System.Windows.Forms.Padding(15, 10, 15, 10);
-            this.headerPanel.Size = new System.Drawing.Size(1182, 95);
+            this.headerPanel.Padding = new System.Windows.Forms.Padding(16, 8, 16, 8);
+            this.headerPanel.Size = new System.Drawing.Size(1182, 80);
             this.headerPanel.TabIndex = 1;
-            // 
+            //
             // _logoBox
-            // 
-            this._logoBox.Location = new System.Drawing.Point(15, 5);
+            //
+            this._logoBox.Location = new System.Drawing.Point(16, 16);
             this._logoBox.Name = "_logoBox";
-            this._logoBox.Size = new System.Drawing.Size(50, 50);
+            this._logoBox.Size = new System.Drawing.Size(46, 46);
             this._logoBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
             this._logoBox.TabIndex = 0;
             this._logoBox.TabStop = false;
-            // 
+            this._logoBox.AccessibleName = "Sheltered Mod Manager logo";
+            //
             // _titleLabel
-            // 
+            //
             this._titleLabel.AutoSize = true;
-            this._titleLabel.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold);
-            this._titleLabel.Location = new System.Drawing.Point(75, 15);
+            this._titleLabel.Font = Manager.Controls.ManagerTheme.Display(16F);
+            this._titleLabel.Location = new System.Drawing.Point(72, 14);
             this._titleLabel.Name = "_titleLabel";
-            this._titleLabel.Size = new System.Drawing.Size(329, 37);
             this._titleLabel.TabIndex = 1;
             this._titleLabel.Text = "Sheltered Mod Manager";
-            // 
+            this._titleLabel.UseMnemonic = false;
+            //
+            // _subtitleLabel
+            //
+            this._subtitleLabel.AutoSize = true;
+            this._subtitleLabel.Font = Manager.Controls.ManagerTheme.UiFont(9F);
+            this._subtitleLabel.Location = new System.Drawing.Point(74, 44);
+            this._subtitleLabel.Name = "_subtitleLabel";
+            this._subtitleLabel.Text = "Version " + APP_VERSION;
+            this._subtitleLabel.UseMnemonic = false;
+            //
             // _headerStatusPanel
-            // 
-            this._headerStatusPanel.Controls.Add(this._nexusUpdatesLabel);
-            this._headerStatusPanel.Controls.Add(this._modApiVersionLabel);
-            this._headerStatusPanel.Controls.Add(this._modsCountLabel);
-            this._headerStatusPanel.Controls.Add(this._statusLabel);
+            //
+            this._headerStatusPanel.AutoSize = true;
+            this._headerStatusPanel.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this._headerStatusPanel.ColumnCount = 1;
+            this._headerStatusPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            this._headerStatusPanel.RowCount = 4;
+            this._headerStatusPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            this._headerStatusPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            this._headerStatusPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            this._headerStatusPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            this._headerStatusPanel.Controls.Add(this._statusLabel, 0, 0);
+            this._headerStatusPanel.Controls.Add(this._modsCountLabel, 0, 1);
+            this._headerStatusPanel.Controls.Add(this._modApiVersionLabel, 0, 2);
+            this._headerStatusPanel.Controls.Add(this._nexusUpdatesLabel, 0, 3);
             this._headerStatusPanel.Dock = System.Windows.Forms.DockStyle.Right;
-            this._headerStatusPanel.Location = new System.Drawing.Point(917, 10);
             this._headerStatusPanel.Name = "_headerStatusPanel";
-            this._headerStatusPanel.Padding = new System.Windows.Forms.Padding(0, 0, 15, 0);
-            this._headerStatusPanel.Size = new System.Drawing.Size(250, 75);
+            this._headerStatusPanel.Padding = new System.Windows.Forms.Padding(0);
             this._headerStatusPanel.TabIndex = 2;
-            // 
+            this._headerStatusPanel.AccessibleName = "Manager status";
+            this._headerStatusPanel.AccessibleRole = System.Windows.Forms.AccessibleRole.StatusBar;
+            //
             // _nexusUpdatesLabel
-            // 
-            this._nexusUpdatesLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this._nexusUpdatesLabel.Font = new System.Drawing.Font("Segoe UI", 8.5F);
-            this._nexusUpdatesLabel.Location = new System.Drawing.Point(0, 56);
+            //
+            this._nexusUpdatesLabel.AutoSize = true;
+            this._nexusUpdatesLabel.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
+            this._nexusUpdatesLabel.Font = Manager.Controls.ManagerTheme.UiFont(8.75F);
+            this._nexusUpdatesLabel.Margin = new System.Windows.Forms.Padding(0);
             this._nexusUpdatesLabel.Name = "_nexusUpdatesLabel";
-            this._nexusUpdatesLabel.Size = new System.Drawing.Size(235, 18);
             this._nexusUpdatesLabel.TabIndex = 3;
-            this._nexusUpdatesLabel.Text = "Nexus Updates: --";
-            this._nexusUpdatesLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-            // 
+            this._nexusUpdatesLabel.Text = "Nexus: not checked yet";
+            this._nexusUpdatesLabel.UseMnemonic = false;
+            this._nexusUpdatesLabel.Cursor = System.Windows.Forms.Cursors.Hand;
+            //
             // _modApiVersionLabel
-            // 
-            this._modApiVersionLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this._modApiVersionLabel.Font = new System.Drawing.Font("Segoe UI", 8.5F);
-            this._modApiVersionLabel.Location = new System.Drawing.Point(0, 38);
+            //
+            this._modApiVersionLabel.AutoSize = true;
+            this._modApiVersionLabel.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
+            this._modApiVersionLabel.Font = Manager.Controls.ManagerTheme.UiFont(8.75F);
+            this._modApiVersionLabel.Margin = new System.Windows.Forms.Padding(0);
             this._modApiVersionLabel.Name = "_modApiVersionLabel";
-            this._modApiVersionLabel.Size = new System.Drawing.Size(235, 18);
             this._modApiVersionLabel.TabIndex = 0;
-            this._modApiVersionLabel.Text = "ModAPI Version: Unknown";
-            this._modApiVersionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-            // 
+            this._modApiVersionLabel.Text = string.Empty;
+            this._modApiVersionLabel.Visible = false;
+            this._modApiVersionLabel.UseMnemonic = false;
+            //
             // _modsCountLabel
-            // 
-            this._modsCountLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this._modsCountLabel.Font = new System.Drawing.Font("Segoe UI", 8.5F);
-            this._modsCountLabel.Location = new System.Drawing.Point(0, 20);
+            //
+            this._modsCountLabel.AutoSize = true;
+            this._modsCountLabel.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
+            this._modsCountLabel.Font = Manager.Controls.ManagerTheme.UiFont(8.75F);
+            this._modsCountLabel.Margin = new System.Windows.Forms.Padding(0);
             this._modsCountLabel.Name = "_modsCountLabel";
-            this._modsCountLabel.Size = new System.Drawing.Size(235, 18);
             this._modsCountLabel.TabIndex = 1;
-            this._modsCountLabel.Text = "Active Mods: 0";
-            this._modsCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-            // 
+            this._modsCountLabel.Text = string.Empty;
+            this._modsCountLabel.UseMnemonic = false;
+            //
             // _statusLabel
-            // 
-            this._statusLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this._statusLabel.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold);
+            //
+            this._statusLabel.AutoSize = true;
+            this._statusLabel.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
+            this._statusLabel.Font = Manager.Controls.ManagerTheme.Semibold(9.5F);
             this._statusLabel.ForeColor = System.Drawing.Color.LightGreen;
-            this._statusLabel.Location = new System.Drawing.Point(0, 0);
+            this._statusLabel.Margin = new System.Windows.Forms.Padding(0, 0, 0, 1);
             this._statusLabel.Name = "_statusLabel";
-            this._statusLabel.Size = new System.Drawing.Size(235, 20);
             this._statusLabel.TabIndex = 2;
-            this._statusLabel.Text = "Status: Ready";
-            this._statusLabel.TextAlign = System.Drawing.ContentAlignment.BottomRight;
+            this._statusLabel.Text = "Ready to play";
+            this._statusLabel.UseMnemonic = false;
             // 
             // _tabControl
             // 
@@ -391,6 +489,7 @@ namespace Manager
             this._tabControl.SelectedIndex = 0;
             this._tabControl.Size = new System.Drawing.Size(1182, 608);
             this._tabControl.TabIndex = 0;
+            this._tabControl.AccessibleName = "Manager sections";
             // 
             // _gameSetupPage
             // 
@@ -400,6 +499,7 @@ namespace Manager
             this._gameSetupPage.Size = new System.Drawing.Size(1174, 562);
             this._gameSetupPage.TabIndex = 0;
             this._gameSetupPage.Text = "Game setup";
+            this._gameSetupPage.UseVisualStyleBackColor = false;
             // 
             // _modManagerPage
             // 
@@ -409,6 +509,7 @@ namespace Manager
             this._modManagerPage.Size = new System.Drawing.Size(1174, 562);
             this._modManagerPage.TabIndex = 1;
             this._modManagerPage.Text = "Mod manager";
+            this._modManagerPage.UseVisualStyleBackColor = false;
             // 
             // _modManagerTab
             // 
@@ -427,6 +528,7 @@ namespace Manager
             this._contentWorkshopPage.Size = new System.Drawing.Size(1174, 562);
             this._contentWorkshopPage.TabIndex = 2;
             this._contentWorkshopPage.Text = "Content workshop";
+            this._contentWorkshopPage.UseVisualStyleBackColor = false;
             //
             // _contentWorkshopTab
             //
@@ -444,6 +546,7 @@ namespace Manager
             this._nexusPage.Size = new System.Drawing.Size(1174, 562);
             this._nexusPage.TabIndex = 2;
             this._nexusPage.Text = "Nexus";
+            this._nexusPage.UseVisualStyleBackColor = false;
             // 
             // _nexusTab
             // 
@@ -462,6 +565,7 @@ namespace Manager
             this._nexusUploadPage.Size = new System.Drawing.Size(1174, 562);
             this._nexusUploadPage.TabIndex = 3;
             this._nexusUploadPage.Text = "Publish";
+            this._nexusUploadPage.UseVisualStyleBackColor = false;
             // 
             // _nexusUploadTab
             // 
@@ -480,6 +584,7 @@ namespace Manager
             this._settingsPage.Size = new System.Drawing.Size(1174, 562);
             this._settingsPage.TabIndex = 4;
             this._settingsPage.Text = "Settings";
+            this._settingsPage.UseVisualStyleBackColor = false;
             // 
             // _settingsTab
             // 
@@ -499,6 +604,7 @@ namespace Manager
             this._aboutPage.Size = new System.Drawing.Size(1174, 562);
             this._aboutPage.TabIndex = 5;
             this._aboutPage.Text = "About";
+            this._aboutPage.UseVisualStyleBackColor = false;
             // 
             // _aboutTab
             // 
@@ -577,6 +683,43 @@ namespace Manager
 
             // Tab change
             _tabControl.SelectedIndexChanged += TabControl_SelectedIndexChanged;
+
+            // Unsaved workshop work stays visible from every tab.
+            _contentWorkshopTab.DirtyStateChanged += ContentWorkshopTab_DirtyStateChanged;
+            _contentWorkshopTab.EnableInstalledPack = delegate(string modId) { return _modManagerTab.EnableModById(modId); };
+
+            // The Mod manager hands Nexus work to the Nexus tab, which owns downloads and sign-in.
+            _modManagerTab.UpdateAllRequested += delegate
+            {
+                _tabControl.SelectedTab = _nexusPage;
+                _nexusTab.StartUpdateAll();
+            };
+            _modManagerTab.NexusInstallRequested += delegate(List<NexusModReference> references)
+            {
+                _tabControl.SelectedTab = _nexusPage;
+                // Nothing started (busy, signed out...): forget the list, or a later batch would re-apply it.
+                if (!_nexusTab.InstallReferences(references))
+                    _modManagerTab.CancelPendingList();
+            };
+            _nexusTab.BatchInstallFinished += delegate { _modManagerTab.ApplyPendingList(); };
+            _nexusUpdatesLabel.Click += delegate
+            {
+                _tabControl.SelectedTab = _nexusPage;
+                _nexusTab.ShowUpdates();
+            };
+
+            // The Nexus tab reuses the Settings OAuth flow; it never handles credentials itself.
+            _nexusTab.SignInRequested += delegate { SettingsTab_NexusOAuthSignInRequested(); };
+            _nexusTab.OpenSettingsRequested += delegate { _tabControl.SelectedTab = _settingsPage; };
+            _nexusTab.AccountRefreshRequested += delegate { RefreshNexusAccountStatusAsync(true); };
+            this.HandleCreated += delegate { ManagerTheme.ApplyTitleBar(this); };
+        }
+
+        private void ContentWorkshopTab_DirtyStateChanged(object sender, EventArgs e)
+        {
+            _contentWorkshopPage.Text = _contentWorkshopTab.HasUnsavedChanges
+                ? "Content workshop •"
+                : "Content workshop";
         }
 
         private void GameSetupTab_ViewGameLogRequested(object sender, EventArgs e)
@@ -609,6 +752,7 @@ namespace Manager
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            FitDefaultSizeToScreen();
             ApplySavedWindowPlacement();
             _windowPlacementInitialized = true;
 
@@ -623,12 +767,18 @@ namespace Manager
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
+            _nexusTab.SetSignInAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
+            ApplyDeveloperMode();
             RefreshNexusAccountStatusAsync(true);
 
             // Apply initial theme
             ApplyTheme(_settings.DarkMode);
+
+            // Mods installed since the previous session get a "New" badge.
+            _modManagerTab.NewSinceUtc = _settings.LastSessionUtc == DateTime.MinValue ? DateTime.MaxValue : _settings.LastSessionUtc;
+            _settings.LastSessionUtc = DateTime.UtcNow;
 
             // Refresh mod state at startup (includes background Nexus sync when enabled).
             _modManagerTab.RefreshMods();
@@ -646,6 +796,7 @@ namespace Manager
             StartNexusProtocolPolling();
 
             BeginInvoke((MethodInvoker)ShowReleaseNoticeIfNeeded);
+            BeginInvoke((MethodInvoker)CheckForUnreportedCrash);
             if (!string.IsNullOrEmpty(_startupNexusLink))
                 BeginInvoke((MethodInvoker)delegate { HandleNexusProtocolLink(_startupNexusLink); });
         }
@@ -801,6 +952,19 @@ namespace Manager
             {
                 _modManagerTab.RefreshMods();
             }
+        }
+
+        /// <summary>
+        /// Developer mode (Settings) reveals IDs, logs and authoring tools across
+        /// the manager; without it each tab keeps to what players need.
+        /// </summary>
+        private void ApplyDeveloperMode()
+        {
+            bool developer = _settings != null && _settings.DevMode;
+            _contentWorkshopTab.DeveloperMode = developer;
+            _gameSetupTab.DeveloperMode = developer;
+            _modManagerTab.DeveloperMode = developer;
+            _nexusTab.DeveloperMode = developer;
         }
 
         private void ApplyPublishTabVisibility()
@@ -992,6 +1156,7 @@ namespace Manager
                 var process = System.Diagnostics.Process.Start(startInfo);
                 
                 StartModLaunchVerification(process, launchGameDir, launchStartedAt);
+                StartCrashWatch(launchGameDir, launchStartedAt);
             }
             catch (Exception ex)
             {
@@ -1075,6 +1240,183 @@ namespace Manager
             }
 
             _gameSetupTab.Log("SMM launch verification timed out after 60 seconds. Last status: " + lastStatus + ". Check SMM\\mod_manager.log.");
+        }
+
+        // ------------------------------------------------------------ crash reports
+
+        /// <summary>
+        /// Watches a modded session: waits for the game to start, then for it
+        /// to close, and offers the session's logs if it left a crash folder.
+        /// </summary>
+        private void StartCrashWatch(string gameDir, DateTime launchStartedAt)
+        {
+            if (string.IsNullOrEmpty(gameDir) || _settings == null || string.IsNullOrEmpty(_settings.GamePath))
+                return;
+            string processName = Path.GetFileNameWithoutExtension(_settings.GamePath);
+            DateTime startedUtc = launchStartedAt.ToUniversalTime();
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                // Steam and Epic can relaunch the game, so follow it by process name.
+                DateTime giveUp = DateTime.UtcNow.AddMinutes(3);
+                bool seen = false;
+                while (true)
+                {
+                    bool running = IsProcessRunning(processName);
+                    if (running)
+                        seen = true;
+                    else if (seen || DateTime.UtcNow > giveUp)
+                        break;
+                    System.Threading.Thread.Sleep(2000);
+                }
+                if (!seen)
+                    return;
+                // Unity finishes writing its crash files as the process ends.
+                System.Threading.Thread.Sleep(1500);
+                List<string> crashes = _crashReports.FindCrashFolders(gameDir, startedUtc.AddSeconds(-5));
+                if (crashes.Count == 0 || IsDisposed || Disposing)
+                    return;
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate { OfferCrashReport(gameDir, crashes[0], startedUtc.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1)); });
+                }
+                catch
+                {
+                    // The manager closed while the game ran.
+                }
+            });
+        }
+
+        /// <summary>
+        /// On start, offers logs for a crash that happened while the manager
+        /// was closed. The first run only records the time, so old crash
+        /// folders are never offered.
+        /// </summary>
+        private void CheckForUnreportedCrash()
+        {
+            if (_settings == null || !_settings.IsGamePathValid)
+                return;
+            DateTime since = _settings.LastCrashCheckUtc;
+            _settings.LastCrashCheckUtc = DateTime.UtcNow;
+            if (since == DateTime.MinValue || CheckGameRunning())
+                return;
+            string gameDir = Path.GetDirectoryName(_settings.GamePath);
+            List<string> crashes = _crashReports.FindCrashFolders(gameDir, since);
+            if (crashes.Count == 0)
+                return;
+            DateTime crashedUtc;
+            try { crashedUtc = Directory.GetCreationTimeUtc(crashes[0]); }
+            catch { crashedUtc = DateTime.UtcNow; }
+            OfferCrashReport(gameDir, crashes[0], crashedUtc.AddHours(-3), crashedUtc.AddMinutes(10));
+        }
+
+        private void OfferCrashReport(string gameDir, string crashFolder, DateTime fromUtc, DateTime toUtc)
+        {
+            _settings.LastCrashCheckUtc = DateTime.UtcNow;
+            if (WindowState == FormWindowState.Minimized)
+                WindowState = FormWindowState.Normal;
+            Activate();
+
+            bool includeDump;
+            using (ManagerDialog dialog = new ManagerDialog(
+                "Game crash",
+                "Sheltered closed unexpectedly",
+                "It looks like the game crashed. Copy the logs from this session so you can send them to the mod's developer or the SMM team; they show what went wrong. Logs can include folder names from your PC."))
+            {
+                CheckBox dump = dialog.AddCheck("Also include the crash dump (a larger file; only if a developer asks for it)", false);
+                dialog.AddButton("Copy logs", DialogResult.OK, ActionButtonKind.Primary);
+                dialog.AddButton("Not now", DialogResult.Cancel, ActionButtonKind.Quiet);
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                    return;
+                includeDump = dump.Checked;
+            }
+
+            string error;
+            string zipPath;
+            Cursor previous = Cursor.Current;
+            Cursor.Current = Cursors.WaitCursor;
+            try
+            {
+                zipPath = _crashReports.CreateReport(gameDir, crashFolder, fromUtc, toUtc, includeDump, BuildCrashSessionSummary(), out error);
+            }
+            finally
+            {
+                Cursor.Current = previous;
+            }
+            if (zipPath == null)
+            {
+                using (ManagerDialog failed = new ManagerDialog("Game crash", "The logs couldn't be collected", error))
+                {
+                    failed.AddButton("Close", DialogResult.OK, ActionButtonKind.Primary);
+                    failed.ShowDialog(this);
+                }
+                return;
+            }
+
+            bool copied = false;
+            try
+            {
+                var files = new System.Collections.Specialized.StringCollection();
+                files.Add(zipPath);
+                Clipboard.SetFileDropList(files);
+                copied = true;
+            }
+            catch
+            {
+                // The file is still saved; the dialog says where.
+            }
+            _gameSetupTab.Log("Crash logs saved to " + zipPath);
+
+            using (ManagerDialog done = new ManagerDialog(
+                "Game crash",
+                copied ? "Logs copied" : "Logs saved",
+                (copied ? "Paste with Ctrl+V in Discord, a forum post or an email to attach the file. " : string.Empty) +
+                "It's saved as “" + Path.GetFileName(zipPath) + "” in Documents\\Sheltered Mod Manager\\Crash reports."))
+            {
+                done.AddButton("Done", DialogResult.OK, ActionButtonKind.Primary);
+                done.AddButton("Show file", DialogResult.Yes, ActionButtonKind.Secondary);
+                if (done.ShowDialog(this) == DialogResult.Yes)
+                {
+                    try { System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + zipPath + "\""); }
+                    catch { }
+                }
+            }
+        }
+
+        private string BuildCrashSessionSummary()
+        {
+            var summary = new System.Text.StringBuilder();
+            summary.AppendLine("Sheltered Mod Manager " + APP_VERSION);
+            summary.AppendLine("Report created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            summary.AppendLine("Game: " + Path.GetFileName(_settings.GamePath ?? string.Empty));
+            summary.AppendLine("Mod loader: " + FormatInstalledApiVersions(_settings));
+            try
+            {
+                var mods = _orderService.GetEnabledMods(_discoveryService.DiscoverMods(_settings.ModsPath), _settings.ModsPath);
+                summary.AppendLine("Active mods (" + mods.Count + ", in load order):");
+                for (int i = 0; i < mods.Count; i++)
+                    summary.AppendLine("  " + (i + 1) + ". " + mods[i].DisplayName + " (" + mods[i].Id + ") " + mods[i].Version);
+            }
+            catch (Exception ex)
+            {
+                summary.AppendLine("Active mods: could not be read (" + ex.Message + ")");
+            }
+            return summary.ToString();
+        }
+
+        private static bool IsProcessRunning(string processName)
+        {
+            try
+            {
+                var processes = System.Diagnostics.Process.GetProcessesByName(processName);
+                bool running = processes.Length > 0;
+                foreach (var process in processes)
+                    process.Dispose();
+                return running;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string ReadFreshLaunchLog(string logPath, DateTime launchStartedAt)
@@ -1341,8 +1683,9 @@ namespace Manager
 
                 int minWidth = Math.Max(this.MinimumSize.Width, 640);
                 int minHeight = Math.Max(this.MinimumSize.Height, 480);
-                int width = Math.Max(_settings.WindowWidth, minWidth);
-                int height = Math.Max(_settings.WindowHeight, minHeight);
+                Rectangle savedArea = Screen.FromPoint(new Point(_settings.WindowX, _settings.WindowY)).WorkingArea;
+                int width = Math.Min(Math.Max(_settings.WindowWidth, minWidth), Math.Max(minWidth, savedArea.Width));
+                int height = Math.Min(Math.Max(_settings.WindowHeight, minHeight), Math.Max(minHeight, savedArea.Height));
 
                 var requested = new Rectangle(_settings.WindowX, _settings.WindowY, width, height);
                 if (!IsRectangleVisibleOnAnyScreen(requested))
@@ -1367,6 +1710,30 @@ namespace Manager
             catch
             {
                 // Keep default startup behavior if restoring fails.
+            }
+        }
+
+        /// <summary>
+        /// Keeps the default window inside the working area. On scaled displays
+        /// (for example 1080p at 150%) the default size is taller than the screen.
+        /// </summary>
+        private void FitDefaultSizeToScreen()
+        {
+            try
+            {
+                Rectangle working = Screen.FromControl(this).WorkingArea;
+                int width = Math.Max(MinimumSize.Width, Math.Min(Width, working.Width));
+                int height = Math.Max(MinimumSize.Height, Math.Min(Height, working.Height));
+                if (width == Width && height == Height)
+                    return;
+                Size = new Size(width, height);
+                Location = new Point(
+                    working.Left + Math.Max(0, (working.Width - width) / 2),
+                    working.Top + Math.Max(0, (working.Height - height) / 2));
+            }
+            catch
+            {
+                // Keep the designer size if the screen cannot be queried.
             }
         }
 
@@ -1684,15 +2051,18 @@ namespace Manager
         {
             if (!string.IsNullOrEmpty(errorMessage))
             {
-                _nexusUpdatesLabel.Text = "Nexus Updates: check failed";
+                _nexusUpdatesLabel.Text = "Nexus: couldn't check for updates";
             }
             else if (!_settings.EnableNexusIntegration)
             {
-                _nexusUpdatesLabel.Text = "Nexus Updates: disabled";
+                _nexusUpdatesLabel.Text = "Nexus: off";
             }
             else
             {
-                _nexusUpdatesLabel.Text = "Nexus Updates: " + updateCount + " (" + mappedMods + " linked)";
+                _nexusUpdatesLabel.Text = updateCount == 0
+                    ? "Nexus: all up to date"
+                    : "Nexus: " + updateCount + (updateCount == 1 ? " update" : " updates") + " available";
+                _headerToolTip.SetToolTip(_nexusUpdatesLabel, mappedMods + (mappedMods == 1 ? " mod is" : " mods are") + " linked to Nexus. Click to see updates.");
             }
 
             _nexusTab.SetLastCheckedUtc(_modManagerTab.LastNexusRemoteSyncUtc);
@@ -1731,6 +2101,7 @@ namespace Manager
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
+            ApplyDeveloperMode();
             SaveSettingsFromUi();
 
             LogSettingsChanges(previous, _settings, "Settings updated");
@@ -1758,6 +2129,15 @@ namespace Manager
             string shelteredVersion = _settings?.InstalledShelteredApiVersion;
             _settings = settings;
 
+            // Session bookkeeping lives in memory until the next save; keep the newer values.
+            if (previous != null)
+            {
+                if (previous.LastSessionUtc > _settings.LastSessionUtc)
+                    _settings.LastSessionUtc = previous.LastSessionUtc;
+                if (previous.LastCrashCheckUtc > _settings.LastCrashCheckUtc)
+                    _settings.LastCrashCheckUtc = previous.LastCrashCheckUtc;
+            }
+
             if (string.IsNullOrEmpty(_settings.InstalledModApiVersion) && !string.IsNullOrEmpty(version))
             {
                 _settings.InstalledModApiVersion = version;
@@ -1784,8 +2164,10 @@ namespace Manager
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
+            _nexusTab.SetSignInAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
+            ApplyDeveloperMode();
             
             // Re-apply theme
             ApplyTheme(_settings.DarkMode);
@@ -1843,6 +2225,7 @@ namespace Manager
                             _nexusUploadTab.Initialize(_nexusService, _settings);
                             _settingsTab.Initialize(_settings);
                             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
+                            _nexusTab.SetSignInAvailable(_nexusOAuthService.IsRegistrationAvailable);
                             RefreshNexusAccountStatusAsync(true);
                             _gameSetupTab.Log("Signed in to Nexus.");
                         }
@@ -1875,6 +2258,7 @@ namespace Manager
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
+            _nexusTab.SetSignInAvailable(_nexusOAuthService.IsRegistrationAvailable);
             RefreshNexusAccountStatusAsync(true);
             _gameSetupTab.Log("Signed out of Nexus.");
         }
@@ -1892,6 +2276,7 @@ namespace Manager
                 this.WindowState = FormWindowState.Normal;
                 this.Size = new Size(1182, 703);
                 this.CenterToScreen();
+                FitDefaultSizeToScreen();
 
                 SaveSettingsFromUi();
                 _gameSetupTab.Log("Settings updated: Manager window placement reset to default.");
@@ -1993,23 +2378,39 @@ namespace Manager
 
                 string apiVersion = FormatInstalledApiVersions(_settings);
 
-                _statusLabel.Text = "Status: Ready";
-                _statusLabel.ForeColor = _settings.DarkMode ? Color.LightGreen : Color.Green;
-                _modsCountLabel.Text = "Active Mods: " + count;
-                _modApiVersionLabel.Text = "API Versions: " + apiVersion;
+                _statusReady = true;
+                _statusLabel.Text = "Ready to play";
+                _statusLabel.ForeColor = ManagerTheme.Current.Success;
+                _modsCountLabel.Text = count == 0 ? "No mods active" : (count == 1 ? "1 mod active" : count + " mods active");
+                // Loader versions are support detail: shown on hover, and only
+                // surfaced in the header when a loader file is missing.
+                _loaderMissing = string.IsNullOrEmpty(_settings.InstalledModApiVersion) || string.IsNullOrEmpty(_settings.InstalledShelteredApiVersion);
+                _modApiVersionLabel.Text = "Mod loader not detected";
+                _modApiVersionLabel.Visible = _loaderMissing;
+                _modApiVersionLabel.ForeColor = ManagerTheme.Current.Warning;
+                string loaderDetail = "Mod loader: " + apiVersion;
+                _headerToolTip.SetToolTip(_statusLabel, loaderDetail);
+                _headerToolTip.SetToolTip(_modsCountLabel, loaderDetail);
+                _headerToolTip.SetToolTip(_modApiVersionLabel, loaderDetail);
+                _headerStatusPanel.AccessibleDescription = loaderDetail;
                 if (!_settings.EnableNexusIntegration)
-                    _nexusUpdatesLabel.Text = "Nexus Updates: disabled";
+                    _nexusUpdatesLabel.Text = "Nexus: off";
 
                 // Also update the tab if it still exists/is used
                 _gameSetupTab.UpdateStatus(true, count, apiVersion);
+                UpdateHeaderPlayButton(count);
             }
             else
             {
-                _statusLabel.Text = "Status: Not Ready";
-                _statusLabel.ForeColor = Color.Red;
-                _modsCountLabel.Text = "Active Mods: 0";
-                _modApiVersionLabel.Text = "API Versions: Unknown";
-                _nexusUpdatesLabel.Text = _settings.EnableNexusIntegration ? "Nexus Updates: --" : "Nexus Updates: disabled";
+                _statusReady = false;
+                _statusLabel.Text = "Game not set up";
+                _statusLabel.ForeColor = ManagerTheme.Current.Danger;
+                _modsCountLabel.Text = "Choose the game in Game setup";
+                _loaderMissing = false;
+                _modApiVersionLabel.Visible = false;
+                _headerToolTip.SetToolTip(_statusLabel, "Mod loader: unknown until the game is set up");
+                _nexusUpdatesLabel.Text = _settings.EnableNexusIntegration ? "Nexus: not checked yet" : "Nexus: off";
+                UpdateHeaderPlayButton(0);
             }
         }
 
@@ -2030,69 +2431,29 @@ namespace Manager
 
         private void ApplyTheme(bool isDark)
         {
-            // Apply theme to form
-            if (isDark)
-            {
-                this.BackColor = Color.FromArgb(45, 45, 48);
-                
-                // Header (includes logo and title)
-                _titleLabel.ForeColor = Color.White;
-                
-                // Status Header specific colors
-                _headerStatusPanel.BackColor = Color.Transparent; // Keep it clean in the header
-                _statusLabel.ForeColor = Color.LightGreen;
-                _modsCountLabel.ForeColor = Color.LightGray;
-                _modApiVersionLabel.ForeColor = Color.LightGray;
-                _nexusUpdatesLabel.ForeColor = Color.LightGray;
+            ManagerTheme.Use(isDark);
+            ThemePalette palette = ManagerTheme.Current;
 
-                foreach (Control c in this.Controls)
-                {
-                    if (c is Panel && c != _headerStatusPanel) // General panels
-                    {
-                        c.BackColor = Color.FromArgb(45, 45, 48);
-                        foreach (Control child in c.Controls)
-                        {
-                            if (child is Label && child != _statusLabel && child != _modsCountLabel && child != _modApiVersionLabel) 
-                                child.ForeColor = Color.White;
-                        }
-                    }
-                    if (c is TabControl)
-                    {
-                        foreach (TabPage page in ((TabControl)c).TabPages)
-                        page.BackColor = Color.FromArgb(45, 45, 48);
-                    }
-                }
-            }
-            else
-            {
-                this.BackColor = SystemColors.Control;
-                _titleLabel.ForeColor = SystemColors.ControlText;
-                _headerStatusPanel.BackColor = Color.Transparent;
-                
-                _statusLabel.ForeColor = Color.Green;
-                _modsCountLabel.ForeColor = SystemColors.ControlText;
-                _modApiVersionLabel.ForeColor = SystemColors.ControlText;
-                _nexusUpdatesLabel.ForeColor = SystemColors.ControlText;
+            this.BackColor = palette.Window;
+            headerPanel.BackColor = palette.Chrome;
+            _headerStatusPanel.BackColor = palette.Chrome;
+            if (_headerPlayHost != null)
+                _headerPlayHost.BackColor = palette.Chrome;
+            _titleLabel.ForeColor = palette.Text;
+            _subtitleLabel.ForeColor = palette.TextMuted;
+            _statusLabel.ForeColor = _statusReady ? palette.Success : palette.Danger;
+            _modsCountLabel.ForeColor = palette.TextMuted;
+            _modApiVersionLabel.ForeColor = palette.Warning;
+            _nexusUpdatesLabel.ForeColor = palette.AccentText;
 
-                foreach (Control c in this.Controls)
-                {
-                    if (c is Panel && c != _headerStatusPanel)
-                    {
-                        c.BackColor = SystemColors.Control;
-                        foreach (Control child in c.Controls)
-                        {
-                            if (child is Label) child.ForeColor = SystemColors.ControlText;
-                        }
-                    }
-                    if (c is TabControl)
-                    {
-                        foreach (TabPage page in ((TabControl)c).TabPages)
-                        {
-                            page.BackColor = SystemColors.Control;
-                        }
-                    }
-                }
+            // The Publish page is removed from TabPages while hidden, so colour every page explicitly.
+            foreach (TabPage page in new TabPage[] { _gameSetupPage, _modManagerPage, _contentWorkshopPage, _nexusPage, _nexusUploadPage, _settingsPage, _aboutPage })
+            {
+                page.BackColor = palette.Window;
+                page.ForeColor = palette.Text;
             }
+            _tabControl.Invalidate();
+            ManagerTheme.ApplyTitleBar(this);
 
             // Apply to tabs
             _gameSetupTab.ApplyTheme(isDark);
