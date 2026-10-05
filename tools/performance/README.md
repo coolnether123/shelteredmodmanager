@@ -251,6 +251,9 @@ one install.
 
 ## Offline contracts
 
+For categorical Nexus state and synthetic native capture checks, see
+[`Release_Readiness_Checks.md`](../../documentation/Release_Readiness_Checks.md).
+
 Run without launching Sheltered:
 
     powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\performance\Test-ShelteredBenchmarkContracts.ps1
