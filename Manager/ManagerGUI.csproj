@@ -330,6 +330,8 @@ mkdir "%25MODS_DIR%25" 2&gt;nul
 if exist "%25MANAGER_EXE%25" copy /y "%25MANAGER_EXE%25" "%25SMM_DIR%25\"
 if exist "%25MODAPI_DLL%25" copy /y "%25MODAPI_DLL%25" "%25SMM_DIR%25\"
 if exist "%25DOORSTOP_DLL%25" copy /y "%25DOORSTOP_DLL%25" "%25BIN_DIR%25\"
+:: SMM always ships Harmony; mods\0Harmony is its tracked source.
+copy /y "%25BASE%25mods\0Harmony\Assemblies\0Harmony.dll" "%25BIN_DIR%25\" || exit /b 1
 
 if exist "%25BASE%25libs\x86\winhttp.dll" copy /y "%25BASE%25libs\x86\winhttp.dll" "%25DOORSTOP_PROXY_DIR%25\x86\"
 if exist "%25BASE%25libs\x64\winhttp.dll" copy /y "%25BASE%25libs\x64\winhttp.dll" "%25DOORSTOP_PROXY_DIR%25\x64\"
