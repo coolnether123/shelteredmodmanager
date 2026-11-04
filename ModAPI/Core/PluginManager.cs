@@ -1303,7 +1303,7 @@ namespace ModAPI.Core
                 Log = log,
                 Game = gameHelper,
                 Actors = actors,
-                SaveSystem = new SaveSystemImpl(modId),
+                SaveSystem = SaveSystemImpl.GetForMod(modId),
                 GameRoot = _gameRoot,
                 ModsRoot = _modsRoot,
                 Scheduler = (Action a) => EnqueueNextFrame(a)

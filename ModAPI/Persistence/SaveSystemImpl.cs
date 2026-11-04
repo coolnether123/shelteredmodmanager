@@ -24,7 +24,18 @@ namespace ModAPI.Persistence
         private bool _afterLoadCallbacksApplied;
         private bool _reportedNoActiveLoadContext;
 
-        public SaveSystemImpl(string modId)
+        internal static SaveSystemImpl GetForMod(string modId)
+        {
+            foreach (SaveSystemImpl instance in _instances)
+            {
+                if (string.Equals(instance._modId, modId, StringComparison.Ordinal))
+                    return instance;
+            }
+
+            return new SaveSystemImpl(modId);
+        }
+
+        private SaveSystemImpl(string modId)
         {
             _modId = modId;
             _store = new ModPersistenceStore(modId);
@@ -121,6 +132,11 @@ namespace ModAPI.Persistence
                 {
                     MMLog.WriteDebug("[SaveSystem] Serializing live mod data for " + _modId + " to " + modFilePath);
                     InvokeBeforeSaveHooks(saveContext, preparedKeys, callbackFailures);
+                    if (callbackFailures.Count > 0)
+                    {
+                        ReportAbortedSaveDiagnostics(callbackFailures, preparedKeys, new HashSet<string>());
+                        return;
+                    }
 
                     HashSet<string> failedSerializeKeys;
                     if (!TrySerializeRegisteredData("save", out jsonToWrite, out failedSerializeKeys))
@@ -142,6 +158,9 @@ namespace ModAPI.Persistence
 
         private void HandleBeforeLoadSceneContents(object data)
         {
+            _preparedLoadKey = null;
+            _afterLoadCallbacksApplied = false;
+            _shutdownCache = null;
             PrepareRegisteredDataForLoad();
         }
 

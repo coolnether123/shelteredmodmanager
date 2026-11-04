@@ -33,6 +33,18 @@ namespace ModAPI.Persistence
             if (!ManualJson.TryParse(json, out root, out error))
                 throw new FormatException("Could not parse persistence data: " + error);
 
+            Array targetArray = target as Array;
+            if (targetArray != null)
+            {
+                if (targetArray.Rank != 1 || root.Type != ManualJsonValueType.Array
+                    || targetArray.Length != root.ArrayValue.Items.Count)
+                    throw new FormatException("Root persistence arrays must have the same length as the registered array.");
+
+                Array restored = (Array)DeserializeValue(root, target.GetType(), null, 0);
+                Array.Copy(restored, targetArray, restored.Length);
+                return;
+            }
+
             DeserializeValue(root, target.GetType(), target, 0);
         }
 
