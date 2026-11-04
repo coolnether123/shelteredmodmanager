@@ -505,6 +505,54 @@ function Set-ShelteredManagerOptions {
     $document | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path -Encoding UTF8
 }
 
+# Harness sessions override these mod_manager.ini preferences. The file also holds
+# DPAPI-protected Nexus credentials, so only these values are recorded, never the file.
+$script:HarnessManagerIniKeys = @('AutoLoadSaveSlot', 'AutoCondenseSaves')
+
+function Get-ShelteredManagerIniValues {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$InstallRoot)
+    $path = Join-Path $InstallRoot 'SMM\bin\mod_manager.ini'
+    $values = [ordered]@{}
+    foreach ($key in $script:HarnessManagerIniKeys) { $values[$key] = $null }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+    foreach ($line in @(Get-Content -LiteralPath $path)) {
+        foreach ($key in $script:HarnessManagerIniKeys) {
+            if ($line -match ('^' + [regex]::Escape($key) + '=(.*)$')) { $values[$key] = $Matches[1] }
+        }
+    }
+    return [pscustomobject]$values
+}
+
+# Sets each named key; a $null value removes the key. Other lines keep their bytes.
+function Set-ShelteredManagerIniValues {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$InstallRoot,
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Values
+    )
+    $path = Join-Path $InstallRoot 'SMM\bin\mod_manager.ini'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return }
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+    $original = [IO.File]::ReadAllText($path)
+    $text = $original
+    foreach ($key in @($Values.Keys)) {
+        $pattern = '(?m)^' + [regex]::Escape([string]$key) + '=[^\r\n]*(\r?\n)?'
+        $value = $Values[$key]
+        if ($null -eq $value) { $text = [regex]::Replace($text, $pattern, ''); continue }
+        $line = "$key=$value"
+        if ($text -match ('(?m)^' + [regex]::Escape([string]$key) + '=')) {
+            $text = [regex]::Replace($text, ('(?m)^' + [regex]::Escape([string]$key) + '=[^\r\n]*'), $line.Replace('$', '$$'))
+        }
+        else {
+            $text = $text.TrimEnd([char[]]"`r`n") + "`r`n$line`r`n"
+        }
+    }
+    if ($text -ceq $original) { return }
+    [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($hasBom)))
+}
+
 function New-InstallStateSnapshot {
     [CmdletBinding()]
     param(
@@ -531,6 +579,7 @@ function New-InstallStateSnapshot {
         InstallRoot = $InstallRoot
         CreatedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
         Entries = $entries.ToArray()
+        ManagerIniValues = Get-ShelteredManagerIniValues -InstallRoot $InstallRoot
     }
     $snapshot | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $BackupRoot 'snapshot.json') -Encoding UTF8
     return $snapshot
@@ -556,6 +605,19 @@ function Restore-InstallStateSnapshot {
             }
         }
         catch { $errors.Add("$($entry.RelativePath): $($_.Exception.Message)") }
+    }
+    $iniValues = Get-ObjectPropertyValue $Snapshot 'ManagerIniValues' $null
+    if ($null -ne $iniValues) {
+        try {
+            $restore = [ordered]@{}
+            foreach ($key in $script:HarnessManagerIniKeys) { $restore[$key] = Get-ObjectPropertyValue $iniValues $key $null }
+            Set-ShelteredManagerIniValues -InstallRoot $Snapshot.InstallRoot -Values $restore
+            $actual = Get-ShelteredManagerIniValues -InstallRoot $Snapshot.InstallRoot
+            foreach ($key in $script:HarnessManagerIniKeys) {
+                if ([string]$restore[$key] -ne [string](Get-ObjectPropertyValue $actual $key $null)) { throw "$key was not restored." }
+            }
+        }
+        catch { $errors.Add("SMM\bin\mod_manager.ini: $($_.Exception.Message)") }
     }
     if ($errors.Count -gt 0) {
         throw "Install state restoration left residual differences: $($errors.ToArray() -join '; ')"
@@ -1121,6 +1183,6 @@ Export-ModuleMember -Function @(
     'Assert-BenchmarkInstallLockAuthorization', 'Enter-BenchmarkInstallLocks', 'Exit-BenchmarkInstallLocks', 'Get-EnabledLoadOrderIds', 'Get-InstalledModCatalog', 'Get-LoadOrderState', 'Get-ObjectPropertyValue',
     'Export-ShelteredStartupTimings', 'Get-Percentile', 'Get-ProcessSampleSummary', 'Import-ShelteredBenchmarkConfig', 'Invoke-BenchmarkCommand',
     'New-BenchmarkInstallLockEnvelope', 'New-InstallStateSnapshot', 'Resolve-BenchmarkExecution', 'Resolve-ConfiguredPath', 'Resolve-ShelteredModProfile',
-    'Restore-InstallStateSnapshot', 'Set-DoorstopEnabled', 'Set-ShelteredLoadOrder', 'Test-BenchmarkDeploymentHashes',
+    'Restore-InstallStateSnapshot', 'Get-ShelteredManagerIniValues', 'Set-ShelteredManagerIniValues', 'Set-DoorstopEnabled', 'Set-ShelteredLoadOrder', 'Test-BenchmarkDeploymentHashes',
     'Set-ShelteredManagerOptions', 'Test-BenchmarkFileManifest', 'Test-BenchmarkMutableModPath', 'Test-ShelteredBenchmarkConfig', 'Write-BenchmarkAggregateReport'
 )

@@ -556,17 +556,8 @@ function Start-ShelteredPlatformSession {
             Set-ShelteredManagerOptions -InstallRoot $installRoot -Overrides (Get-ObjectPropertyValue $Profile 'managerOptions' ([pscustomobject]@{}))
         }
         if ($harnessEnabled) {
-            $managerIniPath = Join-Path $installRoot 'SMM\bin\mod_manager.ini'
-            if (Test-Path -LiteralPath $managerIniPath -PathType Leaf) {
-                $managerIni = Get-Content -LiteralPath $managerIniPath -Raw
-                if ($managerIni -match '(?m)^AutoLoadSaveSlot=') {
-                    $managerIni = $managerIni -replace '(?m)^AutoLoadSaveSlot=.*$', 'AutoLoadSaveSlot=0'
-                }
-                else {
-                    $managerIni = $managerIni.TrimEnd([char[]]"`r`n") + "`r`nAutoLoadSaveSlot=0`r`n"
-                }
-                Set-Content -LiteralPath $managerIniPath -Value $managerIni -Encoding UTF8
-            }
+            # No save auto-load and no condense prompt over the menu; the install snapshot restores both.
+            Set-ShelteredManagerIniValues -InstallRoot $installRoot -Values ([ordered]@{ AutoLoadSaveSlot = '0'; AutoCondenseSaves = 'no' })
         }
         $session.DeploymentAbsenceTransaction = New-BenchmarkDeploymentAbsenceTransaction -Platform $Platform -Profile $Profile `
             -ConfigRoot ([string]$Config._configRoot) -InstallRoot $installRoot `

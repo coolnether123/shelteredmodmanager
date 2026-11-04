@@ -196,6 +196,24 @@ try {
         Assert-True (-not (Test-Path $loadOrderPath)) 'Originally absent file was not removed during restore.'
     }
 
+    Invoke-Contract 'harness manager ini overrides restore byte-identically' {
+        $isolated = Join-Path $tempRoot 'manager-ini'
+        New-Item -ItemType Directory -Path (Join-Path $isolated 'SMM\bin') -Force | Out-Null
+        $iniPath = Join-Path $isolated 'SMM\bin\mod_manager.ini'
+        $original = "NexusProtected=opaque`r`nAutoCondenseSaves=ask`r`nDarkMode=True`r`n"
+        [IO.File]::WriteAllText($iniPath, $original, (New-Object Text.UTF8Encoding($false)))
+        $snapshot = New-InstallStateSnapshot $isolated (Join-Path $tempRoot 'snapshot-manager-ini')
+        Assert-True ((Get-Content (Join-Path $tempRoot 'snapshot-manager-ini\snapshot.json') -Raw) -notmatch 'NexusProtected') 'Snapshot recorded unrelated ini content.'
+        Set-ShelteredManagerIniValues -InstallRoot $isolated -Values ([ordered]@{ AutoLoadSaveSlot = '0'; AutoCondenseSaves = 'no' })
+        $overridden = Get-ShelteredManagerIniValues -InstallRoot $isolated
+        Assert-Equal '0' $overridden.AutoLoadSaveSlot 'Auto-load override was not applied.'
+        Assert-Equal 'no' $overridden.AutoCondenseSaves 'Condense override was not applied.'
+        Restore-InstallStateSnapshot $snapshot
+        $restored = [IO.File]::ReadAllBytes($iniPath)
+        $expected = (New-Object Text.UTF8Encoding($false)).GetBytes($original)
+        Assert-Equal ([Convert]::ToBase64String($expected)) ([Convert]::ToBase64String($restored)) 'Manager ini was not restored byte-identically.'
+    }
+
     Invoke-Contract 'restore hard-fails a non-identical snapshot payload' {
         $isolated = Join-Path $tempRoot 'restore-integrity'
         New-Item -ItemType Directory -Path $isolated | Out-Null
