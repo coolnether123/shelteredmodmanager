@@ -78,6 +78,8 @@
     <Compile Include="Map\Internal\HomeShelterPositionResolver.cs" />
     <Compile Include="Map\Internal\HomeShelterPositionRegistry.cs" />
     <Compile Include="Map\Internal\HomeShelterMapGenerationPatches.cs" />
+    <Compile Include="Map\Internal\HomeShelterExpeditionPatches.cs" />
+    <Compile Include="Map\Internal\HomeShelterExpeditionRuntime.cs" />
     <Compile Include="Map\Internal\HomeShelterPlacementProviderRegistry.cs" />
     <Compile Include="Map\Internal\ExpeditionMapCoordinateConverter.cs" />
     <Compile Include="Map\Internal\ExpeditionMapContextReader.cs" />

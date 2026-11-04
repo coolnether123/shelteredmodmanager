@@ -8,6 +8,13 @@ namespace ShelteredAPI.Map.Internal
         private static readonly object Sync = new object();
         private static readonly List<HomeShelterPositionRegistration> Registrations =
             new List<HomeShelterPositionRegistration>();
+        private static int _version;
+
+        /// <summary>Changes whenever a registration is added, replaced or removed, so per-frame readers can cache.</summary>
+        internal static int Version
+        {
+            get { lock (Sync) { return _version; } }
+        }
 
         internal static MapPolicyRegistrationResult Register(HomeShelterPositionRegistration registration)
         {
@@ -32,6 +39,7 @@ namespace ShelteredAPI.Map.Internal
                 }
 
                 Registrations.Add(copy);
+                _version++;
                 return MapPolicyRegistrationResult.Ok(replaced);
             }
         }
@@ -55,6 +63,8 @@ namespace ShelteredAPI.Map.Internal
                         removed++;
                     }
                 }
+                if (removed > 0)
+                    _version++;
             }
 
             return removed;
@@ -78,6 +88,8 @@ namespace ShelteredAPI.Map.Internal
                         removed++;
                     }
                 }
+                if (removed > 0)
+                    _version++;
             }
 
             return removed;
