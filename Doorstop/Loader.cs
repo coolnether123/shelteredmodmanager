@@ -490,6 +490,14 @@ public static class DoorstopBootstrap
         _isTriggered = true;
         LoaderDebugLog.Write("[Bootstrap] Trigger called. Creating ModLoaderCoroutineRunner GameObject.");
 
+        // Automated launches start hidden, and the Epic build stops its main loop while unfocused,
+        // which stalls main-thread mod loading. Launchers opt in here, before any mod loads.
+        if (Environment.GetEnvironmentVariable("SMM_RUN_IN_BACKGROUND") == "1")
+        {
+            Application.runInBackground = true;
+            LoaderDebugLog.Write("[Bootstrap] runInBackground enabled by SMM_RUN_IN_BACKGROUND.");
+        }
+
         try
         {
             var go = new GameObject("ModLoaderCoroutineRunner");
