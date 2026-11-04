@@ -16,13 +16,13 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) { $WorkspaceRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..\..\..')) }
 
 $gameRoot = if ($Lane -eq 'Steam') {
-    'A:\SteamLibrary\steamapps\common\Sheltered'
+    'H:\SteamLibrary\steamapps\common\Sheltered'
 } else {
     'D:\Epic Games Games\Sheltered'
 }
 $gameRoot = [IO.Path]::GetFullPath($gameRoot).TrimEnd('\')
 $allowedRoots = @(
-    'A:\SteamLibrary\steamapps\common\Sheltered',
+    'H:\SteamLibrary\steamapps\common\Sheltered',
     'D:\Epic Games Games\Sheltered'
 )
 if ($allowedRoots -notcontains $gameRoot) {

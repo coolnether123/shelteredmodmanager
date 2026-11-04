@@ -9,7 +9,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$gameRoot = if ($Lane -eq 'Steam') { 'A:\SteamLibrary\steamapps\common\Sheltered' } else { 'D:\Epic Games Games\Sheltered' }
+$gameRoot = if ($Lane -eq 'Steam') { 'H:\SteamLibrary\steamapps\common\Sheltered' } else { 'D:\Epic Games Games\Sheltered' }
 $gameRoot = [IO.Path]::GetFullPath($gameRoot).TrimEnd('\')
 $gameExe = if ($Lane -eq 'Steam') { 'Sheltered.exe' } else { 'ShelteredWindows64_EOS.exe' }
 $gameExePath = [IO.Path]::GetFullPath((Join-Path $gameRoot $gameExe))

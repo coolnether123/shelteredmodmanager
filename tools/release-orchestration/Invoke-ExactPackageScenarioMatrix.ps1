@@ -42,7 +42,7 @@ foreach ($required in @($graphPath, $stageScript, $restoreScript, $transactionRu
 
 $evidence = [IO.Path]::GetFullPath($EvidenceRoot)
 if (Test-Path -LiteralPath $evidence) { throw "Evidence root already exists; refusing to overwrite it: $evidence" }
-$gameRoot = if ($Lane -eq 'Steam') { 'A:\SteamLibrary\steamapps\common\Sheltered' } else { 'D:\Epic Games Games\Sheltered' }
+$gameRoot = if ($Lane -eq 'Steam') { 'H:\SteamLibrary\steamapps\common\Sheltered' } else { 'D:\Epic Games Games\Sheltered' }
 $graph = Get-Content -LiteralPath $graphPath -Raw | ConvertFrom-Json
 $selectedScenarios = New-Object System.Collections.Generic.List[object]
 foreach ($scenarioId in $scenarioIds) {

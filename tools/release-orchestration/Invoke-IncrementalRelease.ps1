@@ -277,7 +277,7 @@ function Get-AutomaticGameRoot {
             $environmentRoot = [Environment]::GetEnvironmentVariable('SHELTERED_STEAM_GAME_ROOT')
             $script:resolvedSteamGameRoot = Resolve-DirectoryPath $SteamGameRoot 'Steam Sheltered game root' @(
                 $environmentRoot,
-                'A:\SteamLibrary\steamapps\common\Sheltered',
+                'H:\SteamLibrary\steamapps\common\Sheltered',
                 'C:\Program Files (x86)\Steam\steamapps\common\Sheltered',
                 'C:\Program Files\Steam\steamapps\common\Sheltered'
             )

@@ -48,7 +48,7 @@
     {
       "name": "steam",
       "enabled": true,
-      "installRoot": "A:\\SteamLibrary\\steamapps\\common\\Sheltered",
+      "installRoot": "H:\\SteamLibrary\\steamapps\\common\\Sheltered",
       "executable": "Sheltered.exe",
       "processName": "Sheltered",
       "architecture": "x86",

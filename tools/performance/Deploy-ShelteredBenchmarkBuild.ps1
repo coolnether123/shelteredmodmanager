@@ -26,8 +26,8 @@ if (-not (Test-Path -LiteralPath $msbuild)) { $msbuild = (Get-Command msbuild.ex
 
 $targets = @{
     steam = [pscustomobject]@{
-        Name = 'steam'; Root = 'A:\SteamLibrary\steamapps\common\Sheltered'; ProcessName = 'Sheltered'
-        ManagedRoot = 'A:\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed'
+        Name = 'steam'; Root = 'H:\SteamLibrary\steamapps\common\Sheltered'; ProcessName = 'Sheltered'
+        ManagedRoot = 'H:\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed'
         Architecture = 'x86'; AgentPort = 37421
     }
     epic = [pscustomobject]@{
