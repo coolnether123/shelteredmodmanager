@@ -79,7 +79,7 @@ Validate the runner's safety and coverage contracts:
     powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ScenarioEditorAssemblyBoundary.ps1
     powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-ShelteredScenarioEditorContracts.ps1
 
-Each run is written below `Decompiled/Benchmarks`. `summary.json` is the pass/fail entry point;
+Each run is written below `../shelteredmodmanager-Decompiled/Benchmarks` (beside the repository). `summary.json` is the pass/fail entry point;
 `metrics.json`, `observations.csv`, per-platform process samples, health snapshots, event streams,
 screenshots, logs, action CSV/JSONL files, and `restore-verification.json` provide the detailed evidence.
 

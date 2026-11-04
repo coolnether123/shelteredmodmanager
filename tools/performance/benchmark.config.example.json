@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "outputRoot": "../../Decompiled/Benchmarks",
+  "outputRoot": "A:/Dev/GitHub/Coolnether123/Sheltered/shelteredmodmanager-Decompiled/Benchmarks",
   "iterations": 3,
   "parallelPlatforms": false,
   "failOnCaseFailure": true,
@@ -62,7 +62,7 @@
         "0"
       ],
       "menuReadyRegex": "MenuScene",
-      "vanillaMenuReferenceImage": "../../Decompiled/Benchmarks/2026-07-15_SMM_Performance_Epic_Steam/screenshots/vanilla_steam_menu.png",
+      "vanillaMenuReferenceImage": "A:/Dev/GitHub/Coolnether123/Sheltered/shelteredmodmanager-Decompiled/Benchmarks/2026-07-15_SMM_Performance_Epic_Steam/screenshots/vanilla_steam_menu.png",
       "vanillaMenuRmseThreshold": 15,
       "vanillaWindowDelaySeconds": 16,
       "hashGates": [
@@ -133,7 +133,7 @@
         "0"
       ],
       "menuReadyRegex": "MenuScene",
-      "vanillaMenuReferenceImage": "../../Decompiled/Benchmarks/2026-07-15_SMM_Performance_Epic_Steam/screenshots/vanilla_epic_after_foreground_30s.png",
+      "vanillaMenuReferenceImage": "A:/Dev/GitHub/Coolnether123/Sheltered/shelteredmodmanager-Decompiled/Benchmarks/2026-07-15_SMM_Performance_Epic_Steam/screenshots/vanilla_epic_after_foreground_30s.png",
       "vanillaMenuRmseThreshold": 15,
       "vanillaWindowDelaySeconds": 16,
       "hashGates": [

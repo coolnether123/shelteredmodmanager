@@ -172,7 +172,7 @@ window-delay-fallback and is not an exact menu-ready comparison.
 
 Runs are date-stamped under:
 
-    Decompiled/Benchmarks/YYYY-MM-DD_HHMMSS_label/
+    ../shelteredmodmanager-Decompiled/Benchmarks/YYYY-MM-DD_HHMMSS_label/
       README.md
       results.csv
       summary.csv
