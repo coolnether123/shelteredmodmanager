@@ -126,6 +126,14 @@ try {
         Assert-True ([array]::IndexOf($ids, 'com.harmony.0harmony') -lt [array]::IndexOf($ids, 'coolnether123.shelteredagentinterface')) 'Core ordering was not preserved.'
     }
 
+    Invoke-Contract 'SMM-bundled Harmony needs no mods folder' {
+        $catalog = @(Get-InstalledModCatalog $install | Where-Object { $_.Id -ne 'com.harmony.0harmony' })
+        $profile = [pscustomobject]@{ name = 'smm-core'; mode = 'core'; harness = $true }
+        $ids = @(Resolve-ShelteredModProfile -Profile $profile -Catalog $catalog -ExistingOrder @() -CoreModIds @('com.harmony.0harmony', 'coolnether123.shelteredagentinterface'))
+        Assert-Equal 1 $ids.Count 'Bundled Harmony should resolve without a mod folder.'
+        Assert-Equal 'coolnether123.shelteredagentinterface' $ids[0] 'Harness mod was not selected.'
+    }
+
     Invoke-Contract 'vanilla profile resolves as an empty collection' {
         $profile = [pscustomobject]@{ name = 'vanilla'; mode = 'vanilla'; harness = $false }
         $ids = @(Resolve-ShelteredModProfile -Profile $profile -Catalog (Get-InstalledModCatalog $install) -ExistingOrder @() -CoreModIds @())

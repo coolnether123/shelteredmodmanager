@@ -290,6 +290,17 @@ function Get-InstalledModCatalog {
     return $catalog.ToArray()
 }
 
+# SMM ships Harmony (SMM\bin\0Harmony.dll) and shares it with every mod, so these IDs
+# are always satisfied even without a mods folder. Mirrors LoadOrderService.BundledDependencyIds.
+$script:BundledDependencyIds = @(
+    'harmony', '0harmony', 'harmonylib', 'lib.harmony', 'com.harmony',
+    'com.harmony.0harmony', 'brrainz.harmony', 'pardeike.harmony'
+)
+
+function Test-ShelteredBundledDependency([string]$Id) {
+    return -not [string]::IsNullOrWhiteSpace($Id) -and ($script:BundledDependencyIds -contains $Id.Trim().ToLowerInvariant())
+}
+
 function Resolve-ShelteredModProfile {
     [CmdletBinding()]
     param(
@@ -332,6 +343,7 @@ function Resolve-ShelteredModProfile {
         $id = $pending.Dequeue()
         $key = $id.ToLowerInvariant()
         if ($excluded.ContainsKey($key) -or $selected.ContainsKey($key)) { continue }
+        if (-not $byId.ContainsKey($key) -and (Test-ShelteredBundledDependency $key)) { continue }
         if (-not $byId.ContainsKey($key)) { throw "Profile references mod '$id', but it is not installed." }
         $selected[$key] = $byId[$key]
         if ([bool](Get-ObjectPropertyValue $Profile 'includeDependencies' $true)) {
