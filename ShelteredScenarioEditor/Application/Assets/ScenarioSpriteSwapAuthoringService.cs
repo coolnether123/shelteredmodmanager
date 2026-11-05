@@ -1467,15 +1467,15 @@ namespace ShelteredScenarioEditor.Application.Assets{
 
             ClosePickerState(state, true);
 
-            _historyService.RecordVisualChange(definition, "Revert sprite on " + SafeLabel(targetDisplay));
+            ScenarioDefinition beforeRevert = ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(definition);
             int removed = ScenarioSpriteSwapRuleEditor.ClearActiveRulesForTarget(definition, targetPath, GetCurrentDay());
             if (removed <= 0)
             {
                 message = "The selected target does not have an active sprite swap.";
-                string ignored;
-                _historyService.Undo(definition, out ignored);
                 return false;
             }
+
+            _historyService.RecordVisualChange(beforeRevert, "Revert sprite on " + SafeLabel(targetDisplay));
 
             MarkAssetsDirty(session);
             _sceneAssetPreview.RefreshSpriteSwaps(definition, _sessionStore.CurrentFilePath);
@@ -1594,6 +1594,16 @@ namespace ShelteredScenarioEditor.Application.Assets{
                 return false;
             }
 
+            string pendingDescription;
+            ScenarioEditCategory pendingCategory;
+            if (ObjectManager.Instance != null
+                && _historyService.TryPeekUndo(out pendingDescription, out pendingCategory)
+                && pendingCategory == ScenarioEditCategory.Bunker)
+            {
+                message = "Shelter history cannot be applied while a live shelter is loaded. The draft and world were kept. Restore a saved version and restart the preview instead.";
+                return false;
+            }
+
             string description;
             ScenarioDirtySection dirtySection;
             ScenarioEditCategory editCategory;
@@ -1625,6 +1635,16 @@ namespace ShelteredScenarioEditor.Application.Assets{
             if (definition == null)
             {
                 message = "No active authoring session.";
+                return false;
+            }
+
+            string pendingDescription;
+            ScenarioEditCategory pendingCategory;
+            if (ObjectManager.Instance != null
+                && _historyService.TryPeekRedo(out pendingDescription, out pendingCategory)
+                && pendingCategory == ScenarioEditCategory.Bunker)
+            {
+                message = "Shelter history cannot be applied while a live shelter is loaded. The draft and world were kept. Restore a saved version and restart the preview instead.";
                 return false;
             }
 
@@ -2482,10 +2502,7 @@ namespace ShelteredScenarioEditor.Application.Assets{
             if (!ScenarioSpriteSwapRuleEditor.HasAnimationFrameRule(definition, targetPath, frame.Index, frame.SourceRuntimeSpriteKey, currentDay))
                 return 0;
 
-            _historyService.RecordVisualChange(
-                definition,
-                "Revert animation frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    + " on " + SafeLabel(ResolveCustomEditorTargetDisplay(state, targetPath)));
+            ScenarioDefinition beforeRevert = ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(definition);
             int removed = ScenarioSpriteSwapRuleEditor.ClearAnimationFrameRule(
                 definition,
                 targetPath,
@@ -2494,10 +2511,13 @@ namespace ShelteredScenarioEditor.Application.Assets{
                 currentDay);
             if (removed <= 0)
             {
-                string ignored;
-                _historyService.Undo(definition, out ignored);
                 return 0;
             }
+
+            _historyService.RecordVisualChange(
+                beforeRevert,
+                "Revert animation frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + " on " + SafeLabel(ResolveCustomEditorTargetDisplay(state, targetPath)));
 
             MarkAssetsDirty(session);
             _sceneAssetPreview.RefreshSpriteSwaps(definition, _sessionStore.CurrentFilePath);
@@ -2519,16 +2539,16 @@ namespace ShelteredScenarioEditor.Application.Assets{
             if (string.IsNullOrEmpty(targetPath))
                 return 0;
 
-            _historyService.RecordVisualChange(
-                definition,
-                "Revert animation on " + SafeLabel(ResolveCustomEditorTargetDisplay(state, targetPath)));
+            ScenarioDefinition beforeRevert = ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(definition);
             int removed = ScenarioSpriteSwapRuleEditor.ClearAnimationFrameRules(definition, targetPath, GetCurrentDay());
             if (removed <= 0)
             {
-                string ignored;
-                _historyService.Undo(definition, out ignored);
                 return 0;
             }
+
+            _historyService.RecordVisualChange(
+                beforeRevert,
+                "Revert animation on " + SafeLabel(ResolveCustomEditorTargetDisplay(state, targetPath)));
 
             MarkAssetsDirty(session);
             _sceneAssetPreview.RefreshSpriteSwaps(definition, _sessionStore.CurrentFilePath);

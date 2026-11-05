@@ -757,13 +757,16 @@ namespace ShelteredScenarioEditor.Application.Authoring{
 
             LogPlacementInfo("Placement committed to world: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
             _placementFeelVisualService.PlaySettle(spawned.gameObject);
-            RecordBunkerUndo(session, "Place object " + ScenarioBunkerDraftService.SafeObjectName(spawned));
+            var historySession = session;
+            var beforeChange = historySession != null ? ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(historySession.WorkingDefinition) : null;
             if (!_objectPlacementService.UpsertPlacement(_objectPlacementService.CapturePlacement(spawned)))
             {
                 message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ", but the scenario draft became unavailable before the placement could be recorded.";
                 MMLog.WriteWarning("[ScenarioBuildPlacement] Placement could not record to draft: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
                 return true;
             }
+
+            if (_historyService != null) _historyService.RecordBunkerChange(beforeChange, "Place object " + ScenarioBunkerDraftService.SafeObjectName(spawned));
 
             message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + " and recorded it in the scenario draft.";
             LogPlacementInfo("Placement recorded to draft: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
@@ -1083,13 +1086,16 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             }
 
             int serializedIndex = entry.NativeIndex >= 0 ? appliedIndex : -1;
-            RecordBunkerUndo(_editorService != null ? _editorService.CurrentSession : null, "Apply wall at " + gridX + "," + gridY);
+            var historySession = (_editorService != null ? _editorService.CurrentSession : null);
+            var beforeChange = historySession != null ? ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(historySession.WorkingDefinition) : null;
             if (!_wallWiringEditService.ApplyWall(gridX, gridY, serializedIndex, entry.RuntimeSpriteKey))
             {
                 message = "Applied wall sprite " + appliedIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
                 MMLog.WriteWarning("[ScenarioBuildPlacement] Wall edit could not record to draft at " + gridX + "," + gridY + ".");
                 return true;
             }
+
+            if (_historyService != null) _historyService.RecordBunkerChange(beforeChange, "Apply wall at " + gridX + "," + gridY);
 
             message = "Applied wall sprite " + appliedIndex + " to room " + gridX + "," + gridY + ".";
             LogPlacementInfo("Wall edit recorded to draft at " + gridX + "," + gridY + " sprite=" + appliedIndex + ".");
@@ -1128,13 +1134,16 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             }
 
             int serializedIndex = entry.NativeIndex >= 0 ? appliedIndex : -1;
-            RecordBunkerUndo(_editorService != null ? _editorService.CurrentSession : null, "Apply wiring at " + gridX + "," + gridY);
+            var historySession = (_editorService != null ? _editorService.CurrentSession : null);
+            var beforeChange = historySession != null ? ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(historySession.WorkingDefinition) : null;
             if (!_wallWiringEditService.ApplyWire(gridX, gridY, serializedIndex, entry.RuntimeSpriteKey))
             {
                 message = "Applied wiring sprite " + appliedIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
                 MMLog.WriteWarning("[ScenarioBuildPlacement] Wiring edit could not record to draft at " + gridX + "," + gridY + ".");
                 return true;
             }
+
+            if (_historyService != null) _historyService.RecordBunkerChange(beforeChange, "Apply wiring at " + gridX + "," + gridY);
 
             message = "Applied wiring sprite " + appliedIndex + " to room " + gridX + "," + gridY + ".";
             LogPlacementInfo("Wiring edit recorded to draft at " + gridX + "," + gridY + " sprite=" + appliedIndex + ".");

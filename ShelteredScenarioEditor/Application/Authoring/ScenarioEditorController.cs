@@ -114,6 +114,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
         public ScenarioValidationResult CommitChanges(string scenarioFilePath)
         {
             ScenarioEditorSession session = RequireSession();
+            session.LastSaveSucceeded = false;
             string path = !string.IsNullOrEmpty(scenarioFilePath) ? scenarioFilePath : _sessionStore.CurrentFilePath;
             if (string.IsNullOrEmpty(path))
             {
@@ -150,6 +151,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             // without performing XML I/O on the Unity thread.
             _serializer.LoadInfo(path, ScenarioAuthoringDraftRepository.DraftOwnerId);
             session.OriginalDefinition = ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(session.WorkingDefinition);
+            session.LastSaveSucceeded = true;
             session.DirtyFlags.Clear();
             _sessionStore.Set(session, path);
             if (validation != null && !validation.IsValid)

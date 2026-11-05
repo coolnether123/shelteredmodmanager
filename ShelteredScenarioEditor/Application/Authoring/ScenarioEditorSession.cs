@@ -44,6 +44,8 @@ namespace ShelteredScenarioEditor.Application.Authoring{
     /// </summary>
     internal sealed class ScenarioEditorSession
     {
+        internal bool LastSaveSucceeded { get; set; }
+
         public ScenarioEditorSession()
         {
             DirtyFlags = new List<ScenarioDirtySection>();

@@ -91,7 +91,8 @@ namespace ShelteredScenarioEditor.Composition{
                     resolver.Get<ScenarioEditorActorReferenceService>(),
                     resolver.Get<ScenarioObjectIdentityAssignmentService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),
-                    resolver.Get<ScenarioPreviewSessionHost>());
+                    resolver.Get<ScenarioPreviewSessionHost>(),
+                    resolver.Get<ScenarioDraftSnapshotService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -252,7 +253,8 @@ namespace ShelteredScenarioEditor.Composition{
                 return new ScenarioDraftSnapshotService(
                     resolver.Get<IScenarioEditorSessionStore>(),
                     resolver.Get<IScenarioDefinitionSerializer>(),
-                    resolver.Get<ScenarioAuthoringSidecarStore>());
+                    resolver.Get<ScenarioAuthoringSidecarStore>(),
+                    resolver.Get<ScenarioAuthoringHistoryService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthorTestChecklistService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

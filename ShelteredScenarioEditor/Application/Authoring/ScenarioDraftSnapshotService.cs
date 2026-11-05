@@ -22,17 +22,20 @@ namespace ShelteredScenarioEditor.Application.Authoring
         private readonly IScenarioEditorSessionStore _sessionStore;
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly ScenarioAuthoringSidecarStore _sidecarStore;
+        private readonly ScenarioAuthoringHistoryService _historyService;
         private int _observedRevision = -1;
         private DateTime _lastAutosaveUtc = DateTime.MinValue;
 
         internal ScenarioDraftSnapshotService(
             IScenarioEditorSessionStore sessionStore,
             IScenarioDefinitionSerializer serializer,
-            ScenarioAuthoringSidecarStore sidecarStore)
+            ScenarioAuthoringSidecarStore sidecarStore,
+            ScenarioAuthoringHistoryService historyService)
         {
             _sessionStore = sessionStore;
             _serializer = serializer;
             _sidecarStore = sidecarStore;
+            _historyService = historyService;
         }
 
         internal void Tick()
@@ -58,18 +61,18 @@ namespace ShelteredScenarioEditor.Application.Authoring
             }
         }
 
-        internal bool TryAutosaveCurrent(string reason, out string error)
+        internal bool TryAutosaveCurrent(string reason, out string error, bool includeClean = false)
         {
             ScenarioEditorSession session = _sessionStore.Current;
-            return TryAutosave(session, _sessionStore.CurrentFilePath, reason, out error);
+            return TryAutosave(session, _sessionStore.CurrentFilePath, reason, out error, includeClean);
         }
 
-        internal bool TryAutosave(ScenarioEditorSession session, string draftPath, string reason, out string error)
+        internal bool TryAutosave(ScenarioEditorSession session, string draftPath, string reason, out string error, bool includeClean = false)
         {
             error = null;
             if (session == null || session.WorkingDefinition == null || string.IsNullOrEmpty(draftPath))
                 return false;
-            if (session.DirtyFlags == null || session.DirtyFlags.Count == 0)
+            if (!includeClean && (session.DirtyFlags == null || session.DirtyFlags.Count == 0))
                 return false;
 
             try
@@ -189,7 +192,9 @@ namespace ShelteredScenarioEditor.Application.Authoring
                 ScenarioEditorState restoredEditorState = _sidecarStore.Load(snapshot.FilePath, out sidecarWarning);
                 if (!string.IsNullOrEmpty(sidecarWarning))
                     throw new FormatException(sidecarWarning);
-                session.WorkingDefinition = ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(restored);
+                ScenarioDefinition restoredCopy = ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(restored);
+                _historyService.RecordSnapshotRestore(session);
+                session.WorkingDefinition = restoredCopy;
                 session.EditorState = restoredEditorState;
                 session.MarkDraftChanged(ScenarioDirtySection.Meta);
                 session.MarkDraftChanged(ScenarioDirtySection.Family);

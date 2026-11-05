@@ -129,7 +129,8 @@ namespace ShelteredScenarioEditor.Application.Authoring{
                 return false;
             }
 
-            RecordBunkerUndo("Delete object " + objectName);
+            var historySession = _editorService != null ? _editorService.CurrentSession : null;
+            var beforeChange = historySession != null ? ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(historySession.WorkingDefinition) : null;
             try
             {
                 manager.RemoveObject(obj);
@@ -144,6 +145,9 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             {
                 return ScenarioBunkerDraftService.MatchesPlacement(placement, obj);
             });
+
+            if (removedDraft && _historyService != null)
+                _historyService.RecordBunkerChange(beforeChange, "Delete object " + objectName);
 
             message = "Deleted live object '" + objectName + "' and " + (removedDraft ? "removed its draft placement." : "found no matching draft placement.");
             MMLog.WriteInfo("[ScenarioBuildDeletion] " + message);
