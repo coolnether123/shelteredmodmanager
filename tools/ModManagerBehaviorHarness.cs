@@ -46,6 +46,7 @@ internal static class ModManagerBehaviorHarness
             Run("failed load order reads preserve bytes", FailedOrderRead);
             Run("atomic saves preserve locked files", AtomicSaveFailure);
             Run("missing configured game path is retained", MissingConfiguredGame);
+            Run("mod updates preserve runtime files and prune verified backups", RuntimeFilesAndBackups);
             Run("Nexus display versions do not reject verified packages", NexusDisplayVersion);
             Run("profiles keep undiscovered IDs when switching", ProfileKeepsUndiscoveredIds);
             Run("failed settings reads prevent overwrites", FailedSettingsRead);
@@ -1464,6 +1465,47 @@ internal static class ModManagerBehaviorHarness
         Check(Install(inside, mods, true, out modId, out error) == null && error != null, "a mod folder inside the mods folder was installed again");
         Check(Install(mods, mods, true, out modId, out error) == null && error != null, "the mods folder itself was installed");
         Check(Directory.GetDirectories(mods).Length == 1, "folders changed");
+    }
+
+    private static void RuntimeFilesAndBackups()
+    {
+        string mods = NewDir("runtime-mods"), id, error;
+        string zip = Path.Combine(NewDir("runtime-package"), "mod.zip");
+        WriteZip(zip, false, "About/About.json", AboutJson("tester.runtime", "Runtime", "1"), "obsolete.dll", "old");
+        NexusInstallResult first = Install(zip, mods, false, out id, out error);
+        Check(first != null, error);
+        File.WriteAllText(Path.Combine(first.InstalledPath, "config.json"), "user config");
+        Directory.CreateDirectory(Path.Combine(first.InstalledPath, "data"));
+        File.WriteAllText(Path.Combine(first.InstalledPath, "data/save.txt"), "runtime data");
+        File.WriteAllText(Path.Combine(first.InstalledPath, "override.txt"), "user override");
+        WriteZip(zip, false, "About/About.json", AboutJson("tester.runtime", "Runtime", "2"), "override.txt", "package override");
+        NexusInstallResult second = Install(zip, mods, true, out id, out error);
+        Check(second != null, error);
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "config.json")) == "user config", "config lost");
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "data/save.txt")) == "runtime data", "nested runtime data lost");
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "override.txt")) == "package override", "package did not win collision");
+        Check(!File.Exists(Path.Combine(second.InstalledPath, "obsolete.dll")), "removed package binary retained");
+        string other = Path.Combine(mods, "_smm_backup/other");
+        WriteModFolder(other, "tester.other", "Other", "1", null);
+        // Preservation failure must roll back without pruning an earlier recovery copy.
+        using (FileStream locked = new FileStream(Path.Combine(second.InstalledPath, "config.json"), FileMode.Open, FileAccess.Read, FileShare.Delete))
+            Check(Install(zip, mods, true, out id, out error) == null, "locked runtime file did not abort update");
+        Check(Directory.Exists(second.BackupPath), "failed update pruned backup");
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "config.json")) == "user config", "rollback lost config");
+        NexusInstallResult third = Install(zip, mods, true, out id, out error);
+        Check(third != null, error);
+        Check(!Directory.Exists(second.BackupPath) && Directory.Exists(third.BackupPath), "backup retention failed");
+        Check(Directory.Exists(other), "other mod backup removed");
+        Check(File.Exists(Path.Combine(third.InstalledPath, "data/save.txt")), "runtime file became package-owned");
+        File.Delete(Path.Combine(third.InstalledPath, "About/_smm_package_files.json"));
+        File.WriteAllText(Path.Combine(third.InstalledPath, "legacy.dat"), "legacy");
+        NexusInstallResult nexus = Installer().DownloadAndInstall(new Uri(zip).AbsoluteUri, mods,
+            new NexusRemoteMod { GameDomain = "sheltered", ModId = 42 }, new NexusRemoteModFile { FileId = 7 },
+            new NexusInstallTargetContext { ExpectedLocalModId = "tester.runtime", ExistingInstalledPath = third.InstalledPath }, out error);
+        Check(nexus != null, "Nexus update failed: " + error);
+        Check(File.Exists(Path.Combine(third.InstalledPath, "legacy.dat")), "legacy unknown file lost");
+        Check(File.Exists(Path.Combine(third.InstalledPath, "data/save.txt")), "Nexus update lost runtime data");
+        Check(!Directory.Exists(third.BackupPath) && Directory.Exists(nexus.BackupPath), "Nexus backup pruning failed");
     }
 
     private static void InstallReplace()

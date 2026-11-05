@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
 using System.Web.Script.Serialization;
@@ -241,6 +242,7 @@ namespace Manager.Core.Services
                 }
 
                 CopyDirectoryRecursive(sourceModRoot, targetPath);
+                PreserveRuntimeFiles(backupPath, targetPath);
                 WriteNexusMetadata(targetPath, mod.GameDomain, mod.ModId);
 
                 if (!VerifyInstalledMod(sourceModRoot, targetPath, mod, file, targetContext, out verificationSummary, out errorMessage))
@@ -250,6 +252,7 @@ namespace Manager.Core.Services
                     return null;
                 }
 
+                WritePackageInventory(sourceModRoot, targetPath);
                 System.Diagnostics.Debug.WriteLine("Nexus install verification passed: " + verificationSummary);
             }
             catch (Exception ex)
@@ -263,6 +266,8 @@ namespace Manager.Core.Services
                 TryDeleteDirectory(extractPath);
                 TryDeleteFile(archivePath);
             }
+
+            PruneModBackups(backupPath, sourceModId);
 
             var result = new NexusInstallResult();
             result.InstalledPath = targetPath;
@@ -384,12 +389,14 @@ namespace Manager.Core.Services
                     }
 
                     CopyDirectoryRecursive(modRoot, targetPath);
+                    PreserveRuntimeFiles(backupPath, targetPath);
                     if (!VerifyCopiedFiles(modRoot, targetPath, out errorMessage))
                     {
                         errorMessage = "Install check failed: " + errorMessage;
                         RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
                         return null;
                     }
+                    WritePackageInventory(modRoot, targetPath);
                 }
                 catch (Exception ex)
                 {
@@ -398,6 +405,7 @@ namespace Manager.Core.Services
                     return null;
                 }
 
+                PruneModBackups(backupPath, modId);
                 installedModId = modId;
                 var result = new NexusInstallResult();
                 result.InstalledPath = targetPath;
@@ -873,6 +881,83 @@ namespace Manager.Core.Services
 
             string jsonPath = Path.Combine(aboutDir, "Nexus.json");
             AtomicFile.WriteAllText(jsonPath, serializer.Serialize(jsonData));
+        }
+
+        private const string PackageInventory = "About/_smm_package_files.json";
+
+        private static void WritePackageInventory(string source, string target)
+        {
+            var files = new List<string>();
+            foreach (string file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+                files.Add(file.Substring(source.TrimEnd(Path.DirectorySeparatorChar).Length + 1));
+            AtomicFile.WriteAllText(Path.Combine(target, PackageInventory), new JavaScriptSerializer().Serialize(files));
+        }
+
+        private static void PreserveRuntimeFiles(string backup, string target)
+        {
+            if (string.IsNullOrEmpty(backup))
+                return;
+            var shipped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string inventory = Path.Combine(backup, PackageInventory);
+            if (File.Exists(inventory))
+            {
+                // An unreadable inventory must abort the update rather than risk losing user files.
+                string[] paths = new JavaScriptSerializer().Deserialize<string[]>(File.ReadAllText(inventory));
+                if (paths == null)
+                    throw new InvalidDataException("The previous package inventory is invalid.");
+                foreach (string path in paths)
+                    shipped.Add(path.Replace('/', Path.DirectorySeparatorChar));
+            }
+            // Older installs have no inventory. Retain their unknown files conservatively.
+            PreserveRuntimeDirectory(backup, target, "", shipped);
+        }
+
+        private static void PreserveRuntimeDirectory(string source, string target, string relative, HashSet<string> shipped)
+        {
+            if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Cannot preserve runtime files through a directory link: " + source);
+            foreach (string file in Directory.GetFiles(source))
+            {
+                string path = Path.Combine(relative, Path.GetFileName(file));
+                string destination = Path.Combine(target, path);
+                if (shipped.Contains(path) || path.Replace('\\', '/') == PackageInventory ||
+                    File.Exists(destination) || Directory.Exists(destination))
+                    continue;
+                if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Cannot preserve a runtime file link: " + file);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                File.Copy(file, destination);
+            }
+            foreach (string directory in Directory.GetDirectories(source))
+            {
+                string path = Path.Combine(relative, Path.GetFileName(directory));
+                if (!File.Exists(Path.Combine(target, path)))
+                    PreserveRuntimeDirectory(directory, target, path, shipped);
+            }
+        }
+
+        private static void PruneModBackups(string retained, string modId)
+        {
+            if (string.IsNullOrEmpty(retained))
+                return;
+            try
+            {
+                foreach (string directory in Directory.GetDirectories(Path.GetDirectoryName(retained)))
+                {
+                    if (string.Equals(directory, retained, StringComparison.OrdinalIgnoreCase) ||
+                        (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                        continue;
+                    global::Manager.ModTypes.ModAboutInfo about;
+                    string id, error;
+                    if (ModPackageSafety.TryReadRequiredAbout(directory, out about, out id, out error) &&
+                        string.Equals(id, modId, StringComparison.OrdinalIgnoreCase))
+                        Directory.Delete(directory, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning("Could not prune mod backups: " + ex.Message);
+            }
         }
 
         private static void CopyDirectoryRecursive(string sourcePath, string destinationPath)
