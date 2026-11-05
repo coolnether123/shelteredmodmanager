@@ -648,4 +648,3 @@ $visitorDefinition.ScenarioCharacters.Add($authoredVisitor)
 $visitorRecord = [VisitorAttributeFixture]::CreateAttributes($visitorDefinition, 'trader')
 Check ($visitorRecord.m_firstName -eq 'Pat' -and $visitorRecord.m_meshId -eq 'woman' -and $visitorRecord.m_strengthLevel -eq 8 -and $visitorRecord.m_weapon -eq [ItemManager+ItemType]::Knife) 'authored visitor overrides survive fallback randomization'
 Write-Output "PASS game audit continuation contracts: $script:passed/$script:passed"
-
