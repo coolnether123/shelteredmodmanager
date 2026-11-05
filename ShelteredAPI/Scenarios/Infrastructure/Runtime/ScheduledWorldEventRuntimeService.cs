@@ -225,11 +225,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private static FamilySpawner.CharacterAttributes CreateAttributes(ScenarioDefinition definition, string characterId)
         {
             ScenarioNpcDefinition npc = FindScenarioNpc(definition, characterId);
-            if (npc == null)
-                return null;
-
             FamilySpawner.CharacterAttributes attributes = new FamilySpawner.CharacterAttributes();
             attributes.Randomize();
+            if (npc == null)
+                return attributes;
             if (!string.IsNullOrEmpty(npc.DisplayName))
                 attributes.m_firstName = npc.DisplayName;
             if (!string.IsNullOrEmpty(npc.PresetId))

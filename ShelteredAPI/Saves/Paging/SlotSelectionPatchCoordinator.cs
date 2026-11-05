@@ -169,6 +169,10 @@ namespace ShelteredAPI.Saves.Paging{
 
         internal static bool OnSlotChosenPrefix(SlotSelectionPanel panel)
         {
+            if (panel == null || !panel.m_inputEnabled
+                || (SaveManager.instance != null && SaveManager.instance.isDeleting))
+                return false;
+
             if (SaveSnapshotBrowserState.IsActive(panel))
                 return HandleSnapshotSlotChosen(panel);
 
@@ -341,7 +345,8 @@ namespace ShelteredAPI.Saves.Paging{
             {
                 ClearDeleteIntent(panel);
                 MMLog.WriteError("OnDeleteMessageBox Prefix patch error: " + ex);
-                return true;
+                ShowDeletePreservationFailure(ex.Message);
+                return false;
             }
         }
 
@@ -973,7 +978,10 @@ namespace ShelteredAPI.Saves.Paging{
             }
 
             panel.m_inputEnabled = false;
-            SaveManager.instance.SetSlotToLoad(slotToLoad);
+            var panelState = Traverse.Create(panel);
+            int chosenSlot = panelState.Field("m_selectedSlot").GetValue<int>();
+            panelState.Field("m_chosenSlot").SetValue(chosenSlot);
+            panelState.Field("m_loadingSave").SetValue(SaveManager.instance.SetSlotToLoad(slotToLoad));
         }
 
         private static bool HandleVanillaSlotChosen(SlotSelectionPanel panel)
@@ -1178,7 +1186,10 @@ namespace ShelteredAPI.Saves.Paging{
                 loadingGraphic.SetActive(true);
 
             SaveProtectionPatches.LoadGamePatch._forceLoad = true;
-            SaveManager.instance.SetSlotToLoad(scope.GetTransportSlotNumber(chosenSlotIndex));
+            panelTraverse.Field("m_chosenSlot").SetValue(chosenSlotIndex);
+            panelTraverse.Field("m_inputEnabled").SetValue(false);
+            panelTraverse.Field("m_loadingSave").SetValue(
+                SaveManager.instance.SetSlotToLoad(scope.GetTransportSlotNumber(chosenSlotIndex)));
         }
 
         private static void BeginDirectScenarioNewGame(SlotPagingScope scope)

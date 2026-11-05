@@ -165,6 +165,10 @@ namespace ShelteredAPI.Saves.Paging
         /// </summary>
         public static void ChangePage(SlotSelectionPanel panel, int delta)
         {
+            if (panel == null || !panel.m_inputEnabled
+                || (SaveManager.instance != null && (SaveManager.instance.isLoading || SaveManager.instance.isDeleting)))
+                return;
+
             try
             {
                 int p = GetPage(panel);
@@ -251,6 +255,10 @@ namespace ShelteredAPI.Saves.Paging
 
         private static void ToggleSnapshotSort(SlotSelectionPanel panel)
         {
+            if (panel == null || !panel.m_inputEnabled
+                || (SaveManager.instance != null && (SaveManager.instance.isLoading || SaveManager.instance.isDeleting)))
+                return;
+
             SaveSnapshotBrowserState.ToggleSort(panel);
             panel.RefreshSaveSlotInfo();
             Update(panel);

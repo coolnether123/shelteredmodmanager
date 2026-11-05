@@ -49,6 +49,7 @@ namespace ShelteredAPI.Core
 
         public static void ResetAfterFailedTransition()
         {
+            ShelteredAPI.Scenarios.Infrastructure.Unity.ScenarioLoadingTransitionGuard.ClearTransitionOwnership();
             Time.timeScale = 1f;
             AudioListener.pause = false;
             ResetLoadingScreen();
@@ -125,6 +126,8 @@ namespace ShelteredAPI.Core
                 GameObject loadingImage = GetPrivateField(screen, "m_loadingImage") as GameObject;
                 if (loadingImage != null)
                     loadingImage.SetActive(false);
+                if (ScreenFade.instance != null)
+                    ScreenFade.instance.ClearFade(0f, true);
             }
             catch (Exception ex)
             {

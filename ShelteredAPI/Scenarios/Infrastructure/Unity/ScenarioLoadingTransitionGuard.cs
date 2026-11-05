@@ -19,8 +19,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
 
         public static void PrepareForManagedTransition(string targetLabel)
         {
-            ClearDirectLaunchOwnership();
-            ClearManagedLoadingOwnership();
+            ClearTransitionOwnership();
 
             if (LoadingScreen.Instance != null)
             {
@@ -40,6 +39,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity
                 MMLog.WriteInfo("[ScenarioLoadingTransitionGuard] Paused active cutscene manager before managed transition. target="
                     + (targetLabel ?? "<unknown>") + ".");
             }
+        }
+
+        public static void ClearTransitionOwnership()
+        {
+            ClearDirectLaunchOwnership();
+            ClearManagedLoadingOwnership();
         }
 
         public static void OwnManagedLoadingTransition(string expectedSceneName, string targetLabel)

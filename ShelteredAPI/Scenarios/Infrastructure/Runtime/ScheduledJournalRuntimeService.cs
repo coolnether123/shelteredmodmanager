@@ -21,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             "InsertJournalEntry",
             BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly HashSet<string> WrittenMinuteKeys = new HashSet<string>(StringComparer.Ordinal);
+        private static JournalManager _writtenMinuteManager;
 
         private readonly ScenarioActorResolver _actorResolver;
 
@@ -79,14 +80,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 + GameTime.Minute.ToString()
                 + "|"
                 + rendered;
-            lock (WrittenMinuteKeys)
+            if (!TryReserveWrite(manager, writeKey))
             {
-                if (WrittenMinuteKeys.Contains(writeKey))
-                {
-                    message = "Duplicate journal write skipped.";
-                    return true;
-                }
-                WrittenMinuteKeys.Add(writeKey);
+                message = "Duplicate journal write skipped.";
+                return true;
             }
 
             string seamMessage;
@@ -105,6 +102,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             lock (WrittenMinuteKeys)
                 WrittenMinuteKeys.Remove(writeKey);
             return false;
+        }
+
+        private static bool TryReserveWrite(JournalManager manager, string writeKey)
+        {
+            lock (WrittenMinuteKeys)
+            {
+                if (!ReferenceEquals(_writtenMinuteManager, manager))
+                {
+                    WrittenMinuteKeys.Clear();
+                    _writtenMinuteManager = manager;
+                }
+                return WrittenMinuteKeys.Add(writeKey);
+            }
         }
 
         private static bool HasJournalEntry(JournalManager manager, string rendered)

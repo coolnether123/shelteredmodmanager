@@ -20,7 +20,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
         {
             "BreachMan|ResetSpawnTime,EnterStage_FamilySheltering,EnterStage_MainPhase,EnterStage_Breached",
             "BreachMan_Stasis|EnterStage_MainPhase", "BreachMan_Surrounded|EnterStage_MainPhase",
-            "CharacterMeshOptions|GetRandomStasisMutantCharacterPreset,GetRandomTexture,Randomize_DontCallThisOutsideOfCharacterMeshOptions",
+            "CharacterMeshOptions|GetRandomStasisMutantCharacterPreset",
+            "CharacterMeshOptions+CharacterMeshType|GetRandomTexture",
+            "CharacterMeshOptions+CharacterPreset|Randomize_DontCallThisOutsideOfCharacterMeshOptions",
             "CombatAI_Worm|GetNextAction", "CombatAIAggressive|GetNextAction", "CombatAIBear|GetNextAction", "CombatAIDebug|GetNextAction", "CombatAIDog|GetNextAction", "CombatAIGeneric|GetNextAction", "CombatAIMutant|GetNextAction", "CombatAISurroundedBoss|GetNextAction", "CombatAIWolf|GetNextAction",
             "Companion_Scientist|SetRandomState", "CompanionAnimal|GetRandomState", "DialogueStageOpening|State_WaitFade", "DialogueStageQuest|QuestStage_Randomizer,QuestStage_EndEncounter",
             "DiceRoll|d2,d3,d4,d6,d8,d10,d12,d20,d100", "EncounterCharacter|SetupFromInspector,SetAppearance,RandomiseCurrentAnimation,MeleeAttack,Subdue,UpdateState_Throwing,UpdateState_Shooting,GetRandomBackpackItem", "EncounterDialoguePanel|OnShow",
@@ -119,6 +121,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
 
         private static string GetDomainName(Type declaringType)
         {
+            while (declaringType != null && declaringType.DeclaringType != null)
+                declaringType = declaringType.DeclaringType;
             string typeName = declaringType == null ? string.Empty : declaringType.Name;
             if (typeName == "ExpeditionMap" || typeName == "RelocationManager" || typeName == "SettlementNameGenerator") return "map";
 
