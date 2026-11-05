@@ -54,4 +54,97 @@ $v = New-Object Values
 Assert-Contract (!( [SetterFixture]::SetField($v,'Number','invalid')) -and $v.Number -eq 17) 'Failed field conversion must leave the original value'
 Assert-Contract (!( [SetterFixture]::SetProperty($v,'Property','invalid')) -and $v.Property -eq 23) 'Failed property conversion must leave the original value'
 Assert-Contract ([SetterFixture]::SetField($v,'Number','42') -and $v.Number -eq 42) 'Successful conversion must still work'
+
+$registration = Read-Source 'ModAPI/Core/SettingsProviderRegistration.cs'
+Assert-Contract ($registration.Contains('if (!(provider is ISettingsProvider2))') -and $registration.Contains('adapter.Load();')) 'Only plain providers must be adapted and loaded'
+Assert-Contract ($registration.Contains('provider.GetSettingsObject(), provider, provider.GetSettings()')) 'Plain providers must retain their declared definitions and holder'
+Assert-Contract ((Read-Source 'ModAPI/Spine/SettingsController.cs').Contains('definitions != null ? definitions.ToList() : Scan(owner)')) 'Provider definitions must feed the established persistence format'
+$proxy = Read-Method 'ShelteredAPI/Saves/Runtime/PlatformSaveProxy.cs' 'public override void DoesSaveExist('
+Assert-Contract ($proxy.Contains('TryGetPendingLoad') -and $proxy.Contains('HasActiveCustomSessionFor') -and $proxy.Contains('DirectoryProvider.EntryPath')) 'Existence must follow custom session storage'
+$load = Read-Method 'ShelteredAPI/Saves/Runtime/PlatformLoadOperationService.cs' 'internal bool Load('
+Assert-Contract ($load.IndexOf('HasActiveCustomSessionFor') -lt $load.IndexOf('ClearActiveCustomSession')) 'Active custom reload must route before vanilla fallback'
+$idle = Read-Method 'ShelteredAPI/Events/GameTimeTriggerHelper.cs' 'internal static void TickFromGameTime('
+Assert-Contract ($idle -match '(?s)if \(!HasTimedConsumers\(\)\).*?_forceResync = true;.*?return;') 'Idle time must force a fresh scheduler baseline'
+$vanilla = Read-Method 'ShelteredAPI/Saves/SaveRegistryCore.cs' 'public static SaveInfo ReadVanillaSaveInfo('
+Assert-Contract ($vanilla -match '(?s)catch \(Exception ex\).*MMLog.WriteError.*return new SaveInfo\(\)') 'Unreadable vanilla files must report and remain occupied'
+$injector = Read-Source 'ShelteredAPI/Content/ContentInjector.cs'
+Assert-Contract ($injector.Contains('item.CraftStackSize') -and !$injector.Contains('GetField("ResultCount"')) 'Legacy output must use the real item quantity'
+Assert-Contract (!$injector.Contains('GetField("CraftTime"') -and $injector.Contains('Recipe craft time is unsupported')) 'Unsupported per-recipe craft time must report its item-owned replacement'
+Assert-Contract (!(Read-Source 'ShelteredAPI/Content/Packs/ContentPackMapper.cs').Contains('CraftTimeSeconds = source.craftTimeSeconds')) 'Packs must not advertise a recipe-owned time'
+$coordinate = Read-Method 'ShelteredAPI/Map/Internal/ExpeditionMapCoordinateConverter.cs' 'internal static bool TryGridToWorldCenter('
+Assert-Contract ($coordinate.Contains('GetGridRefCentreWorldPos')) 'All map cells must use the game center conversion, including edge cells'
+$distance = Read-Method 'ShelteredAPI/Map/Internal/HomeShelterExpeditionPatches.cs' 'private static float SurvivalDistanceFromHome('
+$defaultsPath = 'ModAPI/Spine/SpineSettingsHelper.cs'
+$defaults = (Read-Method $defaultsPath 'internal static object CreateDefaults(') + "`n" + (Read-Method $defaultsPath 'internal static object ReadDefault(')
+$atomic = (Read-Source 'ModAPI/Util/AtomicTextFile.cs') -replace '(?m)^using [^;]+;', ''
+Add-Type -TypeDefinition @"
+using System;
+using System.IO;
+using System.Reflection;
+public struct Vector2 {
+ public float x,y; public Vector2(float x,float y) {this.x=x;this.y=y;}
+ public float magnitude {get {return (float)Math.Sqrt(x*x+y*y);}}
+ public static Vector2 operator -(Vector2 a,Vector2 b) {return new Vector2(a.x-b.x,a.y-b.y);}
+}
+public static class HomeShelterExpeditionRuntime {
+ public static bool Active; public static Vector2 Home;
+ public static bool TryGetHomeWorld(out Vector2 home) {home=Home;return Active;}
+}
+public static class ReviewFixture {
+ private static class MMLog { public static void WarnOnce(string key,string text) {} }
+$distance
+$defaults
+public static void Write(string path,string text) { ModAPI.Util.AtomicTextFile.Write(path,text); }
+public static float Distance(float x,float y) {var v=new Vector2(x,y);return SurvivalDistanceFromHome(ref v);}
+public static object Default(object owner,string member) {return ReadDefault(owner.GetType().GetField(member), o=>owner.GetType().GetField(member).GetValue(o),CreateDefaults(owner),owner);}
+}
+public class Holder { public int Amount=7; }
+$atomic
+"@ -ReferencedAssemblies System.dll
+$holder = New-Object Holder
+$holder.Amount = 31
+Assert-Contract ([ReviewFixture]::Default($holder,'Amount') -eq 7 -and $holder.Amount -eq 31) 'Defaults must come from a fresh holder without changing loaded values'
+[HomeShelterExpeditionRuntime]::Active = $false
+Assert-Contract ([ReviewFixture]::Distance(3,4) -eq 5) 'No registered home must preserve vanilla distance'
+[HomeShelterExpeditionRuntime]::Active = $true
+[HomeShelterExpeditionRuntime]::Home = New-Object Vector2 100,100
+Assert-Contract ([ReviewFixture]::Distance(103,104) -eq 5) 'Survival distance must measure from relocated home'
+$atomicType = [ReviewFixture].Assembly.GetType('ModAPI.Util.AtomicTextFile')
+$write = $atomicType.GetMethod('Write', [Reflection.BindingFlags]'Static,NonPublic')
+$tempRoot = Join-Path $root ('.framework-review-' + [guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($tempRoot) | Out-Null
+try {
+ $path = Join-Path $tempRoot 'state.json'
+ [ReviewFixture]::Write($path,'old')
+ [ReviewFixture]::Write($path,'new')
+ Assert-Contract ([IO.File]::ReadAllText($path) -eq 'new') 'Atomic writer must create and replace'
+ Assert-Contract (@([IO.Directory]::GetFiles($tempRoot,'*.tmp')).Count -eq 0) 'Atomic writer must clean temporary files'
+} finally { Remove-Item -LiteralPath $tempRoot -Recurse -Force }
+
+$targets = Read-Method 'ModAPI/Harmony/HarmonyUtil.cs' 'public static IEnumerable<MethodBase> GetPatchTargets('
+Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+[AttributeUsage(AttributeTargets.Class, AllowMultiple=true)]
+public class HarmonyPatch : Attribute {
+ public Info info = new Info();
+ public class Info { public Type declaringType; public string methodName; }
+ public HarmonyPatch(Type type) { info.declaringType=type; }
+ public HarmonyPatch(string name) { info.methodName=name; }
+}
+public static class TargetFixture {
+ private static class MMLog { public static void WarnOnce(string key,string message) {} }
+$targets
+}
+public class OverloadedTarget { public void Run() {} public int Run(int value) {return value;} }
+[HarmonyPatch(typeof(OverloadedTarget))]
+[HarmonyPatch("Run")]
+public class SplitPatch {}
+"@
+Assert-Contract (@([TargetFixture]::GetPatchTargets([SplitPatch])).Count -eq 2) 'Split Harmony metadata must discover both overloads for safety checks'
+
+
+$shape = Read-Method 'ShelteredAPI/Map/Internal/HomeShelterExpeditionPatches.cs' 'private static IEnumerable<CodeInstruction> OpenGroundEncounterCheckTranspiler('
+Assert-Contract ($shape.IndexOf('matches.Count != 1') -lt $shape.IndexOf('code[matches[0]].operand = distance')) 'Encounter distance rewrite must reject ambiguous shapes before mutation'
 Write-Output "Framework review contracts: $script:checks passed, 0 failed."
