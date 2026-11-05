@@ -613,6 +613,7 @@
     <Compile Include="Characters\Internal\CharacterAttributePatches.cs" />
     <Compile Include="Events\SharedPanelPatches.cs" />
     <Compile Include="Events\SharedGamePatches.cs" />
+    <Compile Include="Map\Internal\MapSizeGenerationScope.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

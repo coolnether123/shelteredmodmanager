@@ -29,6 +29,22 @@ namespace ShelteredAPI.Map
         public int Priority { get; set; }
     }
 
+    /// <summary>Map dimensions and generation counts, registered through the existing map policy registry.</summary>
+    public sealed class MapSizePolicy : ExpeditionMapGenerationPolicy
+    {
+        public MapSizePolicy() { TerrainMultiplier = 1f; ContentMultiplier = 1f; }
+        /// <summary>Optional width in cells. Null preserves the game's selected width.</summary>
+        public int? Width { get; set; }
+        /// <summary>Optional height in cells. Null preserves the game's selected height.</summary>
+        public int? Height { get; set; }
+        /// <summary>Terrain count factor, applied only during generation.</summary>
+        public float TerrainMultiplier { get; set; }
+        /// <summary>Content count factor, applied only during generation. Combines with existing density policies.</summary>
+        public float ContentMultiplier { get; set; }
+        /// <summary>Runs before temporary counts are restored, also on failure. Use for mod-specific proximity balancing and diagnostics.</summary>
+        public Action<ExpeditionMap, Exception> GenerationFinished { get; set; }
+    }
+
     /// <summary>
     /// Multiplicative intent for non-settlement generated searchable locations.
     /// </summary>
@@ -213,11 +229,18 @@ namespace ShelteredAPI.Map
         {
             LocationDensityMultiplier = 1f;
             TownDensityMultiplier = 1f;
+            TerrainMultiplier = 1f;
+            ContentMultiplier = 1f;
             PolicyConflictSummary = string.Empty;
         }
 
         /// <summary>Number of registrations included in this resolution.</summary>
         public int PolicyCount { get; internal set; }
+        public int? Width { get; internal set; }
+        public int? Height { get; internal set; }
+        public float TerrainMultiplier { get; internal set; }
+        public float ContentMultiplier { get; internal set; }
+        internal readonly System.Collections.Generic.List<MapSizePolicy> SizePolicies = new System.Collections.Generic.List<MapSizePolicy>();
         /// <summary>Combined non-settlement location-density intent.</summary>
         public float LocationDensityMultiplier { get; internal set; }
         /// <summary>Combined settlement-density intent.</summary>

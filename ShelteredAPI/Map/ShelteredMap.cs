@@ -7,6 +7,11 @@ namespace ShelteredAPI.Map
     /// </summary>
     public static class ShelteredMap
     {
+        /// <summary>Registers or replaces a size policy using the existing source, policy ID, and priority ordering.</summary>
+        public static MapPolicyRegistrationResult RegisterMapSizePolicy(MapSizePolicy policy)
+        {
+            return MapGenerationPolicyRegistry.Register(policy);
+        }
         /// <summary>Captures the currently available read-only expedition map context.</summary>
         public static ExpeditionMapContext Current
         {

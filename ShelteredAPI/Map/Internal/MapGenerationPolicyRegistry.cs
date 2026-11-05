@@ -99,6 +99,16 @@ namespace ShelteredAPI.Map.Internal
             for (int i = 0; i < ordered.Count; i++)
             {
                 ExpeditionMapGenerationPolicy policy = ordered[i];
+                MapSizePolicy size = policy as MapSizePolicy;
+                if (size != null)
+                {
+                    if (size.Width.HasValue) result.Width = size.Width;
+                    if (size.Height.HasValue) result.Height = size.Height;
+                    result.TerrainMultiplier = Multiply(result.TerrainMultiplier, size.TerrainMultiplier);
+                    result.ContentMultiplier = Multiply(result.ContentMultiplier, size.ContentMultiplier);
+                    result.SizePolicies.Add(size);
+                    continue;
+                }
                 LocationDensityPolicy locations = policy as LocationDensityPolicy;
                 if (locations != null)
                 {
@@ -185,6 +195,15 @@ namespace ShelteredAPI.Map.Internal
             if (string.IsNullOrEmpty(policy.PolicyId))
                 return "PolicyId is required.";
 
+            MapSizePolicy size = policy as MapSizePolicy;
+            if (size != null)
+            {
+                if ((size.Width.HasValue && (size.Width.Value < 1 || size.Width.Value > 4096))
+                    || (size.Height.HasValue && (size.Height.Value < 1 || size.Height.Value > 4096)))
+                    return "Map dimensions must be between 1 and 4096 cells.";
+                return ValidateMultiplier(size.TerrainMultiplier) ?? ValidateMultiplier(size.ContentMultiplier);
+            }
+
             LocationDensityPolicy locations = policy as LocationDensityPolicy;
             if (locations != null)
                 return ValidateMultiplier(locations.Multiplier);
@@ -216,6 +235,14 @@ namespace ShelteredAPI.Map.Internal
         {
             if (policy == null)
                 return null;
+
+            MapSizePolicy size = policy as MapSizePolicy;
+            if (size != null)
+                return CopyIdentity(size, new MapSizePolicy
+                {
+                    Width = size.Width, Height = size.Height, TerrainMultiplier = size.TerrainMultiplier,
+                    ContentMultiplier = size.ContentMultiplier, GenerationFinished = size.GenerationFinished
+                });
 
             LocationDensityPolicy locations = policy as LocationDensityPolicy;
             if (locations != null)
