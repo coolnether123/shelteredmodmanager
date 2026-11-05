@@ -163,6 +163,8 @@ namespace ManagerUpdater
             // Maintenance cannot invalidate an installation that has started successfully.
             try { CleanupOldBackups(options.BackupDirectory, log); }
             catch (Exception ex) { log.Write("Backup cleanup failed: " + ex.Message); }
+            try { CleanupRecoveryFolders(options, promotionDirectory, log); }
+            catch (Exception ex) { log.Write("Recovery folder cleanup failed: " + ex.Message); }
         }
 
         private static string PreparePromotionDirectory(UpdateArguments options, UpdateLog log)
@@ -280,7 +282,7 @@ namespace ManagerUpdater
             startInfo.Arguments = "--update-health-file " + QuoteArgument(healthFile);
             log.Write("Restarting " + options.RestartExecutable + ".");
 
-            Process process = Process.Start(startInfo);
+            Process process = ManagerProcessLauncher.Start(startInfo, log);
             if (process == null)
                 throw new InvalidOperationException("Manager.exe could not be restarted.");
             try
@@ -330,7 +332,7 @@ namespace ManagerUpdater
                 start.FileName = options.RestartExecutable;
                 start.WorkingDirectory = options.CurrentDirectory;
                 start.UseShellExecute = false;
-                Process process = Process.Start(start);
+                Process process = ManagerProcessLauncher.Start(start, log);
                 if (process != null)
                     process.Dispose();
                 log.Write("Restarted the previous manager after update failure.");
@@ -359,6 +361,41 @@ namespace ManagerUpdater
                 catch (Exception ex)
                 {
                     log.Write("Could not remove old rollback backup " + backups[i] + ": " + ex.Message);
+                }
+            }
+        }
+
+        private static void CleanupRecoveryFolders(UpdateArguments options, string promotionDirectory, UpdateLog log)
+        {
+            string parent = Path.GetDirectoryName(options.BackupDirectory);
+            foreach (string pattern in new string[] { "failed-update-*", "promotion-*" })
+            {
+                DirectoryInfo[] folders = new DirectoryInfo(parent).GetDirectories(pattern);
+                Array.Sort(folders, delegate(DirectoryInfo a, DirectoryInfo b)
+                {
+                    int order = b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc);
+                    return order != 0 ? order : StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName);
+                });
+                // Keep the newest recovery folder of each kind, even after a healthy startup.
+                for (int i = 1; i < folders.Length; i++)
+                {
+                    string path = folders[i].FullName;
+                    bool protectedPath = false;
+                    foreach (string active in new string[] { options.CurrentDirectory, options.StagedDirectory, options.BackupDirectory, promotionDirectory })
+                    {
+                        if (!string.IsNullOrEmpty(active) &&
+                            (string.Equals(path, active, StringComparison.OrdinalIgnoreCase) ||
+                             active.StartsWith(path + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                            protectedPath = true;
+                    }
+                    if (protectedPath || (folders[i].Attributes & FileAttributes.ReparsePoint) != 0)
+                        continue;
+                    try
+                    {
+                        folders[i].Delete(true);
+                        log.Write("Removed stale recovery folder " + path + ".");
+                    }
+                    catch (Exception ex) { log.Write("Could not remove recovery folder " + path + ": " + ex.Message); }
                 }
             }
         }
@@ -423,6 +460,113 @@ namespace ManagerUpdater
             Directory.Move(options.CurrentDirectory, failedPath);
             log.Write("Moved the failed installation to " + failedPath + ".");
         }
+    }
+
+    internal static class ManagerProcessLauncher
+    {
+        public static Process Start(ProcessStartInfo start, UpdateLog log)
+        {
+            try
+            {
+                using (System.Security.Principal.WindowsIdentity identity = System.Security.Principal.WindowsIdentity.GetCurrent())
+                {
+                    if (!IsElevated(identity.Token))
+                        return Process.Start(start);
+                }
+                return StartWithShellToken(start, log);
+            }
+            catch (Exception ex)
+            {
+                log.Write("Cannot restart Manager at normal integrity. No elevated restart was attempted. Open Manager manually. " + ex.Message);
+                throw;
+            }
+        }
+
+        private static bool IsElevated(IntPtr token)
+        {
+            int elevated, length;
+            if (!GetTokenInformation(token, 20, out elevated, sizeof(int), out length))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            return elevated != 0;
+        }
+
+        private static Process StartWithShellToken(ProcessStartInfo start, UpdateLog log)
+        {
+            IntPtr shell = GetShellWindow();
+            if (shell == IntPtr.Zero)
+                throw new InvalidOperationException("No desktop shell is available.");
+            uint shellPid;
+            GetWindowThreadProcessId(shell, out shellPid);
+            IntPtr shellProcess = OpenProcess(0x1000, false, shellPid); // PROCESS_QUERY_LIMITED_INFORMATION
+            IntPtr token = IntPtr.Zero, primary = IntPtr.Zero, environment = IntPtr.Zero;
+            try
+            {
+                if (shellProcess == IntPtr.Zero || !OpenProcessToken(shellProcess, 0x000A, out token)) // QUERY | DUPLICATE
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                if (IsElevated(token))
+                    throw new InvalidOperationException("The desktop shell is elevated.");
+                if (!DuplicateTokenEx(token, 0x000B, IntPtr.Zero, 2, 1, out primary)) // Primary token
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                if (!CreateEnvironmentBlock(out environment, primary, false))
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                StartupInfo startup = new StartupInfo();
+                startup.Size = Marshal.SizeOf(typeof(StartupInfo));
+                startup.Desktop = @"winsta0\default";
+                ProcessInformation process;
+                StringBuilder command = new StringBuilder("\"" + start.FileName + "\" " + start.Arguments);
+                if (!CreateProcessWithTokenW(primary, 0, start.FileName, command, 0x400,
+                    environment, start.WorkingDirectory, ref startup, out process))
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                try
+                {
+                    log.Write("Restarted Manager using the desktop shell's non-elevated token.");
+                    return Process.GetProcessById((int)process.ProcessId);
+                }
+                finally
+                {
+                    CloseHandle(process.Thread);
+                    CloseHandle(process.Process);
+                }
+            }
+            finally
+            {
+                if (environment != IntPtr.Zero) DestroyEnvironmentBlock(environment);
+                if (primary != IntPtr.Zero) CloseHandle(primary);
+                if (token != IntPtr.Zero) CloseHandle(token);
+                if (shellProcess != IntPtr.Zero) CloseHandle(shellProcess);
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct StartupInfo
+        {
+            public int Size;
+            public string Reserved, Desktop, Title;
+            public int X, Y, XSize, YSize, XCountChars, YCountChars, FillAttribute, Flags;
+            public short ShowWindow, ReservedSize;
+            public IntPtr ReservedBytes, StdInput, StdOutput, StdError;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ProcessInformation
+        {
+            public IntPtr Process, Thread;
+            public uint ProcessId, ThreadId;
+        }
+
+        [DllImport("user32.dll")] private static extern IntPtr GetShellWindow();
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+        [DllImport("advapi32.dll", SetLastError = true)] private static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+        [DllImport("advapi32.dll", SetLastError = true)] private static extern bool GetTokenInformation(IntPtr token, int informationClass, out int information, int size, out int length);
+        [DllImport("advapi32.dll", SetLastError = true)] private static extern bool DuplicateTokenEx(IntPtr token, uint access, IntPtr attributes, int level, int type, out IntPtr primary);
+        [DllImport("userenv.dll", SetLastError = true)] private static extern bool CreateEnvironmentBlock(out IntPtr environment, IntPtr token, bool inherit);
+        [DllImport("userenv.dll")] private static extern bool DestroyEnvironmentBlock(IntPtr environment);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CreateProcessWithTokenW(IntPtr token, uint logonFlags, string application,
+            StringBuilder commandLine, uint flags, IntPtr environment, string directory,
+            ref StartupInfo startup, out ProcessInformation process);
     }
 
     internal sealed class UpdateArguments
