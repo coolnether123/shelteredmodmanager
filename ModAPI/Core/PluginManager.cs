@@ -890,6 +890,9 @@ namespace ModAPI.Core
                     pluginRoot.transform.SetParent(_loaderRoot.transform, false);
 
                     var ctx = BuildContextFor(type, pluginRoot);
+                    MMLog.WriteDebug("Initializing plugin: " + type.FullName);
+                    MeasureStartupPhase("Plugin " + type.FullName + " Initialize", delegate { plugin.Initialize(ctx); });
+
                     _plugins.Add(plugin);
 
                     var u = plugin as IModUpdate; if (u != null) _updates.Add(u);
@@ -897,8 +900,7 @@ namespace ModAPI.Core
                     var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
                     var ss = plugin as IModSessionEvents; if (ss != null) _sessionEvents.Add(ss);
 
-                    MMLog.WriteDebug("Initializing plugin: " + type.FullName);
-                    MeasureStartupPhase("Plugin " + type.FullName + " Initialize", delegate { plugin.Initialize(ctx); });
+
 
                     var settingsProvider = plugin as ISettingsProvider;
                     if (entry != null && entry.SettingsProvider == null && settingsProvider != null)

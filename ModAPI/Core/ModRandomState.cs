@@ -74,6 +74,7 @@ namespace ModAPI.Core
             else
             {
                 // No seed.json: Default behavior (Randomized on load)
+                ModRandom.IsDeterministic = false;
                 int newSeed = GenerateFreshSeed();
                 ModRandom.ResetForSaveSeed(newSeed);
                 MMLog.WriteInfo(string.Format("[ModRandom] Session Started (Randomized): New Seed {0}. (No seed.json found)", newSeed));

@@ -102,7 +102,7 @@ namespace ModAPI.Reflection
                     {
                         if (!TryCastManual(value, f.FieldType, out valToSet))
                         {
-                            try { valToSet = Convert.ChangeType(value, f.FieldType); } catch { }
+                            try { valToSet = Convert.ChangeType(value, f.FieldType); } catch { return false; }
                         }
                     }
                     
@@ -173,7 +173,7 @@ namespace ModAPI.Reflection
                     {
                         if (!TryCastManual(value, p.PropertyType, out valToSet))
                         {
-                            try { valToSet = Convert.ChangeType(value, p.PropertyType); } catch { }
+                            try { valToSet = Convert.ChangeType(value, p.PropertyType); } catch { return false; }
                         }
                     }
                     p.SetValue(instance, valToSet, null);

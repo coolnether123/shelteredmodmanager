@@ -129,7 +129,7 @@ namespace ModAPI.Harmony
 
             var methods = type.GetMethods(
                 BindingFlags.Public | BindingFlags.NonPublic |
-                BindingFlags.Instance | BindingFlags.Static);
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
 
             var matches = methods.Where(m => 
                 m.Name == methodName && 

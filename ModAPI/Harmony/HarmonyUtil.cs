@@ -356,8 +356,8 @@ namespace ModAPI.Harmony
 
                     try
                     {
-                        var mb = targetType.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                        if (mb != null) list.Add(mb);
+                        foreach (var mb in targetType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+                            if (mb.Name == methodName) list.Add(mb);
                     }
                     catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TryGetTargets.GetMethod", "Error getting method: " + ex.Message); }
                 }
@@ -446,7 +446,7 @@ namespace ModAPI.Harmony
                 else if (Time.realtimeSinceStartup > it.Deadline)
                 {
                     _queue.Dequeue();
-                    MMLog.WriteDebug("LoadGateRunner: condition timed out");
+                    MMLog.WriteWarning("LoadGateRunner: condition timed out; deferred action was not run.");
                 }
             }
 
