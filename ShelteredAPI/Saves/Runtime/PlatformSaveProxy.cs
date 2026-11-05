@@ -19,7 +19,25 @@ namespace ShelteredAPI.Saves.Runtime
         public override bool IsLoading() => _inner.IsLoading();
         public override bool IsDeleting() => _inner.IsDeleting();
         public override bool WasSaveError() => _inner.WasSaveError();
-        public override void DoesSaveExist(SaveManager.SaveType type, out bool exists, out bool corrupted) => _inner.DoesSaveExist(type, out exists, out corrupted);
+        public override void DoesSaveExist(SaveManager.SaveType type, out bool exists, out bool corrupted)
+        {
+            SaveRuntimeState.Target target;
+            SaveEntry entry = null;
+            bool custom = SaveRuntimeState.TryGetPendingLoad(type, out target) && target != null;
+            if (custom) entry = SaveStorageRouter.Get(target.ScenarioId, target.SaveId);
+            else if (SaveRuntimeState.HasActiveCustomSessionFor(type))
+            {
+                custom = true;
+                entry = SaveRuntimeState.ActiveCustomSave;
+            }
+            if (!custom)
+            {
+                _inner.DoesSaveExist(type, out exists, out corrupted);
+                return;
+            }
+            exists = entry != null && System.IO.File.Exists(DirectoryProvider.EntryPath(entry.scenarioId, entry.absoluteSlot));
+            corrupted = !exists;
+        }
         public override void PlatformInit() => _inner.PlatformInit();
         public override void PlatformUpdate() => _inner.PlatformUpdate();
         public override bool PlatformDelete(SaveManager.SaveType type)

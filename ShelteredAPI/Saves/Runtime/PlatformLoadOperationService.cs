@@ -24,6 +24,12 @@ namespace ShelteredAPI.Saves.Runtime
                 return LoadCustomTarget(type, nextLoadTarget);
             }
 
+            if (SaveRuntimeState.HasActiveCustomSessionFor(type))
+            {
+                SaveEntry active = SaveRuntimeState.ActiveCustomSave;
+                return LoadCustomTarget(type, new SaveRuntimeState.Target { ScenarioId = active.scenarioId, SaveId = active.id });
+            }
+
             MMLog.WriteDebug(string.Format("No custom load target. Passing load for slot={0} to vanilla handler.", type));
             if (ModRuntime.IsQuitting)
             {

@@ -846,7 +846,7 @@ namespace ShelteredAPI.Saves
             catch (Exception ex)
             {
                 MMLog.WriteError($"Failed to read vanilla save info for slot {slotNumber}: {ex.Message}");
-                return null;  // Return null on error
+                return new SaveInfo();  // Unreadable slots remain occupied to prevent overwrite.
             }
         }
 
