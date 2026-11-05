@@ -60,5 +60,22 @@ namespace ShelteredAPI.Persistence
                 }
             }
         }
+
+        [PatchPolicy(PatchDomain.SaveFlow, "ModPersistenceSceneRegistration",
+            TargetBehavior = "Restore collection registration after slot selection clears scene saveables",
+            FailureMode = "Mod collections stop saving after returning to the menu or loading another slot.",
+            RollbackStrategy = "Disable the SaveFlow patch domain or remove the scene registration hook.",
+            StartupTiming = PatchStartupTiming.GameplayDeferred)]
+        [HarmonyLib.HarmonyPatch(typeof(GameTime), "Awake")]
+        private static class GameTime_Awake_Patch
+        {
+            private static void Postfix()
+            {
+                SaveManager manager = SaveManager.instance;
+                if (manager == null) return;
+                foreach (var collection in _registeredCollections)
+                    manager.RegisterSaveable(collection);
+            }
+        }
     }
 }

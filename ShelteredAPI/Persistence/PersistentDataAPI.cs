@@ -63,6 +63,12 @@ namespace ShelteredAPI.Persistence
             _registered = true;
         }
 
+        internal static void RegisterForScene()
+        {
+            _registered = false;
+            EnsureRegistered();
+        }
+
         public static void Save(string modId, string key, object data)
         {
             if (string.IsNullOrEmpty(modId) || string.IsNullOrEmpty(key))
@@ -240,6 +246,20 @@ namespace ShelteredAPI.Persistence
         private static void Postfix()
         {
             ModSaveDataProxy.EnsureRegistered();
+        }
+    }
+
+    [PatchPolicy(PatchDomain.SaveFlow, "PersistentDataSceneRegistration",
+        TargetBehavior = "Restore persistent data registration after the scene saveable list is cleared",
+        FailureMode = "Persistent mod data stops saving after returning to the menu or loading another slot.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the scene registration hook.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
+    [HarmonyLib.HarmonyPatch(typeof(GameTime), "Awake")]
+    internal static class PersistentDataAPI_GameTimeHook
+    {
+        private static void Postfix()
+        {
+            ModSaveDataProxy.RegisterForScene();
         }
     }
 }

@@ -61,7 +61,6 @@ namespace ShelteredAPI.Actors.Internal
             RegisterSerializerInternal(new ActorJsonComponentSerializer<ActorAttributeSetComponent>(ActorAttributeSetComponent.DefaultComponentId, 1), false);
 
             try { GameEvents.OnSessionStarted += HandleSessionReset; } catch { }
-            try { GameEvents.OnNewGame += HandleSessionReset; } catch { }
         }
 
         public IActorRecord Get(ActorId id)
@@ -1602,6 +1601,7 @@ namespace ShelteredAPI.Actors.Internal
         {
             private static void Postfix()
             {
+                ShelteredActors.InternalInstance._registered = false;
                 ShelteredActors.InternalInstance.EnsureRegistered();
             }
         }

@@ -19,6 +19,23 @@ namespace ShelteredAPI.Characters.Models{
         public int Health { get; set; }
         public int MaxHealth { get; set; }
 
+        [System.Runtime.Serialization.OptionalField]
+        private int _strengthLevel;
+        [System.Runtime.Serialization.OptionalField]
+        private int _dexterityLevel;
+        [System.Runtime.Serialization.OptionalField]
+        private int _intelligenceLevel;
+        [System.Runtime.Serialization.OptionalField]
+        private int _charismaLevel;
+        [System.Runtime.Serialization.OptionalField]
+        private int _perceptionLevel;
+
+        public int StrengthLevel { get { return _strengthLevel; } set { _strengthLevel = value; } }
+        public int DexterityLevel { get { return _dexterityLevel; } set { _dexterityLevel = value; } }
+        public int IntelligenceLevel { get { return _intelligenceLevel; } set { _intelligenceLevel = value; } }
+        public int CharismaLevel { get { return _charismaLevel; } set { _charismaLevel = value; } }
+        public int PerceptionLevel { get { return _perceptionLevel; } set { _perceptionLevel = value; } }
+
         public List<EffectSaveData> Effects { get; set; }
         public List<AttributeSaveData> Attributes { get; set; }
         public Dictionary<string, string> CustomData { get; set; }

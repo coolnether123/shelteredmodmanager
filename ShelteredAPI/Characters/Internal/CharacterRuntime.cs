@@ -152,9 +152,10 @@ namespace ShelteredAPI.Characters.Internal
         internal void Tick(float dt)
         {
             RefreshState();
-            SyncToGameObject();
             _effects.Tick(dt);
             _attributes.Tick(dt);
+            SyncToGameObject();
+            RefreshState();
             _dataChanged(this, "state", State);
         }
 
@@ -164,17 +165,29 @@ namespace ShelteredAPI.Characters.Internal
             {
                 TrySetField(_member, "m_firstName", _data.FirstName);
                 TrySetField(_member, "m_lastName", _data.LastName);
-                TrySetField(_member, "m_health", _data.Health);
-                TrySetField(_member, "m_maxHealth", _data.MaxHealth);
+                SyncHealth(_member);
             }
 
             if (_npc != null)
             {
                 TrySetField(_npc, "m_firstName", _data.FirstName);
                 TrySetField(_npc, "m_lastName", _data.LastName);
-                TrySetField(_npc, "m_health", _data.Health);
-                TrySetField(_npc, "m_maxHealth", _data.MaxHealth);
+                SyncHealth(_npc);
             }
+        }
+
+        private void SyncHealth(BaseCharacter character)
+        {
+            int maxHealth = Math.Max(1, _data.MaxHealth);
+            int health = Math.Max(0, Math.Min(_data.Health, maxHealth));
+            character.SetMaxHealth(maxHealth);
+            if (health < character.health)
+                character.Damage(character.health - health);
+            else if (health > character.health && !character.isDead)
+                character.Heal(health - character.health);
+            // Fatal damage can leave a family member at one health while becoming unconscious.
+            _data.Health = character.health;
+            _data.MaxHealth = character.maxHealth;
         }
 
         internal void Unregister()
@@ -262,6 +275,7 @@ namespace ShelteredAPI.Characters.Internal
             if (!effect.CanApply(ctx)) return null;
             _effects.Add(instance);
             effect.OnApplied(ctx);
+            SyncLiveCharacter();
             CharacterEffectSystem.InternalInstance.OnEffectApplied(_character, instance);
             return instance;
         }
@@ -272,8 +286,15 @@ namespace ShelteredAPI.Characters.Internal
             if (!_effects.Remove(effect)) return false;
             EffectContext ctx = new EffectContext(_character, effect);
             effect.Effect.OnRemoved(ctx, reason);
+            SyncLiveCharacter();
             CharacterEffectSystem.InternalInstance.OnEffectRemoved(_character, effect, reason);
             return true;
+        }
+
+        private void SyncLiveCharacter()
+        {
+            LiveCharacterProxy live = _character as LiveCharacterProxy;
+            if (live != null) live.SyncToGameObject();
         }
 
         public int RemoveAllOfType<T>(RemovalReason reason = RemovalReason.Manually) where T : ICharacterEffect
@@ -545,6 +566,11 @@ namespace ShelteredAPI.Characters.Internal
             d.LastName = member.lastName;
             d.Health = member.health;
             d.MaxHealth = member.maxHealth;
+            d.StrengthLevel = member.BaseStats.Strength.Level;
+            d.DexterityLevel = member.BaseStats.Dexterity.Level;
+            d.IntelligenceLevel = member.BaseStats.Intelligence.Level;
+            d.CharismaLevel = member.BaseStats.Charisma.Level;
+            d.PerceptionLevel = member.BaseStats.Perception.Level;
         }
 
         internal static CharacterDataModel CreateFromVisitor(NpcVisitor npc)
@@ -567,6 +593,11 @@ namespace ShelteredAPI.Characters.Internal
             d.LastName = npc.lastName;
             d.Health = npc.health;
             d.MaxHealth = npc.maxHealth;
+            d.StrengthLevel = npc.BaseStats.Strength.Level;
+            d.DexterityLevel = npc.BaseStats.Dexterity.Level;
+            d.IntelligenceLevel = npc.BaseStats.Intelligence.Level;
+            d.CharismaLevel = npc.BaseStats.Charisma.Level;
+            d.PerceptionLevel = npc.BaseStats.Perception.Level;
         }
     }
 

@@ -30,6 +30,11 @@ namespace ShelteredAPI.Actors.Internal
         internal void Update()
         {
             EnsureRegistered();
+            if (UnityEngine.Time.timeScale <= 0f
+                || (SaveManager.instance != null && (SaveManager.instance.isLoading || SaveManager.instance.isSaving))
+                || (LoadingScreen.Instance != null && LoadingScreen.Instance.isShowing)
+                || (CutsceneManager.Instance != null && CutsceneManager.Instance.CutSceneActive))
+                return;
 
             long previousTick;
             long currentTick;

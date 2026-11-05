@@ -48,7 +48,6 @@ namespace ShelteredAPI.Characters.Internal
         internal CharacterEffectSystemImpl()
         {
             try { GameEvents.OnSessionStarted += HandleSessionStarted; } catch { }
-            try { GameEvents.OnNewGame += HandleSessionStarted; } catch { }
         }
 
         public void RegisterEffectType<T>(string effectId) where T : ICharacterEffect, new()
@@ -219,20 +218,14 @@ namespace ShelteredAPI.Characters.Internal
 
         public void SwapEncounterCharacter(EncounterCharacter encounterActor, ICharacterProxy newCharacter, Action<EncounterCharacter> onSwapComplete = null)
         {
-            if (encounterActor == null || newCharacter == null)
+            if (encounterActor == null || newCharacter == null || newCharacter.Data == null)
             {
                 if (onSwapComplete != null) onSwapComplete(encounterActor);
                 return;
             }
 
-            try
-            {
-                var first = encounterActor.GetType().GetField("m_firstName", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (first != null) first.SetValue(encounterActor, newCharacter.Data.FirstName);
-                var last = encounterActor.GetType().GetField("m_lastName", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (last != null) last.SetValue(encounterActor, newCharacter.Data.LastName);
-            }
-            catch { }
+            TrySetMember(encounterActor, "firstName", newCharacter.Data.FirstName);
+            TrySetMember(encounterActor, "lastName", newCharacter.Data.LastName);
             SwapEncounterActorStats(encounterActor, newCharacter);
 
             if (onSwapComplete != null) onSwapComplete(encounterActor);
@@ -242,13 +235,18 @@ namespace ShelteredAPI.Characters.Internal
         {
             if (actor == null || character == null || character.Data == null) return;
 
-            TrySetMember(actor, "health", character.Data.Health);
-            TrySetMember(actor, "maxHealth", character.Data.MaxHealth);
-            TrySetMember(actor, "strength", character.Data.StrengthLevel);
-            TrySetMember(actor, "dexterity", character.Data.DexterityLevel);
-            TrySetMember(actor, "intelligence", character.Data.IntelligenceLevel);
-            TrySetMember(actor, "charisma", character.Data.CharismaLevel);
-            TrySetMember(actor, "perception", character.Data.PerceptionLevel);
+            // A swap sets a new baseline, like Setup, rather than recording combat damage.
+            int maxHealth = Math.Max(1, character.Data.MaxHealth);
+            TrySetMember(actor, "m_maxHealth", maxHealth);
+            TrySetMember(actor, "health", Math.Max(0, Math.Min(character.Data.Health, maxHealth)));
+            BaseStats stats = new BaseStats();
+            stats.Initialize();
+            stats.Strength.SetInitialLevel(Math.Max(0, character.Data.StrengthLevel), 20);
+            stats.Dexterity.SetInitialLevel(Math.Max(0, character.Data.DexterityLevel), 20);
+            stats.Intelligence.SetInitialLevel(Math.Max(0, character.Data.IntelligenceLevel), 20);
+            stats.Charisma.SetInitialLevel(Math.Max(0, character.Data.CharismaLevel), 20);
+            stats.Perception.SetInitialLevel(Math.Max(0, character.Data.PerceptionLevel), 20);
+            actor.SetStats(stats);
         }
 
         public int UnloadTemporaryCharacters(string sourceModId)
@@ -329,8 +327,13 @@ namespace ShelteredAPI.Characters.Internal
                 SyntheticCharacterProxy p = BuildSynthetic(data.UniqueId, data.FirstName, data.LastName, data.PersistenceKey, data.SourceMod, data.IsPersistent);
                 p.Data.MeshId = data.MeshId;
                 p.Data.IsMale = data.IsMale;
-                p.Data.Health = data.Health > 0 ? data.Health : 100;
-                p.Data.MaxHealth = data.MaxHealth > 0 ? data.MaxHealth : Math.Max(100, p.Data.Health);
+                p.Data.MaxHealth = data.MaxHealth > 0 ? data.MaxHealth : Math.Max(100, data.Health);
+                p.Data.Health = Math.Max(0, Math.Min(data.Health, p.Data.MaxHealth));
+                p.Data.StrengthLevel = data.StrengthLevel;
+                p.Data.DexterityLevel = data.DexterityLevel;
+                p.Data.IntelligenceLevel = data.IntelligenceLevel;
+                p.Data.CharismaLevel = data.CharismaLevel;
+                p.Data.PerceptionLevel = data.PerceptionLevel;
                 if (data.CustomData != null && data.CustomData.Count > 0)
                 {
                     foreach (var kv in data.CustomData)
@@ -417,14 +420,8 @@ namespace ShelteredAPI.Characters.Internal
                 _liveFamily.Clear();
                 _liveVisitors.Clear();
                 _temporarySyntheticIds.Clear();
-                var keep = _syntheticById.Values.Where(x => x.IsPersistent).ToList();
                 _syntheticById.Clear();
                 _syntheticByKey.Clear();
-                for (int i = 0; i < keep.Count; i++)
-                {
-                    _syntheticById[keep[i].UniqueId] = keep[i];
-                    if (!string.IsNullOrEmpty(keep[i].PersistenceKey)) _syntheticByKey[keep[i].PersistenceKey] = keep[i];
-                }
             }
         }
 
@@ -535,6 +532,11 @@ namespace ShelteredAPI.Characters.Internal
                 MeshId = p.Data.MeshId,
                 Health = p.Data.Health,
                 MaxHealth = p.Data.MaxHealth,
+                StrengthLevel = p.Data.StrengthLevel,
+                DexterityLevel = p.Data.DexterityLevel,
+                IntelligenceLevel = p.Data.IntelligenceLevel,
+                CharismaLevel = p.Data.CharismaLevel,
+                PerceptionLevel = p.Data.PerceptionLevel,
                 Effects = effects != null ? effects.ToSaveData() : new List<EffectSaveData>(),
                 Attributes = attrs != null ? attrs.ToSaveData() : new List<AttributeSaveData>(),
                 CustomData = custom
@@ -572,6 +574,7 @@ namespace ShelteredAPI.Characters.Internal
         {
             private static void Postfix()
             {
+                CharacterEffectSystem.InternalInstance._registered = false;
                 CharacterEffectSystem.InternalInstance.EnsureRegistered();
             }
         }
@@ -588,14 +591,30 @@ namespace ShelteredAPI.Characters.Internal
         private void Update()
         {
             EnsureRegistered();
+            if (Time.timeScale <= 0f
+                || (SaveManager.instance != null && (SaveManager.instance.isLoading || SaveManager.instance.isSaving))
+                || (LoadingScreen.Instance != null && LoadingScreen.Instance.isShowing)
+                || (CutsceneManager.Instance != null && CutsceneManager.Instance.CutSceneActive))
+                return;
+
             RefreshLiveCharacters();
             float dt = Time.deltaTime;
             List<LiveCharacterProxy> proxies;
+            List<SyntheticCharacterProxy> synthetic;
             lock (_sync)
             {
                 proxies = _liveFamily.Values.Concat(_liveVisitors.Values).ToList();
+                synthetic = _syntheticById.Values.ToList();
             }
             for (int i = 0; i < proxies.Count; i++) proxies[i].Tick(dt);
+            for (int i = 0; i < synthetic.Count; i++)
+            {
+                if (!synthetic[i].IsActive) continue;
+                BasicCharacterEffects effects = synthetic[i].Effects as BasicCharacterEffects;
+                BasicCharacterAttributes attributes = synthetic[i].Attributes as BasicCharacterAttributes;
+                if (effects != null) effects.Tick(dt);
+                if (attributes != null) attributes.Tick(dt);
+            }
             SynchronizeActors();
         }
 
