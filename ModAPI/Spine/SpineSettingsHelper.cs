@@ -21,6 +21,7 @@ namespace ModAPI.Spine
             if (settingsObject == null) return definitions;
 
             var type = settingsObject.GetType();
+            object defaults = CreateDefaults(settingsObject);
             var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             
             MMLog.WriteDebug($"Scanning {type.Name} for settings...");
@@ -37,7 +38,7 @@ namespace ModAPI.Spine
                         var def = SettingDefinitionFactory.Create(attr, field, type);
                         def.Getter = SettingDefinitionFactory.CreateGetter(field);
                         def.Setter = SettingDefinitionFactory.CreateSetter(field);
-                        def.DefaultValue = def.Getter != null ? def.Getter(settingsObject) : null;
+                        def.DefaultValue = def.Getter != null ? ReadDefault(field, def.Getter, defaults, settingsObject) : null;
                         SettingDefinitionFactory.ApplyPresets(field, def);
                         definitions.Add(def);
                         continue;
@@ -63,7 +64,7 @@ namespace ModAPI.Spine
                         var def = SettingDefinitionFactory.Create(attr, prop, type);
                         def.Getter = SettingDefinitionFactory.CreateGetter(prop);
                         def.Setter = SettingDefinitionFactory.CreateSetter(prop);
-                        def.DefaultValue = def.Getter != null ? def.Getter(settingsObject) : null;
+                        def.DefaultValue = def.Getter != null ? ReadDefault(prop, def.Getter, defaults, settingsObject) : null;
                         SettingDefinitionFactory.ApplyPresets(prop, def);
                         definitions.Add(def);
                     }
@@ -92,5 +93,23 @@ namespace ModAPI.Spine
             definitions.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
             return definitions;
         }
+        internal static object CreateDefaults(object owner)
+        {
+            try { return Activator.CreateInstance(owner.GetType(), true); }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("SettingsDefaults." + owner.GetType().FullName,
+                    "Cannot construct settings defaults. Supply DefaultValue attributes for this holder: " + ex.Message);
+                return null;
+            }
+        }
+
+        internal static object ReadDefault(MemberInfo member, Func<object, object> getter, object defaults, object owner)
+        {
+            var explicitDefault = Attribute.GetCustomAttribute(member, typeof(System.ComponentModel.DefaultValueAttribute)) as System.ComponentModel.DefaultValueAttribute;
+            if (explicitDefault != null) return explicitDefault.Value;
+            return getter(defaults ?? owner);
+        }
+
     }
 }

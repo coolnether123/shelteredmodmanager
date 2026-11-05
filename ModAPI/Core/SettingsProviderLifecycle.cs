@@ -33,6 +33,9 @@ namespace ModAPI.Core
             if (context == null || events == null)
                 return;
 
+            if (ResolveProvider(context) is LegacySettingsProviderAdapter)
+                BindControllerReloadOnSessionStart(context, events, logPrefix);
+
             Action<object> beforeSaveHandler = delegate(object _)
             {
                 try
@@ -67,6 +70,8 @@ namespace ModAPI.Core
                     SettingsController activeController = ResolveProvider(context) as SettingsController;
                     if (activeController != null)
                         activeController.Load();
+                    LegacySettingsProviderAdapter legacy = ResolveProvider(context) as LegacySettingsProviderAdapter;
+                    if (legacy != null) legacy.Load();
                 }
                 catch (Exception ex)
                 {

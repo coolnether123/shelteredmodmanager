@@ -39,12 +39,17 @@ namespace ModAPI.Spine
         }
 
         public SettingsController(IPluginContext context, object owner, object notificationTarget)
+            : this(context, owner, notificationTarget, null)
+        {
+        }
+
+        internal SettingsController(IPluginContext context, object owner, object notificationTarget, IEnumerable<SettingDefinition> definitions)
         {
             _context = context;
             _mod = context != null ? context.Mod : null;
             _owner = owner;
             _notificationTarget = notificationTarget;
-            _definitions = Scan(owner);
+            _definitions = definitions != null ? definitions.ToList() : Scan(owner);
             _defById = _definitions.ToDictionary(d => d.Id);
             IsReady = true;
         }
@@ -283,6 +288,11 @@ namespace ModAPI.Spine
 
             manager = _notificationTarget as ModManagerBase;
             if (manager != null) manager.OnSettingsLoaded();
+            else
+            {
+                ISettingsProvider provider = _notificationTarget as ISettingsProvider;
+                if (provider != null) provider.OnSettingsLoaded();
+            }
         }
 
         public void ResetToDefaults()
@@ -303,6 +313,7 @@ namespace ModAPI.Spine
         {
             var definitions = new List<SettingDefinition>();
             var type = owner.GetType();
+            object defaults = SpineSettingsHelper.CreateDefaults(owner);
             var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
             // Fields
@@ -314,7 +325,7 @@ namespace ModAPI.Spine
                     var def = SettingDefinitionFactory.Create(attr, field, type);
                     def.Getter = SettingDefinitionFactory.CreateGetter(field);
                     def.Setter = SettingDefinitionFactory.CreateSetter(field);
-                    def.DefaultValue = def.Getter(owner);
+                    def.DefaultValue = SpineSettingsHelper.ReadDefault(field, def.Getter, defaults, owner);
                     SettingDefinitionFactory.ApplyPresets(field, def);
                     definitions.Add(def);
                 }
@@ -329,7 +340,7 @@ namespace ModAPI.Spine
                     var def = SettingDefinitionFactory.Create(attr, prop, type);
                     def.Getter = SettingDefinitionFactory.CreateGetter(prop);
                     def.Setter = SettingDefinitionFactory.CreateSetter(prop);
-                    def.DefaultValue = def.Getter(owner);
+                    def.DefaultValue = SpineSettingsHelper.ReadDefault(prop, def.Getter, defaults, owner);
                     SettingDefinitionFactory.ApplyPresets(prop, def);
                     definitions.Add(def);
                 }

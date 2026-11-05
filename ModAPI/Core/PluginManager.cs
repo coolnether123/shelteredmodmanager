@@ -906,7 +906,7 @@ namespace ModAPI.Core
                     if (entry != null && entry.SettingsProvider == null && settingsProvider != null)
                     {
                         RegisterSettingsProvider(entry, ctx, settingsProvider, "ISettingsProvider");
-                        if (settingsProvider is ISettingsProvider2 && !(plugin is ModManagerBase))
+                        if (entry.SettingsProvider is ISettingsProvider2 && !(plugin is ModManagerBase))
                             SettingsProviderLifecycle.BindProviderSaveOnBeforeSave(ctx, GetFrameworkEvents(ctx), "[PluginManager]");
                     }
                     else if (entry != null && entry.SettingsProvider != null)
