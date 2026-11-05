@@ -1146,6 +1146,7 @@ namespace ModAPI.Core
         /// </summary>
         public void OnNewGame()
         {
+            SaveSystemImpl.ResetForNewGame();
             InvokeStaticLifecycleSubscribers("OnNewGame", OnNewGameEvent);
             // Initialize ModRandom for the new world
             ModRandom.Initialize(Environment.TickCount ^ Guid.NewGuid().GetHashCode());

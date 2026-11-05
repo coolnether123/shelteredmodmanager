@@ -85,6 +85,37 @@ public static class ModPersistenceContracts
         catch (FormatException) { rejected = true; }
         Check(rejected && array[0] == 3, "array length mismatch fails without mutation");
         Check(!object.ReferenceEquals(first, SaveSystemImpl.GetForMod("other.mod")), "different mods retain separate registries");
+        Data other = new Data { Value = 7 };
+        SaveSystemImpl.GetForMod("other.mod").RegisterModData("other", other);
+        a.Value = 11; b.Value = 22;
+        host.Save();
+        string shelterA = File.ReadAllText(file);
+        a.Value = 81; b.Value = 82; array[0] = 83; other.Value = 84;
+        SaveSystemImpl.PrecalculateShutdownData();
+        int restoresBeforeNewGame = a.Restores;
+        int migrations = 0;
+        first.RegisterModData("migration", new Data(), delegate(Data data) { migrations++; });
+        bool callbackSawDefaults = false;
+        host.NewGame += delegate { callbackSawDefaults = a.Value == 0 && b.Value == 0 && other.Value == 7; a.Value = 5; };
+        host.UseSlot(Path.Combine(root, "shelter-b"));
+        host.StartNewGame();
+        Check(callbackSawDefaults && a.Value == 5, "New Game resets every mod before callbacks initialize data");
+        Check(array[0] == 3 && array[1] == 4, "New Game resets registered arrays in place");
+        Check(a.Restores == restoresBeforeNewGame && migrations == 0, "New Game does not invoke load callbacks or migrations");
+        Check(object.ReferenceEquals(first, SaveSystemImpl.GetForMod("test.mod")), "New Game preserves registry and registered object references");
+        PluginRunner.IsQuitting = true;
+        host.Save();
+        PluginRunner.IsQuitting = false;
+        a.Value = 90; b.Value = 91; other.Value = 92;
+        host.Load();
+        Check(a.Value == 5 && b.Value == 0 && other.Value == 7, "first save of New Game contains defaults and callback state, not the shutdown cache");
+        Check(File.ReadAllText(file) == shelterA, "New Game leaves the previous shelter file intact");
+        host.UseSlot(root);
+        host.Load();
+        Check(a.Value == 11 && b.Value == 22 && other.Value == 7, "loading the previous shelter still restores its state");
+        SaveSystemImpl.ResetForNewGame();
+        host.CompleteLoad();
+        Check(a.Value == 11 && b.Value == 22, "New Game clears the prepared-load key for the same save context");
         Console.WriteLine("Persistence contracts: " + _checks + " passed, 0 failed.");
     }
     private sealed class Data : IModPersistenceLifecycle, IModPersistenceLogic
@@ -106,11 +137,14 @@ public static class ModPersistenceContracts
     }
     private sealed class Host : IGameLifecycleSource, ISaveRuntimeAdapter
     {
-        private readonly string _root;
+        private string _root;
         internal Host(string root) { _root = root; }
         public event Action<object> BeforeSave, BeforeLoadSceneContents, AfterLoad;
         public event Action SessionStarted { add { } remove { } }
-        public event Action NewGame { add { } remove { } }
+        public event Action NewGame;
+        internal void UseSlot(string root) { _root = root; }
+        internal void StartNewGame() { SaveSystemImpl.ResetForNewGame(); if (NewGame != null) NewGame(); }
+        internal void CompleteLoad() { AfterLoad(null); }
         internal void Save() { BeforeSave(null); }
         internal void Load() { BeforeLoadSceneContents(null); AfterLoad(null); AfterLoad(null); }
         public string GetCurrentSlotPath() { return _root; }

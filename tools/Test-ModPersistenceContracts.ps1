@@ -5,6 +5,10 @@ $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 }
+$pluginManager = Get-Content -LiteralPath (Join-Path $RepoRoot 'ModAPI/Core/PluginManager.cs') -Raw
+if ($pluginManager -notmatch '(?s)public void OnNewGame\(\)\s*\{\s*SaveSystemImpl\.ResetForNewGame\(\);\s*InvokeStaticLifecycleSubscribers\("OnNewGame"') {
+    throw 'Registered data must reset before New Game callbacks initialize it.'
+}
 $paths = @(
     'ModAPI/Util/ManualJson.cs',
     'ModAPI/Core/ModPersistenceData.cs',
@@ -23,6 +27,7 @@ Add-Type -TypeDefinition $source -Language CSharp
 $testRoot = Join-Path $RepoRoot ('.persistence-contracts-' + [guid]::NewGuid().ToString('N'))
 try {
     [ModPersistenceContracts]::Run($testRoot)
+    Write-Output 'New Game dispatch order: 1 passed, 0 failed.'
 } finally {
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }

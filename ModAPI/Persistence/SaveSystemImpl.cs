@@ -46,6 +46,29 @@ namespace ModAPI.Persistence
             _instances.Add(this);
         }
 
+        internal static void ResetForNewGame()
+        {
+            foreach (SaveSystemImpl instance in _instances)
+                instance.ResetRegisteredDataForNewGame();
+        }
+
+        private void ResetRegisteredDataForNewGame()
+        {
+            _preparedLoadKey = null;
+            _afterLoadCallbacksApplied = false;
+            _shutdownCache = null;
+            _reportedNoActiveLoadContext = false;
+            _preparedLoadStates.Clear();
+
+            foreach (KeyValuePair<string, object> registration in _registeredData)
+            {
+                PreparedLoadState state = new PreparedLoadState();
+                if (!RestoreRegisteredDefault(registration.Key, registration.Value, state))
+                    MMLog.WriteWarning("[SaveSystem] Could not reset registered data for New Game: "
+                        + _modId + "/" + registration.Key + ": " + string.Join("; ", state.Details.ToArray()));
+            }
+        }
+
         public string GetCurrentSlotPath()
         {
             return SaveRuntimeAdapters.GetCurrentSlotPath();
