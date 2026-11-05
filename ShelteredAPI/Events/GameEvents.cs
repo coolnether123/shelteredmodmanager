@@ -43,8 +43,7 @@ namespace ShelteredAPI.Events
         private static bool _beforeSaveRaised;
         private static bool _beforeLoadSceneContentsRaised;
         private static bool _afterLoadRaised;
-        private static bool _dayHooked;
-        private static bool _partyHooked;
+        private static ExplorationManager _partyEventManager;
         private static SaveData _loadStartData;
         private static bool _suppressNextNewGameForLoad;
         private static readonly object WarnOnceSync = new object();
@@ -52,12 +51,11 @@ namespace ShelteredAPI.Events
 
         internal static void HookDayEvents()
         {
-            if (_dayHooked)
-                return;
             try
             {
+                // Awake clears vanilla's static delegates on each shelter session.
+                GameTime.newDay -= HandleNewDay;
                 GameTime.newDay += HandleNewDay;
-                _dayHooked = true;
             }
             catch (Exception ex)
             {
@@ -67,16 +65,17 @@ namespace ShelteredAPI.Events
 
         internal static void HookPartyEvents()
         {
-            if (_partyHooked)
-                return;
-
             try
             {
                 var mgr = ExplorationManager.Instance;
                 if (mgr == null)
                     return;
+                if (ReferenceEquals(_partyEventManager, mgr))
+                    return;
+                if (!ReferenceEquals(_partyEventManager, null))
+                    _partyEventManager.onPartyReturned -= OnPartyReturnedInternal;
                 mgr.onPartyReturned += OnPartyReturnedInternal;
-                _partyHooked = true;
+                _partyEventManager = mgr;
             }
             catch (Exception ex)
             {
@@ -96,7 +95,7 @@ namespace ShelteredAPI.Events
         {
             SaveData data;
             _loadStartData = mgr != null && TryGetField(mgr, "m_data", out data) ? data : null;
-            _suppressNextNewGameForLoad = true;
+            _suppressNextNewGameForLoad = false;
         }
 
         private static bool ConsumeLoadNewGameSuppression()
@@ -258,8 +257,8 @@ namespace ShelteredAPI.Events
                 GameEvents.TryRaiseSessionStarted();
 
                 // SaveManager.isLoading can already be false by GameTime.Awake during a
-                // completed load. StartLoad is the authoritative discriminator for this
-                // session; consume it once so load startup cannot be misreported as NewGame.
+                // completed load. Valid slot data marks this session as a load;
+                // consume it once so load startup cannot be misreported as NewGame.
                 try
                 {
                     var sm = SaveManager.instance;
@@ -275,8 +274,10 @@ namespace ShelteredAPI.Events
         [HarmonyPatch(typeof(SaveManager), "StartSave")]
         private static class SaveManager_StartSave_Patch
         {
-            private static void Prefix(SaveManager.SaveType type)
+            private static void Postfix(SaveManager.SaveType type, bool __result)
             {
+                if (!__result || type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid)
+                    return;
                 GameEvents.ResetSaveFlags();
                 SaveRuntimeState.TryBeginSaveOperation(type);
             }
@@ -285,8 +286,10 @@ namespace ShelteredAPI.Events
         [HarmonyPatch(typeof(SaveManager), "StartLoad")]
         private static class SaveManager_StartLoad_Patch
         {
-            private static void Prefix(SaveManager __instance)
+            private static void Postfix(SaveManager __instance, SaveManager.SaveType type, bool __result)
             {
+                if (!__result || type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid)
+                    return;
                 GameEvents.CaptureLoadStartState(__instance);
                 GameEvents.ResetSaveFlags();
             }

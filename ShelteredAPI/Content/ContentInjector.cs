@@ -950,16 +950,17 @@ namespace ShelteredAPI.Content
             {
                 if ((int)__instance.m_type >= CustomItemTypeStart)
                 {
+                    bool concealed = __instance.IsLocked || __instance.IsHidden;
                     Transform t = __instance.transform.Find("CustomModIcon");
                     if (t != null)
                     {
-                        t.gameObject.SetActive(!locked);
+                        t.gameObject.SetActive(!concealed);
                         var ui2d = t.GetComponent<UI2DSprite>();
-                        if (ui2d != null) ui2d.alpha = locked ? 0f : 1f;
+                        if (ui2d != null) ui2d.alpha = concealed ? 0f : 1f;
                     }
                     
                     if (__instance.m_sprite != null)
-                        __instance.m_sprite.alpha = locked ? 1f : 0f;
+                        __instance.m_sprite.alpha = concealed ? 1f : 0f;
                 }
             }
         }
@@ -988,16 +989,17 @@ namespace ShelteredAPI.Content
             {
                 if ((int)__instance.m_type >= CustomItemTypeStart)
                 {
+                    bool concealed = __instance.IsLocked || __instance.IsHidden;
                     Transform t = __instance.transform.Find("CustomModIcon");
                     if (t != null)
                     {
-                        t.gameObject.SetActive(!hidden);
+                        t.gameObject.SetActive(!concealed);
                         var ui2d = t.GetComponent<UI2DSprite>();
-                        if (ui2d != null) ui2d.alpha = hidden ? 0f : 1f;
+                        if (ui2d != null) ui2d.alpha = concealed ? 0f : 1f;
                     }
 
                     if (__instance.m_sprite != null)
-                        __instance.m_sprite.alpha = hidden ? 1f : 0f;
+                        __instance.m_sprite.alpha = concealed ? 1f : 0f;
                 }
             }
         }

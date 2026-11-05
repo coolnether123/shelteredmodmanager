@@ -77,21 +77,20 @@ namespace ShelteredAPI.UI.Compatibility
         // ============================================================================
         
         /// <summary>
-        /// Hook UIPanelManager.PushPanel to fire OnPanelOpened event.
-        /// This is a public method so we can safely patch it.
+        /// Publish after the deferred push has initialized and shown the panel.
         /// </summary>
-        [HarmonyPatch(typeof(UIPanelManager), "PushPanel")]
+        [HarmonyPatch(typeof(UIPanelManager), "PushPanel_Delayed", new Type[] { typeof(BasePanel) })]
         [HarmonyPostfix]
-        static void Postfix_UIPanelManager_PushPanel(BasePanel panel)
+        static void Postfix_UIPanelManager_PushPanel(BasePanel panel, List<BasePanel> ___m_panel_stack)
         {
-            UIPanelLifecycleRuntimeService.RaisePanelOpened(panel);
+            if (panel != null && ___m_panel_stack != null && ___m_panel_stack.Contains(panel))
+                UIPanelLifecycleRuntimeService.RaisePanelOpened(panel);
         }
         
         /// <summary>
-        /// Hook UIPanelManager.PopPanel(BasePanel) to fire OnPanelClosed event.
-        /// This is the public overload that takes a panel parameter.
+        /// Both deferred pops and PopTop close through this method.
         /// </summary>
-        [HarmonyPatch(typeof(UIPanelManager), "PopPanel", new Type[] { typeof(BasePanel) })]
+        [HarmonyPatch(typeof(UIPanelManager), "ClosePanel", new Type[] { typeof(BasePanel) })]
         [HarmonyPostfix]
         static void Postfix_UIPanelManager_PopPanel(BasePanel panel)
         {
@@ -105,6 +104,14 @@ namespace ShelteredAPI.UI.Compatibility
         [HarmonyPatch(typeof(BasePanel), "OnResume")]
         [HarmonyPostfix]
         static void Postfix_BasePanel_OnResume(BasePanel __instance)
+        {
+            UIPanelLifecycleRuntimeService.RaisePanelResumed(__instance);
+        }
+
+        // This override restores focus without calling BasePanel.OnResume.
+        [HarmonyPatch(typeof(CustomisationPanel), "OnResume")]
+        [HarmonyPostfix]
+        static void Postfix_CustomisationPanel_OnResume(CustomisationPanel __instance)
         {
             UIPanelLifecycleRuntimeService.RaisePanelResumed(__instance);
         }

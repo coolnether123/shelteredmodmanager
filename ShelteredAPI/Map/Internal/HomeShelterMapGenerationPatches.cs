@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
@@ -31,11 +33,111 @@ namespace ShelteredAPI.Map.Internal
             HomeShelterMapGenerationRuntime.OnCreateMapEnd(__instance);
         }
 
-        [HarmonyPatch(typeof(ExpeditionMap), "WorldPosToGridRef")]
-        [HarmonyPrefix]
-        private static void WorldPosToGridRefPrefix(ref Vector2 worldPos)
+        [HarmonyPatch(typeof(ExpeditionMap), "CreateMap")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> ExpeditionMapCreateMapHomeTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {
-            HomeShelterMapGenerationRuntime.RedirectWorldPosIfHomeOrigin(ref worldPos);
+            return HomeOriginTranspiler(instructions, original);
+        }
+
+        [HarmonyPatch(typeof(ExpeditionMap), "PlaceBuildingsNearToShelter")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> ExpeditionMapPlaceBuildingsNearToShelterHomeTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            return HomeOriginTranspiler(instructions, original);
+        }
+
+        [HarmonyPatch(typeof(ExpeditionMap), "PlaceBuildingsNearToShelter_Remaining")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> ExpeditionMapPlaceBuildingsNearToShelter_RemainingHomeTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            return HomeOriginTranspiler(instructions, original);
+        }
+
+        [HarmonyPatch(typeof(ExpeditionMap), "FindMapRegionForQuest")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> ExpeditionMapFindMapRegionForQuestHomeTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            return HomeOriginTranspiler(instructions, original);
+        }
+
+        [HarmonyPatch(typeof(ExpeditionMap), "GetPossibleFactionZoneLocations")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> ExpeditionMapGetPossibleFactionZoneLocationsHomeTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            return HomeOriginTranspiler(instructions, original);
+        }
+
+        [HarmonyPatch(typeof(ExplorationParty), "SaveLoad")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> ExplorationPartySaveLoadHomeTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            return HomeOriginTranspiler(instructions, original);
+        }
+
+        [HarmonyPatch(typeof(FactionMan), "GrowFactionZone")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> FactionManGrowFactionZoneHomeTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            return HomeOriginTranspiler(instructions, original);
+        }
+
+        private static IEnumerable<CodeInstruction> HomeOriginTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            var transpiler = FluentTranspiler.For(instructions, original);
+            var code = new List<CodeInstruction>(transpiler.Instructions());
+            MethodInfo conversion = AccessTools.Method(typeof(ExpeditionMap), "WorldPosToGridRef", new[] { typeof(Vector2) });
+            int first = -1;
+            int count = 0;
+            for (int i = 0; i < code.Count; i++)
+            {
+                if (!code[i].Calls(conversion))
+                    continue;
+                if (first < 0) first = i;
+                count++;
+            }
+
+            int expected = original.DeclaringType == typeof(FactionMan) ? 2 : 1;
+            bool zeroGetter = first > 0 && code[first - 1].Calls(AccessTools.PropertyGetter(typeof(Vector2), "zero"));
+            bool zeroConstructor = first >= 3 && code[first - 1].opcode == OpCodes.Newobj
+                && Equals(code[first - 1].operand, AccessTools.Constructor(typeof(Vector2), new[] { typeof(float), typeof(float) }))
+                && code[first - 2].opcode == OpCodes.Ldc_R4 && Equals(code[first - 2].operand, 0f)
+                && code[first - 3].opcode == OpCodes.Ldc_R4 && Equals(code[first - 3].operand, 0f);
+            if (count != expected || (!zeroGetter && !zeroConstructor))
+            {
+                MMLog.WriteWarning("[ShelteredMap] Home origin IL did not match " + original.DeclaringType.Name + "." + original.Name
+                    + ": expected " + expected + " coordinate conversion call(s), first using literal zero; found " + count + ". Leaving method unchanged.");
+                return transpiler.Build(strict: false, validateStack: true);
+            }
+
+            transpiler.ReplaceAtWithCall(first, AccessTools.Method(typeof(HomeShelterMapGenerationRuntime), "HomeOriginGrid"));
+            return transpiler.Build(strict: false, validateStack: true);
+        }
+
+        [HarmonyPatch(typeof(ExpeditionMap), "FindClearSpace")]
+        [HarmonyTranspiler]
+        private static IEnumerable<CodeInstruction> ShelterClearanceTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            var code = new List<CodeInstruction>(instructions);
+            ConstructorInfo constructor = AccessTools.Constructor(typeof(ExpeditionMap.GridRef), new[] { typeof(int), typeof(int) });
+            int match = -1;
+            int count = 0;
+            for (int i = 0; i < code.Count; i++)
+            {
+                if (code[i].opcode != OpCodes.Newobj || !Equals(code[i].operand, constructor))
+                    continue;
+                match = i;
+                count++;
+            }
+            if (count == 1)
+            {
+                code[match].opcode = OpCodes.Call;
+                code[match].operand = AccessTools.Method(typeof(HomeShelterMapGenerationRuntime), "HomeClearanceGrid");
+            }
+            else
+                MMLog.WriteWarning("[ShelteredMap] FindClearSpace IL did not contain exactly one GridRef(int,int) constructor; found " + count + ". Leaving method unchanged.");
+
+            return FluentTranspiler.For(code, original).Build(strict: false, validateStack: true);
         }
 
         [HarmonyPatch(typeof(MapRegion), "GetTooltipText")]
@@ -60,10 +162,10 @@ namespace ShelteredAPI.Map.Internal
         }
 
         [HarmonyPatch(typeof(ExpeditionMap), "PlaceShelters")]
-        [HarmonyPrefix]
-        private static bool PlaceSheltersPrefix(ExpeditionMap __instance, int numToPlace)
+        [HarmonyPostfix]
+        private static void PlaceSheltersPostfix(ExpeditionMap __instance)
         {
-            return HomeShelterMapGenerationRuntime.PlaceShelters(__instance, numToPlace);
+            HomeShelterMapGenerationRuntime.StampHomeShelter(__instance);
         }
 
         [HarmonyPatch(typeof(ExpeditionMap), "BuildMap")]
@@ -116,20 +218,22 @@ namespace ShelteredAPI.Map.Internal
             VerifyHomeShelterCell(map, snapshot, "CreateMap end");
         }
 
-        internal static void RedirectWorldPosIfHomeOrigin(ref Vector2 worldPos)
+        internal static ExpeditionMap.GridRef HomeOriginGrid(ExpeditionMap map, Vector2 worldPos)
         {
-            if (ModRuntime.IsQuitting || !IsNearOrigin(worldPos, 0.01f))
-                return;
-
             HomeShelterPositionSnapshot snapshot;
-            if (!TryGetRegisteredHomeShelterSnapshot(out snapshot))
-                return;
-
             Vector2 target;
-            if (!TryGetWorld(snapshot, out target) || IsNearOrigin(target, 0.01f))
-                return;
+            if (!ModRuntime.IsQuitting && TryGetRegisteredHomeShelterSnapshot(out snapshot) && TryGetWorld(snapshot, out target))
+                worldPos = target;
 
-            worldPos = target;
+            return map.WorldPosToGridRef(worldPos);
+        }
+
+        internal static ExpeditionMap.GridRef HomeClearanceGrid(int x, int y)
+        {
+            HomeShelterPositionSnapshot snapshot;
+            if (!ModRuntime.IsQuitting && TryGetRegisteredHomeShelterSnapshot(out snapshot) && snapshot.HasGridPosition)
+                return new ExpeditionMap.GridRef(snapshot.GridPosition.X, snapshot.GridPosition.Y);
+            return new ExpeditionMap.GridRef(x, y);
         }
 
         internal static void ApplyHomeShelterTooltip(MapRegion region, ref string tooltipText)
@@ -204,75 +308,26 @@ namespace ShelteredAPI.Map.Internal
             }
         }
 
-        internal static bool PlaceShelters(ExpeditionMap map, int numToPlace)
+        internal static void StampHomeShelter(ExpeditionMap map)
         {
             if (ShouldUseVanillaMapMutation(map))
-                return true;
-
-            if (numToPlace <= 0)
-                return false;
+                return;
 
             HomeShelterPositionSnapshot snapshot;
             if (!TryResolveHomeShelterSnapshot("PlaceShelters", !IsSaveLoading(), out snapshot))
-                return true;
+                return;
 
             try
             {
                 Array scratch = Safe.GetField<Array>(map, "m_mapScratchpad");
-                if (scratch == null)
-                    return true;
-
                 Vector2 homeWorld = RequireWorld(snapshot, "PlaceShelters");
                 ExpeditionMap.GridRef homeGrid = map.WorldPosToGridRef(homeWorld);
-                if (homeGrid == null || !InBounds(scratch, homeGrid.x, homeGrid.y))
-                {
-                    MMLog.WriteError("[ShelteredMap] Resolved home shelter maps outside the expedition scratchpad during PlaceShelters. "
-                        + "world=" + FormatVector(homeWorld)
-                        + ", grid=" + FormatGrid(homeGrid)
-                        + ", scratch=" + FormatArray(scratch) + ". Falling back to vanilla shelter placement.");
-                    return true;
-                }
-
-                int placed = 0;
-                if (ForcePlaceShelterCell(scratch, homeGrid.x, homeGrid.y))
-                    placed++;
-
-                for (int radius = 1; placed < numToPlace && radius <= 4; radius++)
-                {
-                    for (int dx = -radius; dx <= radius && placed < numToPlace; dx++)
-                    {
-                        for (int dy = -radius; dy <= radius && placed < numToPlace; dy++)
-                        {
-                            if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius)
-                                continue;
-
-                            int x = homeGrid.x + dx;
-                            int y = homeGrid.y + dy;
-                            if (!InBounds(scratch, x, y))
-                                continue;
-                            if (ForcePlaceShelterCell(scratch, x, y))
-                                placed++;
-                        }
-                    }
-                }
-
-                if (placed <= 0)
-                {
-                    MMLog.WriteError("[ShelteredMap] Failed to stamp any shelter cells during PlaceShelters. "
-                        + "world=" + FormatVector(homeWorld)
-                        + ", grid=" + FormatGrid(homeGrid)
-                        + ", scratch=" + FormatArray(scratch) + ". Falling back to vanilla shelter placement.");
-                    return true;
-                }
-
-                MMLog.WriteDebug("[ShelteredMap] Stamped " + placed + " shelter cell(s) during PlaceShelters at grid="
-                    + FormatGrid(homeGrid) + ", world=" + FormatVector(homeWorld) + ".");
-                return false;
+                if (homeGrid == null || !ForcePlaceShelterCell(scratch, homeGrid.x, homeGrid.y))
+                    MMLog.WriteError("[ShelteredMap] Could not stamp the registered home shelter during PlaceShelters.");
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[ShelteredMap] PlaceShelters failed: " + ex);
-                return true;
+                MMLog.WriteError("[ShelteredMap] Home shelter placement failed: " + ex);
             }
         }
 
@@ -651,11 +706,6 @@ namespace ShelteredAPI.Map.Internal
         {
             return ExpeditionMapCoordinateConverter.IsFinite(value.X)
                 && ExpeditionMapCoordinateConverter.IsFinite(value.Y);
-        }
-
-        private static bool IsNearOrigin(Vector2 value, float tolerance)
-        {
-            return value.sqrMagnitude < tolerance * tolerance;
         }
 
         private static bool InBounds(Array array, int x, int y)

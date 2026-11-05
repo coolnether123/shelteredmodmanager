@@ -17,6 +17,7 @@ namespace ShelteredAPI.Saves.Runtime
 
         internal bool Load(SaveManager.SaveType type)
         {
+            _customLoadedXml = null;
             SaveRuntimeState.Target nextLoadTarget;
             if (SaveRuntimeState.TryGetPendingLoad(type, out nextLoadTarget) && nextLoadTarget != null)
             {
@@ -38,7 +39,6 @@ namespace ShelteredAPI.Saves.Runtime
             if (!string.IsNullOrEmpty(_customLoadedXml))
             {
                 data = Encoding.UTF8.GetBytes(_customLoadedXml);
-                _customLoadedXml = null;
                 return true;
             }
 

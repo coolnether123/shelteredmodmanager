@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 
 using HarmonyLib;
 using ModAPI.Core;
@@ -16,42 +18,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
         StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class ScenarioConversationChatterPatches
     {
-        [HarmonyPatch(typeof(FamilyMember), "RandomIdle")]
-        [HarmonyPrefix]
-        private static bool RandomIdlePrefix(FamilyMember __instance)
+        private static readonly FieldInfo InConversationField = AccessTools.Field(typeof(BaseCharacter), "isInCoversation");
+        private static readonly FieldInfo ConversationPartnerField = AccessTools.Field(typeof(FamilyMember), "interactWith");
+
+        private sealed class ConversationState
         {
-            try
-            {
-                if (__instance == null || __instance.isSpeaking || __instance.isSpeechBubbleActive || GameTime.Day <= 4)
-                    return true;
-                if (CutsceneManager.Instance != null && CutsceneManager.Instance.CutSceneActive)
-                    return true;
-
-                float roll = UnityEngine.Random.value;
-                if (roll < 0.37f || roll >= 0.4f)
-                    return true;
-
-                ScenarioConversationRuntimeService service = ResolveService();
-                if (service == null)
-                    return true;
-
-                string ignoredSpeech;
-                if (!service.TryHandleRandomComment(__instance, out ignoredSpeech))
-                    return true;
-
-                return false;
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ScenarioConversationChatter] RandomIdle patch failed: " + ex.Message);
-                return true;
-            }
+            internal bool InConversation;
+            internal FamilyMember Partner;
         }
 
+        // RandomIdle calls this after its native probability and conversation guards.
         [HarmonyPatch(typeof(FamilyMember), "SayRandomComment")]
         [HarmonyPrefix]
-        private static bool SayRandomCommentPrefix(FamilyMember __instance, ref string __result)
+        private static bool SayRandomCommentPrefix(FamilyMember __instance, ref string __result,
+            out Dictionary<FamilyMember, ConversationState> __state)
         {
+            __state = null;
             try
             {
                 ScenarioConversationRuntimeService service = ResolveService();
@@ -60,7 +42,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
 
                 string authoredSpeech;
                 if (!service.TryHandleRandomComment(__instance, out authoredSpeech))
+                {
+                    if (service.ShouldSuppressGenericBantz() && FamilyManager.Instance != null)
+                    {
+                        __state = new Dictionary<FamilyMember, ConversationState>();
+                        foreach (FamilyMember member in FamilyManager.Instance.GetAllFamilyMembers())
+                        {
+                            if (member != null)
+                                __state[member] = new ConversationState { InConversation = (bool)InConversationField.GetValue(member), Partner = (FamilyMember)ConversationPartnerField.GetValue(member) };
+                        }
+                    }
                     return true;
+                }
 
                 __result = string.Empty;
                 return false;
@@ -69,6 +62,30 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
             {
                 MMLog.WriteWarning("[ScenarioConversationChatter] SayRandomComment patch failed: " + ex.Message);
                 return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(FamilyMember), "SayRandomComment")]
+        [HarmonyPostfix]
+        private static void SayRandomCommentPostfix(FamilyMember __instance, string __result,
+            Dictionary<FamilyMember, ConversationState> __state)
+        {
+            if (__state == null || __result != string.Empty || __instance == null)
+                return;
+
+            // The illness fallback sets both flags even when suppressed bantz returns empty.
+            // RandomIdle schedules no response for empty speech, so restore the prior state.
+            FamilyMember partner = (FamilyMember)ConversationPartnerField.GetValue(__instance);
+            ConversationState previous;
+            if (partner != null && __state.TryGetValue(partner, out previous))
+            {
+                InConversationField.SetValue(partner, previous.InConversation);
+                ConversationPartnerField.SetValue(partner, previous.Partner);
+            }
+            if (__state.TryGetValue(__instance, out previous))
+            {
+                InConversationField.SetValue(__instance, previous.InConversation);
+                ConversationPartnerField.SetValue(__instance, previous.Partner);
             }
         }
 

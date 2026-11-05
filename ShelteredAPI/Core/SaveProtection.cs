@@ -106,8 +106,9 @@ namespace ShelteredAPI.Core
             /// <summary>
             /// Injects mod manifest data after vanilla save serialization completes.
             /// </summary>
-            public static void Postfix(object __instance, SaveManager.SaveType type) // __instance is SaveManager
+            public static void Postfix(object __instance, SaveManager.SaveType type, bool __result)
             {
+                if (!__result) return;
                 // Only inject for actual game slots, not GlobalData or Invalid
                 if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid) return;
 
@@ -207,16 +208,17 @@ namespace ShelteredAPI.Core
                     return true;
                 }
 
-                // Access the private m_data field from the SaveManager instance
-                SaveData data = AccessTools.Field(typeof(SaveManager), "m_data").GetValue(__instance) as SaveData;
-                if (data == null) return true; // Continue with original method if SaveData is null
-
                 // Only process for actual game slots
                 SaveManager.SaveType type = (SaveManager.SaveType)AccessTools.Field(typeof(SaveManager), "m_currentType").GetValue(__instance);
                 if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid) return true;
 
                 try
                 {
+                    // Update_LoadData has not assigned m_data yet. Inspect this request's
+                    // platform payload without consuming the bytes vanilla still needs.
+                    SaveData data = ReadPendingLoadData(__instance);
+                    if (data == null) return true;
+
                     MMLog.WriteDebug($"[LoadGamePatch] Checking mod data for slot {type}.");
 
                     List<ModManifestData.ModInfo> savedMods = null;
@@ -332,6 +334,17 @@ namespace ShelteredAPI.Core
                 }
 
                 return true; // Continue with original method
+            }
+
+            private static SaveData ReadPendingLoadData(object manager)
+            {
+                var script = AccessTools.Field(typeof(SaveManager), "m_saveScript").GetValue(manager) as PlatformSave_Base;
+                byte[] bytes;
+                if (script == null || script.IsLoading() || !script.PlatformGetLoadedData(out bytes) || bytes == null)
+                    return null;
+
+                SaveData data = new SaveData(bytes);
+                return data.isFinished ? null : data;
             }
 
             private static void ShowBlockedLoadDetails(SaveData data, LoadManifestContext context, SaveVerification.VerificationState state)

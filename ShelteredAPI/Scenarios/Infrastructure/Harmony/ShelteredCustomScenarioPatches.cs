@@ -164,18 +164,31 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
     internal static class ShelteredCustomScenarioStateCleanupPatches
     {
         [HarmonyPatch(typeof(GameModeSelectionPanel), "OnSurvivalModeChosen")]
-        [HarmonyPostfix]
-        private static void SurvivalChosenPostfix()
+        [HarmonyPrefix]
+        private static void SurvivalChosenPrefix(bool ___m_inputEnabled)
         {
+            if (!___m_inputEnabled)
+                return;
+
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Survival mode chosen; checking for stale pending custom scenario state.");
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
             SlotPagingScopeResolver.ClearRememberedScenarioSelections();
         }
 
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnCancel")]
-        [HarmonyPostfix]
-        private static void SlotSelectionCancelPostfix(SlotSelectionPanel __instance)
+        [HarmonyPrefix]
+        private static void SlotSelectionCancelPrefix(bool ___m_inputEnabled, out bool __state)
         {
+            __state = ___m_inputEnabled && (SaveManager.instance == null || (!SaveManager.instance.isLoading && !SaveManager.instance.isDeleting));
+        }
+
+        [HarmonyPatch(typeof(SlotSelectionPanel), "OnCancel")]
+        [HarmonyPostfix]
+        private static void SlotSelectionCancelPostfix(SlotSelectionPanel __instance, bool __state, bool __runOriginal)
+        {
+            if (!__state || !__runOriginal)
+                return;
+
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot selection cancelled; checking for stale pending custom scenario state.");
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
             SlotPagingScopeResolver.ForgetScenarioSelection(__instance);
@@ -183,16 +196,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
         [HarmonyPatch(typeof(CustomisationPanel), "OnCancel")]
         [HarmonyPrefix]
-        private static void CustomisationCancelPrefix(CustomisationPanel __instance)
+        private static void CustomisationCancelPrefix(CustomisationPanel __instance, bool ___m_ignoreInput, int ___m_currentPageIndex)
         {
-            if (__instance == null)
-                return;
-
-            int currentPage = 0;
-            try { currentPage = Traverse.Create(__instance).Field("m_currentPageIndex").GetValue<int>(); }
-            catch { }
-
-            if (currentPage != 0)
+            if (__instance == null || ___m_ignoreInput || ___m_currentPageIndex != 0)
                 return;
 
             SaveManager.SaveType[] startupSaveTypes = GetScenarioStartupSaveTypes();
