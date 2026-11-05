@@ -1578,8 +1578,7 @@ namespace Manager
         }
 
         /// <summary>
-        /// Reconciles load order before launch: migrates known renamed IDs and removes entries
-        /// that are no longer discoverable on disk.
+        /// Migrates known renamed IDs before launch while retaining entries that discovery cannot read.
         /// </summary>
         private int ReconcileLoadOrderForLaunch()
         {
@@ -1637,7 +1636,8 @@ namespace Manager
                     }
                     else
                     {
-                        removed++;
+                        // Discovery can be incomplete when metadata is locked or invalid.
+                        if (seen.Add(raw)) reconciled.Add(raw);
                     }
                 }
 
@@ -1653,8 +1653,7 @@ namespace Manager
             }
             catch (Exception ex)
             {
-                _gameSetupTab.Log("Load order reconciliation failed: " + ex.Message);
-                return 0;
+                throw new IOException("The load order could not be reconciled. Launch was cancelled to preserve the saved mod selection.", ex);
             }
         }
 

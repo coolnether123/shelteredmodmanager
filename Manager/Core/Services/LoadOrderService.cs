@@ -41,12 +41,11 @@ namespace Manager.Core.Services
 
                 if (data != null && data.order != null)
                     return data.order;
-                return new string[0];
+                throw new InvalidDataException("The load order has no order array.");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Error reading load order: " + ex.Message);
-                return new string[0];
+                throw new IOException("The load order could not be read. The saved order was preserved.", ex);
             }
         }
 
@@ -66,7 +65,7 @@ namespace Manager.Core.Services
                 var serializer = new JavaScriptSerializer();
                 string json = serializer.Serialize(data);
                 
-                File.WriteAllText(orderPath, json);
+                AtomicFile.WriteAllText(orderPath, json);
                 
                 if (OrderChanged != null)
                     OrderChanged(data.order);

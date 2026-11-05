@@ -47,7 +47,6 @@ namespace Manager.Core.Services
         private const int MaximumEntries = 2000;
         private const int MaximumProfileNameLength = 40;
 
-        private static readonly Regex IdPattern = new Regex("^[A-Za-z0-9_.-]{1,200}$", RegexOptions.CultureInvariant);
         private static readonly Regex DomainPattern = new Regex("^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant);
         private static readonly string[] ReservedDeviceNames = new string[]
         {
@@ -90,28 +89,7 @@ namespace Manager.Core.Services
             string directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 Directory.CreateDirectory(directory);
-            string temporary = path + ".tmp";
-            File.WriteAllText(temporary, json, new UTF8Encoding(false));
-            if (!File.Exists(path))
-            {
-                File.Move(temporary, path);
-                return;
-            }
-            try
-            {
-                // Swap in one step so an interrupted save never leaves no file.
-                File.Replace(temporary, path, null);
-            }
-            catch (IOException)
-            {
-                File.Delete(path);
-                File.Move(temporary, path);
-            }
-            catch (PlatformNotSupportedException)
-            {
-                File.Delete(path);
-                File.Move(temporary, path);
-            }
+            AtomicFile.WriteAllText(path, json);
         }
 
         public bool TryLoad(string path, out ModListFile list, out string error)
@@ -147,7 +125,7 @@ namespace Manager.Core.Services
                 HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (ModListEntry entry in loaded.mods)
                 {
-                    if (entry == null || entry.id == null || !IdPattern.IsMatch(entry.id.Trim()) || !seen.Add(entry.id.Trim()))
+                    if (entry == null || entry.id == null || string.IsNullOrEmpty(entry.id.Trim()) || !seen.Add(entry.id.Trim()))
                         continue;
                     ModListEntry clean = new ModListEntry();
                     clean.id = entry.id.Trim().ToLowerInvariant();
@@ -316,7 +294,7 @@ namespace Manager.Core.Services
                 throw new ArgumentException(error, "name");
             if (!Directory.Exists(folder))
                 Directory.CreateDirectory(folder);
-            File.WriteAllText(path, name.Trim(), new UTF8Encoding(false));
+            AtomicFile.WriteAllText(path, name.Trim());
         }
 
         public static bool IsValidProfileName(string name, out string error)

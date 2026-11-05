@@ -379,7 +379,10 @@ namespace Manager.Core.Services
             }
 
             if (string.IsNullOrEmpty(expectedMd5) && string.IsNullOrEmpty(expectedSha256))
-                Trace.TraceWarning("Nexus manager update metadata did not include an archive hash; continuing without cryptographic archive verification.");
+            {
+                errorMessage = "Nexus manager update metadata did not include an archive hash. Automatic update was cancelled.";
+                return false;
+            }
 
             return true;
         }

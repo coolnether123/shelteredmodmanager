@@ -103,7 +103,7 @@ namespace Manager.Core.Services
                 settings.GamePath = gamePath;
             }
             
-            if (string.IsNullOrEmpty(settings.GamePath) || !File.Exists(settings.GamePath))
+            if (string.IsNullOrEmpty(settings.GamePath))
             {
                 string detected = TryAutoDetectGamePath();
                 if (!string.IsNullOrEmpty(detected))
@@ -474,7 +474,7 @@ namespace Manager.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Error reading INI: " + ex.Message);
+                throw new IOException("Settings could not be read. The saved settings were preserved.", ex);
             }
 
             return settings;
@@ -499,14 +499,14 @@ namespace Manager.Core.Services
                     lines.Add(key + "=" + data[key]);
                 }
 
-                File.WriteAllLines(_iniPath, lines.ToArray());
+                AtomicFile.WriteAllText(_iniPath, string.Join(Environment.NewLine, lines.ToArray()) + Environment.NewLine);
                 
                 // Give the watcher time to process any pending events before re-enabling
                 System.Threading.Thread.Sleep(100);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Error writing INI: " + ex.Message);
+                throw new IOException("Settings could not be saved.", ex);
             }
             finally
             {

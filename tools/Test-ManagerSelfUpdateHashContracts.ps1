@@ -115,10 +115,10 @@ try {
     $absent.ReleaseMetadata = 'release notes without hashes'
     [object[]]$invokeArgs = @([string]$archive, $absent, $null)
     $passed = [bool]$verifyMethod.Invoke($null, $invokeArgs)
-    Assert-True $passed 'Absent Nexus hash metadata must warn and continue.'
+    Assert-True (-not $passed) 'Absent Nexus hash metadata must reject the update.'
 
     $serviceSource = Get-Content -LiteralPath (Join-Path $repoRoot 'Manager\Core\Services\ManagerSelfUpdateService.cs') -Raw
-    Assert-True ($serviceSource -match 'Trace\.TraceWarning[\s\S]*did not include an archive hash') 'Absent hash metadata must log a warning.'
+    Assert-True ([string]$invokeArgs[2] -match 'did not include an archive hash') 'Absent hash metadata must explain the rejected update.'
     $downloadAndStageBody = Get-MethodBody -Source $serviceSource -Pattern 'public\s+ManagerUpdateStage\s+DownloadAndStage\s*\(\s*string\s+downloadUrl,\s*string\s+expectedVersion,\s*ManagerUpdateArchiveHashExpectation\s+hashExpectation,\s*out\s+string\s+errorMessage\s*\)\s*\{'
     Assert-True ($null -ne $downloadAndStageBody) 'DownloadAndStage staging path must exist and be parseable.'
     $downloadIndex = $downloadAndStageBody.IndexOf('DownloadBounded(')

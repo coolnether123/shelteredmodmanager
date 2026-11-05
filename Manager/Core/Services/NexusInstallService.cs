@@ -611,7 +611,7 @@ namespace Manager.Core.Services
             }
             catch (Exception restoreEx)
             {
-                string restoreMessage = " Backup restore failed: " + restoreEx.Message;
+                string restoreMessage = " Backup restore failed. Backup: " + backupPath + ". " + restoreEx.Message;
                 errorMessage = string.IsNullOrEmpty(errorMessage)
                     ? restoreMessage.Trim()
                     : errorMessage + restoreMessage;
@@ -658,14 +658,6 @@ namespace Manager.Core.Services
                 return false;
             }
 
-            string expectedVersion = GetExpectedInstalledVersion(targetContext, mod, file);
-            if (!string.IsNullOrEmpty(expectedVersion) &&
-                NexusVersionComparer.CompareVersions(about.version, expectedVersion) != 0)
-            {
-                errorMessage = "Installed mod version '" + about.version + "' does not match expected Nexus version '" + expectedVersion + "'.";
-                return false;
-            }
-
             string nexusJson = Path.Combine(Path.Combine(targetPath, "About"), "Nexus.json");
             if (!File.Exists(nexusJson))
             {
@@ -682,20 +674,6 @@ namespace Manager.Core.Services
                 + ", nexusModId=" + (mod != null ? mod.ModId.ToString() : "unknown")
                 + ", fileId=" + (file != null ? file.FileId.ToString() : "unknown") + ".";
             return true;
-        }
-
-        private static string GetExpectedInstalledVersion(NexusInstallTargetContext targetContext, NexusRemoteMod mod, NexusRemoteModFile file)
-        {
-            if (file != null && !string.IsNullOrEmpty(file.Version))
-                return file.Version.Trim();
-
-            if (mod != null && !string.IsNullOrEmpty(mod.Version))
-                return mod.Version.Trim();
-
-            if (targetContext != null && !string.IsNullOrEmpty(targetContext.ExpectedVersion))
-                return targetContext.ExpectedVersion.Trim();
-
-            return string.Empty;
         }
 
         private static string NormalizeModId(string modId)
@@ -894,7 +872,7 @@ namespace Manager.Core.Services
             };
 
             string jsonPath = Path.Combine(aboutDir, "Nexus.json");
-            File.WriteAllText(jsonPath, serializer.Serialize(jsonData));
+            AtomicFile.WriteAllText(jsonPath, serializer.Serialize(jsonData));
         }
 
         private static void CopyDirectoryRecursive(string sourcePath, string destinationPath)
