@@ -43,6 +43,17 @@ internal static class ModManagerBehaviorHarness
         Directory.CreateDirectory(_root);
         try
         {
+            Run("failed load order reads preserve bytes", FailedOrderRead);
+            Run("atomic saves preserve locked files", AtomicSaveFailure);
+            Run("missing configured game path is retained", MissingConfiguredGame);
+            Run("mod updates preserve runtime files and prune verified backups", RuntimeFilesAndBackups);
+            Run("Nexus display versions do not reject verified packages", NexusDisplayVersion);
+            Run("profiles keep undiscovered IDs when switching", ProfileKeepsUndiscoveredIds);
+            Run("failed settings reads prevent overwrites", FailedSettingsRead);
+            Run("unreadable options are never replaced with defaults", FailedOptionsRead);
+            Run("profiles round trip Unicode and spaced IDs", ProfileUnicodeIds);
+            Run("launch reconciliation retains unreadable mod entries", LaunchKeepsUndiscoveredIds);
+            Run("failed Nexus rollback reports its recovery folder", NexusRollbackPath);
             // Load order
             Run("fix order keeps a valid order unchanged", FixOrderKeepsValidOrder);
             Run("fix order moves only the dependency that is out of place", FixOrderMovesOnlyWhatMust);
@@ -728,6 +739,162 @@ internal static class ModManagerBehaviorHarness
         Check(!File.Exists(path + ".tmp"), "temporary file left behind");
     }
 
+    private static void NexusRollbackPath()
+    {
+        string root = NewDir("rollback-path");
+        string target = Path.Combine(root, "occupied");
+        File.WriteAllText(target, "keep");
+        string backup = Path.Combine(root, "backup");
+        Directory.CreateDirectory(backup);
+        object[] args = new object[] { target, backup, true, "Initial failure." };
+        typeof(NexusInstallService).GetMethod("RestoreBackupAfterFailedInstall", AnyMember).Invoke(null, args);
+        Check(((string)args[3]).Contains(backup), "rollback error omitted backup location");
+        Check(Directory.Exists(backup), "backup lost");
+    }
+
+    private static void LaunchKeepsUndiscoveredIds()
+    {
+        string root = NewDir("launch-discovery");
+        string mod = Path.Combine(root, "Hidden");
+        Directory.CreateDirectory(Path.Combine(mod, "About"));
+        File.WriteAllText(Path.Combine(mod, "About/About.json"), "broken metadata");
+        LoadOrderService order = new LoadOrderService();
+        order.SaveOrder(root, new string[] { "tester.hidden", "tester.absent" });
+        string path = Path.Combine(root, "loadorder.json");
+        string original = File.ReadAllText(path);
+        object form = System.Runtime.Serialization.FormatterServices.GetUninitializedObject(ManagerType("Manager.MainForm"));
+        SetField(form, "_settings", new AppSettings { ModsPath = root });
+        SetField(form, "_discoveryService", new ModDiscoveryService((string)null));
+        SetField(form, "_orderService", order);
+        Check((int)Call(form, "ReconcileLoadOrderForLaunch") == 2, "launch lost entries");
+        SameText(original, File.ReadAllText(path), "launch changed unreadable mod selection");
+    }
+
+    private static void ProfileUnicodeIds()
+    {
+        string root = NewDir("unicode-profile");
+        ModListFileService service = new ModListFileService();
+        string id = "mod \u00e9dition";
+        service.SaveProfile(root, "Unicode", new ModItem[] { new ModItem(id, id, root) });
+        ModListFile loaded;
+        string error;
+        Check(service.TryLoadProfile(root, "Unicode", out loaded, out error), "profile load failed");
+        Check(loaded.mods.Length == 1 && loaded.mods[0].id == id, "ID changed");
+    }
+
+    private static void FailedOptionsRead()
+    {
+        string root = NewDir("broken-options");
+        string path = Path.Combine(root, "manager_options.json");
+        Type type = ManagerType("Manager.Core.Services.ManagerBooleanOptionsService");
+        object service = Activator.CreateInstance(type, true);
+        SetField(service, "_optionsPath", path);
+        foreach (string body in new string[] { "null", "broken" })
+        {
+            File.WriteAllText(path, body);
+            bool failed = false;
+            try { Call(service, "Load"); }
+            catch (IOException) { failed = true; }
+            Check(failed, "invalid options should fail load");
+            SameText(body, File.ReadAllText(path), "invalid options overwritten");
+        }
+    }
+
+    private static void FailedSettingsRead()
+    {
+        string root = NewDir("locked-settings");
+        string path = Path.Combine(root, "settings.ini");
+        File.WriteAllText(path, "Unknown=keep");
+        using (FileStream locked = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            bool failed = false;
+            try { new SettingsService(path).Save(new AppSettings()); } catch (IOException) { failed = true; }
+            Check(failed, "unreadable settings must stop save");
+        }
+        SameText("Unknown=keep", File.ReadAllText(path), "unknown settings lost");
+    }
+
+    private static void ProfileKeepsUndiscoveredIds()
+    {
+        TabFixture f = NewTab(null);
+        ModListFileService service = new ModListFileService();
+        service.SaveProfile(f.ModsPath, "Original", new List<ModItem>());
+        service.SetActiveProfile(f.ModsPath, "Original");
+        service.SaveProfile(f.ModsPath, "Other", new List<ModItem>());
+        Call(f.Tab, "SwitchProfile", "Other");
+        ModListFile list;
+        string error;
+        Check(service.TryLoadProfile(f.ModsPath, "Original", out list, out error), "profile missing");
+        Check(Array.IndexOf(ModListFileService.OrderOf(list), "not.installed") >= 0, "undiscovered entry dropped from profile");
+    }
+
+    private static void NexusDisplayVersion()
+    {
+        string source = NewDir("nexus-source");
+        string target = NewDir("nexus-target");
+        WriteModFolder(source, "tester.version", "Version", "1.0", null);
+        WriteModFolder(target, "tester.version", "Version", "1.0", null);
+        Directory.CreateDirectory(Path.Combine(target, "About"));
+        File.WriteAllText(Path.Combine(target, "About/Nexus.json"), "{}");
+        NexusRemoteModFile file = new NexusRemoteModFile();
+        file.Version = "Release 2026 optional patch";
+        object[] args = new object[] { source, target, null, file, null, null, null };
+        bool valid = (bool)typeof(NexusInstallService).GetMethod("VerifyInstalledMod", AnyMember).Invoke(null, args);
+        Check(valid, "verified package rejected for display version: " + args[6]);
+    }
+
+    private static void FailedOrderRead()
+    {
+        string root = NewDir("broken-order");
+        string path = Path.Combine(root, "loadorder.json");
+        LoadOrderService service = new LoadOrderService();
+        foreach (string body in new string[] { "broken", "null", "{}" })
+        {
+            File.WriteAllText(path, body);
+            bool failed = false;
+            try { service.EnableMod(root, "example.mod"); } catch (IOException) { failed = true; }
+            Check(failed, "bad read must prevent save");
+            SameText(body, File.ReadAllText(path), "saved order changed");
+        }
+        service.SaveOrder(root, new string[] { "one", "two" });
+        using (FileStream locked = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            bool failed = false;
+            try { service.ReadOrder(root); } catch (IOException) { failed = true; }
+            Check(failed, "locked read must fail");
+        }
+        Same(new List<string> { "one", "two" }, new List<string>(service.ReadOrder(root)), "locked read changed order");
+    }
+
+    private static void AtomicSaveFailure()
+    {
+        string root = NewDir("locked-save");
+        LoadOrderService service = new LoadOrderService();
+        service.SaveOrder(root, new string[] { "original" });
+        string path = Path.Combine(root, "loadorder.json");
+        using (FileStream locked = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            bool failed = false;
+            try { service.SaveOrder(root, new string[] { "replacement" }); } catch (IOException) { failed = true; }
+            Check(failed, "locked replacement must fail");
+        }
+        Same(new List<string> { "original" }, new List<string>(service.ReadOrder(root)), "failed replace changed order");
+        Check(Directory.GetFiles(root, "*.tmp").Length == 0, "temporary file leaked");
+    }
+
+    private static void MissingConfiguredGame()
+    {
+        string root = NewDir("missing-game");
+        string path = Path.Combine(root, "settings.ini");
+        string missing = Path.Combine(root, "missing.exe");
+        File.WriteAllText(path, "GamePath=" + missing);
+        SettingsService service = new SettingsService(path);
+        AppSettings settings = service.Load();
+        SameText(missing, settings.GamePath, "configured path was replaced");
+        service.Save(settings);
+        SameText(missing, service.Load().GamePath, "configured path changed on save");
+    }
+
     private static void ModListSanitises()
     {
         ModListFileService service = new ModListFileService();
@@ -743,10 +910,10 @@ internal static class ModManagerBehaviorHarness
         ModListFile list;
         string error;
         Check(service.TryLoad(path, out list, out error), "load failed: " + error);
-        Same(new List<string> { "keep.me", "nexus.ok", "nexus.bad", "nexus.neg" }, ModListFileService.OrderOf(list), "kept entries");
+        Same(new List<string> { "keep.me", "bad id", "..\\up", "a/b", "nexus.ok", "nexus.bad", "nexus.neg" }, ModListFileService.OrderOf(list), "kept entries");
         Check(list.mods[0].name.Length == 200 && list.name.Length == 80, "long text is capped");
-        Check(list.mods[1].nexusGameDomain == "sheltered" && list.mods[1].nexusModId == 5, "valid Nexus link kept (lower-cased)");
-        Check(list.mods[2].nexusModId == 0 && list.mods[3].nexusModId == 0, "invalid Nexus links dropped");
+        Check(list.mods[4].nexusGameDomain == "sheltered" && list.mods[4].nexusModId == 5, "valid Nexus link kept (lower-cased)");
+        Check(list.mods[5].nexusModId == 0 && list.mods[6].nexusModId == 0, "invalid Nexus links dropped");
     }
 
     private static void ModListRefusesJunk()
@@ -1298,6 +1465,47 @@ internal static class ModManagerBehaviorHarness
         Check(Install(inside, mods, true, out modId, out error) == null && error != null, "a mod folder inside the mods folder was installed again");
         Check(Install(mods, mods, true, out modId, out error) == null && error != null, "the mods folder itself was installed");
         Check(Directory.GetDirectories(mods).Length == 1, "folders changed");
+    }
+
+    private static void RuntimeFilesAndBackups()
+    {
+        string mods = NewDir("runtime-mods"), id, error;
+        string zip = Path.Combine(NewDir("runtime-package"), "mod.zip");
+        WriteZip(zip, false, "About/About.json", AboutJson("tester.runtime", "Runtime", "1"), "obsolete.dll", "old");
+        NexusInstallResult first = Install(zip, mods, false, out id, out error);
+        Check(first != null, error);
+        File.WriteAllText(Path.Combine(first.InstalledPath, "config.json"), "user config");
+        Directory.CreateDirectory(Path.Combine(first.InstalledPath, "data"));
+        File.WriteAllText(Path.Combine(first.InstalledPath, "data/save.txt"), "runtime data");
+        File.WriteAllText(Path.Combine(first.InstalledPath, "override.txt"), "user override");
+        WriteZip(zip, false, "About/About.json", AboutJson("tester.runtime", "Runtime", "2"), "override.txt", "package override");
+        NexusInstallResult second = Install(zip, mods, true, out id, out error);
+        Check(second != null, error);
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "config.json")) == "user config", "config lost");
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "data/save.txt")) == "runtime data", "nested runtime data lost");
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "override.txt")) == "package override", "package did not win collision");
+        Check(!File.Exists(Path.Combine(second.InstalledPath, "obsolete.dll")), "removed package binary retained");
+        string other = Path.Combine(mods, "_smm_backup/other");
+        WriteModFolder(other, "tester.other", "Other", "1", null);
+        // Preservation failure must roll back without pruning an earlier recovery copy.
+        using (FileStream locked = new FileStream(Path.Combine(second.InstalledPath, "config.json"), FileMode.Open, FileAccess.Read, FileShare.Delete))
+            Check(Install(zip, mods, true, out id, out error) == null, "locked runtime file did not abort update");
+        Check(Directory.Exists(second.BackupPath), "failed update pruned backup");
+        Check(File.ReadAllText(Path.Combine(second.InstalledPath, "config.json")) == "user config", "rollback lost config");
+        NexusInstallResult third = Install(zip, mods, true, out id, out error);
+        Check(third != null, error);
+        Check(!Directory.Exists(second.BackupPath) && Directory.Exists(third.BackupPath), "backup retention failed");
+        Check(Directory.Exists(other), "other mod backup removed");
+        Check(File.Exists(Path.Combine(third.InstalledPath, "data/save.txt")), "runtime file became package-owned");
+        File.Delete(Path.Combine(third.InstalledPath, "About/_smm_package_files.json"));
+        File.WriteAllText(Path.Combine(third.InstalledPath, "legacy.dat"), "legacy");
+        NexusInstallResult nexus = Installer().DownloadAndInstall(new Uri(zip).AbsoluteUri, mods,
+            new NexusRemoteMod { GameDomain = "sheltered", ModId = 42 }, new NexusRemoteModFile { FileId = 7 },
+            new NexusInstallTargetContext { ExpectedLocalModId = "tester.runtime", ExistingInstalledPath = third.InstalledPath }, out error);
+        Check(nexus != null, "Nexus update failed: " + error);
+        Check(File.Exists(Path.Combine(third.InstalledPath, "legacy.dat")), "legacy unknown file lost");
+        Check(File.Exists(Path.Combine(third.InstalledPath, "data/save.txt")), "Nexus update lost runtime data");
+        Check(!Directory.Exists(third.BackupPath) && Directory.Exists(nexus.BackupPath), "Nexus backup pruning failed");
     }
 
     private static void InstallReplace()
@@ -2401,7 +2609,7 @@ internal static class ModManagerBehaviorHarness
         TabFixture corrupt = NewTab("{ not json");
         Check(((List<ModItem>)Field(corrupt.Tab, "_enabledMods")).Count == 0, "a corrupt load order means nothing is on");
         corrupt.Toggle("test.solo", true);
-        Same(new List<string> { "test.solo" }, corrupt.ReadOrder(), "a corrupt file is replaced by a valid one");
+        SameText("{ not json", File.ReadAllText(Path.Combine(corrupt.ModsPath, "loadorder.json")), "a corrupt file must be preserved until repaired");
 
         TabFixture f = NewTab(null);
         WriteModFolder(Path.Combine(f.ModsPath, "Core Copy"), "test.core", "Core", "1.1", null);

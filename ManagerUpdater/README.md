@@ -23,6 +23,8 @@ The updater preserves these items from the previous installation:
 - `bin/manager_options.json`
 - `mod_manager.log`
 - `Feedback/`
+- `nexus_uploads/`
+- `bin/_nxm_inbox/`
 
 On any failure after the swap starts, the updater moves the staged installation
 out of the way and restores the backup. Logs are written outside the SMM

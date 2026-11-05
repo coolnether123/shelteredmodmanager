@@ -83,11 +83,12 @@ namespace Manager.Core.Services
                         ManagerBooleanOptionPolicy.Normalize(file);
                         return file;
                     }
+                    throw new InvalidDataException("The options file is empty or invalid.");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Failed to read runtime manager options: " + ex.Message);
+                throw new IOException("Runtime manager options could not be read. The saved options were preserved.", ex);
             }
             return new ManagerBooleanOptionsFile();
         }
@@ -100,15 +101,12 @@ namespace Manager.Core.Services
                 ManagerBooleanOptionPolicy.Normalize(file);
                 string dir = Path.GetDirectoryName(_optionsPath);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                string tmp = _optionsPath + ".tmp";
                 string json = new JavaScriptSerializer().Serialize(file);
-                File.WriteAllText(tmp, json);
-                if (File.Exists(_optionsPath)) File.Delete(_optionsPath);
-                File.Move(tmp, _optionsPath);
+                AtomicFile.WriteAllText(_optionsPath, json);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Failed to write runtime manager options: " + ex.Message);
+                throw new IOException("Runtime manager options could not be saved.", ex);
             }
         }
 

@@ -338,6 +338,12 @@ namespace Manager.Views
 
         private void RefreshMods(bool rediscover)
         {
+            try { RefreshModsCore(rediscover); }
+            catch (Exception ex) { ShowAction(NoticeKind.Error, ex.Message, null, null); }
+        }
+
+        private void RefreshModsCore(bool rediscover)
+        {
             if (_settings == null || !_settings.IsModsPathValid || _discoveryService == null)
                 return;
 
@@ -486,7 +492,13 @@ namespace Manager.Views
         {
             if (_settings == null || !_settings.IsModsPathValid)
                 return;
-            string[] previous = _orderService.ReadOrder(_settings.ModsPath);
+            string[] previous;
+            try { previous = _orderService.ReadOrder(_settings.ModsPath); }
+            catch (Exception ex)
+            {
+                ShowAction(NoticeKind.Error, ex.Message, null, null);
+                return;
+            }
 
             HashSet<string> installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (ModItem mod in _allMods)
@@ -971,6 +983,12 @@ namespace Manager.Views
                 ShowAction(NoticeKind.Error, error, null, null);
                 return;
             }
+            try { _orderService.ReadOrder(_settings.ModsPath); }
+            catch (Exception ex)
+            {
+                ShowAction(NoticeKind.Error, ex.Message, null, null);
+                return;
+            }
             // Save the profile being left so it keeps any last changes.
             RefreshMods();
             SyncActiveProfile();
@@ -995,7 +1013,13 @@ namespace Manager.Views
                 return;
             try
             {
-                _listService.SaveProfile(_settings.ModsPath, active, _enabledMods);
+                var savedMods = new List<ModItem>();
+                foreach (string id in _orderService.ReadOrder(_settings.ModsPath))
+                {
+                    ModItem mod = _allMods.FirstOrDefault(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase));
+                    savedMods.Add(mod ?? new ModItem(id, id, string.Empty));
+                }
+                _listService.SaveProfile(_settings.ModsPath, active, savedMods);
             }
             catch
             {
