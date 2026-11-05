@@ -280,3 +280,9 @@ When events do not fire:
 3. search the log for `Trigger callback threw for '<trigger id>'` or other callback errors
 4. confirm the game state reached the expected lifecycle boundary
 5. if using triggers, inspect `ShelteredEvents.GetTimeTriggerPriorityList(...)` for your cadence
+
+## Subscriber failures
+
+Game, UI, faction, inter-mod and static lifecycle events invoke each subscriber in registration order. A throwing subscriber no longer prevents later subscribers from running. ModAPI attributes the warning to the subscriber target assembly, or the declaring assembly for a static method, and warns once per handler and event. Public event signatures are unchanged.
+
+See [Shared mod hooks](Shared_Mod_Hooks_Guide.md) for composable speed, body access, panel events, death, timed wear, expedition ticks and map sizes, and [per-mod migration](Shared_Mod_Hooks_Migration.md).

@@ -79,3 +79,5 @@ The 2.0 assembly split is the supported line. Runtime UI, stores, cooking statio
 | Maintain comment style | [Developer commenting standard](Developer_Commenting_Standard.md) |
 | Review OAuth security and behavior | [Nexus OAuth implementation](Nexus_OAuth_Implementation.md) |
 | Prepare Nexus application review | [Nexus registration submission](Nexus_Registration_Submission.md) |
+
+See [Shared mod hooks](Shared_Mod_Hooks_Guide.md) for composable speed, body access, panel events, death, timed wear, expedition ticks and map sizes, and [per-mod migration](Shared_Mod_Hooks_Migration.md).

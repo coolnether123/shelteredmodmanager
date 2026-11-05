@@ -94,3 +94,46 @@ Use `ShelteredSupportBundle` to capture current runtime, mod, save-manifest, dia
 ## API status
 
 The 2.0 assembly split is the supported API line. Runtime UI, stores, cooking stations, map helpers, queues, and support-bundle APIs remain in preview. Scenario registration, XML and code authoring, playback, runtime bindings, and scoring snapshots are supported. `ShelteredScenarioEditor.dll` is an optional editor application and is not a mod dependency.
+
+See [Shared mod hooks](Shared_Mod_Hooks_Guide.md) for composable speed, body access, panel events, death, timed wear, expedition ticks and map sizes, and [per-mod migration](Shared_Mod_Hooks_Migration.md).
+
+## Shared hook signatures
+
+All are additions in ShelteredAPI.dll. See the shared hook guide for ordering, lifetime and native-type limitations.
+
+```csharp
+// ShelteredAPI.Events.ShelteredEvents
+static event Action<CharacterDeathEventArgs> CharacterDied;
+static event Action<FamilyMember> CharacterFatalDamageStarting;
+static event Action<FamilyMember, bool> CharacterFatalDamage;
+static event Action<ObjectDegradingEventArgs> ObjectDegrading;
+static event Action<ExplorationManager> ExpeditionTick;
+static event Action<TradingPanel> TradeUpdated;
+static event Action<TradingPanel> TradeSelectionLabelsUpdated;
+static event Action<ExpeditionMainPanelNew> ExpeditionPanelShown;
+static event Action<ExpeditionMainPanelNew> ExpeditionPanelUpdated;
+static void RefreshTradingPanel(TradingPanel panel);
+// ShelteredAPI.Characters.ShelteredCharacters
+static bool TryGetBody(BaseCharacter character, out CharacterMesh mesh);
+static bool TrySetBody(FamilyMember member, string meshId, out string message);
+// ShelteredAPI.Characters.Models.AttributeModifier
+bool IsMultiplicative { get; set; } // default false
+float? MinimumResult { get; set; }
+// ShelteredAPI.Map.ShelteredMap
+static MapPolicyRegistrationResult RegisterMapSizePolicy(MapSizePolicy policy);
+// MapSizePolicy extends ExpeditionMapGenerationPolicy
+int? Width { get; set; }
+int? Height { get; set; }
+float TerrainMultiplier { get; set; } // default 1
+float ContentMultiplier { get; set; } // default 1
+Action<ExpeditionMap, Exception> GenerationFinished { get; set; }
+// MapGenerationPolicySnapshot additions, public getters, internal setters
+int? Width { get; }
+int? Height { get; }
+float TerrainMultiplier { get; }
+float ContentMultiplier { get; }
+```
+
+`CharacterDeathEventArgs` has public getters and internal setters for `BaseCharacter Victim`, `BaseCharacter Killer`, `EncounterCharacter EncounterVictim`, `EncounterCharacter EncounterKiller`, `BaseCharacter.DamageType Cause`, `ItemDefinition_Combat.DamageTypeEnum EncounterDamageType`, `string Details`, and `string Context`.
+
+`ObjectDegradingEventArgs` exposes public getters for `Obj_Integrity Object`, `int OriginalWearAmount`, and `float OriginalInterval`, and public get/set properties `int WearAmount` and `float Interval`. Mods receive this object from the event rather than constructing it.

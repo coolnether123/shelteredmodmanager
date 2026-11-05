@@ -281,3 +281,5 @@ ShelteredCharacters.SwapEncounterCharacter(encounterCharacter, proxy);
 Prefer actor ids, proxies, and DTOs for normal mod logic. Use the raw
 `FamilyMember`, `NpcVisitor`, or `EncounterCharacter` escape hatches only when a
 mod is intentionally integrating with Sheltered runtime objects.
+
+See [Shared mod hooks](Shared_Mod_Hooks_Guide.md) for composable speed, body access, panel events, death, timed wear, expedition ticks and map sizes, and [per-mod migration](Shared_Mod_Hooks_Migration.md).

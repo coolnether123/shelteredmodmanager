@@ -57,7 +57,7 @@ Capture temporary label/widget/tween colors with `SnapshotColors(...)` and resto
 
 `ShelteredMap.Current` exposes read-only expedition dimensions, the `40 x 16` vanilla normal-map baseline, result scale, map seed when assigned, home shelter position, coordinate conversion, and route-distance helpers. Check `IsValid` before using coordinate or route operations: startup, scene transitions, and non-shelter scenes return explicit unavailable or not-yet-generated results.
 
-`ShelteredMap` also accepts focused location-density, town-density, quest-placement, faction-zone, home-shelter, and special-item eligibility policies. Policy composition is deterministic and empty registration produces vanilla/no-op intent. This foundation records and resolves intent; it deliberately does not apply speculative Harmony changes to vanilla map generation.
+`ShelteredMap` also accepts focused location-density, town-density, quest-placement, faction-zone, home-shelter, and special-item eligibility policies. Policy composition is deterministic and empty registration produces vanilla/no-op intent. Map size and location/town density contributions apply during new-map generation through the existing CreateMap patch. Other policy kinds retain their documented consumers.
 
 ## Shared facade conventions
 
@@ -100,3 +100,5 @@ Back up saves before testing any save-changing behavior or preview authoring wor
 Mods should call documented facades and exchange their public DTOs. Serializers, catalog services, storage repositories, runtime binding services, NGUI implementations, patch hosts, manager adapters, and every type in `ShelteredScenarioEditor.dll` are implementation detail and may change without becoming supported mod entry points.
 
 For loader/runtime ownership details, use [ModAPI Architecture Guide](ModAPI_Architecture_guide.md). For the completed implementation split and verifier history, use [ModAPI/ShelteredAPI Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md).
+
+See [Shared mod hooks](Shared_Mod_Hooks_Guide.md) for composable speed, body access, panel events, death, timed wear, expedition ticks and map sizes, and [per-mod migration](Shared_Mod_Hooks_Migration.md).
