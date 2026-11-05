@@ -477,8 +477,10 @@ namespace ManagerUpdater
             }
             catch (Exception ex)
             {
-                log.Write("Cannot restart Manager at normal integrity. No elevated restart was attempted. Open Manager manually. " + ex.Message);
-                throw;
+                // A shell that is itself elevated (UAC off, built-in Administrator) has no normal-integrity token.
+                // Failing here would roll back a good update, so restart the way the updater always has.
+                log.Write("Cannot restart Manager at normal integrity; restarting with the updater's token. " + ex.Message);
+                return Process.Start(start);
             }
         }
 
