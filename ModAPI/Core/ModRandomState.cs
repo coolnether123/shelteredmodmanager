@@ -105,7 +105,7 @@ namespace ModAPI.Core
                 data.streamSteps = snapshot.StreamSteps;
 
                 string json = SerializeSeedData(data);
-                File.WriteAllText(filePath, json);
+                AtomicTextFile.Write(filePath, json);
                 MMLog.WriteDebug(string.Format("[ModRandom] Saved seed.json. Deterministic={0}", data.isDeterministic));
             }
             catch (Exception ex)

@@ -49,7 +49,7 @@ namespace ModAPI.Persistence
             string modDataFolder = Path.GetDirectoryName(modFilePath);
             if (!Directory.Exists(modDataFolder)) Directory.CreateDirectory(modDataFolder);
 
-            File.WriteAllText(modFilePath, json);
+            AtomicTextFile.Write(modFilePath, json);
             CleanupLegacyFile(rootPath);
         }
 

@@ -11,6 +11,7 @@ if ($pluginManager -notmatch '(?s)public void OnNewGame\(\)\s*\{\s*SaveSystemImp
 }
 $paths = @(
     'ModAPI/Util/ManualJson.cs',
+    'ModAPI/Util/AtomicTextFile.cs',
     'ModAPI/Core/ModPersistenceData.cs',
     'ModAPI/Core/ISaveRuntimeAdapter.cs',
     'ModAPI/Core/IGameLifecycleSource.cs',

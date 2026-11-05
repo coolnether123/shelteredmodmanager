@@ -336,30 +336,18 @@ namespace ModAPI.Harmony
 
             try
             {
-                var attrs = patchClass.GetCustomAttributes(true);
                 var list = new List<MethodBase>();
-                foreach (var a in attrs)
+                Type targetType = null;
+                string methodName = null;
+                foreach (HarmonyPatch attribute in patchClass.GetCustomAttributes(typeof(HarmonyPatch), true))
                 {
-                    var at = a.GetType();
-                    if (!string.Equals(at.FullName, "HarmonyLib.HarmonyPatch", StringComparison.Ordinal))
-                        continue;
-
-                    var typeProp = at.GetProperty("type") ?? (MemberInfo)at.GetField("type");
-                    var nameProp = at.GetProperty("methodName") ?? (MemberInfo)at.GetField("methodName");
-                    Type targetType = typeProp is PropertyInfo tp
-                        ? tp.GetValue(a, null) as Type
-                        : (typeProp is FieldInfo tf ? tf.GetValue(a) as Type : null);
-                    string methodName = nameProp is PropertyInfo np
-                        ? np.GetValue(a, null) as string
-                        : (nameProp is FieldInfo nf ? nf.GetValue(a) as string : null);
-                    if (targetType == null || string.IsNullOrEmpty(methodName)) continue;
-
-                    try
-                    {
-                        foreach (var mb in targetType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
-                            if (mb.Name == methodName) list.Add(mb);
-                    }
-                    catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TryGetTargets.GetMethod", "Error getting method: " + ex.Message); }
+                    if (attribute.info.declaringType != null) targetType = attribute.info.declaringType;
+                    if (!string.IsNullOrEmpty(attribute.info.methodName)) methodName = attribute.info.methodName;
+                }
+                if (targetType != null && !string.IsNullOrEmpty(methodName))
+                {
+                    foreach (var mb in targetType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+                        if (mb.Name == methodName) list.Add(mb);
                 }
                 if (list.Count > 0) return list;
             }

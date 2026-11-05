@@ -182,6 +182,7 @@
     <Compile Include="Core\RuntimeCompat.cs" />
     <Compile Include="Util\CollectionCompatibility.cs" />
     <Compile Include="Util\ManualJson.cs" />
+    <Compile Include="Util\AtomicTextFile.cs" />
     <Compile Include="Loading\ModLoadPlanBuilder.cs" />
     <Compile Include="Persistence\ModPersistenceStore.cs" />
     <Compile Include="Persistence\PersistenceFieldGraphSerializer.cs" />
