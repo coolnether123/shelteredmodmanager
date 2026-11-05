@@ -65,14 +65,7 @@ namespace Doorstop
             {
                 string arch = IntPtr.Size == 8 ? "x64" : "x86";
                 LoaderDebugLog.Reset(string.Format("[Doorstop] Sheltered Mod Manager starting ({0})", arch));
-                try
-                {
-                    LoaderDebugLog.Write(string.Format("[Doorstop] Process={0}", System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName));
-                }
-                catch (System.Exception ex)
-                {
-                    LoaderDebugLog.Write("[Doorstop] Process diagnostic unavailable: " + ex.Message);
-                }
+                LoaderDebugLog.Write(string.Format("[Doorstop] Process={0}", System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName));
                 LoaderDebugLog.Write(string.Format("[Doorstop] BaseDir={0}", AppDomain.CurrentDomain.BaseDirectory));
                 LoaderDebugLog.Write(string.Format("[Doorstop] CurrentDir={0}", Environment.CurrentDirectory));
                 Loader.Launch();
