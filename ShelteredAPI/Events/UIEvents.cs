@@ -53,7 +53,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelOpened?.Invoke(panel), nameof(OnPanelOpened), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelOpened, nameof(OnPanelOpened), panel);
         }
 
         internal static void RaisePanelClosed(BasePanel panel)
@@ -61,7 +61,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelClosed?.Invoke(panel), nameof(OnPanelClosed), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelClosed, nameof(OnPanelClosed), panel);
         }
 
         internal static void RaisePanelResumed(BasePanel panel)
@@ -69,7 +69,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelResumed?.Invoke(panel), nameof(OnPanelResumed), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelResumed, nameof(OnPanelResumed), panel);
         }
 
         internal static void RaisePanelPaused(BasePanel panel)
@@ -77,7 +77,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelPaused?.Invoke(panel), nameof(OnPanelPaused), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelPaused, nameof(OnPanelPaused), panel);
         }
 
         internal static void RaiseButtonClicked(GameObject button, string buttonName)
@@ -85,29 +85,7 @@ namespace ShelteredAPI.Events
             if (button == null)
                 return;
 
-            SafeInvoke(() => OnButtonClicked?.Invoke(button, buttonName),
-                      nameof(OnButtonClicked),
-                      $"Button: {buttonName}");
-        }
-
-        private static void SafeInvoke(Action action, string eventName, object context = null)
-        {
-            if (action == null || ModRuntime.IsQuitting)
-                return;
-
-            try
-            {
-                action.Invoke();
-
-                string contextStr = context != null ? $" (Context: {context})" : "";
-                MMLog.WriteDebug($"[UIEvents.{eventName}] Event fired{contextStr}");
-            }
-            catch (Exception ex)
-            {
-                string contextStr = context != null ? $" for {context}" : "";
-                MMLog.WarnOnce($"UIEvents.{eventName}.Error",
-                    $"[UIEvents] {eventName} handler error{contextStr}: {ex.Message}");
-            }
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnButtonClicked, nameof(OnButtonClicked), button, buttonName);
         }
 
         /// <summary>

@@ -1298,6 +1298,50 @@ Assert-Contains "asset browser recent runtime fixture" $actionCoverageVerificati
 Assert-Contains "recursive shell action projection" $rendererManifestSource 'CollectWindows\(actions.*CollectDocument\(actions.*CollectHelp\(actions.*CollectTutorial\(actions.*CollectTour\(actions.*CollectSettings\(actions' "the shell contract projection must recursively include windows, focused documents, popups/help/tutorial/tour, and settings."
 Assert-Contains "semantic contract serializer window" $rendererManifestSource 'Id = "contract\.semantic_actions".*Visible = false.*Items = items' "the existing shell serializer must receive a non-rendered window containing the exhaustive action/field projection."
 
+# Compile the real neutral dispatcher with isolated logging/ownership fixtures.
+$dispatchSource = Read-RepoFile "ModAPI\Core\SubscriberDispatch.cs"
+$dispatchFixture = @"
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+namespace ModAPI.Core {
+    public sealed class ModEntry { public string Id = "fixture.owner"; }
+    public static class ModRegistry {
+        public static bool TryGetModByAssembly(Assembly assembly, out ModEntry entry) {
+            entry = new ModEntry(); return true;
+        }
+    }
+    public static class MMLog {
+        public static readonly Dictionary<string, string> Warnings = new Dictionary<string, string>();
+        public static void WarnOnce(string key, string message) {
+            if (!Warnings.ContainsKey(key)) Warnings.Add(key, message);
+        }
+    }
+    public static class DispatchContractFixture {
+        private static void Throw(int value) { throw new InvalidOperationException("fixture failure"); }
+        public static void Verify() {
+            int result = 0;
+            Action<int> subscribers = Throw;
+            subscribers += delegate(int value) { result += value; };
+            SubscriberDispatch.Invoke(subscribers, "fixture", 3);
+            SubscriberDispatch.Invoke(subscribers, "fixture", 3);
+            if (result != 6) throw new Exception("Throwing subscriber skipped a later subscriber");
+            if (MMLog.Warnings.Count != 1) throw new Exception("Expected one warning per failing handler");
+            foreach (string message in MMLog.Warnings.Values)
+                if (!message.Contains("fixture.owner") || !message.Contains("fixture failure"))
+                    throw new Exception("Warning lost subscriber ownership or original exception");
+            SubscriberDispatch.Invoke(null, "empty");
+        }
+    }
+}
+"@
+try {
+    Add-Type -TypeDefinition ($dispatchFixture + [Environment]::NewLine + $dispatchSource.Replace("using System;", "").Replace("using System.Reflection;", ""))
+    [ModAPI.Core.DispatchContractFixture]::Verify()
+} catch {
+    $failures.Add("subscriber dispatch runtime contract: " + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

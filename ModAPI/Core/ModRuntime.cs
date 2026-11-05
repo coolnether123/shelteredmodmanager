@@ -66,50 +66,12 @@ namespace ModAPI.Core
 
         internal static void NotifyPluginsActivated()
         {
-            System.Action handlers = PluginsActivated;
-            if (handlers == null)
-                return;
-
-            System.Delegate[] invocationList = handlers.GetInvocationList();
-            for (int i = 0; i < invocationList.Length; i++)
-            {
-                System.Action handler = invocationList[i] as System.Action;
-                if (handler == null)
-                    continue;
-
-                try
-                {
-                    handler();
-                }
-                catch (System.Exception ex)
-                {
-                    MMLog.WritePluginError("ModRuntime.PluginsActivated", "PluginsActivated", ex);
-                }
-            }
+            SubscriberDispatch.Invoke(PluginsActivated, "ModRuntime.PluginsActivated");
         }
 
         internal static void NotifyModActivating(ModEntry entry)
         {
-            System.Action<ModEntry> handlers = ModActivating;
-            if (handlers == null || entry == null)
-                return;
-
-            System.Delegate[] invocationList = handlers.GetInvocationList();
-            for (int i = 0; i < invocationList.Length; i++)
-            {
-                System.Action<ModEntry> handler = invocationList[i] as System.Action<ModEntry>;
-                if (handler == null)
-                    continue;
-
-                try
-                {
-                    handler(entry);
-                }
-                catch (System.Exception ex)
-                {
-                    MMLog.WritePluginError(entry.Id, "ModRuntime.ModActivating", ex);
-                }
-            }
+            if (entry != null) SubscriberDispatch.Invoke(ModActivating, "ModRuntime.ModActivating", entry);
         }
     }
 }

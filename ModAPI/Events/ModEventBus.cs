@@ -47,7 +47,7 @@ namespace ModAPI.Events
                 if (typedHandler != null)
                 {
                     MMLog.WriteDebug($"[ModEventBus] Publishing event: {eventName}");
-                    typedHandler.Invoke(data);
+                    SubscriberDispatch.Invoke(typedHandler, eventName, data);
                 }
                 else
                 {

@@ -118,7 +118,7 @@ namespace ShelteredAPI.Events
             EnsureSaveOperationContext(mgr);
             SaveBackupService.BackupCurrentSlotBeforeSave(mgr);
             _beforeSaveRaised = true;
-            if (OnBeforeSave != null) SafeInvoke(delegate { OnBeforeSave(data); }, "OnBeforeSave");
+            if (OnBeforeSave != null) ModAPI.Core.SubscriberDispatch.Invoke(OnBeforeSave, "OnBeforeSave", data);
 
             // Also raise the Sheltered custom-save event bridge.
             try
@@ -145,7 +145,7 @@ namespace ShelteredAPI.Events
                 return;
 
             _afterLoadRaised = true;
-            if (OnAfterLoad != null) SafeInvoke(delegate { OnAfterLoad(data); }, "OnAfterLoad");
+            if (OnAfterLoad != null) ModAPI.Core.SubscriberDispatch.Invoke(OnAfterLoad, "OnAfterLoad", data);
 
             // Also raise the Sheltered custom-save event bridge.
             try
@@ -175,7 +175,7 @@ namespace ShelteredAPI.Events
             _beforeLoadSceneContentsRaised = true;
             _suppressNextNewGameForLoad = true;
             if (OnBeforeLoadSceneContents != null)
-                SafeInvoke(delegate { OnBeforeLoadSceneContents(data); }, "OnBeforeLoadSceneContents");
+                ModAPI.Core.SubscriberDispatch.Invoke(OnBeforeLoadSceneContents, "OnBeforeLoadSceneContents", data);
 
             try
             {
@@ -201,7 +201,7 @@ namespace ShelteredAPI.Events
 
             var player = players[0];
             var enemy = npcs[0];
-            if (OnCombatStarted != null) SafeInvoke(delegate { OnCombatStarted(player, enemy); }, "OnCombatStarted");
+            if (OnCombatStarted != null) ModAPI.Core.SubscriberDispatch.Invoke(OnCombatStarted, "OnCombatStarted", player, enemy);
         }
 
         private static void HandleNewDay()
@@ -209,7 +209,7 @@ namespace ShelteredAPI.Events
             try
             {
                 var day = GameTime.Day;
-                if (OnNewDay != null) SafeInvoke(delegate { OnNewDay(day); }, "OnNewDay");
+                if (OnNewDay != null) ModAPI.Core.SubscriberDispatch.Invoke(OnNewDay, "OnNewDay", day);
             }
             catch (Exception ex)
             {
@@ -223,7 +223,7 @@ namespace ShelteredAPI.Events
             {
                 var mgr = ExplorationManager.Instance;
                 var party = mgr != null ? mgr.GetParty(partyId) : null;
-                if (OnPartyReturned != null) SafeInvoke(delegate { OnPartyReturned(party); }, "OnPartyReturned");
+                if (OnPartyReturned != null) ModAPI.Core.SubscriberDispatch.Invoke(OnPartyReturned, "OnPartyReturned", party);
             }
             catch (Exception ex)
             {
@@ -231,20 +231,14 @@ namespace ShelteredAPI.Events
             }
         }
 
-        private static void SafeInvoke(Action action, string name)
-        {
-            try { if (action != null) action(); }
-            catch (Exception ex) { WarnOnce("GameEvents.Invoke." + name, name + " handler threw: " + ex.Message); }
-        }
-
         internal static void TryRaiseNewGame()
         {
-            if (OnNewGame != null) SafeInvoke(delegate { OnNewGame(); }, "OnNewGame");
+            if (OnNewGame != null) ModAPI.Core.SubscriberDispatch.Invoke(OnNewGame, "OnNewGame");
         }
 
         internal static void TryRaiseSessionStarted()
         {
-            if (OnSessionStarted != null) SafeInvoke(delegate { OnSessionStarted(); }, "OnSessionStarted");
+            if (OnSessionStarted != null) ModAPI.Core.SubscriberDispatch.Invoke(OnSessionStarted, "OnSessionStarted");
         }
 
         // Harmony patches ---------------------------------------------------

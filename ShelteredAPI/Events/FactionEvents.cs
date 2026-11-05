@@ -39,7 +39,7 @@ namespace ShelteredAPI.Events
 
         internal static void RaiseFactionSpawned(int factionId)
         {
-            try { OnFactionSpawned?.Invoke(factionId); }
+            try { SubscriberDispatch.Invoke(OnFactionSpawned, nameof(OnFactionSpawned), factionId); }
             catch (Exception ex) { ModLog.Error($"OnFactionSpawned handler failed: {ex.Message}"); }
         }
 
@@ -47,8 +47,8 @@ namespace ShelteredAPI.Events
         {
             try
             {
-                OnFactionZoneGrow?.Invoke(factionId, zoneId);
-                OnFactionTerritoryChanged?.Invoke(factionId, zoneId);
+                SubscriberDispatch.Invoke(OnFactionZoneGrow, nameof(OnFactionZoneGrow), factionId, zoneId);
+                SubscriberDispatch.Invoke(OnFactionTerritoryChanged, nameof(OnFactionTerritoryChanged), factionId, zoneId);
             }
             catch (Exception ex) { ModLog.Error($"OnFactionZoneGrow handler failed: {ex.Message}"); }
         }
