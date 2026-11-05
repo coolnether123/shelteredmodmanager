@@ -148,3 +148,58 @@ Assert-Contract (@([TargetFixture]::GetPatchTargets([SplitPatch])).Count -eq 2) 
 $shape = Read-Method 'ShelteredAPI/Map/Internal/HomeShelterExpeditionPatches.cs' 'private static IEnumerable<CodeInstruction> OpenGroundEncounterCheckTranspiler('
 Assert-Contract ($shape.IndexOf('matches.Count != 1') -lt $shape.IndexOf('code[matches[0]].operand = distance')) 'Encounter distance rewrite must reject ambiguous shapes before mutation'
 Write-Output "Framework review contracts: $script:checks passed, 0 failed."
+$deathMethods = @(
+ (Read-Method 'ShelteredAPI/Events/GameEvents.cs' 'internal static void RaiseDeath('),
+ (Read-Method 'ShelteredAPI/Events/GameEvents.cs' 'private static bool RemoveEncounterDeath('),
+ (Read-Method 'ShelteredAPI/Events/GameEvents.cs' 'internal static void ClearEncounterDeath('),
+ (Read-Method 'ShelteredAPI/Events/GameEvents.cs' 'internal static void RaiseFatalDamage('),
+ (Read-Method 'ShelteredAPI/Events/GameEvents.cs' 'internal static void RaiseFatalDamageStarting(')
+) -join "`n"
+Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+namespace DeathComposition {
+ public class BaseCharacter { public enum DamageType { Undefined } public int health=100; }
+ public class FamilyMember : BaseCharacter { public bool isAway; }
+ public class BreachMan { public static BreachMan instance; public bool inProgress; }
+ public class CharacterDeathEventArgs { public BaseCharacter Victim; public BaseCharacter.DamageType Cause; public string Details,Context; }
+ public static class GameEvents {
+ static readonly List<WeakReference> EncounterDeaths=new List<WeakReference>();
+ static event Action<CharacterDeathEventArgs> OnCharacterDied;
+ static event Action<FamilyMember,bool> OnCharacterFatalDamage;
+ static event Action<FamilyMember> OnCharacterFatalDamageStarting;
+$deathMethods
+ public static string Exercise(bool allowDeath,bool deferDeath,bool wasteland,bool subscribe) {
+  var person=new FamilyMember(); var trace=new List<string>();
+  OnCharacterDied=null; OnCharacterFatalDamage=null; OnCharacterFatalDamageStarting=null;
+  if (subscribe) {
+   OnCharacterFatalDamageStarting += p=>trace.Add("starting:"+p.health);
+   OnCharacterFatalDamage += (p,allowed)=>trace.Add("fatal:"+p.health+":"+allowed);
+   OnCharacterDied += e=>trace.Add("dead:"+e.Victim.health);
+  }
+  // Model the game's fatal gate and delayed-death branches around the production event methods.
+  bool wasAlive=person.health>0;
+  if (!wasteland) { RaiseFatalDamageStarting(person); RaiseFatalDamage(person,allowDeath); }
+  if (!wasteland && !allowDeath) person.health=1;
+  else if (!deferDeath) person.health=0;
+  RaiseDeath(person,wasAlive,BaseCharacter.DamageType.Undefined,"",wasteland);
+  RaiseDeath(person,person.health>0,BaseCharacter.DamageType.Undefined,"",wasteland);
+  trace.Add("health:"+person.health);
+  return string.Join(",",trace.ToArray());
+ }
+ }
+}
+namespace ModAPI.Core {
+ public static class SubscriberDispatch {
+  public static void Invoke<T>(Action<T> action,string name,T value) {if(action!=null)action(value);}
+  public static void Invoke<T,U>(Action<T,U> action,string name,T value,U value2) {if(action!=null)action(value,value2);}
+ }
+}
+"@
+Assert-Contract ([DeathComposition.GameEvents]::Exercise($true,$false,$false,$true) -eq 'starting:100,fatal:100:True,dead:0,health:0') 'Fatal notifications precede committed death and death fires once'
+Assert-Contract ([DeathComposition.GameEvents]::Exercise($false,$false,$false,$true) -eq 'starting:100,fatal:100:False,health:1') 'Unconsciousness must not emit death'
+Assert-Contract ([DeathComposition.GameEvents]::Exercise($true,$true,$false,$true) -eq 'starting:100,fatal:100:True,health:100') 'Pending death must wait for committed health'
+Assert-Contract ([DeathComposition.GameEvents]::Exercise($true,$false,$true,$true) -eq 'dead:0,health:0') 'Wasteland damage skips the shelter fatal gate'
+Assert-Contract ([DeathComposition.GameEvents]::Exercise($true,$false,$false,$false) -eq 'health:0') 'No subscribers must preserve fatal health'
+Assert-Contract ([DeathComposition.GameEvents]::Exercise($false,$false,$false,$false) -eq 'health:1') 'No subscribers must preserve unconsciousness health'
+Write-Output "Framework review and death composition contracts: $script:checks passed, 0 failed."
