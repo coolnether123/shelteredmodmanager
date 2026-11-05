@@ -10,6 +10,70 @@ namespace ShelteredAPI.Events
     /// </summary>
     public static class ShelteredEvents
     {
+        /// <summary>Runs before fatal-damage handling so queue extensions can capture the active job.</summary>
+        public static event Action<FamilyMember> CharacterFatalDamageStarting
+        {
+            add { GameEvents.OnCharacterFatalDamageStarting += value; }
+            remove { GameEvents.OnCharacterFatalDamageStarting -= value; }
+        }
+        /// <summary>Runs after vanilla trade totals update. Handlers run in subscription order.</summary>
+        public static event Action<TradingPanel> TradeUpdated
+        {
+            add { UIEvents.OnTradeUpdated += value; }
+            remove { UIEvents.OnTradeUpdated -= value; }
+        }
+
+        /// <summary>Runs after vanilla selection labels update.</summary>
+        public static event Action<TradingPanel> TradeSelectionLabelsUpdated
+        {
+            add { UIEvents.OnTradeSelectionLabelsUpdated += value; }
+            remove { UIEvents.OnTradeSelectionLabelsUpdated -= value; }
+        }
+
+        /// <summary>Recalculates trade totals and labels after a mod changes stock or suggestions. Reentrant refresh requests are ignored.</summary>
+        public static void RefreshTradingPanel(TradingPanel panel) { UIEvents.RefreshTradingPanel(panel); }
+
+        /// <summary>Runs after party panel setup, including vanilla early returns.</summary>
+        public static event Action<ExpeditionMainPanelNew> ExpeditionPanelShown
+        {
+            add { UIEvents.OnExpeditionPanelShown += value; }
+            remove { UIEvents.OnExpeditionPanelShown -= value; }
+        }
+
+        /// <summary>Runs after each party panel update. Subscribers can adjust eligibility, readiness, and custom controls.</summary>
+        public static event Action<ExpeditionMainPanelNew> ExpeditionPanelUpdated
+        {
+            add { UIEvents.OnExpeditionPanelUpdated += value; }
+            remove { UIEvents.OnExpeditionPanelUpdated -= value; }
+        }
+
+        /// <summary>Runs after ExplorationManager.UpdateManager, including its early returns. Runs on the game thread.</summary>
+        public static event Action<ExplorationManager> ExpeditionTick
+        {
+            add { GameEvents.OnExpeditionTick += value; }
+            remove { GameEvents.OnExpeditionTick -= value; }
+        }
+
+        /// <summary>Reports confirmed death. Encounter actors retain victim and credited attacker identities.</summary>
+        public static event Action<CharacterDeathEventArgs> CharacterDied
+        {
+            add { GameEvents.OnCharacterDied += value; }
+            remove { GameEvents.OnCharacterDied -= value; }
+        }
+
+        /// <summary>Runs after fatal-damage handling, including when vanilla chooses unconsciousness. The bool is vanilla's allow-death result.</summary>
+        public static event Action<FamilyMember, bool> CharacterFatalDamage
+        {
+            add { GameEvents.OnCharacterFatalDamage += value; }
+            remove { GameEvents.OnCharacterFatalDamage -= value; }
+        }
+
+        /// <summary>Adjusts timed wear inside Obj_Integrity.Update. Changes are passed to the next subscriber.</summary>
+        public static event Action<ObjectDegradingEventArgs> ObjectDegrading
+        {
+            add { GameEvents.OnObjectDegrading += value; }
+            remove { GameEvents.OnObjectDegrading -= value; }
+        }
         public static event Action<int> NewDay
         {
             add { GameEvents.OnNewDay += value; }

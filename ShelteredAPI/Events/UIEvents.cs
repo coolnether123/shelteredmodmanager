@@ -19,6 +19,46 @@ namespace ShelteredAPI.Events
     /// </summary>
     internal static class UIEvents
     {
+        internal static event Action<TradingPanel> OnTradeUpdated;
+        internal static event Action<TradingPanel> OnTradeSelectionLabelsUpdated;
+        internal static event Action<ExpeditionMainPanelNew> OnExpeditionPanelShown;
+        internal static event Action<ExpeditionMainPanelNew> OnExpeditionPanelUpdated;
+
+        internal static void RaiseTradeUpdated(TradingPanel panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnTradeUpdated, "TradeUpdated", panel);
+        }
+
+        internal static void RaiseTradeSelectionLabelsUpdated(TradingPanel panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnTradeSelectionLabelsUpdated, "TradeSelectionLabelsUpdated", panel);
+        }
+
+        internal static void RaiseExpeditionPanelShown(ExpeditionMainPanelNew panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnExpeditionPanelShown, "ExpeditionPanelShown", panel);
+        }
+
+        internal static void RaiseExpeditionPanelUpdated(ExpeditionMainPanelNew panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnExpeditionPanelUpdated, "ExpeditionPanelUpdated", panel);
+        }
+
+        private static readonly System.Reflection.MethodInfo UpdateTrade = HarmonyLib.AccessTools.Method(typeof(TradingPanel), "UpdateTrade");
+        private static readonly System.Reflection.MethodInfo UpdateSelectionLabels = HarmonyLib.AccessTools.Method(typeof(TradingPanel), "UpdateSelectionLabels");
+        private static bool _refreshingTrade;
+
+        internal static void RefreshTradingPanel(TradingPanel panel)
+        {
+            if (panel == null || _refreshingTrade || ModRuntime.IsQuitting) return;
+            _refreshingTrade = true;
+            try
+            {
+                UpdateTrade.Invoke(panel, null);
+                UpdateSelectionLabels.Invoke(panel, null);
+            }
+            finally { _refreshingTrade = false; }
+        }
         // Panel lifecycle events
         /// <summary>
         /// Fired when a panel is pushed onto the UI stack and shown.
