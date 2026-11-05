@@ -38,7 +38,33 @@ namespace ShelteredAPI.Map.Internal
         [HarmonyTranspiler]
         private static IEnumerable<CodeInstruction> OpenGroundEncounterCheckTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {
-            return RedirectShelterMapPosition(instructions, original);
+            var code = new List<CodeInstruction>(RedirectShelterMapPosition(instructions, original));
+            MethodInfo distance = AccessTools.Method(typeof(HomeShelterExpeditionPatches), "SurvivalDistanceFromHome");
+            var matches = new List<int>();
+            for (int i = 0; i + 1 < code.Count; i++)
+            {
+                FieldInfo field = code[i].operand as FieldInfo;
+                MethodInfo call = code[i + 1].operand as MethodInfo;
+                if (code[i].opcode == System.Reflection.Emit.OpCodes.Ldflda && field != null && field.Name == "m_location"
+                    && call != null && call.DeclaringType == typeof(Vector2) && call.Name == "get_magnitude")
+                {
+                    matches.Add(i + 1);
+                }
+            }
+            if (matches.Count != 1)
+            {
+                MMLog.WarnOnce("HomeShelter.EncounterDistance", "Expected one Survival encounter distance read; leaving distance unchanged.");
+                return code;
+            }
+            code[matches[0]].opcode = System.Reflection.Emit.OpCodes.Call;
+            code[matches[0]].operand = distance;
+            return code;
+        }
+
+        private static float SurvivalDistanceFromHome(ref Vector2 location)
+        {
+            Vector2 home;
+            return HomeShelterExpeditionRuntime.TryGetHomeWorld(out home) ? (location - home).magnitude : location.magnitude;
         }
 
         [HarmonyPatch(typeof(UI_ExpeditionMap), "UpdateMapSymbols")]

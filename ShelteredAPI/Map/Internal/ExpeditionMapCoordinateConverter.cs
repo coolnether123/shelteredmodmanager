@@ -36,16 +36,8 @@ namespace ShelteredAPI.Map.Internal
             if (gridPosition.X < 0 || gridPosition.Y < 0 || gridPosition.X >= map.width || gridPosition.Y >= map.height)
                 return false;
 
-            Vector2 lowerLeft = map.GridRefToWorldPos(new ExpeditionMap.GridRef(gridPosition.X, gridPosition.Y));
-            Vector2 next = map.GridRefToWorldPos(new ExpeditionMap.GridRef(
-                gridPosition.X < map.width - 1 ? gridPosition.X + 1 : gridPosition.X,
-                gridPosition.Y < map.height - 1 ? gridPosition.Y + 1 : gridPosition.Y));
-
-            float cellWidth = gridPosition.X < map.width - 1 ? next.x - lowerLeft.x : 0f;
-            float cellHeight = gridPosition.Y < map.height - 1 ? next.y - lowerLeft.y : 0f;
-            worldPosition = new ExpeditionMapWorldPosition(
-                lowerLeft.x + (cellWidth * 0.5f),
-                lowerLeft.y + (cellHeight * 0.5f));
+            Vector2 center = map.GetGridRefCentreWorldPos(new ExpeditionMap.GridRef(gridPosition.X, gridPosition.Y));
+            worldPosition = new ExpeditionMapWorldPosition(center.x, center.y);
             return IsFinite(worldPosition.X) && IsFinite(worldPosition.Y);
         }
 

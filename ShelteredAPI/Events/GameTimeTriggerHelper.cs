@@ -364,7 +364,10 @@ namespace ShelteredAPI.Events
         {
             // Skip scheduler work entirely when no mod is listening for timed work.
             if (!HasTimedConsumers())
+            {
+                lock (Sync) _forceResync = true;
                 return;
+            }
 
             EnsureInitialized();
 
