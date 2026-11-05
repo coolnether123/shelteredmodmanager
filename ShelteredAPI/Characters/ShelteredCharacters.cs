@@ -13,6 +13,17 @@ namespace ShelteredAPI.Characters
     /// </summary>
     public static class ShelteredCharacters
     {
+        /// <summary>Gets the current body for scaling, depth, colors, or textures. Resolve again after a body swap.</summary>
+        public static bool TryGetBody(BaseCharacter character, out CharacterMesh mesh)
+        {
+            return Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.TryGetBody(character, out mesh);
+        }
+
+        /// <summary>Replaces a family member's body through the existing appearance owner, preserving colors, scale and position.</summary>
+        public static bool TrySetBody(FamilyMember member, string meshId, out string message)
+        {
+            return Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.TrySetBody(member, meshId, out message);
+        }
         /// <summary>Raised after an effect is applied to a character.</summary>
         public static event Action<ICharacterProxy, EffectInstance> EffectApplied
         {

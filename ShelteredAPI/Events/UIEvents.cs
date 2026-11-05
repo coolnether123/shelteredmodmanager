@@ -19,6 +19,46 @@ namespace ShelteredAPI.Events
     /// </summary>
     internal static class UIEvents
     {
+        internal static event Action<TradingPanel> OnTradeUpdated;
+        internal static event Action<TradingPanel> OnTradeSelectionLabelsUpdated;
+        internal static event Action<ExpeditionMainPanelNew> OnExpeditionPanelShown;
+        internal static event Action<ExpeditionMainPanelNew> OnExpeditionPanelUpdated;
+
+        internal static void RaiseTradeUpdated(TradingPanel panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnTradeUpdated, "TradeUpdated", panel);
+        }
+
+        internal static void RaiseTradeSelectionLabelsUpdated(TradingPanel panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnTradeSelectionLabelsUpdated, "TradeSelectionLabelsUpdated", panel);
+        }
+
+        internal static void RaiseExpeditionPanelShown(ExpeditionMainPanelNew panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnExpeditionPanelShown, "ExpeditionPanelShown", panel);
+        }
+
+        internal static void RaiseExpeditionPanelUpdated(ExpeditionMainPanelNew panel)
+        {
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnExpeditionPanelUpdated, "ExpeditionPanelUpdated", panel);
+        }
+
+        private static readonly System.Reflection.MethodInfo UpdateTrade = HarmonyLib.AccessTools.Method(typeof(TradingPanel), "UpdateTrade");
+        private static readonly System.Reflection.MethodInfo UpdateSelectionLabels = HarmonyLib.AccessTools.Method(typeof(TradingPanel), "UpdateSelectionLabels");
+        private static bool _refreshingTrade;
+
+        internal static void RefreshTradingPanel(TradingPanel panel)
+        {
+            if (panel == null || _refreshingTrade || ModRuntime.IsQuitting) return;
+            _refreshingTrade = true;
+            try
+            {
+                UpdateTrade.Invoke(panel, null);
+                UpdateSelectionLabels.Invoke(panel, null);
+            }
+            finally { _refreshingTrade = false; }
+        }
         // Panel lifecycle events
         /// <summary>
         /// Fired when a panel is pushed onto the UI stack and shown.
@@ -53,7 +93,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelOpened?.Invoke(panel), nameof(OnPanelOpened), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelOpened, nameof(OnPanelOpened), panel);
         }
 
         internal static void RaisePanelClosed(BasePanel panel)
@@ -61,7 +101,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelClosed?.Invoke(panel), nameof(OnPanelClosed), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelClosed, nameof(OnPanelClosed), panel);
         }
 
         internal static void RaisePanelResumed(BasePanel panel)
@@ -69,7 +109,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelResumed?.Invoke(panel), nameof(OnPanelResumed), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelResumed, nameof(OnPanelResumed), panel);
         }
 
         internal static void RaisePanelPaused(BasePanel panel)
@@ -77,7 +117,7 @@ namespace ShelteredAPI.Events
             if (panel == null)
                 return;
 
-            SafeInvoke(() => OnPanelPaused?.Invoke(panel), nameof(OnPanelPaused), panel);
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnPanelPaused, nameof(OnPanelPaused), panel);
         }
 
         internal static void RaiseButtonClicked(GameObject button, string buttonName)
@@ -85,29 +125,7 @@ namespace ShelteredAPI.Events
             if (button == null)
                 return;
 
-            SafeInvoke(() => OnButtonClicked?.Invoke(button, buttonName),
-                      nameof(OnButtonClicked),
-                      $"Button: {buttonName}");
-        }
-
-        private static void SafeInvoke(Action action, string eventName, object context = null)
-        {
-            if (action == null || ModRuntime.IsQuitting)
-                return;
-
-            try
-            {
-                action.Invoke();
-
-                string contextStr = context != null ? $" (Context: {context})" : "";
-                MMLog.WriteDebug($"[UIEvents.{eventName}] Event fired{contextStr}");
-            }
-            catch (Exception ex)
-            {
-                string contextStr = context != null ? $" for {context}" : "";
-                MMLog.WarnOnce($"UIEvents.{eventName}.Error",
-                    $"[UIEvents] {eventName} handler error{contextStr}: {ex.Message}");
-            }
+            if (!ModRuntime.IsQuitting) SubscriberDispatch.Invoke(OnButtonClicked, nameof(OnButtonClicked), button, buttonName);
         }
 
         /// <summary>

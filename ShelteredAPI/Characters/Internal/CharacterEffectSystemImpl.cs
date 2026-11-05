@@ -79,6 +79,21 @@ namespace ShelteredAPI.Characters.Internal
             }
         }
 
+        internal BasicCharacterAttributes FindBoundAttributes(BaseCharacter character)
+        {
+            lock (_sync)
+            {
+                LiveCharacterProxy proxy;
+                FamilyMember member = character as FamilyMember;
+                if (member != null && _liveFamily.TryGetValue(member.GetId(), out proxy)
+                    && ReferenceEquals(proxy.UnderlyingMember, member)) return proxy.Attributes as BasicCharacterAttributes;
+                NpcVisitor visitor = character as NpcVisitor;
+                if (visitor != null && _liveVisitors.TryGetValue(visitor.npcId, out proxy)
+                    && ReferenceEquals(proxy.UnderlyingNpc, visitor)) return proxy.Attributes as BasicCharacterAttributes;
+                return null;
+            }
+        }
+
         public ICharacterProxy GetCharacter(NpcVisitor npc)
         {
             if (npc == null) return null;

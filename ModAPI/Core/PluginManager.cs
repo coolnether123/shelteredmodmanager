@@ -1161,19 +1161,7 @@ namespace ModAPI.Core
 
         private static void InvokeStaticLifecycleSubscribers(string eventName, Action subscribers)
         {
-            if (subscribers == null)
-                return;
-
-            Delegate[] invocationList = subscribers.GetInvocationList();
-            for (int i = 0; i < invocationList.Length; i++)
-            {
-                Delegate subscriber = invocationList[i];
-                Action action = subscriber as Action;
-                if (action == null)
-                    continue;
-
-                InvokeLifecycleCallback(eventName, SafeDelegateLabel(subscriber), action);
-            }
+            SubscriberDispatch.Invoke(subscribers, eventName);
         }
 
         private static void InvokePluginLifecycleCallback(string eventName, object plugin, Action callback)

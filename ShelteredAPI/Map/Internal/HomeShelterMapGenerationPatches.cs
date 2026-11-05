@@ -21,9 +21,18 @@ namespace ShelteredAPI.Map.Internal
     {
         [HarmonyPatch(typeof(ExpeditionMap), "CreateMap")]
         [HarmonyPrefix]
-        private static void CreateMapPrefix(ExpeditionMap __instance)
+        private static void CreateMapPrefix(ExpeditionMap __instance, out MapSizeGenerationScope __state)
         {
+            __state = MapSizeGenerationScope.Begin(__instance);
             HomeShelterMapGenerationRuntime.OnCreateMapStart(__instance);
+        }
+
+        [HarmonyPatch(typeof(ExpeditionMap), "CreateMap")]
+        [HarmonyFinalizer]
+        private static Exception CreateMapFinalizer(MapSizeGenerationScope __state, Exception __exception)
+        {
+            if (__state != null) __state.Finish(__exception);
+            return __exception;
         }
 
         [HarmonyPatch(typeof(ExpeditionMap), "CreateMap")]

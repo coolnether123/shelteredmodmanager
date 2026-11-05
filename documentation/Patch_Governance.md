@@ -97,3 +97,5 @@ During ModAPI 2.0:
 - keep existing public ModAPI patch-related behavior working
 - prefer internal refactors over public API moves
 - use registries/coordinators behind compatibility facades
+
+See [Shared mod hooks](Shared_Mod_Hooks_Guide.md) for composable speed, body access, panel events, death, timed wear, expedition ticks and map sizes, and [per-mod migration](Shared_Mod_Hooks_Migration.md).

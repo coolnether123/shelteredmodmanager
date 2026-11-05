@@ -13,6 +13,7 @@ if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
 }
 
 $failures = New-Object "System.Collections.Generic.List[string]"
+$script:contractCount = 0
 
 function Read-RepoFile {
     param([string]$RelativePath)
@@ -33,6 +34,7 @@ function Assert-Contains {
         [string]$Message
     )
 
+    $script:contractCount++
     if (-not [System.Text.RegularExpressions.Regex]::IsMatch($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)) {
         $failures.Add("${Name}: ${Message}")
     }
@@ -46,6 +48,7 @@ function Assert-NotContains {
         [string]$Message
     )
 
+    $script:contractCount++
     if ([System.Text.RegularExpressions.Regex]::IsMatch($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)) {
         $failures.Add("${Name}: ${Message}")
     }
@@ -1298,6 +1301,103 @@ Assert-Contains "asset browser recent runtime fixture" $actionCoverageVerificati
 Assert-Contains "recursive shell action projection" $rendererManifestSource 'CollectWindows\(actions.*CollectDocument\(actions.*CollectHelp\(actions.*CollectTutorial\(actions.*CollectTour\(actions.*CollectSettings\(actions' "the shell contract projection must recursively include windows, focused documents, popups/help/tutorial/tour, and settings."
 Assert-Contains "semantic contract serializer window" $rendererManifestSource 'Id = "contract\.semantic_actions".*Visible = false.*Items = items' "the existing shell serializer must receive a non-rendered window containing the exhaustive action/field projection."
 
+# Compile the real neutral dispatcher with isolated logging/ownership fixtures.
+$dispatchSource = Read-RepoFile "ModAPI\Core\SubscriberDispatch.cs"
+$sharedGame = Read-RepoFile "ShelteredAPI\Events\GameEvents.cs"
+$sharedRuntime = Read-RepoFile "ShelteredAPI\Characters\Internal\CharacterRuntime.cs"
+$argsStart = $sharedGame.IndexOf('    public sealed class CharacterDeathEventArgs')
+$argsEnd = $sharedGame.IndexOf('    /// <summary>', $sharedGame.IndexOf('    public sealed class ObjectDegradingEventArgs'))
+# Use the next central-owner summary, rather than the property's XML summary.
+$argsEnd = [regex]::Match($sharedGame, '    /// <summary>\s*/// Central event bus').Index
+$eventsStart = $sharedGame.IndexOf('        internal static event Action<ExplorationManager>')
+$eventsEnd = $sharedGame.IndexOf('        public static event Action<int> OnNewDay;')
+$attributesStart = $sharedRuntime.IndexOf('    internal sealed class BasicCharacterAttributes')
+$attributesEnd = $sharedRuntime.IndexOf('    internal sealed class EffectContext')
+$sharedUi = Read-RepoFile "ShelteredAPI\Events\UIEvents.cs"
+$uiStart = $sharedUi.IndexOf('        internal static event Action<TradingPanel>')
+$uiEnd = $sharedUi.IndexOf('        // Panel lifecycle events')
+$sharedSources = @(
+    (Read-RepoFile "tools\SharedModHooks.ContractFixture.cs"),
+    (Read-RepoFile "ShelteredAPI\Characters\Models\AttributeModifier.cs"),
+    (Read-RepoFile "ShelteredAPI\Characters\Models\CharacterSaveData.cs"),
+    (Read-RepoFile "ShelteredAPI\Characters\Abstractions\ICharacterAttributes.cs"),
+    ('namespace ShelteredAPI.Characters.Internal {' + $sharedRuntime.Substring($attributesStart, $attributesEnd - $attributesStart) + '}'),
+    ('namespace ShelteredAPI.Events {' + $sharedGame.Substring($argsStart, $argsEnd - $argsStart) + 'internal static class GameEvents {' + $sharedGame.Substring($eventsStart, $eventsEnd - $eventsStart) + '}}'),
+    ('namespace ShelteredAPI.Events { internal static class UIEvents {' + $sharedUi.Substring($uiStart, $uiEnd - $uiStart) + '}}'),
+    (Read-RepoFile "ShelteredAPI\Events\SharedPanelPatches.cs"),
+    (Read-RepoFile "ShelteredAPI\Events\SharedGamePatches.cs"),
+    (Read-RepoFile "ShelteredAPI\Map\MapGenerationPolicies.cs"),
+    (Read-RepoFile "ShelteredAPI\Map\Internal\MapGenerationPolicyRegistry.cs"),
+    (Read-RepoFile "ShelteredAPI\Map\Internal\MapSizeGenerationScope.cs")
+)
+$appearanceOwner = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Assets\ScenarioCharacterAppearanceService.cs"
+$characterFacade = Read-RepoFile "ShelteredAPI\Characters\ShelteredCharacters.cs"
+Assert-Contains "body facade shares appearance owner" $characterFacade 'TryGetBody.*ScenarioCharacterAppearanceService.TryGetBody.*TrySetBody.*ScenarioCharacterAppearanceService.TrySetBody' "body access must reuse the scenario appearance owner."
+Assert-Contains "body swap persistence" $appearanceOwner 'OriginalHeadTextureField.SetValue.*OriginalTorsoTextureField.SetValue.*OriginalLegTextureField.SetValue.*UpdateAvatarSprite' "swapping a body must align original texture identities and refresh the avatar."
+Assert-Contains "body swap preservation" $appearanceOwner 'localScale = scale.*localPosition = position.*HairColor, hair.*SkinColor, skin.*ShirtColor, shirt.*PantsColor, pants' "swapping a body must preserve transform and colors."
+$sharedHosts = (Read-RepoFile "ShelteredAPI\Events\SharedGamePatches.cs") + (Read-RepoFile "ShelteredAPI\Events\SharedPanelPatches.cs") + (Read-RepoFile "ShelteredAPI\Characters\Internal\CharacterAttributePatches.cs")
+Assert-NotContains "shared hooks coexist" $sharedHosts 'bool Prefix\(|return false;' "new bridge prefixes must never suppress vanilla or another mod's patch."
+Assert-Contains "speed uses existing bound attributes" (Read-RepoFile "ShelteredAPI\Characters\Internal\CharacterAttributePatches.cs") 'FindBoundAttributes\(__instance\).*ApplyTo\("WalkSpeed", __result\)' "speed must use the existing attribute owner without constructing proxies."
+$eventFacade = Read-RepoFile "ShelteredAPI\Events\ShelteredEvents.cs"
+foreach ($event in @('CharacterDied','CharacterFatalDamageStarting','CharacterFatalDamage','ObjectDegrading','ExpeditionTick','TradeUpdated','TradeSelectionLabelsUpdated','ExpeditionPanelShown','ExpeditionPanelUpdated')) {
+    Assert-Contains "shared event $event" $eventFacade ("event Action<[^>]+> " + $event + '\s*\{\s*add \{ (GameEvents|UIEvents)\.On' + $event + ' \+= value; \}\s*remove \{ (GameEvents|UIEvents)\.On' + $event + ' -= value;') "the public facade must forward add and remove to an existing owner."
+}
+$dispatchFixture = @"
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Linq;
+using HarmonyLib;
+using ModAPI.Core;
+using ModAPI.Harmony;
+using ModAPI.Util;
+using UnityEngine;
+using ShelteredAPI.Characters.Abstractions;
+using ShelteredAPI.Characters.Models;
+namespace ShelteredAPI.Characters.Abstractions { public enum CharacterSource { Family } }
+namespace ModAPI.Core {
+    public sealed class ModEntry { public string Id = "fixture.owner"; }
+    public static class ModRegistry {
+        public static bool TryGetModByAssembly(Assembly assembly, out ModEntry entry) {
+            entry = new ModEntry(); return true;
+        }
+    }
+    public static class MMLog {
+        public static readonly Dictionary<string, string> Warnings = new Dictionary<string, string>();
+        public static void WarnOnce(string key, string message) {
+            if (!Warnings.ContainsKey(key)) Warnings.Add(key, message);
+        }
+    }
+    public static class DispatchContractFixture {
+        private static void Throw(int value) { throw new InvalidOperationException("fixture failure"); }
+        public static void Verify() {
+            int result = 0;
+            Action<int> subscribers = Throw;
+            subscribers += delegate(int value) { result += value; };
+            SubscriberDispatch.Invoke(subscribers, "fixture", 3);
+            SubscriberDispatch.Invoke(subscribers, "fixture", 3);
+            if (result != 6) throw new Exception("Throwing subscriber skipped a later subscriber");
+            if (MMLog.Warnings.Count != 1) throw new Exception("Expected one warning per failing handler");
+            foreach (string message in MMLog.Warnings.Values)
+                if (!message.Contains("fixture.owner") || !message.Contains("fixture failure"))
+                    throw new Exception("Warning lost subscriber ownership or original exception");
+            SubscriberDispatch.Invoke(null, "empty");
+        }
+    }
+}
+"@
+try {
+    $productionSources = @($dispatchSource) + $sharedSources | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    Add-Type -TypeDefinition ($dispatchFixture + [Environment]::NewLine + ($productionSources -join [Environment]::NewLine))
+    [ModAPI.Core.DispatchContractFixture]::Verify()
+    $script:contractCount += 4
+    [SharedModHooksContractFixture]::Verify()
+    $script:contractCount += [SharedModHooksContractFixture]::Count
+} catch {
+    $failures.Add("shared hooks runtime contract: " + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
@@ -1306,4 +1406,4 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Host "ShelteredAPI contract tests passed."
+Write-Host ("ShelteredAPI contract tests passed: " + $script:contractCount + " checks.")

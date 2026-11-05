@@ -332,3 +332,6 @@ class	ShelteredAPI.Scenarios.Shared	ScenarioPropertyBag	ShelteredAPI/Scenarios/S
 enum	ShelteredAPI.Scenarios.Public	ScenarioPreviewRefreshScope	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Typed refresh scope for the disposable scenario preview lifecycle.
 enum	ShelteredAPI.Scenarios.Public	ScenarioRuntimeIdentityKind	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Stable authored-runtime identity categories returned instead of public Unity marker types.
 interface	ShelteredAPI.Scenarios.Public	IScenarioPreviewSession	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Coarse disposable runtime preview boundary usable without the editor assembly.
+class	ShelteredAPI.Events	CharacterDeathEventArgs	ShelteredAPI/Events/GameEvents.cs	Native death identities and cause exposed through the existing ShelteredEvents facade.
+class	ShelteredAPI.Events	ObjectDegradingEventArgs	ShelteredAPI/Events/GameEvents.cs	Ordered mutable timed-wear arguments for the existing ShelteredEvents facade.
+class	ShelteredAPI.Map	MapSizePolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Size contribution extending the existing map generation policy registry.

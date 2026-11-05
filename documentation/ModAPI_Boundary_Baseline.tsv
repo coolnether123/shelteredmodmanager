@@ -1,1 +1,2 @@
 # Rule	Path	Symbol	AllowedCount	Justification
+source-symbol	ModAPI/Properties/AssemblyInfo.cs	ShelteredAPI	1	Friend access lets downstream game event bridges use the internal neutral subscriber dispatcher; no reverse assembly reference or game types are added.

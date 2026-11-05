@@ -11,6 +11,36 @@ using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Events
 {
+    /// <summary>Confirmed death, with the native encounter identities when combat supplies them.</summary>
+    public sealed class CharacterDeathEventArgs : EventArgs
+    {
+        public BaseCharacter Victim { get; internal set; }
+        public BaseCharacter Killer { get; internal set; }
+        public EncounterCharacter EncounterVictim { get; internal set; }
+        public EncounterCharacter EncounterKiller { get; internal set; }
+        public BaseCharacter.DamageType Cause { get; internal set; }
+        public ItemDefinition_Combat.DamageTypeEnum EncounterDamageType { get; internal set; }
+        public string Details { get; internal set; }
+        /// <summary>Shelter, Breach, or ExpeditionEncounter.</summary>
+        public string Context { get; internal set; }
+    }
+
+    /// <summary>One timed wear operation. Handlers share this instance in registration order.</summary>
+    public sealed class ObjectDegradingEventArgs : EventArgs
+    {
+        public Obj_Integrity Object { get; private set; }
+        public int OriginalWearAmount { get; private set; }
+        public int WearAmount { get; set; }
+        public float OriginalInterval { get; private set; }
+        /// <summary>Interval used to schedule the next wear tick. The stored base interval is restored after Update.</summary>
+        public float Interval { get; set; }
+        internal ObjectDegradingEventArgs(Obj_Integrity target, int amount, float interval)
+        {
+            Object = target; OriginalWearAmount = WearAmount = amount;
+            OriginalInterval = Interval = interval;
+        }
+    }
+
     /// <summary>
     /// Central event bus so mods can subscribe instead of duplicating Harmony patches.
     /// </summary>
@@ -21,6 +51,100 @@ namespace ShelteredAPI.Events
         StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class GameEvents
     {
+        internal static event Action<ExplorationManager> OnExpeditionTick;
+        internal static event Action<CharacterDeathEventArgs> OnCharacterDied;
+        internal static event Action<FamilyMember, bool> OnCharacterFatalDamage;
+        internal static event Action<FamilyMember> OnCharacterFatalDamageStarting;
+        internal static event Action<ObjectDegradingEventArgs> OnObjectDegrading;
+        private static readonly List<WeakReference> EncounterDeaths = new List<WeakReference>();
+
+        private static bool RemoveEncounterDeath(BaseCharacter character)
+        {
+            bool found = false;
+            for (int i = EncounterDeaths.Count - 1; i >= 0; i--)
+            {
+                object target = EncounterDeaths[i].Target;
+                if (target == null || ReferenceEquals(target, character))
+                {
+                    found |= ReferenceEquals(target, character);
+                    EncounterDeaths.RemoveAt(i);
+                }
+            }
+            return found;
+        }
+
+        internal static bool HasWearSubscribers { get { return OnObjectDegrading != null; } }
+        internal static void RaiseExpeditionTick(ExplorationManager manager)
+        {
+            ModAPI.Core.SubscriberDispatch.Invoke(OnExpeditionTick, "ExpeditionTick", manager);
+        }
+
+        internal static void RaiseFatalDamage(FamilyMember member, bool allowed)
+        {
+            ModAPI.Core.SubscriberDispatch.Invoke(OnCharacterFatalDamage, "CharacterFatalDamage", member, allowed);
+        }
+
+        internal static void RaiseFatalDamageStarting(FamilyMember member)
+        {
+            ModAPI.Core.SubscriberDispatch.Invoke(OnCharacterFatalDamageStarting, "CharacterFatalDamageStarting", member);
+        }
+
+        internal static void RaiseDeath(BaseCharacter victim, bool wasAlive, BaseCharacter.DamageType cause, string details, bool wasteland)
+        {
+            if (!wasAlive || victim == null) return;
+            if (victim.health > 0) return;
+            // Encounter settlement subsequently applies damage to the shelter representation.
+            // That is the same death, already reported with the richer combat identities.
+            if (RemoveEncounterDeath(victim)) return;
+            FamilyMember member = victim as FamilyMember;
+            string context = wasteland || (member != null && member.isAway) ? "ExpeditionEncounter"
+                : BreachMan.instance != null && BreachMan.instance.inProgress ? "Breach" : "Shelter";
+            ModAPI.Core.SubscriberDispatch.Invoke(OnCharacterDied, "CharacterDied", new CharacterDeathEventArgs
+            {
+                Victim = victim, Cause = cause, Details = details, Context = context
+            });
+        }
+
+        internal static BaseCharacter ResolveEncounterCharacter(EncounterCharacter actor)
+        {
+            if (actor == null) return null;
+            return actor.partyMember != null ? actor.partyMember.person : (BaseCharacter)actor.visitor;
+        }
+
+        internal static void RaiseEncounterDeath(EncounterCharacter victim, bool wasAlive)
+        {
+            if (!wasAlive || victim == null || !victim.isDead || victim.isKnockedOut) return;
+            BaseCharacter person = ResolveEncounterCharacter(victim);
+            if (person != null)
+            {
+                RemoveEncounterDeath(person);
+                EncounterDeaths.Add(new WeakReference(person));
+            }
+            EncounterCharacter killer = victim.lastDamageFrom;
+            ModAPI.Core.SubscriberDispatch.Invoke(OnCharacterDied, "CharacterDied", new CharacterDeathEventArgs
+            {
+                Victim = person, Killer = ResolveEncounterCharacter(killer),
+                EncounterVictim = victim, EncounterKiller = killer,
+                EncounterDamageType = victim.lastDamageType,
+                Cause = victim.lastDamageType == ItemDefinition_Combat.DamageTypeEnum.Undefined
+                    ? BaseCharacter.DamageType.Bleeding : BaseCharacter.DamageType.Weapon,
+                Details = victim.lastDamagedBy.ToString(),
+                Context = victim.GetCurrentBattleLocation == EncounterCharacter.BattleLocation.field ? "ExpeditionEncounter"
+                    : victim.GetCurrentBattleLocation == EncounterCharacter.BattleLocation.shelterBreach ? "Breach" : "Shelter"
+            });
+        }
+
+        internal static void ClearEncounterDeath(BaseCharacter character)
+        {
+            if (character != null && character.health > 0) RemoveEncounterDeath(character);
+        }
+
+        internal static ObjectDegradingEventArgs RaiseObjectDegrading(Obj_Integrity target, int amount, float interval)
+        {
+            ObjectDegradingEventArgs args = new ObjectDegradingEventArgs(target, amount, interval);
+            ModAPI.Core.SubscriberDispatch.Invoke(OnObjectDegrading, "ObjectDegrading", args);
+            return args;
+        }
         public static event Action<int> OnNewDay;
         public static event Action<SaveData> OnBeforeSave;
         public static event Action<SaveData> OnBeforeLoadSceneContents;
@@ -117,7 +241,7 @@ namespace ShelteredAPI.Events
             EnsureSaveOperationContext(mgr);
             SaveBackupService.BackupCurrentSlotBeforeSave(mgr);
             _beforeSaveRaised = true;
-            if (OnBeforeSave != null) SafeInvoke(delegate { OnBeforeSave(data); }, "OnBeforeSave");
+            if (OnBeforeSave != null) ModAPI.Core.SubscriberDispatch.Invoke(OnBeforeSave, "OnBeforeSave", data);
 
             // Also raise the Sheltered custom-save event bridge.
             try
@@ -144,7 +268,7 @@ namespace ShelteredAPI.Events
                 return;
 
             _afterLoadRaised = true;
-            if (OnAfterLoad != null) SafeInvoke(delegate { OnAfterLoad(data); }, "OnAfterLoad");
+            if (OnAfterLoad != null) ModAPI.Core.SubscriberDispatch.Invoke(OnAfterLoad, "OnAfterLoad", data);
 
             // Also raise the Sheltered custom-save event bridge.
             try
@@ -174,7 +298,7 @@ namespace ShelteredAPI.Events
             _beforeLoadSceneContentsRaised = true;
             _suppressNextNewGameForLoad = true;
             if (OnBeforeLoadSceneContents != null)
-                SafeInvoke(delegate { OnBeforeLoadSceneContents(data); }, "OnBeforeLoadSceneContents");
+                ModAPI.Core.SubscriberDispatch.Invoke(OnBeforeLoadSceneContents, "OnBeforeLoadSceneContents", data);
 
             try
             {
@@ -200,7 +324,7 @@ namespace ShelteredAPI.Events
 
             var player = players[0];
             var enemy = npcs[0];
-            if (OnCombatStarted != null) SafeInvoke(delegate { OnCombatStarted(player, enemy); }, "OnCombatStarted");
+            if (OnCombatStarted != null) ModAPI.Core.SubscriberDispatch.Invoke(OnCombatStarted, "OnCombatStarted", player, enemy);
         }
 
         private static void HandleNewDay()
@@ -208,7 +332,7 @@ namespace ShelteredAPI.Events
             try
             {
                 var day = GameTime.Day;
-                if (OnNewDay != null) SafeInvoke(delegate { OnNewDay(day); }, "OnNewDay");
+                if (OnNewDay != null) ModAPI.Core.SubscriberDispatch.Invoke(OnNewDay, "OnNewDay", day);
             }
             catch (Exception ex)
             {
@@ -222,7 +346,7 @@ namespace ShelteredAPI.Events
             {
                 var mgr = ExplorationManager.Instance;
                 var party = mgr != null ? mgr.GetParty(partyId) : null;
-                if (OnPartyReturned != null) SafeInvoke(delegate { OnPartyReturned(party); }, "OnPartyReturned");
+                if (OnPartyReturned != null) ModAPI.Core.SubscriberDispatch.Invoke(OnPartyReturned, "OnPartyReturned", party);
             }
             catch (Exception ex)
             {
@@ -230,20 +354,14 @@ namespace ShelteredAPI.Events
             }
         }
 
-        private static void SafeInvoke(Action action, string name)
-        {
-            try { if (action != null) action(); }
-            catch (Exception ex) { WarnOnce("GameEvents.Invoke." + name, name + " handler threw: " + ex.Message); }
-        }
-
         internal static void TryRaiseNewGame()
         {
-            if (OnNewGame != null) SafeInvoke(delegate { OnNewGame(); }, "OnNewGame");
+            if (OnNewGame != null) ModAPI.Core.SubscriberDispatch.Invoke(OnNewGame, "OnNewGame");
         }
 
         internal static void TryRaiseSessionStarted()
         {
-            if (OnSessionStarted != null) SafeInvoke(delegate { OnSessionStarted(); }, "OnSessionStarted");
+            if (OnSessionStarted != null) ModAPI.Core.SubscriberDispatch.Invoke(OnSessionStarted, "OnSessionStarted");
         }
 
         // Harmony patches ---------------------------------------------------

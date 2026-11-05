@@ -609,6 +609,10 @@
     <!-- IGameHelper interface is now in ModAPI; only the implementation lives here -->
     <Compile Include="Harmony\ShelteredPatterns.cs" />
     <Compile Include="Core\ShelteredModManagerBase.cs" />
+    <Compile Include="Characters\Internal\CharacterAttributePatches.cs" />
+    <Compile Include="Events\SharedPanelPatches.cs" />
+    <Compile Include="Events\SharedGamePatches.cs" />
+    <Compile Include="Map\Internal\MapSizeGenerationScope.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

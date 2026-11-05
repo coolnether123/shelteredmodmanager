@@ -36,6 +36,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private static readonly FieldInfo BaseCharacterHeadTextureField = typeof(BaseCharacter).GetField("m_headTexture", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterTorsoTextureField = typeof(BaseCharacter).GetField("m_torsoTexture", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterLegTextureField = typeof(BaseCharacter).GetField("m_legTexture", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo OriginalHeadTextureField = typeof(BaseCharacter).GetField("m_originalHeadTexture", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo OriginalTorsoTextureField = typeof(BaseCharacter).GetField("m_originalTorsoTexture", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo OriginalLegTextureField = typeof(BaseCharacter).GetField("m_originalLegTexture", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterAvatarSpriteField = typeof(BaseCharacter).GetField("m_avatarSprite", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterMeshIdField = typeof(BaseCharacter).GetField("m_characterMeshId", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterMaleField = typeof(BaseCharacter).GetField("m_male", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -56,6 +59,59 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             _assetResolver = assetResolver;
         }
 
+        internal static bool TryGetBody(BaseCharacter character, out CharacterMesh mesh)
+        {
+            mesh = character != null && BaseCharacterMeshField != null
+                ? BaseCharacterMeshField.GetValue(character) as CharacterMesh : null;
+            return mesh != null;
+        }
+
+        internal static bool TrySetBody(FamilyMember member, string meshId, out string message)
+        {
+            message = null;
+            CharacterMesh current;
+            if (!TryGetBody(member, out current) || string.IsNullOrEmpty(meshId)
+                || CharacterMeshOptions.instance == null || CharacterMeshOptions.instance.FindCharacterMesh(meshId) == null)
+            {
+                message = "Character body or requested mesh definition is unavailable.";
+                return false;
+            }
+            FamilyMemberConfig config = new FamilyMemberConfig
+            {
+                Appearance = new FamilyMemberAppearanceConfig { MeshId = meshId }
+            };
+            if (string.Equals(current.meshId, meshId, StringComparison.OrdinalIgnoreCase)) return true;
+            Vector3 scale = current.transform.localScale;
+            Vector3 position = current.transform.localPosition;
+            Color hair = current.hairColor, skin = current.skinColor, shirt = current.shirtColor, pants = current.pantsColor;
+            ScenarioCharacterAppearanceService service = new ScenarioCharacterAppearanceService(null);
+            if (!service.AlignLiveMesh(config, member, out message)) return false;
+            CharacterMesh replacement;
+            if (!TryGetBody(member, out replacement)) return false;
+            replacement.transform.localScale = scale;
+            replacement.transform.localPosition = position;
+            replacement.SetColor(CharacterMesh.ColorCustomization.HairColor, hair);
+            replacement.SetColor(CharacterMesh.ColorCustomization.SkinColor, skin);
+            replacement.SetColor(CharacterMesh.ColorCustomization.ShirtColor, shirt);
+            replacement.SetColor(CharacterMesh.ColorCustomization.PantsColor, pants);
+            BaseCharacterHairColorField.SetValue(member, hair);
+            BaseCharacterSkinColorField.SetValue(member, skin);
+            BaseCharacterShirtColorField.SetValue(member, shirt);
+            BaseCharacterPantsColorField.SetValue(member, pants);
+            replacement.RandomizeTextures();
+            replacement.RefreshTextures();
+            replacement.RefreshColors();
+            // Keep the saved texture identity aligned with the newly selected body.
+            if (BaseCharacterHeadTextureField != null) BaseCharacterHeadTextureField.SetValue(member, replacement.headTexture);
+            if (BaseCharacterTorsoTextureField != null) BaseCharacterTorsoTextureField.SetValue(member, replacement.torsoTexture);
+            if (BaseCharacterLegTextureField != null) BaseCharacterLegTextureField.SetValue(member, replacement.legTexture);
+            if (OriginalHeadTextureField != null) OriginalHeadTextureField.SetValue(member, replacement.headTexture);
+            if (OriginalTorsoTextureField != null) OriginalTorsoTextureField.SetValue(member, replacement.torsoTexture);
+            if (OriginalLegTextureField != null) OriginalLegTextureField.SetValue(member, replacement.legTexture);
+            member.UpdateAvatarSprite();
+            return true;
+        }
+
         private static bool TryResolve(FamilyMember familyMember, out ResolvedCharacterTarget resolved, out string message)
         {
             resolved = null;
@@ -66,7 +122,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return false;
             }
 
-            CharacterMesh mesh = BaseCharacterMeshField != null ? BaseCharacterMeshField.GetValue(familyMember) as CharacterMesh : null;
+            CharacterMesh mesh;
+            TryGetBody(familyMember, out mesh);
             if (mesh == null)
             {
                 message = "Selected family member does not expose an editable character mesh.";
@@ -137,16 +194,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             SanitizeAppearanceTextures(config.Appearance);
 
-            if (BaseCharacterMaleField != null)
-                BaseCharacterMaleField.SetValue(member, meshType.m_male);
-            if (BaseCharacterChildField != null)
-                BaseCharacterChildField.SetValue(member, !meshType.m_adult);
-            if (BaseCharacterMeshIdField != null)
-                BaseCharacterMeshIdField.SetValue(member, meshId);
-
-            CharacterMesh current = BaseCharacterMeshField != null ? BaseCharacterMeshField.GetValue(member) as CharacterMesh : null;
+            CharacterMesh current;
+            TryGetBody(member, out current);
             if (current != null && string.Equals(current.meshId, meshId, StringComparison.OrdinalIgnoreCase))
+            {
+                AlignBodyIdentity(member, meshType, meshId);
                 return true;
+            }
 
             CharacterMesh replacement = InstantiateCharacterMesh(member.transform, meshType);
             if (replacement == null)
@@ -155,6 +209,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return false;
             }
 
+            AlignBodyIdentity(member, meshType, meshId);
             CharacterMesh old = current;
             member.SetCharacterMesh(replacement);
             member.UpdateSpritesAndAnimators();
@@ -163,6 +218,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 UnityEngine.Object.Destroy(old.gameObject);
 
             return true;
+        }
+
+        private static void AlignBodyIdentity(FamilyMember member, CharacterMeshOptions.CharacterMeshType meshType, string meshId)
+        {
+            if (BaseCharacterMaleField != null) BaseCharacterMaleField.SetValue(member, meshType.m_male);
+            if (BaseCharacterChildField != null) BaseCharacterChildField.SetValue(member, !meshType.m_adult);
+            if (BaseCharacterMeshIdField != null) BaseCharacterMeshIdField.SetValue(member, meshId);
         }
 
         private void SanitizeAppearanceTextures(FamilyMemberAppearanceConfig appearance)

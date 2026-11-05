@@ -73,6 +73,7 @@
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModRuntime.cs" />
+    <Compile Include="Core\SubscriberDispatch.cs" />
     <Compile Include="Core\ModLog.cs" />
     <Compile Include="Core\MMLog.cs" />
     <Compile Include="Core\UnityLogFilter.cs" />

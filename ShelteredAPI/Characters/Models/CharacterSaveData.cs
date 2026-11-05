@@ -57,6 +57,12 @@ namespace ShelteredAPI.Characters.Models{
     [Serializable]
     internal class AttributeSaveData
     {
+        [System.Runtime.Serialization.OptionalField]
+        private bool _isMultiplicative;
+        public bool IsMultiplicative { get { return _isMultiplicative; } set { _isMultiplicative = value; } }
+        [System.Runtime.Serialization.OptionalField]
+        private float? _minimumResult;
+        public float? MinimumResult { get { return _minimumResult; } set { _minimumResult = value; } }
         public string AttributeName { get; set; }
         public float Value { get; set; }
         public float Duration { get; set; }
