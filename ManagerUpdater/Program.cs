@@ -40,7 +40,10 @@ namespace ManagerUpdater
 
                 using (Mutex updateMutex = new Mutex(false, @"Local\ShelteredModManager.Updater"))
                 {
-                    if (!updateMutex.WaitOne(0, false))
+                    bool acquired;
+                    try { acquired = updateMutex.WaitOne(0, false); }
+                    catch (AbandonedMutexException) { acquired = true; }
+                    if (!acquired)
                         throw new InvalidOperationException("Another manager update is already running.");
                     try
                     {
@@ -141,15 +144,25 @@ namespace ManagerUpdater
                 PreserveLocalState(options, log);
                 ValidateInstalledManager(options);
                 StartManager(options, log);
-                CleanupOldBackups(options.BackupDirectory, log);
+
             }
             catch
             {
                 if (currentMoved)
-                    RollBack(options, promotionDirectory, stagedMoved, log);
+                {
+                    try { RollBack(options, promotionDirectory, stagedMoved, log); }
+                    catch (Exception rollbackError)
+                    {
+                        log.Write("Rollback failed. Previous installation backup: " + options.BackupDirectory + ". " + rollbackError);
+                        throw new IOException("Update rollback failed. Restore the previous installation from " + options.BackupDirectory, rollbackError);
+                    }
+                }
                 TryRestartPreviousManager(options, log);
                 throw;
             }
+            // Maintenance cannot invalidate an installation that has started successfully.
+            try { CleanupOldBackups(options.BackupDirectory, log); }
+            catch (Exception ex) { log.Write("Backup cleanup failed: " + ex.Message); }
         }
 
         private static string PreparePromotionDirectory(UpdateArguments options, UpdateLog log)
@@ -182,6 +195,14 @@ namespace ManagerUpdater
             CopyFileIfPresent(
                 Path.Combine(options.BackupDirectory, "mod_manager.log"),
                 Path.Combine(options.CurrentDirectory, "mod_manager.log"),
+                log);
+            CopyDirectoryIfPresent(
+                Path.Combine(options.BackupDirectory, "nexus_uploads"),
+                Path.Combine(options.CurrentDirectory, "nexus_uploads"),
+                log);
+            CopyDirectoryIfPresent(
+                Path.Combine(options.BackupDirectory, @"bin\_nxm_inbox"),
+                Path.Combine(options.CurrentDirectory, @"bin\_nxm_inbox"),
                 log);
             CopyDirectoryIfPresent(
                 Path.Combine(options.BackupDirectory, "Feedback"),
@@ -269,6 +290,8 @@ namespace ManagerUpdater
                 {
                     if (File.Exists(healthFile))
                     {
+                        if (process.WaitForExit(1000))
+                            throw new InvalidOperationException("The updated manager exited immediately after reporting startup.");
                         log.Write("Updated manager reported a healthy UI startup.");
                         TryDeleteFile(healthFile);
                         return;
@@ -387,8 +410,8 @@ namespace ManagerUpdater
                 log.Write("Restored the previous installation.");
             }
 
-            if (!Directory.Exists(options.CurrentDirectory))
-                throw new IOException("Rollback could not restore the previous installation.", displacementFailure);
+            if (Directory.Exists(options.BackupDirectory) || !Directory.Exists(options.CurrentDirectory))
+                throw new IOException("Rollback could not restore the previous installation. Backup: " + options.BackupDirectory, displacementFailure);
         }
 
         private static void TryDisplaceFailedInstallation(UpdateArguments options, UpdateLog log)

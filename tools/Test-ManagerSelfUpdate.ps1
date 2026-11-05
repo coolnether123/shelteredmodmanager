@@ -78,6 +78,7 @@ public static class FakeHealthyManager
             if (string.Equals(args[i], "--update-health-file", StringComparison.OrdinalIgnoreCase))
             {
                 File.WriteAllText(args[i + 1], "ready");
+                System.Threading.Thread.Sleep(2000);
                 return 0;
             }
         }
@@ -88,6 +89,8 @@ public static class FakeHealthyManager
     Add-Type -TypeDefinition $fakeManagerSource -OutputAssembly $script:fakeManagerPath -OutputType ConsoleApplication
     $unhealthyManagerPath = Join-Path $testRoot 'FakeUnhealthyManager.exe'
     Add-Type -TypeDefinition 'public static class FakeUnhealthyManager { public static int Main(string[] args) { return 0; } }' -OutputAssembly $unhealthyManagerPath -OutputType ConsoleApplication
+    $earlyExitManagerPath = Join-Path $testRoot 'FakeEarlyExitManager.exe'
+    Add-Type -TypeDefinition 'public static class FakeEarlyExitManager { public static void Main(string[] args) { for (int i=0; i+1<args.Length; i++) if(args[i]=="--update-health-file") { System.IO.File.WriteAllText(args[i+1], "ready"); return; } } }' -OutputAssembly $earlyExitManagerPath -OutputType ConsoleApplication
     $env:SMM_UPDATER_NO_UI = '1'
 
     $successRoot = Join-Path $testRoot 'success'
@@ -104,6 +107,10 @@ public static class FakeHealthyManager
     New-Item -ItemType Directory -Path (Join-Path $current 'Feedback') | Out-Null
     Set-Content -LiteralPath (Join-Path $current 'Feedback\report.txt') -Value 'feedback' -Encoding ASCII
 
+    foreach ($relative in @('nexus_uploads', 'bin\_nxm_inbox')) {
+        New-Item -ItemType Directory -Path (Join-Path $current $relative) | Out-Null
+        Set-Content -LiteralPath (Join-Path (Join-Path $current $relative) 'pending.txt') -Value 'pending'
+    }
     $exitCode = Invoke-Updater -Current $current -Staged $staged -Backup $backup
     if ($exitCode -ne 0) { throw "Successful update returned exit code $exitCode." }
     if (-not (Test-Path -LiteralPath (Join-Path $current 'new-version.dll'))) { throw 'Staged payload was not promoted.' }
@@ -114,6 +121,9 @@ public static class FakeHealthyManager
     if (-not (Test-Path -LiteralPath (Join-Path $current 'Feedback\report.txt'))) { throw 'Feedback files were not preserved.' }
     if (-not (Test-Path -LiteralPath (Join-Path $backup 'old-stale.dll'))) { throw 'Rollback backup was not retained.' }
 
+    foreach ($relative in @('nexus_uploads', 'bin\_nxm_inbox')) {
+        if ((Get-Content -LiteralPath (Join-Path (Join-Path $current $relative) 'pending.txt') -Raw).Trim() -ne 'pending') { throw "Local state lost: $relative" }
+    }
     $rollbackRoot = Join-Path $testRoot 'rollback'
     $rollbackCurrent = Join-Path $rollbackRoot 'SMM'
     $rollbackStaged = Join-Path $rollbackRoot 'staged-SMM'
@@ -141,6 +151,16 @@ public static class FakeHealthyManager
     if ($exitCode -eq 0) { throw 'A manager that omitted the health handshake unexpectedly succeeded.' }
     if (-not (Test-Path -LiteralPath (Join-Path $healthCurrent 'known-healthy.dll'))) { throw 'Health-check failure did not restore the previous manager.' }
 
+    $earlyRoot = Join-Path $testRoot 'early-exit'
+    $earlyCurrent = Join-Path $earlyRoot 'SMM'
+    $earlyStage = Join-Path $earlyRoot 'staged'
+    $earlyBackup = Join-Path $earlyRoot 'backup'
+    New-TestTree -Root $earlyCurrent
+    New-TestTree -Root $earlyStage -ManagerPath $earlyExitManagerPath
+    Set-Content -LiteralPath (Join-Path $earlyCurrent 'known-good.dll') -Value 'good'
+    $exitCode = Invoke-Updater -Current $earlyCurrent -Staged $earlyStage -Backup $earlyBackup
+    if ($exitCode -eq 0 -or -not (Test-Path -LiteralPath (Join-Path $earlyCurrent 'known-good.dll'))) { throw 'An immediate exit after readiness must restore the old installation.' }
+
     $crossRoot = Join-Path $testRoot 'cross-volume'
     $crossCurrent = Join-Path $crossRoot 'SMM'
     $crossBackup = Join-Path $crossRoot 'backup-SMM'
@@ -152,7 +172,7 @@ public static class FakeHealthyManager
     if ($exitCode -ne 0) { throw "Cross-volume-capable update returned exit code $exitCode." }
     if (-not (Test-Path -LiteralPath (Join-Path $crossCurrent 'cross-volume.dll'))) { throw 'Cross-volume staging payload was not promoted.' }
 
-    Write-Host 'Manager self-update process tests passed.'
+    Write-Host 'Manager self-update process tests passed: 5 scenarios.'
 }
 finally {
     Remove-Item Env:SMM_UPDATER_NO_UI -ErrorAction SilentlyContinue
