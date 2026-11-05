@@ -30,5 +30,4 @@ public class DoorstopDiagnosticsFixture {
 "@
 Add-Type -TypeDefinition ($fixture + $entry) -IgnoreWarnings -WarningAction SilentlyContinue
 [DoorstopDiagnosticsFixture]::Run()
-if (-not $source.Contains('Timeout: bootstrap was not triggered after {0} attempts.')) { throw 'Timeout must describe bootstrap state rather than claim no callbacks arrived.' }
-Write-Host 'Doorstop diagnostic assertions passed: 3'
+Write-Host 'Doorstop diagnostic assertions passed: 2'

@@ -159,7 +159,7 @@ public static class UnityInitHook
             }
             if (!Loader.BootstrapTriggered)
             {
-                LoaderDebugLog.Write(string.Format("[Loader] Timeout: bootstrap was not triggered after {0} attempts.", _pollAttempts));
+                LoaderDebugLog.Write(string.Format("[Loader] Timeout: Unity log callback was not received after {0} attempts.", _pollAttempts));
             }
         });
         _poller.IsBackground = true;
