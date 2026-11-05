@@ -900,6 +900,7 @@ namespace ShelteredAPI.Content
         public CraftStation Station = CraftStation.Workbench;
         public ObjectManager.ObjectType CraftingStation = ObjectManager.ObjectType.Undefined;
         public int Level = 1;
+        [Obsolete("Craft time belongs to the result item. Use ItemDefinition.WithBaseCraftTime.")]
         public float CraftTimeSeconds = 1f;
         public int ResultCount = 1;
         public bool Unique = false;   // Only craftable once
@@ -921,6 +922,7 @@ namespace ShelteredAPI.Content
         }
         public RecipeDefinition WithStation(CraftStation station) { Station = station; return this; }
         public RecipeDefinition WithLevel(int level) { Level = level; return this; }
+        [Obsolete("Craft time belongs to the result item. Use ItemDefinition.WithBaseCraftTime.")]
         public RecipeDefinition WithCraftTime(float seconds) { CraftTimeSeconds = seconds; return this; }
         public RecipeDefinition AsUnique() { Unique = true; return this; }
         public RecipeDefinition AsLocked(string unlockFlag = null) 

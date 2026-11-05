@@ -56,6 +56,7 @@ public class MyPlugin : IModPlugin
             .WithCategory(ItemCategory.Normal)
             .WithStackSize(10)
             .WithTradeValue(120)
+            .WithBaseCraftTime(45f)
             .WithScrapValue(5f)
             .WithIcon("Assets/Icons/power_cell.png");
 
@@ -72,7 +73,6 @@ public class MyPlugin : IModPlugin
                 .WithResultItem("com.mymod.power_cell")
                 .WithStation(CraftStation.Workbench)
                 .WithLevel(1)
-                .WithCraftTime(45f)
                 .WithIngredient(VanillaItems.Component, 3)
                 .WithIngredient(VanillaItems.Metal, 2));
     }

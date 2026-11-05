@@ -120,7 +120,7 @@ namespace ShelteredAPI.Content
                 Level = recipe.level,
                 Unique = recipe.unique,
                 Locked = recipe.locked,
-                CraftTimeSeconds = ExtractLegacyCraftTime(recipe),
+
                 ResultCount = ExtractLegacyResultCount(recipe),
                 CraftingStation = MapCraftLocation(recipe.location)
             };
@@ -389,6 +389,9 @@ namespace ShelteredAPI.Content
                     continue;
                 }
 
+                if (def.CraftTimeSeconds != 1f)
+                    MMLog.WarnOnce("ContentInjector.RecipeTime." + def.Id,
+                        "Recipe craft time is unsupported. Set BaseCraftTime on the result item instead.");
                 ApplyLegacyResultCountCompatibility(def, resultType);
 
                 var recipe = new CraftingManager.Recipe(resultType, ingredients.ToArray())
@@ -604,37 +607,13 @@ namespace ShelteredAPI.Content
             return "legacy.recipe." + resultType;
         }
 
-        private static float ExtractLegacyCraftTime(CraftingManager.Recipe recipe)
-        {
-            try
-            {
-                var field = typeof(CraftingManager.Recipe).GetField("CraftTime", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (field != null)
-                {
-                    var value = field.GetValue(recipe);
-                    if (value is float)
-                        return (float)value;
-                }
-            }
-            catch { }
-
-            return 1f;
-        }
-
         private static int ExtractLegacyResultCount(CraftingManager.Recipe recipe)
         {
-            try
-            {
-                var field = typeof(CraftingManager.Recipe).GetField("ResultCount", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (field != null)
-                {
-                    var value = field.GetValue(recipe);
-                    if (value is int && (int)value > 0)
-                        return (int)value;
-                }
-            }
-            catch { }
-
+            // Vanilla output quantity belongs to the result item, not Recipe.
+            GameItemDefinition item = ItemManager.Instance != null ? ItemManager.Instance.GetItemDefinition(recipe.Result) : null;
+            if (item != null) return Math.Max(1, item.CraftStackSize);
+            MMLog.WarnOnce("ContentInjector.LegacyOutputUnavailable." + recipe.Result,
+                "Cannot read legacy recipe output quantity before its result item is available. Register the item before the recipe.");
             return 1;
         }
 

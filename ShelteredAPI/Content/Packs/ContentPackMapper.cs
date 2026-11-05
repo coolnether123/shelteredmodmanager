@@ -87,13 +87,16 @@ namespace ShelteredAPI.Content.Packs
 
         private static RecipeDefinition MapRecipe(ContentPackRecipe source)
         {
+            if (source.craftTimeSeconds != 1f)
+                ModAPI.Core.MMLog.WarnOnce("ContentPack.RecipeTime." + source.id,
+                    "Recipe craftTimeSeconds is unsupported. Set baseCraftTime on the result item instead.");
             RecipeDefinition recipe = new RecipeDefinition
             {
                 Id = source.id,
                 ResultItemId = source.resultItemId,
                 Station = (CraftStation)Enum.Parse(typeof(CraftStation), source.station, true),
                 Level = source.level,
-                CraftTimeSeconds = source.craftTimeSeconds,
+
                 Unique = source.unique,
                 Locked = source.locked,
                 UnlockFlag = source.unlockFlag
