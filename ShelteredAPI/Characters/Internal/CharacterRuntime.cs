@@ -420,7 +420,26 @@ namespace ShelteredAPI.Characters.Internal
 
         public float GetModifier(string attributeName)
         {
-            return _mods.Where(x => string.Equals(x.AttributeName, attributeName, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
+            return _mods.Where(x => !x.IsMultiplicative && string.Equals(x.AttributeName, attributeName, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
+        }
+
+        internal float ApplyTo(string attributeName, float baseValue)
+        {
+            float added = 0f, factor = 1f, minimum = 0f;
+            bool contributed = false;
+            foreach (AttributeModifier modifier in _mods)
+            {
+                if (modifier.IsExpired || !string.Equals(modifier.AttributeName, attributeName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (float.IsNaN(modifier.Value) || float.IsInfinity(modifier.Value)) continue;
+                contributed = true;
+                if (modifier.IsMultiplicative) factor *= modifier.Value;
+                else added += modifier.Value;
+                if (modifier.MinimumResult.HasValue && !float.IsNaN(modifier.MinimumResult.Value)
+                    && !float.IsInfinity(modifier.MinimumResult.Value)) minimum = Math.Max(minimum, modifier.MinimumResult.Value);
+            }
+            if (!contributed) return baseValue;
+            float result = (baseValue + added) * factor;
+            return float.IsNaN(result) || float.IsInfinity(result) ? baseValue : Math.Max(minimum, result);
         }
 
         public IReadOnlyList<AttributeModifier> GetModifiers(string attributeName)
@@ -455,6 +474,8 @@ namespace ShelteredAPI.Characters.Internal
                 result.Add(new AttributeSaveData
                 {
                     AttributeName = m.AttributeName,
+                    IsMultiplicative = m.IsMultiplicative,
+                    MinimumResult = m.MinimumResult,
                     Value = m.Value,
                     Duration = m.Duration,
                     TimeRemaining = m.TimeRemaining,
@@ -475,6 +496,8 @@ namespace ShelteredAPI.Characters.Internal
                 _mods.Add(new AttributeModifier
                 {
                     AttributeName = m.AttributeName,
+                    IsMultiplicative = m.IsMultiplicative,
+                    MinimumResult = m.MinimumResult,
                     Value = m.Value,
                     Duration = m.Duration,
                     TimeRemaining = m.TimeRemaining,
