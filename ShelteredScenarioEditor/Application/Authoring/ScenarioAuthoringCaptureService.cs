@@ -18,19 +18,22 @@ namespace ShelteredScenarioEditor.Application.Authoring{
         private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
         private readonly ScenarioAuthoringHistoryService _historyService;
         private readonly ScenarioPreviewSessionHost _previewHost;
+        private readonly ScenarioDraftSnapshotService _snapshots;
 
         internal ScenarioAuthoringCaptureService(
             IScenarioDraftMutationService draftMutationService,
             ScenarioEditorActorReferenceService actorResolver,
             ScenarioObjectIdentityAssignmentService identityAssignmentService,
             ScenarioAuthoringHistoryService historyService,
-            ScenarioPreviewSessionHost previewHost)
+            ScenarioPreviewSessionHost previewHost,
+            ScenarioDraftSnapshotService snapshots)
         {
             _draftMutationService = draftMutationService;
             _actorResolver = actorResolver;
             _identityAssignmentService = identityAssignmentService;
             _historyService = historyService;
             _previewHost = previewHost;
+            _snapshots = snapshots;
         }
 
         public bool CaptureCurrentFamily(ScenarioEditorSession session, out string message)
@@ -167,40 +170,58 @@ namespace ShelteredScenarioEditor.Application.Authoring{
                 return false;
             }
 
-            List<ObjectPlacement> preserved = new List<ObjectPlacement>();
-            for (int i = 0; i < bunkerEdits.ObjectPlacements.Count; i++)
+            try
             {
-                ObjectPlacement existing = bunkerEdits.ObjectPlacements[i];
-                if (ScenarioBunkerDraftService.ShouldPreserveDuringLiveCapture(existing))
-                    preserved.Add(existing);
+                ScenarioEditorSession staged = new ScenarioEditorSession
+                {
+                    WorkingDefinition = ShelteredScenarioEditor.Application.Runtime.ScenarioEditorDefinitionCloner.Clone(session.WorkingDefinition)
+                };
+                List<ObjectPlacement> preserved = new List<ObjectPlacement>();
+                foreach (ObjectPlacement existing in staged.WorkingDefinition.BunkerEdits.ObjectPlacements)
+                {
+                    if (ScenarioBunkerDraftService.ShouldPreserveDuringLiveCapture(existing))
+                        preserved.Add(existing);
+                }
+                List<Obj_Base> liveObjects = ScenarioLiveShelterObjectCatalog.Discover();
+                List<ObjectPlacement> captured = new List<ObjectPlacement>(preserved);
+                for (int i = 0; liveObjects != null && i < liveObjects.Count; i++)
+                {
+                    Obj_Base obj = liveObjects[i];
+                    if (!ShouldCaptureObject(obj))
+                        continue;
+
+                    captured.Add(ScenarioBunkerDraftService.CreatePlacement(obj, _previewHost));
+                }
+
+                captured.Sort(ComparePlacements);
+                if (captured.Count == preserved.Count)
+                {
+                    message = "No eligible live shelter objects were found; the draft was kept.";
+                    return false;
+                }
+                staged.WorkingDefinition.BunkerEdits.ObjectPlacements.Clear();
+                staged.WorkingDefinition.BunkerEdits.ObjectPlacements.AddRange(captured);
+                AssignMissingObjectIdentities(staged);
+                string protectionError;
+                if (!_snapshots.TryAutosaveCurrent("capturing shelter objects", out protectionError, true))
+                {
+                    message = "Shelter capture cancelled because the current draft could not be protected: " + protectionError;
+                    return false;
+                }
+                if (_historyService != null)
+                    _historyService.RecordBunkerChange(session.WorkingDefinition, "Capture shelter objects from world");
+                session.WorkingDefinition.BunkerEdits = staged.WorkingDefinition.BunkerEdits;
+                _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
+                int liveCapturedCount = Math.Max(0, captured.Count - preserved.Count);
+                message = "Captured " + liveCapturedCount + " live shelter object placement(s).";
+                MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
+                return true;
             }
-
-            bunkerEdits.ObjectPlacements.Clear();
-
-            List<Obj_Base> liveObjects = ScenarioLiveShelterObjectCatalog.Discover();
-            List<ObjectPlacement> captured = new List<ObjectPlacement>(preserved);
-            for (int i = 0; liveObjects != null && i < liveObjects.Count; i++)
+            catch (Exception ex)
             {
-                Obj_Base obj = liveObjects[i];
-                if (!ShouldCaptureObject(obj))
-                    continue;
-
-                captured.Add(ScenarioBunkerDraftService.CreatePlacement(obj, _previewHost));
+                message = "Shelter capture failed: " + ex.Message;
+                return false;
             }
-
-            captured.Sort(ComparePlacements);
-            for (int i = 0; i < captured.Count; i++)
-                bunkerEdits.ObjectPlacements.Add(captured[i]);
-
-            session.WorkingDefinition.BunkerEdits = bunkerEdits;
-            AssignMissingObjectIdentities(session);
-            _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
-            int liveCapturedCount = Math.Max(0, captured.Count - preserved.Count);
-            message = captured.Count > 0
-                ? "Captured " + liveCapturedCount + " live shelter object placement(s)."
-                : "No eligible shelter objects were found; captured placement list cleared.";
-            MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
-            return true;
         }
 
         public bool CaptureSelectedObject(ScenarioEditorSession session, ScenarioAuthoringTarget target, out string message)
@@ -276,7 +297,7 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             string placementName = FormatPlacementName(matchedPlacement, displayName);
             bool removed = _draftMutationService.TryRemovePlacement(delegate(ObjectPlacement placement)
             {
-                return ReferenceEquals(placement, matchedPlacement) || PlacementMatchesTarget(placement, target);
+                return ReferenceEquals(placement, matchedPlacement);
             });
 
             int afterCount = bunkerEdits.ObjectPlacements.Count;
@@ -666,6 +687,10 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             {
                 return false;
             }
+
+            ScenarioPlacementDefinitionKind structuralKind;
+            if (ScenarioPlacementDefinitions.TryParseSpecialKind(objectType.ToString(), out structuralKind))
+                return false;
 
             string typeName = objectType.ToString();
             if (ContainsAny(typeName, "Corpse", "Worm", "Ghost", "Fire", "Breach", "Raider", "Warning", "Smoke", "Explosion"))

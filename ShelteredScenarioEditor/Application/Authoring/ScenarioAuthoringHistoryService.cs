@@ -119,6 +119,13 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             _redo.Clear();
         }
 
+        internal void RecordSnapshotRestore(ScenarioEditorSession session)
+        {
+            RecordAuthoringChange(session.WorkingDefinition, "Restore saved version", ScenarioDirtySection.Meta, ScenarioEditCategory.Bunker);
+            _undo.Peek().OwnerSession = session;
+            _undo.Peek().EditorState = session.EditorState.Copy();
+        }
+
         public bool Undo(ScenarioDefinition definition, out string description)
         {
             ScenarioDirtySection dirtySection;
@@ -158,6 +165,12 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             };
 
             DefinitionSnapshot snapshot = _undo.Pop();
+            if (snapshot.OwnerSession != null)
+            {
+                redoPoint.OwnerSession = snapshot.OwnerSession;
+                redoPoint.EditorState = snapshot.OwnerSession.EditorState.Copy();
+                snapshot.OwnerSession.EditorState = snapshot.EditorState.Copy();
+            }
             RestoreDefinition(definition, snapshot.Definition);
             redoPoint.Description = snapshot.Description;
             redoPoint.DirtySection = snapshot.DirtySection;
@@ -210,6 +223,12 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             };
 
             DefinitionSnapshot snapshot = _redo.Pop();
+            if (snapshot.OwnerSession != null)
+            {
+                undoPoint.OwnerSession = snapshot.OwnerSession;
+                undoPoint.EditorState = snapshot.OwnerSession.EditorState.Copy();
+                snapshot.OwnerSession.EditorState = snapshot.EditorState.Copy();
+            }
             RestoreDefinition(definition, snapshot.Definition);
             undoPoint.Description = snapshot.Description;
             undoPoint.DirtySection = snapshot.DirtySection;
@@ -325,6 +344,8 @@ namespace ShelteredScenarioEditor.Application.Authoring{
 
         private sealed class DefinitionSnapshot
         {
+            public ScenarioEditorSession OwnerSession;
+            public ScenarioEditorState EditorState;
             public string Description;
             public ScenarioDefinition Definition;
             public ScenarioDirtySection DirtySection;

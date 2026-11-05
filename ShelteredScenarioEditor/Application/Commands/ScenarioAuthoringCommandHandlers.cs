@@ -1485,6 +1485,11 @@ namespace ShelteredScenarioEditor.Application.Commands{
             {
                 ScenarioValidationResult validation = _editorService.CommitChanges(null);
                 ScenarioEditorSession session = _editorService.CurrentSession;
+                if (session == null || !session.LastSaveSucceeded)
+                {
+                    message = "Scenario draft save failed: " + FormatValidationSummary(validation);
+                    return false;
+                }
                 string savedMessage = session != null && session.HasUnappliedDraftChanges
                     ? "Scenario draft saved. Running playtest predates recent edits; stop and restart playtest to verify the saved draft."
                     : "Scenario draft saved.";
@@ -1497,7 +1502,7 @@ namespace ShelteredScenarioEditor.Application.Commands{
             {
                 message = "Scenario draft save failed: " + ex.Message;
                 MMLog.WriteWarning("[ScenarioAuthoringBackend] Save failed: " + ex.Message);
-                return true;
+                return false;
             }
         }
 

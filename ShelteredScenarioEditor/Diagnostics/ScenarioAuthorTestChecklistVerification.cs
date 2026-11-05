@@ -117,7 +117,8 @@ namespace ShelteredScenarioEditor.Diagnostics
         {
             ScenarioEditorSessionStore sessions = new ScenarioEditorSessionStore();
             sessions.Set(session, scenarioPath);
-            ScenarioDraftSnapshotService snapshots = new ScenarioDraftSnapshotService(sessions, serializer, sidecars);
+            ScenarioAuthoringHistoryService history = new ScenarioAuthoringHistoryService();
+            ScenarioDraftSnapshotService snapshots = new ScenarioDraftSnapshotService(sessions, serializer, sidecars, history);
             ScenarioDraftSnapshotInfo snapshot;
             string error;
             Assert(snapshots.SaveVersion(out snapshot, out error),
@@ -143,6 +144,17 @@ namespace ShelteredScenarioEditor.Diagnostics
                 && session.EditorState.HasCompletedTour("overview")
                 && !session.EditorState.HasCompletedTour("story"),
                 "Snapshot restore did not restore the complete editor metadata aggregate.", result);
+
+            string historyDescription;
+            Assert(history.Undo(session.WorkingDefinition, out historyDescription)
+                && session.EditorState.ChecklistDismissed
+                && session.EditorState.HasCompletedTour("story")
+                && checklistService.FindItem(session, ScenarioAuthorTestChecklistService.SavedReloadedId).Note == "Changed after snapshot.",
+                "Undo restore did not recover the complete pre-restore editor state.", result);
+            Assert(history.Redo(session.WorkingDefinition, out historyDescription)
+                && !session.EditorState.ChecklistDismissed
+                && !session.EditorState.HasCompletedTour("story"),
+                "Redo restore did not recover the saved editor state.", result);
 
             ScenarioAuthorTestChecklist preservedChecklist = session.AuthorTestChecklist;
             session.AuthorTestChecklist = new ScenarioAuthorTestChecklist();
