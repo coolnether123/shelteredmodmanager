@@ -111,6 +111,13 @@ public static class FakeHealthyManager
         New-Item -ItemType Directory -Path (Join-Path $current $relative) | Out-Null
         Set-Content -LiteralPath (Join-Path (Join-Path $current $relative) 'pending.txt') -Value 'pending'
     }
+    foreach ($prefix in @('failed-update-', 'promotion-')) {
+        foreach ($age in @('old', 'new')) {
+            $folder = New-Item -ItemType Directory -Path (Join-Path $successRoot ($prefix + $age))
+            Set-Content -LiteralPath (Join-Path $folder.FullName 'recovery.txt') -Value 'recovery'
+            $folder.LastWriteTimeUtc = if ($age -eq 'old') { [DateTime]::UtcNow.AddDays(-2) } else { [DateTime]::UtcNow.AddDays(-1) }
+        }
+    }
     $exitCode = Invoke-Updater -Current $current -Staged $staged -Backup $backup
     if ($exitCode -ne 0) { throw "Successful update returned exit code $exitCode." }
     if (-not (Test-Path -LiteralPath (Join-Path $current 'new-version.dll'))) { throw 'Staged payload was not promoted.' }
@@ -123,6 +130,10 @@ public static class FakeHealthyManager
 
     foreach ($relative in @('nexus_uploads', 'bin\_nxm_inbox')) {
         if ((Get-Content -LiteralPath (Join-Path (Join-Path $current $relative) 'pending.txt') -Raw).Trim() -ne 'pending') { throw "Local state lost: $relative" }
+    }
+    foreach ($prefix in @('failed-update-', 'promotion-')) {
+        if (Test-Path -LiteralPath (Join-Path $successRoot ($prefix + 'old'))) { throw "Stale $prefix folder survived successful startup." }
+        if (-not (Test-Path -LiteralPath (Join-Path $successRoot ($prefix + 'new')))) { throw "Newest $prefix recovery folder was removed." }
     }
     $rollbackRoot = Join-Path $testRoot 'rollback'
     $rollbackCurrent = Join-Path $rollbackRoot 'SMM'
