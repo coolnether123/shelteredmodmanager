@@ -52,10 +52,13 @@ public class NativeSave : PlatformSave_Base {
     public override bool PlatformLoad(SaveManager.SaveType type) { payload = Encoding.UTF8.GetBytes(type.ToString()); return true; }
     public override bool PlatformGetLoadedData(out byte[] bytes) { reads++; bytes = payload; return bytes != null; }
 }
+public class SaveEntry { public string scenarioId; public string id; }
 public static class SaveRuntimeState {
-    public class Target { public string Text; }
+    public class Target { public string Text; public string ScenarioId; public string SaveId; }
     public static Target pending;
+    public static SaveEntry ActiveCustomSave;
     public static bool TryGetPendingLoad(SaveManager.SaveType type, out Target target) { target = pending; pending = null; return target != null; }
+    public static bool HasActiveCustomSessionFor(SaveManager.SaveType type) { return false; }
     public static void ClearActiveCustomSession() {}
 }
 public static class ModRuntime {

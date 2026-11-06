@@ -23,6 +23,7 @@ $sources = @(
     'Manager\Core\Models\NexusOAuthTokenSet.cs',
     'Manager\Core\Security\DpapiSecretProtector.cs',
     'Manager\Core\Security\NexusOAuthTokenProtector.cs',
+    'Manager\Core\Services\AtomicFile.cs',
     'Manager\Core\Services\SettingsService.cs',
     'Manager\Core\Services\NexusRequestCredential.cs',
     'Manager\Core\Services\NexusRequestHeaders.cs',
