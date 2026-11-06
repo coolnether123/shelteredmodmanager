@@ -36,7 +36,7 @@ Assert-Contract ($rng -match 'No seed.json[^\n]*\n\s*ModRandom.IsDeterministic =
 $harmony = Read-Source 'ModAPI/Harmony/HarmonyUtil.cs'
 Assert-Contract ($harmony.Contains('foreach (var mb in targetType.GetMethods(')) 'Safety discovery must enumerate overloaded targets'
 Assert-Contract ($harmony.Contains('MMLog.WriteWarning("LoadGateRunner: condition timed out')) 'Timed-out work must warn'
-$setters = (Read-Method 'ModAPI/Reflection/Safe.cs' 'public static bool SetField(') + "`n" + (Read-Method 'ModAPI/Reflection/Safe.cs' 'public static bool SetProperty(')
+$setters = (Read-Method 'ModAPI/Reflection/Safe.cs' 'public static bool SetField(') + "`n" + (Read-Method 'ModAPI/Reflection/Safe.cs' 'public static bool SetProperty(') + "`n" + (Read-Method 'ModAPI/Reflection/Safe.cs' 'private static bool TryConvertEnum(')
 Add-Type -TypeDefinition @"
 using System;
 using System.Reflection;
@@ -44,13 +44,17 @@ public static class MMLog { public static void WriteDebug(string s) {} public st
 public static class SetterFixture {
 $setters
 static void ResolveTarget(object o, out Type t, out object instance, out BindingFlags flags) { t=o.GetType(); instance=o; flags=BindingFlags.Instance|BindingFlags.Public; }
-static bool TryCastManual(object o, Type t, out object value) { value=null; return false; }
+static bool TryCastManual(object o, Type t, out object value) { return TryConvertEnum(o, t, out value); }
 static string BuildOnceKey(Type t, string a, string b) { return b; }
 static void LogDetailedFailure(Type t, string a, string[] b, BindingFlags f) {}
 }
-public class Values { public int Number=17; public int Property {get;set;} public Values() { Property=23; } }
+public enum Page { Map, LoadoutMember1, LoadoutMember2 }
+public class Values { public int Number=17; public int Property {get;set;} public Page Screen=Page.Map; public Values() { Property=23; } }
 "@
 $v = New-Object Values
+Assert-Contract ([SetterFixture]::SetField($v,'Screen',1) -and $v.Screen -eq [Page]::LoadoutMember1) 'Integral values must convert to enum fields'
+Assert-Contract ([SetterFixture]::SetField($v,'Screen','loadoutmember2') -and $v.Screen -eq [Page]::LoadoutMember2) 'Enum names must convert to enum fields'
+Assert-Contract (!( [SetterFixture]::SetField($v,'Screen','missing')) -and $v.Screen -eq [Page]::LoadoutMember2) 'Unknown enum names must leave the original value'
 Assert-Contract (!( [SetterFixture]::SetField($v,'Number','invalid')) -and $v.Number -eq 17) 'Failed field conversion must leave the original value'
 Assert-Contract (!( [SetterFixture]::SetProperty($v,'Property','invalid')) -and $v.Property -eq 23) 'Failed property conversion must leave the original value'
 Assert-Contract ([SetterFixture]::SetField($v,'Number','42') -and $v.Number -eq 42) 'Successful conversion must still work'

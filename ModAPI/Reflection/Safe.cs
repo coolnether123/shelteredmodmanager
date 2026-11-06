@@ -331,6 +331,9 @@ namespace ModAPI.Reflection
                 result = raw; return true;
             }
 
+            // Integral values and names convert to private enum fields the way a C# cast would.
+            if (TryConvertEnum(raw, targetType, out result)) return true;
+
             // Vector2 <-> Vector3 conversions
             if (sourceType == typeof(Vector2) && targetType == typeof(Vector3))
             {
@@ -344,6 +347,24 @@ namespace ModAPI.Reflection
             }
 
             return false;
+        }
+
+        private static bool TryConvertEnum(object raw, Type targetType, out object result)
+        {
+            result = null;
+            Type enumType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+            if (raw == null || !enumType.IsEnum) return false;
+            Type sourceType = raw.GetType();
+            bool integral = sourceType.IsPrimitive && sourceType != typeof(bool) && sourceType != typeof(char)
+                && sourceType != typeof(float) && sourceType != typeof(double);
+            try
+            {
+                if (raw is string) result = Enum.Parse(enumType, (string)raw, true);
+                else if (raw is Enum || integral) result = Enum.ToObject(enumType, raw);
+                else return false;
+                return true;
+            }
+            catch { result = null; return false; }
         }
 
         private static string[] SplitCandidates(string input)
