@@ -349,7 +349,7 @@ namespace ModAPI.Harmony
 
                 bool typeMatch = includeInherited
                     ? method.DeclaringType == type
-                      || type.IsAssignableFrom(method.DeclaringType)
+                      || method.DeclaringType.IsAssignableFrom(type)
                       || method.DeclaringType.FullName == type.FullName
                     : method.DeclaringType == type
                       || method.DeclaringType.FullName == type.FullName;

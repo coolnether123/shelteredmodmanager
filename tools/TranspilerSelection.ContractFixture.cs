@@ -20,6 +20,7 @@ public partial class FluentTranspiler {
     private void AddSoftFailure(string message) { Failures++; }
     private void AddWarning(string message) { }
     private void AddNote(string message) { }
+    public bool MatchesCall(Type type, string name, MethodInfo method, bool inherited, Type[] genericArguments) { return BuildCallPredicate(type, name, null, genericArguments, inherited)(new CodeInstruction(OpCodes.Call, method)); }
     public bool HasStackDelta(int index, int start, int end, int delta) {
         return _stackDeltaExpectations.Count > index && _stackDeltaExpectations[index].startIndex == start && _stackDeltaExpectations[index].endIndex == end && _stackDeltaExpectations[index].expectedDelta == delta;
     }
@@ -39,6 +40,14 @@ public static class TranspilerSelectionContractFixture {
         VerifyLogs();
         VerifyCombinators();
         VerifyStackAnchors();
+        VerifyInheritedCalls();
+    }
+    private static void VerifyInheritedCalls() {
+        var t = new FluentTranspiler();
+        var inherited = typeof(CallBase).GetMethod("Inherited");
+        Check(t.MatchesCall(typeof(CallDerived), "Inherited", inherited, true, null), "includeInherited must find calls declared on the requested type's base class");
+        Check(!t.MatchesCall(typeof(CallDerived), "Inherited", inherited, false, null), "An exact type match must exclude calls declared on its base class");
+        Check(!t.MatchesCall(typeof(CallBase), "Own", typeof(CallDerived).GetMethod("Own"), true, null), "Inheritance matching must not include methods available only on a derived type");
     }
     private static void VerifyStackAnchors() {
         var t = new FluentTranspiler(new CodeInstruction(OpCodes.Nop), new CodeInstruction(OpCodes.Ldc_I4_1), new CodeInstruction(OpCodes.Pop), new CodeInstruction(OpCodes.Ret));
@@ -97,6 +106,8 @@ public static class TranspilerSelectionContractFixture {
     }
 }
 public static class Localization { public static string Get(string key, bool suppressWarnings) { return key; } }
+public class CallBase { public void Inherited() { } }
+public class CallDerived : CallBase { public void Own() { } }
 namespace ModAPI.Core { public static class MMLog {
     public static void WriteInfo(string message) { }
     public static void WriteDebug(string message) { }
