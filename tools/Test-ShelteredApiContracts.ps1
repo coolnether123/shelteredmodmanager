@@ -1489,6 +1489,26 @@ try {
     $failures.Add('actor identity runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $storeSources = @(
+        (Read-RepoFile 'tools\Storage.ContractFixture.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ItemStoreContracts.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ItemStoreBase.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemStoreState.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemReservation.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemStore.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemStoreRegistry.cs')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    Add-Type -TypeDefinition ('namespace StoreFixture { using System; using System.Collections.Generic; using ShelteredAPI.Content;' + ($storeSources -join [Environment]::NewLine) + '}')
+    [StoreFixture.StorageContractFixture]::Verify()
+    $script:contractCount += [StoreFixture.StorageContractFixture]::Count
+    $storePersistence = Read-RepoFile 'ShelteredAPI\Storage\ModItemStorePersistence.cs'
+    Assert-Contains 'mod store session reset' $storePersistence 'ModPersistence.Register\(Instance, ModItemStoreRegistry.ResetContents\)' 'Registered stores must clear their contents when a new session starts.'
+    Assert-Contains 'mod store missing group' $storePersistence 'if \(data.isLoading\) ModItemStoreRegistry.ResetContents\(\);\s*data.GroupStart' 'A missing store group must not retain the previous save contents.'
+} catch {
+    $failures.Add('mod stores runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

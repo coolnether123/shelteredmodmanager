@@ -26,7 +26,7 @@ namespace ShelteredAPI.Storage
             if (_registered)
                 return;
 
-            ModPersistence.Register(Instance);
+            ModPersistence.Register(Instance, ModItemStoreRegistry.ResetContents);
             _registered = true;
         }
 
@@ -38,6 +38,7 @@ namespace ShelteredAPI.Storage
             if (data == null)
                 return false;
 
+            if (data.isLoading) ModItemStoreRegistry.ResetContents();
             data.GroupStart(GroupName);
             try
             {
