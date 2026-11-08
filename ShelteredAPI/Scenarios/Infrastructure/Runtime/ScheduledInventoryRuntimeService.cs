@@ -1,5 +1,6 @@
 using System;
 using ShelteredAPI.Content;
+using ShelteredAPI.Storage;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Content.Compatibility;
@@ -34,7 +35,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
 
             if (effect.Kind == ScenarioEffectKind.RemoveInventory)
-                return InventoryManager.Instance.RemoveItemsOfType(type, effect.Quantity);
+            {
+                ItemTransferResult removal = ShelteredStores.Inventory.Remove(type.ToString(), effect.Quantity);
+                message = removal.ErrorMessage;
+                return removal.Success && removal.Moved == effect.Quantity;
+            }
             return InventoryManager.Instance.AddNewItems(type, effect.Quantity);
         }
 
@@ -53,7 +58,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            int count = InventoryManager.Instance.GetItemCountInStorage(type, false);
+            int count = ShelteredStores.Inventory.GetCount(type.ToString());
             return count >= condition.Quantity;
         }
     }

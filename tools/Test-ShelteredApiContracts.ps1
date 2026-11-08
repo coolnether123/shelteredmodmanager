@@ -1658,6 +1658,16 @@ try {
     $failures.Add('transpiler selection runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $scenarioInventory = Read-RepoFile 'ShelteredAPI\Scenarios\Infrastructure\Runtime\ScheduledInventoryRuntimeService.cs'
+    $scenarioInventoryMethods = (Read-ContractMethod $scenarioInventory 'public bool Handle(') + (Read-ContractMethod $scenarioInventory 'public bool IsSatisfied(')
+    Add-Type -TypeDefinition ('namespace ScenarioInventoryFixture { using System; using System.Collections.Generic;' + (Read-RepoFile 'tools\ScenarioInventory.ContractFixture.cs') + 'public partial class ScenarioInventoryContractFixture {' + $scenarioInventoryMethods + '}}')
+    [ScenarioInventoryFixture.ScenarioInventoryContractFixture]::Verify()
+    $script:contractCount += [ScenarioInventoryFixture.ScenarioInventoryContractFixture]::Count
+} catch {
+    $failures.Add('scenario inventory runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
