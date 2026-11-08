@@ -16,7 +16,10 @@ public static class InventoryHelper {
     public static bool ResolveItemType(string id, out ItemManager.ItemType type) { return Enum.TryParse<ItemManager.ItemType>(id, out type); }
 }
 public sealed class ItemTransferResult { public bool Success; public int Moved; public string ErrorMessage = null; }
-public static class ShelteredStores { public static readonly FoodAwareStore Inventory = new FoodAwareStore(); }
+public static class ShelteredStores {
+    public static readonly FoodAwareStore Inventory = new FoodAwareStore();
+    public static FoodAwareStore ForInventory() { return Inventory; }
+}
 public sealed class FoodAwareStore {
     public readonly Dictionary<string, int> Food = new Dictionary<string, int>();
     public int GetCount(string id) { int count; return Food.TryGetValue(id, out count) ? count : InventoryManager.Instance.Wood; }

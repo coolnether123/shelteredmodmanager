@@ -36,7 +36,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             if (effect.Kind == ScenarioEffectKind.RemoveInventory)
             {
-                ItemTransferResult removal = ShelteredStores.Inventory.Remove(type.ToString(), effect.Quantity);
+                ItemTransferResult removal = ShelteredStores.ForInventory().Remove(type.ToString(), effect.Quantity);
                 message = removal.ErrorMessage;
                 return removal.Success && removal.Moved == effect.Quantity;
             }
@@ -58,7 +58,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            int count = ShelteredStores.Inventory.GetCount(type.ToString());
+            int count = ShelteredStores.ForInventory().GetCount(type.ToString());
             return count >= condition.Quantity;
         }
     }
