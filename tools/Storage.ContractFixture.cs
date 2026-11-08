@@ -61,6 +61,12 @@ public static class StorageContractFixture {
     public static int Count;
     private static void Check(bool value, string message) { Count++; if (!value) throw new Exception(message); }
     public static void Verify() {
+        var overflow = ShelteredAPI.Storage.ModItemStoreRegistry.Get("fixture", "large", "Large", 0);
+        overflow.Add("item", int.MaxValue);
+        Check(!overflow.Add("item", 1).Success && overflow.GetCount("item") == int.MaxValue, "An overflowing item count must reject the addition without losing stored items");
+        var bounded = ShelteredAPI.Storage.ModItemStoreRegistry.Get("fixture", "bounded", "Bounded", 100);
+        bounded.Add("item", 1);
+        Check(!bounded.CanAdd("item", int.MaxValue), "Quantity overflow must not bypass capacity checks");
         var original = ShelteredAPI.Storage.ModItemStoreRegistry.Get("fixture", "store", "Store", 100);
         original.Add("item", 12);
         var reserved = ((ShelteredAPI.Storage.IReservableItemStore)original).Reserve("item", 2, "assignment.fixture");
