@@ -93,10 +93,9 @@ namespace ModAPI.Actors
             if (string.IsNullOrEmpty(payload))
                 return new TComponent();
 
-            TComponent component = null;
-            try { component = JsonUtility.FromJson<TComponent>(payload); }
-            catch { component = null; }
-            return component ?? new TComponent();
+            TComponent component = JsonUtility.FromJson<TComponent>(payload);
+            if (component == null) throw new InvalidOperationException("Actor component payload could not be decoded");
+            return component;
         }
     }
 

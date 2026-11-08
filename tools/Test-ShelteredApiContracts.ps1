@@ -1481,6 +1481,8 @@ try {
         'private static bool IsOwnedComponentId(', 'private static bool IsValidComponentId(',
         'private ActorComponentWriteResult SetComponentLocked(', 'private bool AreComponentsEquivalentLocked(',
         'private sealed class ActorComponentSlot',
+        'private void RestoreComponentLocked(', 'private void HydrateUnknownSlotsLocked(',
+        'private ActorComponentSaveEntry BuildComponentSaveEntryLocked(',
         'private sealed class ActorSubscription :'
     ) | ForEach-Object { Read-ContractMethod $actorOwner $_ }
     $actorModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')

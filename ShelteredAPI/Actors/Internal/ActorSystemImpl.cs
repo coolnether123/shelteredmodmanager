@@ -732,6 +732,7 @@ namespace ShelteredAPI.Actors.Internal
                 try
                 {
                     slot.Component = serializer.Deserialize(slot.RawPayload, slot.Version);
+                    if (slot.Component == null) throw new InvalidOperationException("Component serializer returned no value");
                     slot.RawPayload = null;
                 }
                 catch (Exception ex)
@@ -797,7 +798,11 @@ namespace ShelteredAPI.Actors.Internal
             IActorComponentSerializer serializer;
             if (_serializers.TryGetValue(entry.ComponentId, out serializer) && serializer != null)
             {
-                try { slot.Component = serializer.Deserialize(entry.PayloadJson ?? string.Empty, entry.Version); }
+                try
+                {
+                    slot.Component = serializer.Deserialize(entry.PayloadJson ?? string.Empty, entry.Version);
+                    if (slot.Component == null) throw new InvalidOperationException("Component serializer returned no value");
+                }
                 catch (Exception ex)
                 {
                     slot.RawPayload = entry.PayloadJson ?? string.Empty;

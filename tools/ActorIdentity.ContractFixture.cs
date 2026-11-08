@@ -5,6 +5,13 @@ public static class JsonUtility {
     public static T FromJson<T>(string value) { throw new InvalidOperationException("Fixture serializer"); }
 }
 public sealed partial class ActorIdentityContractFixture {
+    private class NullSerializer : IActorComponentSerializer {
+        public string ComponentId { get { return "fixture.null"; } }
+        public Type ComponentType { get { return typeof(ActorProfileComponent); } }
+        public int CurrentVersion { get { return 1; } }
+        public string Serialize(IActorComponent component) { return ""; }
+        public IActorComponent Deserialize(string payload, int version) { return null; }
+    }
     private const string BuiltInOwner = "shelteredapi";
     private readonly Dictionary<ActorId, List<ActorBinding>> _bindings = new Dictionary<ActorId, List<ActorBinding>>();
     private readonly Dictionary<string, ActorId> _bindingIndex = new Dictionary<string, ActorId>(StringComparer.OrdinalIgnoreCase);
@@ -53,5 +60,17 @@ public sealed partial class ActorIdentityContractFixture {
         removal.Remove("reputation", "fixture");
         var existing = new ActorAttributeSetComponent(); existing.SetValue("reputation", 7, "fixture");
         Check(((ActorAttributeSetComponent)removal.Merge(existing)).GetValue("reputation") == 0, "Removal must also work when the incoming component is a detached copy");
+        var serializer = new NullSerializer();
+        owner._serializers[serializer.ComponentId] = serializer;
+        owner.RestoreComponentLocked(other, new ActorComponentSaveEntry { ComponentId = serializer.ComponentId, OwnerModId = "fixture", Version = 1, PayloadJson = "saved-value" });
+        var raw = owner._components[other][serializer.ComponentId];
+        Check(raw.RawPayload == "saved-value", "A serializer returning null must preserve the saved payload");
+        owner.HydrateUnknownSlotsLocked(serializer.ComponentId);
+        Check(raw.RawPayload == "saved-value", "Deferred hydration returning null must preserve the original payload");
+        Check(owner.BuildComponentSaveEntryLocked(raw).PayloadJson == "saved-value", "Undecodable components must round-trip without data loss");
+        bool rejected = false;
+        try { new ActorJsonComponentSerializer<ActorProfileComponent>("profile", 1).Deserialize("invalid-json", 1); }
+        catch (InvalidOperationException) { rejected = true; }
+        Check(rejected, "The JSON serializer must report decode failure instead of silently constructing empty data");
     }
 }
