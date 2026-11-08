@@ -673,9 +673,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                     continue;
 
                 ItemManager.ItemType itemType;
-                try { itemType = (ItemManager.ItemType)Enum.Parse(typeof(ItemManager.ItemType), item.ItemId, true); }
-                catch { itemType = ItemManager.ItemType.Undefined; }
-                if (itemType == ItemManager.ItemType.Undefined)
+                if (!ContentInjector.ResolveItemType(item.ItemId, out itemType) || itemType == ItemManager.ItemType.Undefined)
                     continue;
 
                 list.Add(new ItemStack(itemType, item.Quantity));

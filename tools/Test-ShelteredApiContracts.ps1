@@ -1668,6 +1668,15 @@ try {
     $failures.Add('scenario inventory runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $storyItems = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Infrastructure\Unity\ShelteredScenarioDefBuilder.cs') 'private static void ReplaceItemList('
+    Add-Type -TypeDefinition ('namespace StoryItemsFixture { using System; using System.Collections; using System.Collections.Generic; using System.Reflection;' + (Read-RepoFile 'tools\ScenarioStoryItems.ContractFixture.cs') + 'public static partial class ScenarioStoryItemsContractFixture {' + $storyItems + '}}')
+    [StoryItemsFixture.ScenarioStoryItemsContractFixture]::Verify()
+    $script:contractCount += [StoryItemsFixture.ScenarioStoryItemsContractFixture]::Count
+} catch {
+    $failures.Add('scenario story item runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
