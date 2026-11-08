@@ -1852,6 +1852,18 @@ try {
     $failures.Add('replacement type identity runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $sliderSource = Read-RepoFile 'ShelteredAPI\UI\Internal\Spine\SpineScalarWidgetBuilder.cs'
+    $sliderSubmit = Read-ContractMethod (Read-ContractMethod $sliderSource 'public static GameObject CreateSliderWidget(') 'Action handleSubmit = () =>'
+    $sliderHelpers = (Read-ContractMethod $sliderSource 'private static bool ShouldSnapSliderToStep(') + (Read-ContractMethod $sliderSource 'private static float ResolveSliderStep(')
+    $sliderMethod = 'private static void Submit(SettingDefinition def, string text, float min, float max, bool snapToInt) { object settingsObject = null; object panel = null; UIInput valueInput = new UIInput { value = text }; Action<float> refreshDisplay = ignored => {}; ' + $sliderSubmit + '; handleSubmit(); }'
+    Add-Type -TypeDefinition ('namespace SliderSubmitFixture { using System;' + (Read-RepoFile 'tools\SliderSubmit.ContractFixture.cs') + 'public static partial class SliderSubmitContractFixture {' + $sliderHelpers + $sliderMethod + '}}')
+    [SliderSubmitFixture.SliderSubmitContractFixture]::Verify()
+    $script:contractCount += [SliderSubmitFixture.SliderSubmitContractFixture]::Count
+} catch {
+    $failures.Add('slider text submission runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
