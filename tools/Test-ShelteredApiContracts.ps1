@@ -1432,14 +1432,18 @@ try {
     $appearanceSources = @(
         (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterData.cs'),
         (Read-RepoFile 'ShelteredAPI\Characters\Models\CharacterDataModel.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\CharacterSaveData.cs'),
+        ('namespace ShelteredAPI.Characters.Internal {' + (Read-ContractMethod $sharedRuntime 'internal static class RuntimeSerialization') + '}'),
         ('namespace ShelteredAPI.Characters.Internal {' + (Read-ContractMethod $sharedRuntime 'internal static class CharacterFactory') + '}')
     ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
     $appearanceMethods = @('private void PullFromGame(', 'private static T Pick<T>(', 'private void SyncAppearance(', 'private static bool TrySetField(') | ForEach-Object { Read-ContractMethod $sharedRuntime $_ }
+    $appearanceMethods += Read-ContractMethod $characterSystemImpl 'private static CharacterSaveData ToSaveData('
     $appearanceCompilation = (Read-RepoFile 'tools\CharacterAppearance.ContractFixture.cs') + ($appearanceSources -join [Environment]::NewLine) + 'public partial class CharacterAppearanceContractFixture {' + ($appearanceMethods -join [Environment]::NewLine) + '}'
     $appearanceCompilation = $appearanceCompilation.Replace('ShelteredAPI.', 'AppearanceFixture.')
     Add-Type -TypeDefinition ('namespace AppearanceContract {' + $appearanceCompilation + '}')
     [AppearanceContract.CharacterAppearanceContractFixture]::Verify()
     $script:contractCount += [AppearanceContract.CharacterAppearanceContractFixture]::Count
+    Assert-Contains 'synthetic color restoration' $characterSystemImpl 'p.Data.SkinColor = new Color\(data.SkinColor\[0\], data.SkinColor\[1\], data.SkinColor\[2\], data.SkinColor\[3\]\).*p.Data.HairColor = new Color\(data.HairColor\[0\], data.HairColor\[1\], data.HairColor\[2\], data.HairColor\[3\]\)' 'Synthetic restore must apply every saved color channel.'
 } catch {
     $failures.Add('character appearance runtime contract: ' + $_.Exception.Message)
 }

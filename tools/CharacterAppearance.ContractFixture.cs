@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.IO;
 using UnityEngine;
 using ShelteredAPI.Characters.Abstractions;
 using ShelteredAPI.Characters.Models;
@@ -36,6 +37,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets {
 }
 namespace ShelteredAPI.Characters.Internal {
     internal static class CharacterEffectSystemImpl { internal static float NowSeconds() { return 1; } }
+    internal class BasicCharacterEffects { public List<EffectSaveData> ToSaveData() { return new List<EffectSaveData>(); } }
+    internal class BasicCharacterAttributes { public List<AttributeSaveData> ToSaveData() { return new List<AttributeSaveData>(); } }
+}
+namespace ShelteredAPI.Characters.Models {
+    internal class SyntheticCharacterProxy {
+        public ICharacterData Data = new CharacterDataModel();
+        public int UniqueId { get { return 1; } }
+        public string PersistenceKey { get { return "fixture"; } }
+        public CharacterSource Source { get { return CharacterSource.Synthetic; } }
+        public string SourceMod { get { return "fixture"; } }
+        public bool IsPersistent { get { return true; } }
+        public object Effects { get { return null; } }
+        public object Attributes { get { return null; } }
+    }
 }
 public partial class CharacterAppearanceContractFixture {
     private readonly CharacterDataModel _data = new CharacterDataModel();
@@ -58,5 +73,10 @@ public partial class CharacterAppearanceContractFixture {
         proxy.SyncAppearance(member);
         Check(!member.isMale && member.meshId == "woman" && member.skinColor.r == 8 && member.hairColor.r == 9 && member.m_originalHairColor.r == 9, "Appearance writes must reach the game character and saved hair identity");
         Check(ShelteredAPI.Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.Mesh.Skin.r == 8 && ShelteredAPI.Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.Mesh.Hair.r == 9, "Color writes must update the live mesh");
+        var synthetic = new SyntheticCharacterProxy();
+        synthetic.Data.SkinColor = new Color(1, 2, 3, 4); synthetic.Data.HairColor = new Color(5, 6, 7, 8);
+        var saved = ToSaveData(synthetic);
+        var reloaded = (CharacterSaveData)RuntimeSerialization.DeserializeFromString(RuntimeSerialization.SerializeToString(saved));
+        Check(reloaded.SkinColor[0] == 1 && reloaded.SkinColor[3] == 4 && reloaded.HairColor[0] == 5 && reloaded.HairColor[3] == 8, "Synthetic color channels must survive character save serialization");
     }
 }

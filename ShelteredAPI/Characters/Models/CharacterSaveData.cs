@@ -16,6 +16,10 @@ namespace ShelteredAPI.Characters.Models{
         public string LastName { get; set; }
         public bool IsMale { get; set; }
         public string MeshId { get; set; }
+        [System.Runtime.Serialization.OptionalField]
+        public float[] SkinColor;
+        [System.Runtime.Serialization.OptionalField]
+        public float[] HairColor;
         public int Health { get; set; }
         public int MaxHealth { get; set; }
 

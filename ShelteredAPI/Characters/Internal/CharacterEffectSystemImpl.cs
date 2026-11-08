@@ -372,6 +372,10 @@ namespace ShelteredAPI.Characters.Internal
                 SyntheticCharacterProxy p = BuildSynthetic(data.UniqueId, data.FirstName, data.LastName, data.PersistenceKey, data.SourceMod, data.IsPersistent);
                 p.Data.MeshId = data.MeshId;
                 p.Data.IsMale = data.IsMale;
+                if (data.SkinColor != null && data.SkinColor.Length == 4)
+                    p.Data.SkinColor = new Color(data.SkinColor[0], data.SkinColor[1], data.SkinColor[2], data.SkinColor[3]);
+                if (data.HairColor != null && data.HairColor.Length == 4)
+                    p.Data.HairColor = new Color(data.HairColor[0], data.HairColor[1], data.HairColor[2], data.HairColor[3]);
                 p.Data.MaxHealth = data.MaxHealth > 0 ? data.MaxHealth : Math.Max(100, data.Health);
                 p.Data.Health = Math.Max(0, Math.Min(data.Health, p.Data.MaxHealth));
                 p.Data.StrengthLevel = data.StrengthLevel;
@@ -587,6 +591,8 @@ namespace ShelteredAPI.Characters.Internal
                 LastName = p.Data.LastName,
                 IsMale = p.Data.IsMale,
                 MeshId = p.Data.MeshId,
+                SkinColor = new[] { p.Data.SkinColor.r, p.Data.SkinColor.g, p.Data.SkinColor.b, p.Data.SkinColor.a },
+                HairColor = new[] { p.Data.HairColor.r, p.Data.HairColor.g, p.Data.HairColor.b, p.Data.HairColor.a },
                 Health = p.Data.Health,
                 MaxHealth = p.Data.MaxHealth,
                 StrengthLevel = p.Data.StrengthLevel,

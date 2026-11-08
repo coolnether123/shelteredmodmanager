@@ -108,6 +108,8 @@ public static class SharedModHooksContractFixture {
         return type.GetMethod(method, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).Invoke(null, arguments);
     }
     public static void Verify() {
+        var appearance = new CharacterSaveData { SkinColor = new float[4], HairColor = new float[4] };
+        if (appearance.SkinColor.Length != appearance.HairColor.Length) throw new Exception("Invalid color fixture");
         Attributes(); Events(); Panels(); Wear(); Maps(); Parties();
     }
     private static void PartyPostfix(string target, params object[] args) {
