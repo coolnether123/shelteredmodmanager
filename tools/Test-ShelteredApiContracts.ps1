@@ -1885,6 +1885,15 @@ try {
     $failures.Add('preview ownership runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $gateClass = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Domain\Validation\GateConditionValidationRule.cs') 'internal sealed class GateConditionValidationRule'
+    Add-Type -TypeDefinition ('namespace GateFlagValidationFixture { using System; using System.Collections.Generic; using System.Linq;' + (Read-RepoFile 'tools\GateFlagValidation.ContractFixture.cs') + $gateClass + '}')
+    [GateFlagValidationFixture.GateFlagValidationContractFixture]::Verify()
+    $script:contractCount += [GateFlagValidationFixture.GateFlagValidationContractFixture]::Count
+} catch {
+    $failures.Add('gate flag validation runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

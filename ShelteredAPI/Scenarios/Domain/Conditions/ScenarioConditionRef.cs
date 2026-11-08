@@ -8,7 +8,7 @@ using ShelteredAPI.Scenarios.Domain.Scheduling;
 namespace ShelteredAPI.Scenarios.Domain.Conditions{
     /// <summary>
     /// One typed condition reference with properties needed by the selected condition kind.
-    /// Target IDs point at scenario-local objects such as items, quests, survivors, gates, or flags.
+    /// Target IDs point at scenario-local objects such as items, quests, survivors, or flags.
     /// </summary>
     public class ScenarioConditionRef
     {

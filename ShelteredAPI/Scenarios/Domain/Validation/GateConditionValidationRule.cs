@@ -44,7 +44,6 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     summary.AddError("journal.entry.unknown_gate", "[Events] Journal entry '" + (entryId ?? ("#" + i)) + "' references unknown gate '" + gateId + "'.");
             }
 
-            ValidateCircularGateRefs(definition, summary);
         }
 
         private static void ValidateGroup(ScenarioDefinition definition, ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionGroup group, string scope)
@@ -124,47 +123,6 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                         summary.AddError("events.condition.unknown_trigger", scope + " references unknown trigger '" + target + "'.");
                     break;
             }
-        }
-
-        private static void ValidateCircularGateRefs(ScenarioDefinition definition, ValidationSummary summary)
-        {
-            Dictionary<string, string> edges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; definition.Gates != null && i < definition.Gates.Count; i++)
-            {
-                ScenarioGateDefinition gate = definition.Gates[i];
-                string id = TrimToNull(gate != null ? gate.Id : null);
-                if (id == null)
-                    continue;
-                string target = FirstGateReference(gate.Conditions);
-                if (target != null)
-                    edges[id] = target;
-            }
-
-            foreach (KeyValuePair<string, string> edge in edges)
-            {
-                string slow = edge.Key;
-                string fast = edge.Value;
-                while (fast != null && edges.ContainsKey(fast))
-                {
-                    if (string.Equals(slow, fast, StringComparison.OrdinalIgnoreCase))
-                    {
-                        summary.AddError("events.gate.circular", "[Events] Gate dependency chain contains a cycle at '" + slow + "'.");
-                        break;
-                    }
-                    fast = edges[fast];
-                }
-            }
-        }
-
-        private static string FirstGateReference(ScenarioConditionGroup group)
-        {
-            for (int i = 0; group != null && group.Conditions != null && i < group.Conditions.Count; i++)
-            {
-                ScenarioConditionRef condition = group.Conditions[i];
-                if (condition != null && condition.Kind == ScenarioConditionKind.ScenarioFlagSet && TrimToNull(condition.TargetId) != null)
-                    return condition.TargetId;
-            }
-            return null;
         }
 
         private static string TrimToNull(string value)
