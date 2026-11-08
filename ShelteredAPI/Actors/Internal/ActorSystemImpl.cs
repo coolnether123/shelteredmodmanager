@@ -1462,6 +1462,7 @@ namespace ShelteredAPI.Actors.Internal
         private static bool IsOwnedComponentId(string componentId, string ownerModId)
         {
             if (string.IsNullOrEmpty(componentId) || string.IsNullOrEmpty(ownerModId)) return true;
+            if (string.Equals(componentId, ActorAttributeSetComponent.DefaultComponentId, StringComparison.OrdinalIgnoreCase)) return true;
             if (string.Equals(ownerModId, BuiltInOwner, StringComparison.OrdinalIgnoreCase))
                 return componentId.StartsWith("sheltered.", StringComparison.OrdinalIgnoreCase);
             return componentId.StartsWith(ownerModId + ".", StringComparison.OrdinalIgnoreCase);

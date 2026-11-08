@@ -1478,9 +1478,13 @@ try {
         'private static bool IsValidBindingType(', 'private static bool IsOwnedBindingType(',
         'private static void AddToStringIndex(', 'private static void RemoveFromStringIndex(',
         'private bool MatchesQueryLocked(', 'private static ActorEventEnvelope CloneEvent(',
+        'private static bool IsOwnedComponentId(', 'private static bool IsValidComponentId(',
+        'private ActorComponentWriteResult SetComponentLocked(', 'private bool AreComponentsEquivalentLocked(',
+        'private sealed class ActorComponentSlot',
         'private sealed class ActorSubscription :'
     ) | ForEach-Object { Read-ContractMethod $actorOwner $_ }
     $actorModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $actorModels += [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorComponents.cs'), '(?m)^using [^\r\n]+\r?\n', '')
     $actorFixture = Read-RepoFile 'tools\ActorIdentity.ContractFixture.cs'
     Add-Type -TypeDefinition ('namespace ActorIdentityFixture { using System; using System.Collections.Generic; using ModAPI.Actors;' + $actorModels + $actorFixture + 'public sealed partial class ActorIdentityContractFixture {' + ($actorMethods -join [Environment]::NewLine) + '}}')
     [ActorIdentityFixture.ActorIdentityContractFixture]::Verify()
