@@ -1350,6 +1350,7 @@ $sharedSources = @(
     (Read-RepoFile "ShelteredAPI\Characters\Models\CharacterSaveData.cs"),
     (Read-RepoFile "ShelteredAPI\Characters\Abstractions\ICharacterAttributes.cs"),
     ('namespace ShelteredAPI.Characters.Internal {' + $sharedRuntime.Substring($attributesStart, $attributesEnd - $attributesStart) + '}'),
+    ('namespace ShelteredAPI.Characters.Models { public partial class CharacterQuery {' + (Read-ContractMethod $characterQuery 'public CharacterQuery WithAttribute(') + '}}'),
     ('namespace ShelteredAPI.Events {' + $sharedGame.Substring($argsStart, $argsEnd - $argsStart) + 'internal static class GameEvents {' + $sharedGame.Substring($eventsStart, $eventsEnd - $eventsStart) + '}}'),
     ('namespace ShelteredAPI.Events { internal static class UIEvents {' + $sharedUi.Substring($uiStart, $uiEnd - $uiStart) + '}}'),
     (Read-RepoFile "ShelteredAPI\Events\SharedPanelPatches.cs"),

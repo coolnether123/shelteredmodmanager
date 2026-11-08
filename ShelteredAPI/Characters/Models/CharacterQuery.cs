@@ -46,7 +46,7 @@ namespace ShelteredAPI.Characters.Models{
 
         public CharacterQuery WithAttribute(string attributeName)
         {
-            _predicates.Add(delegate(ICharacterProxy c) { return c != null && c.Attributes.GetModifier(attributeName) != 0f; });
+            _predicates.Add(delegate(ICharacterProxy c) { return c != null && c.Attributes.GetModifiers(attributeName).Any(x => !x.IsExpired); });
             return this;
         }
 

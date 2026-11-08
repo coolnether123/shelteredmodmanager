@@ -535,7 +535,7 @@ namespace ShelteredAPI.Characters.Internal
 
         public float GetModifier(string attributeName)
         {
-            return _mods.Where(x => !x.IsMultiplicative && string.Equals(x.AttributeName, attributeName, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
+            return _mods.Where(x => !x.IsExpired && !x.IsMultiplicative && string.Equals(x.AttributeName, attributeName, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
         }
 
         internal float ApplyTo(string attributeName, float baseValue)
@@ -571,11 +571,13 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Tick(float dt)
         {
-            for (int i = _mods.Count - 1; i >= 0; i--)
+            AttributeModifier[] pending = _mods.ToArray();
+            for (int i = pending.Length - 1; i >= 0; i--)
             {
-                AttributeModifier m = _mods[i];
+                AttributeModifier m = pending[i];
+                if (!_mods.Contains(m)) continue;
                 if (!m.IsPermanent) m.TimeRemaining -= dt;
-                if (m.IsExpired) { _mods.RemoveAt(i); Raise(m.AttributeName); }
+                if (m.IsExpired) Remove(m);
             }
         }
 
