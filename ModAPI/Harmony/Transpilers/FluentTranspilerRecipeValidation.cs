@@ -551,7 +551,7 @@ namespace ModAPI.Harmony
                 type = Enum.GetUnderlyingType(type);
             }
 
-            return type == typeof(int)
+            return type == typeof(bool) || type == typeof(int)
                 || type == typeof(uint)
                 || type == typeof(short)
                 || type == typeof(ushort)

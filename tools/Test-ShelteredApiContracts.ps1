@@ -1834,6 +1834,16 @@ try {
     $failures.Add('generic hook runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $booleanDefaults = (Read-ContractMethod $receiverSource 'internal static bool CanEmitDefaultValue(') + (Read-ContractMethod $receiverSource 'internal static CodeInstruction CreateDefaultValueInstruction(')
+    $booleanPrelude = 'public enum TranspilerDiagnosticCategory { Validation } public sealed class FluentTranspiler { public void AddWarning(TranspilerDiagnosticCategory category, string value) {} } public static class FluentTranspilerFormatting { public static string FormatMethod(MethodInfo method) { return method.Name; }}'
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace BooleanStackFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + $booleanPrelude + (Read-RepoFile 'tools\BooleanStack.ContractFixture.cs') + 'public static class FluentTranspilerRecipeValidation {' + $receiverMethods + $booleanDefaults + '} public static class FluentTranspilerCompatibilityExtensions {' + $receiverCompat + '}}')
+    [BooleanStackFixture.BooleanStackContractFixture]::Verify()
+    $script:contractCount += [BooleanStackFixture.BooleanStackContractFixture]::Count
+} catch {
+    $failures.Add('boolean stack runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
