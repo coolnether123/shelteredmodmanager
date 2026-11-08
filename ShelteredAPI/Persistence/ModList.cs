@@ -19,7 +19,7 @@ namespace ShelteredAPI.Persistence
         public ShelteredPersistentList(string uniqueId)
         {
             this._id = uniqueId;
-            ModPersistence.Register(this);
+            ModPersistence.Register(this, Clear);
         }
 
         public bool IsReadyForLoad() => true;
@@ -27,6 +27,7 @@ namespace ShelteredAPI.Persistence
 
         public bool SaveLoad(SaveData data)
         {
+            if (data.isLoading) Clear();
             data.GroupStart("ModList_" + _id);
             int size = this.Count;
             data.SaveLoad("size", ref size);

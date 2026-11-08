@@ -19,7 +19,7 @@ namespace ShelteredAPI.Persistence
         public ShelteredPersistentDictionary(string uniqueId)
         {
             this._id = uniqueId;
-            ModPersistence.Register(this);
+            ModPersistence.Register(this, Clear);
         }
 
         public bool IsReadyForLoad() => true;
@@ -27,6 +27,7 @@ namespace ShelteredAPI.Persistence
 
         public bool SaveLoad(SaveData data)
         {
+            if (data.isLoading) Clear();
             data.GroupStart("ModDict_" + _id);
             
             if (data.isSaving)

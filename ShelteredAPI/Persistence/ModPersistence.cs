@@ -24,15 +24,17 @@ namespace ShelteredAPI.Persistence
     internal static class ModPersistence
     {
         private static readonly List<ISaveable> _registeredCollections = new List<ISaveable>();
+        private static readonly List<Action> _resetCollections = new List<Action>();
 
         /// <summary>
         /// Registers a collection for automatic save/load.
         /// </summary>
-        internal static void Register(ISaveable collection)
+        internal static void Register(ISaveable collection, Action reset)
         {
             if (!_registeredCollections.Contains(collection))
             {
                 _registeredCollections.Add(collection);
+                _resetCollections.Add(reset);
                 // Ensure it's registered with the game's SaveManager
                 if (SaveManager.instance != null)
                 {
@@ -71,6 +73,7 @@ namespace ShelteredAPI.Persistence
         {
             private static void Postfix()
             {
+                foreach (Action reset in _resetCollections) reset();
                 SaveManager manager = SaveManager.instance;
                 if (manager == null) return;
                 foreach (var collection in _registeredCollections)

@@ -1433,6 +1433,22 @@ try {
     $failures.Add('character effects runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $persistenceSources = @(
+        (Read-RepoFile 'tools\Persistence.ContractFixture.cs'),
+        (Read-RepoFile 'ShelteredAPI\Persistence\ModPersistence.cs'),
+        (Read-RepoFile 'ShelteredAPI\Persistence\ModList.cs'),
+        (Read-RepoFile 'ShelteredAPI\Persistence\ModDictionary.cs')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    # Windows PowerShell's compiler needs equivalent syntax for these newer C# forms.
+    $persistenceCompilation = ($persistenceSources -join [Environment]::NewLine).Replace('public bool IsReadyForLoad() => true;', 'public bool IsReadyForLoad() { return true; }').Replace('public bool IsRelocationEnabled() => true;', 'public bool IsRelocationEnabled() { return true; }').Replace('T val = default;', 'T val = default(T);').Replace('TValue val = default;', 'TValue val = default(TValue);')
+    Add-Type -TypeDefinition ('namespace PersistenceFixture { using System; using System.Collections.Generic; using ModAPI.Harmony;' + $persistenceCompilation + '}')
+    [PersistenceFixture.PersistenceContractFixture]::Verify()
+    $script:contractCount += [PersistenceFixture.PersistenceContractFixture]::Count
+} catch {
+    $failures.Add('persistent collections runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
