@@ -1717,6 +1717,16 @@ try {
     $failures.Add('scenario event subscribers runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $bulkMethod = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler.cs') 'public FluentTranspiler ReplaceAllPatterns('
+    $bulkMethod = [regex]::Replace($bulkMethod, '(LogTrace|AddSoftFailure|AddWarning)\(\$"[^\r\n]*\);', '$1("bulk pattern diagnostic");')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ((Read-RepoFile 'tools\TranspilerBulk.ContractFixture.cs') + 'namespace TranspilerBulkFixture { public partial class FluentTranspiler {' + $bulkMethod + '}}')
+    [TranspilerBulkFixture.TranspilerBulkContractFixture]::Verify()
+    $script:contractCount += [TranspilerBulkFixture.TranspilerBulkContractFixture]::Count
+} catch {
+    $failures.Add('transpiler bulk pattern runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

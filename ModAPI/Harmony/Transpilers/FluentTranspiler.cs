@@ -1905,14 +1905,19 @@ namespace ModAPI.Harmony
         /// </code>
         /// </para>
         /// </remarks>
-        /// <param name="patternPredicates">Predicates that match each instruction in the target sequence.</param>
-        /// <param name="replaceWith">The instructions to insert at every match location.</param>
+        /// <param name="patternPredicates">A nonempty array of nonnull predicates that match each instruction in the target sequence.</param>
+        /// <param name="replaceWith">The instructions to insert at every match location. An empty array removes matches.</param>
         /// <param name="preserveInstructionCount">If true, fills remaining slots with <c>OpCodes.Nop</c> to maintain stable instruction indices.</param>
         public FluentTranspiler ReplaceAllPatterns(
             Func<CodeInstruction, bool>[] patternPredicates,
             CodeInstruction[] replaceWith,
             bool preserveInstructionCount = false)
         {
+            if (patternPredicates == null || patternPredicates.Length == 0 || patternPredicates.Any(predicate => predicate == null) || replaceWith == null)
+            {
+                AddSoftFailure("ReplaceAllPatterns requires a nonempty array of nonnull predicates and a nonnull replacement array.");
+                return this;
+            }
             string methodName = _originalMethod != null ? _originalMethod.Name : "<unknown-method>";
             bool effectivePreserveInstructionCount = ResolvePatternPreserveMode(preserveInstructionCount, patternPredicates != null ? patternPredicates.Length : 0);
             LogTrace($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Searching for pattern (length {patternPredicates.Length}) in {methodName}. Preserve count: requested={preserveInstructionCount}, effective={effectivePreserveInstructionCount}.");
