@@ -1494,6 +1494,8 @@ try {
     $assignmentEnd = $assignmentSource.IndexOf('    internal sealed class CharacterItemAssignmentPersistence')
     $storeSources = @(
         (Read-RepoFile 'tools\Storage.ContractFixture.cs'),
+        ('namespace ShelteredAPI.Storage { internal partial class InventoryItemStore {' + (Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Storage\InventoryItemStore.cs') 'public override ItemTransferResult Add(') + '}}'),
+        ('namespace ShelteredAPI.Storage { internal static partial class ShelteredStores {' + (Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Storage\ShelteredStores.cs') 'public static ItemTransferResult Transfer(') + (Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Storage\ShelteredStores.cs') 'private static void RollbackTransfer(') + '}}'),
         (Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'),
         (Read-RepoFile 'ShelteredAPI\Storage\CharacterItemAssignmentContracts.cs'),
         ($assignmentSource.Substring(0, $assignmentEnd) + '}'),

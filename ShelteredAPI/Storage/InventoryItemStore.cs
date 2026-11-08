@@ -85,8 +85,10 @@ namespace ShelteredAPI.Storage
             {
                 if (FoodManager.Instance == null)
                     return ItemTransferResult.Failed(itemId, quantity, "FoodManager is not available");
-                bool accepted = FoodManager.Instance.AddRations(quantity);
-                return accepted ? ItemTransferResult.Ok(itemId, quantity, quantity) : ItemTransferResult.Failed(itemId, quantity, "Pantry capacity rejected some rations");
+                int before = FoodManager.Instance.Rations;
+                FoodManager.Instance.AddRations(quantity);
+                int moved = Math.Max(0, FoodManager.Instance.Rations - before);
+                return moved > 0 ? ItemTransferResult.Ok(itemId, quantity, moved) : ItemTransferResult.Failed(itemId, quantity, "Pantry capacity rejected the rations");
             }
             if (IsMeat(itemId))
             {

@@ -6,8 +6,38 @@ namespace ShelteredAPI.Storage {
     }
     internal static class ModItemStorePersistence { internal static void EnsureRegistered() { } }
     internal static class CharacterItemAssignmentPersistence { internal static void EnsureRegistered() { } }
-    internal static class ShelteredStores {
+    internal static partial class ShelteredStores {
         internal static bool TryResolveStore(string id, ItemStoreKind kind, out IItemStore store) { return ModItemStoreRegistry.TryGet(id, out store); }
+        private static string GetCannotAddMessage(IItemStore store, string id) { return "Cannot add"; }
+    }
+}
+public class FoodManager {
+    public static FoodManager Instance = new FoodManager();
+    public int Rations = 19;
+    public bool AddRations(int quantity) { Rations += quantity; if (Rations > 20) { Rations = 20; return false; } return true; }
+    public int TakeRations(int quantity) { int before = Rations; Rations = Math.Max(0, Rations - quantity); return before - Rations; }
+    public int AddMeat(int quantity) { return quantity; }
+    public int AddDesperateMeat(int quantity) { return quantity; }
+}
+namespace ShelteredAPI.Content {
+    internal class InventoryMutationResult { public bool Success = true; public string ErrorMessage = ""; }
+    internal static class ShelteredContent { public static InventoryMutationResult AddToInventory(string id, int quantity) { return new InventoryMutationResult(); } }
+}
+namespace ShelteredAPI.Storage {
+    internal partial class InventoryItemStore : ItemStoreBase {
+        public override string StoreId { get { return "inventory"; } }
+        public override string DisplayName { get { return "Inventory"; } }
+        public override ItemStoreKind Kind { get { return ItemStoreKind.Inventory; } }
+        public override int Capacity { get { return 20; } }
+        public override int Used { get { return FoodManager.Instance.Rations; } }
+        public override ItemStoreSnapshot Snapshot() { return new ItemStoreSnapshot(); }
+        public override int GetCount(string id) { return FoodManager.Instance.Rations; }
+        public override bool CanAdd(string id, int quantity) { return true; }
+        public override bool CanRemove(string id, int quantity) { return GetCount(id) >= quantity; }
+        public override ItemTransferResult Remove(string id, int quantity) { return ItemTransferResult.Ok(id, quantity, FoodManager.Instance.TakeRations(quantity)); }
+        private static bool IsRation(string id) { return id == "Ration"; }
+        private static bool IsMeat(string id) { return false; }
+        private static bool IsDesperateMeat(string id) { return false; }
     }
 }
 public class FamilyMember {
@@ -49,5 +79,11 @@ public static class StorageContractFixture {
         Check(assignments.Snapshot().Count == 0, "A new session must discard the previous character assignments");
         var sources = (System.Collections.IDictionary)assignments.GetType().GetField("_knownSources", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(assignments);
         Check(sources.Count == 0, "Loaded assignments must resolve stores from the current scene");
+        var inventory = new ShelteredAPI.Storage.InventoryItemStore();
+        Check(inventory.Add("Ration", 5).Moved == 1, "Ration adds must report partial pantry acceptance");
+        FoodManager.Instance.Rations = 19;
+        original.Add("Ration", 5);
+        var transfer = ShelteredAPI.Storage.ShelteredStores.Transfer(original, inventory, "Ration", 5);
+        Check(!transfer.Success && original.GetCount("Ration") == 5 && FoodManager.Instance.Rations == 19, "A rejected partial ration transfer must restore both stores without duplicating items");
     }
 }
