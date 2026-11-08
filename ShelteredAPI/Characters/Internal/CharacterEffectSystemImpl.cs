@@ -125,6 +125,35 @@ namespace ShelteredAPI.Characters.Internal
             return null;
         }
 
+        /// <summary>
+        /// Resolves a character by kind, ID, and (for synthetic characters) source-mod domain,
+        /// so a family member, visitor, and synthetic character that share a number never alias.
+        /// </summary>
+        internal ICharacterProxy GetCharacterByActorId(ActorId actorId)
+        {
+            if (actorId == null) return null;
+            EnsureRegistered();
+            lock (_sync)
+            {
+                LiveCharacterProxy live;
+                switch (actorId.Kind)
+                {
+                    case ActorKind.Player:
+                        return _liveFamily.TryGetValue(actorId.LocalId, out live) ? live : null;
+                    case ActorKind.Visitor:
+                        return _liveVisitors.TryGetValue(actorId.LocalId, out live) ? live : null;
+                    case ActorKind.Synthetic:
+                        SyntheticCharacterProxy synthetic;
+                        if (!_syntheticById.TryGetValue(actorId.LocalId, out synthetic)) return null;
+                        return string.Equals(NormalizeDomain(actorId.Domain), NormalizeDomain(synthetic.SourceMod), StringComparison.OrdinalIgnoreCase)
+                            ? synthetic
+                            : null;
+                    default:
+                        return null;
+                }
+            }
+        }
+
         public CharacterQuery Query()
         {
             return new CharacterQuery(GetAllCharacters);

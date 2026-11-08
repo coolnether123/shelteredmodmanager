@@ -1305,6 +1305,19 @@ Assert-Contains "semantic contract serializer window" $rendererManifestSource 'I
 $dispatchSource = Read-RepoFile "ModAPI\Core\SubscriberDispatch.cs"
 $sharedGame = Read-RepoFile "ShelteredAPI\Events\GameEvents.cs"
 $sharedRuntime = Read-RepoFile "ShelteredAPI\Characters\Internal\CharacterRuntime.cs"
+$characterQuery = Read-RepoFile "ShelteredAPI\Characters\Models\CharacterQuery.cs"
+$shelteredActors = Read-RepoFile "ShelteredAPI\Actors\ActorSystem.cs"
+$characterSystemImpl = Read-RepoFile "ShelteredAPI\Characters\Internal\CharacterEffectSystemImpl.cs"
+Assert-Contains "character query custom data" $characterQuery 'WithData<T>\(string key\).*HasCustomData\(key\).*GetCustomData<object>\(key\) is T' "WithData<T> must test the custom-data key and the requested value type."
+Assert-NotContains "character query custom data" $characterQuery 'WithData<T>\(string key\)\s*\{\s*_predicates\.Add\(delegate\(ICharacterProxy c\) \{ return c != null && string\.Equals\(c\.Data\.PersistenceKey' "WithData<T> must not compare the persistence key."
+Assert-Contains "actor lookup identity" $shelteredActors 'TryGetCharacter\(ActorId actorId.*GetCharacterByActorId\(actorId\)' "TryGetCharacter must resolve by the full actor identity."
+Assert-NotContains "actor lookup identity" $shelteredActors 'GetByUniqueId\(actorId\.LocalId\)' "TryGetCharacter must not drop the actor kind and domain."
+Assert-Contains "actor lookup identity" $characterSystemImpl 'GetCharacterByActorId\(ActorId actorId\).*ActorKind\.Player:.*_liveFamily.*ActorKind\.Visitor:.*_liveVisitors.*ActorKind\.Synthetic:.*NormalizeDomain\(actorId\.Domain\), NormalizeDomain\(synthetic\.SourceMod\)' "actor lookup must pick the store by kind and match the synthetic source-mod domain."
+Assert-Contains "live character edits" $sharedRuntime 'internal void Bind\(FamilyMember member\).*PullFromGame\(game, sameObject\).*internal void Bind\(NpcVisitor npc\).*PullFromGame\(game, sameObject\)' "refreshing a live character must keep pending mod edits to the same game object."
+Assert-NotContains "live character edits" $sharedRuntime 'FillFromFamilyMember\(_data, member\)|FillFromVisitor\(_data, npc\)' "refreshing a live character must not copy game values over the mod-facing data."
+Assert-Contains "live character edits" $sharedRuntime 'keepPendingEdits && !EqualityComparer<T>\.Default\.Equals\(current, synced\) \? current : game' "only fields edited since the last sync may survive a refresh."
+Assert-Contains "live stat writeback" $sharedRuntime 'WriteStatLevel\(stats\.Strength.*WriteStatLevel\(stats\.Dexterity.*WriteStatLevel\(stats\.Intelligence.*WriteStatLevel\(stats\.Charisma.*WriteStatLevel\(stats\.Perception' "every editable stat level must be written back to the game."
+Assert-Contains "live stat writeback" $sharedRuntime 'desired - stat\.LevelModifier.*SetInitialLevel\(baseLevel, stat\.LevelCap\)' "stat writeback must keep the level modifier and the cap."
 $argsStart = $sharedGame.IndexOf('    public sealed class CharacterDeathEventArgs')
 $argsEnd = $sharedGame.IndexOf('    /// <summary>', $sharedGame.IndexOf('    public sealed class ObjectDegradingEventArgs'))
 # Use the next central-owner summary, rather than the property's XML summary.

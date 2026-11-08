@@ -23,6 +23,9 @@ namespace ShelteredAPI.Characters.Internal
         private readonly BasicCharacterEffects _effects;
         private readonly BasicCharacterAttributes _attributes;
         private readonly Action<ICharacterProxy, string, object> _dataChanged;
+        // Game values as of the last read or write. A data field that differs from this was edited by a mod
+        // and is pending writeback, so a refresh from the game must not overwrite it.
+        private readonly CharacterDataModel _synced = new CharacterDataModel();
 
         public int UniqueId { get; private set; }
         public string Name
@@ -76,6 +79,7 @@ namespace ShelteredAPI.Characters.Internal
             _dataChanged = dataChanged;
             UniqueId = member != null ? member.GetId() : -1;
             _data = CharacterFactory.CreateFromFamilyMember(member);
+            CharacterFactory.FillFromFamilyMember(_synced, member);
             _effects = new BasicCharacterEffects(this);
             _attributes = new BasicCharacterAttributes();
             IsActive = true;
@@ -90,6 +94,7 @@ namespace ShelteredAPI.Characters.Internal
             _dataChanged = dataChanged;
             UniqueId = npc != null ? npc.npcId : -1;
             _data = CharacterFactory.CreateFromVisitor(npc);
+            CharacterFactory.FillFromVisitor(_synced, npc);
             _effects = new BasicCharacterEffects(this);
             _attributes = new BasicCharacterAttributes();
             IsActive = true;
@@ -99,10 +104,13 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Bind(FamilyMember member)
         {
+            bool sameObject = ReferenceEquals(_member, member);
             _member = member;
             if (member != null)
             {
-                CharacterFactory.FillFromFamilyMember(_data, member);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromFamilyMember(game, member);
+                PullFromGame(game, sameObject);
                 IsActive = true;
             }
             RefreshState();
@@ -110,13 +118,48 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Bind(NpcVisitor npc)
         {
+            bool sameObject = ReferenceEquals(_npc, npc);
             _npc = npc;
             if (npc != null)
             {
-                CharacterFactory.FillFromVisitor(_data, npc);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromVisitor(game, npc);
+                PullFromGame(game, sameObject);
                 IsActive = true;
             }
             RefreshState();
+        }
+
+        // Takes the game's current values but keeps mod edits that have not been written back yet.
+        // Pending edits only survive a refresh of the same game object; a new object starts from the game.
+        private void PullFromGame(CharacterDataModel game, bool keepPendingEdits)
+        {
+            _data.UniqueId = game.UniqueId;
+            _data.FirstName = Pick(_data.FirstName, _synced.FirstName, game.FirstName, keepPendingEdits);
+            _data.LastName = Pick(_data.LastName, _synced.LastName, game.LastName, keepPendingEdits);
+            _data.Health = Pick(_data.Health, _synced.Health, game.Health, keepPendingEdits);
+            _data.MaxHealth = Pick(_data.MaxHealth, _synced.MaxHealth, game.MaxHealth, keepPendingEdits);
+            _data.StrengthLevel = Pick(_data.StrengthLevel, _synced.StrengthLevel, game.StrengthLevel, keepPendingEdits);
+            _data.DexterityLevel = Pick(_data.DexterityLevel, _synced.DexterityLevel, game.DexterityLevel, keepPendingEdits);
+            _data.IntelligenceLevel = Pick(_data.IntelligenceLevel, _synced.IntelligenceLevel, game.IntelligenceLevel, keepPendingEdits);
+            _data.CharismaLevel = Pick(_data.CharismaLevel, _synced.CharismaLevel, game.CharismaLevel, keepPendingEdits);
+            _data.PerceptionLevel = Pick(_data.PerceptionLevel, _synced.PerceptionLevel, game.PerceptionLevel, keepPendingEdits);
+
+            _synced.UniqueId = game.UniqueId;
+            _synced.FirstName = game.FirstName;
+            _synced.LastName = game.LastName;
+            _synced.Health = game.Health;
+            _synced.MaxHealth = game.MaxHealth;
+            _synced.StrengthLevel = game.StrengthLevel;
+            _synced.DexterityLevel = game.DexterityLevel;
+            _synced.IntelligenceLevel = game.IntelligenceLevel;
+            _synced.CharismaLevel = game.CharismaLevel;
+            _synced.PerceptionLevel = game.PerceptionLevel;
+        }
+
+        private static T Pick<T>(T current, T synced, T game, bool keepPendingEdits)
+        {
+            return keepPendingEdits && !EqualityComparer<T>.Default.Equals(current, synced) ? current : game;
         }
 
         internal void ClearBinding()
@@ -163,21 +206,48 @@ namespace ShelteredAPI.Characters.Internal
         {
             if (_member != null)
             {
-                TrySetField(_member, "m_firstName", _data.FirstName);
-                TrySetField(_member, "m_lastName", _data.LastName);
+                WriteNamesAndStats(_member, _member.BaseStats);
                 SyncHealth(_member);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromFamilyMember(game, _member);
+                PullFromGame(game, false);
             }
 
             if (_npc != null)
             {
-                TrySetField(_npc, "m_firstName", _data.FirstName);
-                TrySetField(_npc, "m_lastName", _data.LastName);
+                WriteNamesAndStats(_npc, _npc.BaseStats);
                 SyncHealth(_npc);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromVisitor(game, _npc);
+                PullFromGame(game, false);
             }
+        }
+
+        private void WriteNamesAndStats(object character, BaseStats stats)
+        {
+            if (!string.Equals(_data.FirstName, _synced.FirstName, StringComparison.Ordinal))
+                TrySetField(character, "m_firstName", _data.FirstName);
+            if (!string.Equals(_data.LastName, _synced.LastName, StringComparison.Ordinal))
+                TrySetField(character, "m_lastName", _data.LastName);
+            if (stats == null) return;
+            WriteStatLevel(stats.Strength, _data.StrengthLevel, _synced.StrengthLevel);
+            WriteStatLevel(stats.Dexterity, _data.DexterityLevel, _synced.DexterityLevel);
+            WriteStatLevel(stats.Intelligence, _data.IntelligenceLevel, _synced.IntelligenceLevel);
+            WriteStatLevel(stats.Charisma, _data.CharismaLevel, _synced.CharismaLevel);
+            WriteStatLevel(stats.Perception, _data.PerceptionLevel, _synced.PerceptionLevel);
+        }
+
+        // Data levels are effective levels (base plus modifier), so the modifier is kept and only the base level moves.
+        private static void WriteStatLevel(BaseStat stat, int desired, int synced)
+        {
+            if (stat == null || desired == synced) return;
+            int baseLevel = Math.Max(0, Math.Min(desired - stat.LevelModifier, stat.LevelCap));
+            stat.SetInitialLevel(baseLevel, stat.LevelCap);
         }
 
         private void SyncHealth(BaseCharacter character)
         {
+            if (_data.Health == _synced.Health && _data.MaxHealth == _synced.MaxHealth) return;
             int maxHealth = Math.Max(1, _data.MaxHealth);
             int health = Math.Max(0, Math.Min(_data.Health, maxHealth));
             character.SetMaxHealth(maxHealth);
