@@ -46,7 +46,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
                 })
                 .Register();
 
-            return new RegistrationLease(registrationId);
+            return new RegistrationLease(registrationId, registration);
         }
 
         public static bool CanOpen(string registrationId, Obj_Base target, FamilyMember member)
@@ -111,13 +111,17 @@ namespace ShelteredAPI.UI.Internal.Runtime{
             return new ObjectPanelContext(objectId, target, member);
         }
 
-        private static void Unregister(string registrationId)
+        private static void Unregister(string registrationId, ObjectPanelRegistration registration)
         {
             if (string.IsNullOrEmpty(registrationId))
                 return;
 
             lock (Sync)
-                Registrations.Remove(registrationId);
+            {
+                ObjectPanelRegistration current;
+                if (Registrations.TryGetValue(registrationId, out current) && ReferenceEquals(current, registration))
+                    Registrations.Remove(registrationId);
+            }
         }
 
         private static string BuildRegistrationId(ObjectPanelRegistration registration, ObjectManager.ObjectType objectType)
@@ -192,10 +196,12 @@ namespace ShelteredAPI.UI.Internal.Runtime{
         private sealed class RegistrationLease : IDisposable
         {
             private string _registrationId;
+            private readonly ObjectPanelRegistration _registration;
 
-            public RegistrationLease(string registrationId)
+            public RegistrationLease(string registrationId, ObjectPanelRegistration registration)
             {
                 _registrationId = registrationId;
+                _registration = registration;
             }
 
             public void Dispose()
@@ -203,7 +209,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
                 if (_registrationId == null)
                     return;
 
-                Unregister(_registrationId);
+                Unregister(_registrationId, _registration);
                 _registrationId = null;
             }
         }

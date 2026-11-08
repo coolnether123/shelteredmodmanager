@@ -1629,6 +1629,17 @@ try {
     $failures.Add('scenario base mode runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $objectPanelRegistry = Read-RepoFile 'ShelteredAPI\UI\Internal\Runtime\RuntimeObjectPanelRegistry.cs'
+    $objectPanelRegistry = $objectPanelRegistry.Substring(0, $objectPanelRegistry.IndexOf('    internal sealed class RuntimeObjectPanelInteraction')) + '}'
+    $objectPanelRegistry = [regex]::Replace($objectPanelRegistry, '(?m)^using [^\r\n]+\r?\n', '')
+    Add-Type -TypeDefinition ('namespace ObjectPanelFixture { using System; using System.Collections.Generic; using System.Text; using ModAPI.Core; using ShelteredAPI.Content; using ShelteredAPI.Interactions; using ShelteredAPI.UI.Runtime;' + $objectPanelRegistry + (Read-RepoFile 'tools\ObjectPanel.ContractFixture.cs') + '}')
+    [ObjectPanelFixture.ShelteredAPI.UI.Internal.Runtime.ObjectPanelContractFixture]::Verify()
+    $script:contractCount += [ObjectPanelFixture.ShelteredAPI.UI.Internal.Runtime.ObjectPanelContractFixture]::Count
+} catch {
+    $failures.Add('object panel registration runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
