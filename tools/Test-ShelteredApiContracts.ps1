@@ -1748,6 +1748,25 @@ try {
     $failures.Add('Unity vector-zero runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $receiverSource = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs'
+    $receiverMethods = ''
+    foreach ($signature in @('internal static bool ValidateStaticMethod(', 'internal static bool ValidateReturnTypeAssignable(', 'internal static bool ValidateReplacementCallSignature(', 'internal static bool ValidateHookCanReceiveOriginalArguments(', 'private static Type[] GetCallStackInputTypes(', 'private static Type[] GetEnclosingArgumentTypes(', 'private static bool IsStackAssignable(', 'private static Type NormalizeByRef(', 'private static bool IsInt32StackType(', 'private static string FormatType(', 'private static void Warn(')) {
+        $receiverMethods += Read-ContractMethod $receiverSource $signature
+    }
+    $compatSource = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerCompatibilityExtensions.cs'
+    $receiverCompat = ''
+    foreach ($signature in @('internal static bool IsCompatibleCallReplacement(', 'private static Type[] BuildExpectedReplacementParameters(', 'private static bool IsStackParameterCompatible(', 'private static bool IsReturnCompatible(', 'private static bool IsInt32StackType(', 'private static string FormatType(')) {
+        $receiverCompat += Read-ContractMethod $compatSource $signature
+    }
+    $receiverMethods = [regex]::Replace($receiverMethods, '\$"[^"\r\n]*"', '"receiver diagnostic"')
+    Add-Type -TypeDefinition ('namespace ReceiverFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit;' + (Read-RepoFile 'tools\TranspilerReceiver.ContractFixture.cs') + 'public static class FluentTranspilerRecipeValidation {' + $receiverMethods + '} public static class FluentTranspilerCompatibilityExtensions {' + $receiverCompat + '}}')
+    [ReceiverFixture.TranspilerReceiverContractFixture]::Verify()
+    $script:contractCount += [ReceiverFixture.TranspilerReceiverContractFixture]::Count
+} catch {
+    $failures.Add('struct receiver runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

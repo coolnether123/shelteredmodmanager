@@ -438,7 +438,9 @@ namespace ModAPI.Harmony
 
             if (!sourceMethod.IsStatic && sourceMethod.DeclaringType != null)
             {
-                expectedParameters.Insert(0, sourceMethod.DeclaringType);
+                expectedParameters.Insert(0, sourceMethod.DeclaringType.IsValueType
+                    ? sourceMethod.DeclaringType.MakeByRefType()
+                    : sourceMethod.DeclaringType);
             }
 
             return expectedParameters.ToArray();

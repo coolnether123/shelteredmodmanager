@@ -466,7 +466,7 @@ namespace ModAPI.Harmony
             var inputs = new List<Type>();
             if (!method.IsStatic)
             {
-                inputs.Add(method.DeclaringType);
+                inputs.Add(method.DeclaringType.IsValueType ? method.DeclaringType.MakeByRefType() : method.DeclaringType);
             }
 
             inputs.AddRange(method.GetParameters().Select(parameter => parameter.ParameterType));
@@ -478,7 +478,7 @@ namespace ModAPI.Harmony
             var inputs = new List<Type>();
             if (!method.IsStatic)
             {
-                inputs.Add(method.DeclaringType);
+                inputs.Add(method.DeclaringType.IsValueType ? method.DeclaringType.MakeByRefType() : method.DeclaringType);
             }
 
             inputs.AddRange(method.GetParameters().Select(parameter => parameter.ParameterType));
