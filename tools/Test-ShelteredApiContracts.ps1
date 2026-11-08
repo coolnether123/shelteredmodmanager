@@ -1690,6 +1690,17 @@ try {
     $failures.Add('transpiler guard runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $conditionSerializer = Read-RepoFile 'ShelteredAPI\Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs'
+    $conditionGroupMethods = (Read-ContractMethod $conditionSerializer 'private static ScenarioConditionGroup ReadConditionGroup(') + (Read-ContractMethod $conditionSerializer 'private static void ReadConditionRefs(')
+    $conditionGroupMethods += Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Application\Conditions\ScenarioConditionEvaluatorRegistry.cs') 'private bool IsGroupSatisfied('
+    Add-Type -ReferencedAssemblies System.Xml,System,System.Core -TypeDefinition ('namespace ConditionGroupsFixture { using System; using System.Collections.Generic; using System.Xml;' + (Read-RepoFile 'tools\ScenarioConditionGroups.ContractFixture.cs') + 'public sealed partial class ScenarioConditionGroupsContractFixture {' + $conditionGroupMethods + '}}')
+    [ConditionGroupsFixture.ScenarioConditionGroupsContractFixture]::Verify()
+    $script:contractCount += [ConditionGroupsFixture.ScenarioConditionGroupsContractFixture]::Count
+} catch {
+    $failures.Add('scenario condition groups runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
