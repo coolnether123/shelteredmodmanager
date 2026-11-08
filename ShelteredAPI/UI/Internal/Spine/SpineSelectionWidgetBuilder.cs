@@ -33,6 +33,7 @@ namespace ShelteredAPI.UI.Internal.Spine
             UIUtil.CreateButton(container, SpineWidgetFactory.ButtonTemplate, "CYCLE", 100, 40, new Vector3(330, 0, 0), () =>
             {
                 var values = Enum.GetValues(def.EnumType);
+                if (values.Length == 0) return;
                 var currentValue = SpineWidgetRuntime.GetValue<object>(def, settingsObject);
                 var index = Array.IndexOf(values, currentValue);
                 if (index == -1)
@@ -49,7 +50,6 @@ namespace ShelteredAPI.UI.Internal.Spine
                     }
                 }
 
-                if (index == -1) index = 0;
                 index = (index + 1) % values.Length;
 
                 var nextValue = values.GetValue(index);
@@ -88,7 +88,6 @@ namespace ShelteredAPI.UI.Internal.Spine
 
                 var currentValue = SpineWidgetRuntime.GetValue<string>(def, settingsObject);
                 var index = options.FindIndex(o => o.Equals(currentValue, StringComparison.OrdinalIgnoreCase));
-                if (index == -1) index = 0;
                 index = (index + 1) % options.Count;
 
                 var nextValue = options[index];

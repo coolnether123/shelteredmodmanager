@@ -1767,6 +1767,16 @@ try {
     $failures.Add('struct receiver runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $selectionSource = Read-RepoFile 'ShelteredAPI\UI\Internal\Spine\SpineSelectionWidgetBuilder.cs'
+    $selectionMethods = (Read-ContractMethod $selectionSource 'public static GameObject CreateEnumWidget(') + (Read-ContractMethod $selectionSource 'public static GameObject CreateChoiceWidget(')
+    Add-Type -TypeDefinition ('namespace SpineSelectionFixture { using System; using System.Collections.Generic; using System.Linq;' + (Read-RepoFile 'tools\SpineSelection.ContractFixture.cs') + 'public static class SpineSelectionWidgetBuilder {' + $selectionMethods + '}}')
+    [SpineSelectionFixture.SpineSelectionContractFixture]::Verify()
+    $script:contractCount += [SpineSelectionFixture.SpineSelectionContractFixture]::Count
+} catch {
+    $failures.Add('setting selection runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
