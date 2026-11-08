@@ -1645,9 +1645,9 @@ try {
     $transpilerSelection = (Read-ContractMethod $transpilerSource 'public FluentTranspiler FindSequence(SearchMode mode, params Func<CodeInstruction, bool>[] predicates)') + (Read-ContractMethod $transpilerSource 'public bool TryFindSequence(')
     $transpilerSelection = $transpilerSelection.Replace('$"Predicate sequence not found: length {length}"', '"Predicate sequence not found: length " + length')
     $shelteredPatternSource = Read-RepoFile 'ShelteredAPI\Harmony\ShelteredPatterns.cs'
-    $shelteredPatternMethods = Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchUILocalization('
+    $shelteredPatternMethods = (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchUILocalization(') + (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchLog(')
     $harmonyFixtureAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $RepoRoot 'mods\0Harmony\Assemblies\0Harmony.dll'))
-    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace TranspilerSelectionFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + (Read-RepoFile 'tools\TranspilerSelection.ContractFixture.cs') + 'public partial class FluentTranspiler {' + $transpilerSelection + '} public static partial class ShelteredPatterns {' + $shelteredPatternMethods + '}}')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace TranspilerSelectionFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Reflection.Emit; using HarmonyLib; using ModAPI.Core;' + (Read-RepoFile 'tools\TranspilerSelection.ContractFixture.cs') + 'public partial class FluentTranspiler {' + $transpilerSelection + '} public static partial class ShelteredPatterns {' + $shelteredPatternMethods + '}}')
     [TranspilerSelectionFixture.TranspilerSelectionContractFixture]::Verify()
     $script:contractCount += [TranspilerSelectionFixture.TranspilerSelectionContractFixture]::Count
 } catch {

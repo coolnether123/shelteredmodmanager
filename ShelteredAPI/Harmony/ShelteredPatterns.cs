@@ -133,10 +133,14 @@ namespace ShelteredAPI.Harmony
 
         public static FluentTranspiler MatchLog(this FluentTranspiler t)
         {
-             return t.MatchCall(typeof(MMLog), "WriteInfo")
-                .MatchCall(typeof(MMLog), "WriteDebug")
-                .MatchCall(typeof(MMLog), "WriteWarning")
-                .MatchCall(typeof(MMLog), "WriteError");
+            return t.FindSequence(SearchMode.Start, delegate(CodeInstruction instruction)
+            {
+                MethodInfo method = instruction.operand as MethodInfo;
+                return (instruction.opcode == OpCodes.Call || instruction.opcode == OpCodes.Callvirt)
+                    && method != null && method.DeclaringType == typeof(MMLog)
+                    && (method.Name == "WriteInfo" || method.Name == "WriteDebug"
+                        || method.Name == "WriteWarning" || method.Name == "WriteError");
+            });
         }
 
         public static FluentTranspiler MatchBunkerLocation(this FluentTranspiler t)

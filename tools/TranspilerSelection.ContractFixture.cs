@@ -29,6 +29,7 @@ public static class TranspilerSelectionContractFixture {
         t.FindSequence(SearchMode.Start, delegate(CodeInstruction instruction) { return instruction.opcode == OpCodes.Ldc_I4_1; });
         Check(t.HasMatch && t.CurrentIndex == 0, "A later search from Start must recover after a missing match");
         VerifyLocalization();
+        VerifyLogs();
     }
     private static void VerifyLocalization() {
         var get = typeof(Localization).GetMethod("Get");
@@ -40,5 +41,21 @@ public static class TranspilerSelectionContractFixture {
         ShelteredPatterns.MatchUILocalization(t);
         Check(t.HasMatch && t.CurrentIndex == 2, "An unspecified localization key must match the first Get call");
     }
+    private static void VerifyLogs() {
+        foreach (string name in new[] { "WriteInfo", "WriteDebug", "WriteWarning", "WriteError" }) {
+            var t = new FluentTranspiler(new CodeInstruction(OpCodes.Ldstr, "message"), new CodeInstruction(OpCodes.Call, typeof(ModAPI.Core.MMLog).GetMethod(name)));
+            ShelteredPatterns.MatchLog(t);
+            Check(t.HasMatch && t.CurrentIndex == 1 && t.Failures == 0, "Log matching must accept " + name + " without requiring other log levels");
+        }
+        var absent = new FluentTranspiler(new CodeInstruction(OpCodes.Ret));
+        ShelteredPatterns.MatchLog(absent);
+        Check(!absent.HasMatch && absent.Failures == 1, "Log matching must report an absent log call once");
+    }
 }
 public static class Localization { public static string Get(string key, bool suppressWarnings) { return key; } }
+namespace ModAPI.Core { public static class MMLog {
+    public static void WriteInfo(string message) { }
+    public static void WriteDebug(string message) { }
+    public static void WriteWarning(string message) { }
+    public static void WriteError(string message) { }
+} }
