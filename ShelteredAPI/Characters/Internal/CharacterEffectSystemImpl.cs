@@ -443,6 +443,7 @@ namespace ShelteredAPI.Characters.Internal
                 MeshId = "synthetic"
             };
             p.Data = data;
+            data.CustomDataChanged = delegate(string changedKey, object value) { OnDataChangedInternal(p, changedKey, value); };
             p.Effects = new BasicCharacterEffects(p);
             p.Attributes = new BasicCharacterAttributes();
             p.State = CharacterState.SyntheticAbsent;

@@ -8,6 +8,7 @@ namespace ShelteredAPI.Characters.Models{
     {
         private readonly object _customDataLock = new object();
         private readonly Dictionary<string, object> _customData = new Dictionary<string, object>(StringComparer.Ordinal);
+        internal Action<string, object> CustomDataChanged;
 
         public int UniqueId { get; internal set; }
         public string PersistenceKey { get; internal set; }
@@ -40,6 +41,8 @@ namespace ShelteredAPI.Characters.Models{
             {
                 _customData[key] = value;
             }
+            Action<string, object> changed = CustomDataChanged;
+            if (changed != null) changed(key, value);
         }
 
         public T GetCustomData<T>(string key)

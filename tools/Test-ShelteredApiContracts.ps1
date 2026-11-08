@@ -1437,6 +1437,8 @@ try {
         (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterEffect.cs'),
         (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterEffects.cs'),
         (Read-RepoFile 'ShelteredAPI\Characters\Models\EffectInstance.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterData.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\CharacterDataModel.cs'),
         ('namespace ShelteredAPI.Characters.Internal {' + $sharedRuntime.Substring($effectsStart, $effectsEnd - $effectsStart) + '}' + $sharedRuntime.Substring($contextStart, $contextEnd - $contextStart) + '}')
     ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
     $fixture = (Read-RepoFile 'tools\CharacterEffects.ContractFixture.cs').Replace('using System.Linq;', 'using System.Linq; using ModAPI.Util;')
@@ -1444,6 +1446,9 @@ try {
     Add-Type -TypeDefinition $effectCompilation
     [CharacterEffectsContractFixture]::Verify()
     $script:contractCount += [CharacterEffectsContractFixture]::Count
+    Assert-Contains 'live custom data notifications' $sharedRuntime 'CreateFromFamilyMember\(member\);\s*_data.CustomDataChanged = NotifyCustomDataChanged;.*CreateFromVisitor\(npc\);\s*_data.CustomDataChanged = NotifyCustomDataChanged;' 'Both live proxy kinds must forward custom-data writes.'
+    Assert-Contains 'synthetic custom data notifications' $characterSystemImpl 'data.CustomDataChanged = delegate\(string changedKey, object value\) \{ OnDataChangedInternal\(p, changedKey, value\); \}' 'Synthetic custom-data writes must reach the same event owner.'
+    Assert-NotContains 'custom data event meaning' $sharedRuntime '_dataChanged\(this, "state", State\)' 'Frame ticks must not emit a custom-data change without a write.'
 } catch {
     $failures.Add('character effects runtime contract: ' + $_.Exception.Message)
 }

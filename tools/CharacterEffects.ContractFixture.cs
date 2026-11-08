@@ -1,12 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 using ShelteredAPI.Characters.Abstractions;
 using ShelteredAPI.Characters.Models;
 using ShelteredAPI.Characters.Internal;
 namespace ShelteredAPI.Content { }
 namespace ShelteredAPI.Saves { }
-namespace ShelteredAPI.Characters.Abstractions { public interface ICharacterProxy { } }
+namespace UnityEngine { public struct Color { } }
+namespace ShelteredAPI.Characters.Abstractions {
+    public interface ICharacterProxy { }
+    public enum CharacterSource { RealFamily, Visitor, Synthetic }
+}
 namespace ModAPI.Util {
     public static class FixtureLists {
         public static IReadOnlyList<T> ToReadOnlyList<T>(this List<T> list) { return list.AsReadOnly(); }
@@ -45,6 +50,14 @@ public static class CharacterEffectsContractFixture {
         public void DeserializeData(string data) { }
     }
     public static void Verify() {
+        var data = new CharacterDataModel();
+        int changes = 0;
+        data.CustomDataChanged = delegate(string key, object value) {
+            Check(key == "fixture" && (int)value == 3 && data.GetCustomData<int>(key) == 3, "Custom-data notifications must include the committed key and value"); changes++;
+        };
+        data.SetCustomData("fixture", 3);
+        data.SetCustomData(null, 9);
+        Check(changes == 1, "Custom data must emit one notification per valid write");
         var effects = new BasicCharacterEffects(null);
         Effect.Behavior = StackBehavior.Refresh;
         var first = effects.Apply<Effect>(0);

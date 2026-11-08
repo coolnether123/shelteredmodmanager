@@ -79,6 +79,7 @@ namespace ShelteredAPI.Characters.Internal
             _dataChanged = dataChanged;
             UniqueId = member != null ? member.GetId() : -1;
             _data = CharacterFactory.CreateFromFamilyMember(member);
+            _data.CustomDataChanged = NotifyCustomDataChanged;
             CharacterFactory.FillFromFamilyMember(_synced, member);
             _effects = new BasicCharacterEffects(this);
             _attributes = new BasicCharacterAttributes();
@@ -94,6 +95,7 @@ namespace ShelteredAPI.Characters.Internal
             _dataChanged = dataChanged;
             UniqueId = npc != null ? npc.npcId : -1;
             _data = CharacterFactory.CreateFromVisitor(npc);
+            _data.CustomDataChanged = NotifyCustomDataChanged;
             CharacterFactory.FillFromVisitor(_synced, npc);
             _effects = new BasicCharacterEffects(this);
             _attributes = new BasicCharacterAttributes();
@@ -199,7 +201,11 @@ namespace ShelteredAPI.Characters.Internal
             _attributes.Tick(dt);
             SyncToGameObject();
             RefreshState();
-            _dataChanged(this, "state", State);
+        }
+
+        private void NotifyCustomDataChanged(string key, object value)
+        {
+            if (_dataChanged != null) _dataChanged(this, key, value);
         }
 
         internal void SyncToGameObject()
