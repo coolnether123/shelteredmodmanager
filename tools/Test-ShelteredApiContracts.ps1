@@ -1473,6 +1473,7 @@ try {
 try {
     $actorOwner = Read-RepoFile 'ShelteredAPI\Actors\Internal\ActorSystemImpl.cs'
     $actorMethods = @(
+        'private static ActorProfileComponent BuildProfile(FamilyMember', 'private static ActorProfileComponent BuildProfile(NpcVisitor',
         'private bool BindLocked(', 'private bool RemoveBindingLocked(', 'private bool HasBindingTypeLocked(',
         'private static string NormalizeKey(', 'private static string BuildBindingIndexKey(',
         'private static bool IsValidBindingType(', 'private static bool IsOwnedBindingType(',

@@ -1393,6 +1393,11 @@ namespace ShelteredAPI.Actors.Internal
             component.PantsColor = member.pantsColor;
             component.Health = member.health;
             component.MaxHealth = member.maxHealth;
+            component.StrengthLevel = member.BaseStats.Strength.Level;
+            component.DexterityLevel = member.BaseStats.Dexterity.Level;
+            component.IntelligenceLevel = member.BaseStats.Intelligence.Level;
+            component.CharismaLevel = member.BaseStats.Charisma.Level;
+            component.PerceptionLevel = member.BaseStats.Perception.Level;
             return component;
         }
 
@@ -1402,8 +1407,19 @@ namespace ShelteredAPI.Actors.Internal
             if (visitor == null) return component;
             component.FirstName = visitor.firstName;
             component.LastName = visitor.lastName;
+            component.IsMale = visitor.isMale;
+            component.MeshId = visitor.meshId;
+            component.SkinColor = visitor.skinColor;
+            component.HairColor = visitor.hairColor;
+            component.ShirtColor = visitor.shirtColor;
+            component.PantsColor = visitor.pantsColor;
             component.Health = visitor.health;
             component.MaxHealth = visitor.maxHealth;
+            component.StrengthLevel = visitor.BaseStats.Strength.Level;
+            component.DexterityLevel = visitor.BaseStats.Dexterity.Level;
+            component.IntelligenceLevel = visitor.BaseStats.Intelligence.Level;
+            component.CharismaLevel = visitor.BaseStats.Charisma.Level;
+            component.PerceptionLevel = visitor.BaseStats.Perception.Level;
             return component;
         }
 

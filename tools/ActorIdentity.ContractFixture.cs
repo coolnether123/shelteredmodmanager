@@ -1,5 +1,18 @@
 // Production methods are inserted into this class by the contract gate.
-public struct Color { }
+public struct Color { public float r; }
+public class FixtureStat { public int Level = 6; }
+public class FixtureStats {
+    public FixtureStat Strength = new FixtureStat(), Dexterity = new FixtureStat(), Intelligence = new FixtureStat(), Charisma = new FixtureStat(), Perception = new FixtureStat();
+}
+public class FamilyMember {
+    public string firstName = "first", lastName = "last";
+    public bool isMale = true;
+    public string meshId = "fixture.mesh";
+    public Color skinColor = new Color { r = 1 }, hairColor = new Color { r = 2 }, shirtColor = new Color { r = 3 }, pantsColor = new Color { r = 4 };
+    public int health = 70, maxHealth = 100;
+    public FixtureStats BaseStats = new FixtureStats();
+}
+public class NpcVisitor : FamilyMember { }
 public static class JsonUtility {
     public static string ToJson(object value) { throw new InvalidOperationException("Fixture serializer"); }
     public static T FromJson<T>(string value) { throw new InvalidOperationException("Fixture serializer"); }
@@ -35,6 +48,11 @@ public sealed partial class ActorIdentityContractFixture {
     public static int Count;
     private static void Check(bool value, string message) { Count++; if (!value) throw new Exception(message); }
     public static void Verify() {
+        var familyProfile = BuildProfile(new FamilyMember());
+        var visitorProfile = BuildProfile(new NpcVisitor());
+        Check(familyProfile.StrengthLevel == 6 && familyProfile.DexterityLevel == 6 && familyProfile.IntelligenceLevel == 6 && familyProfile.CharismaLevel == 6 && familyProfile.PerceptionLevel == 6, "Family profiles must include all current stat levels");
+        Check(visitorProfile.StrengthLevel == 6 && visitorProfile.DexterityLevel == 6 && visitorProfile.IntelligenceLevel == 6 && visitorProfile.CharismaLevel == 6 && visitorProfile.PerceptionLevel == 6, "Visitor profiles must include all current stat levels");
+        Check(visitorProfile.IsMale && visitorProfile.MeshId == "fixture.mesh" && visitorProfile.SkinColor.r == 1 && visitorProfile.HairColor.r == 2 && visitorProfile.ShirtColor.r == 3 && visitorProfile.PantsColor.r == 4, "Visitor profiles must include appearance");
         var owner = new ActorIdentityContractFixture();
         var id = new ActorId(ActorKind.Custom, 1, "fixture");
         Check(owner.BindLocked(id, new ActorBinding { BindingType = "fixture.type", BindingKey = "part|leaf", SourceModId = "fixture" }, false), "First binding must succeed");
