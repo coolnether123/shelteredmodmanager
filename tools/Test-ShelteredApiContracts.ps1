@@ -1339,6 +1339,7 @@ $sharedSources = @(
     ('namespace ShelteredAPI.Events { internal static class UIEvents {' + $sharedUi.Substring($uiStart, $uiEnd - $uiStart) + '}}'),
     (Read-RepoFile "ShelteredAPI\Events\SharedPanelPatches.cs"),
     (Read-RepoFile "ShelteredAPI\Events\SharedGamePatches.cs"),
+    (Read-RepoFile "ShelteredAPI\Characters\PartyPatches.cs"),
     (Read-RepoFile "ShelteredAPI\Map\MapGenerationPolicies.cs"),
     (Read-RepoFile "ShelteredAPI\Map\Internal\MapGenerationPolicyRegistry.cs"),
     (Read-RepoFile "ShelteredAPI\Map\Internal\MapSizeGenerationScope.cs")
