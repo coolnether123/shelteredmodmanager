@@ -1646,6 +1646,7 @@ try {
     $transpilerSelection = $transpilerSelection.Replace('$"Predicate sequence not found: length {length}"', '"Predicate sequence not found: length " + length')
     $transpilerFeatures = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler_Features.cs'
     $transpilerSelection += (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchEither(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchWithGap(')
+    $transpilerSelection += (Read-ContractMethod $transpilerSource 'private struct StackExpectation') + (Read-ContractMethod $transpilerFeatures 'private struct StackDeltaExpectation') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler ExpectStack(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler EnsureStack(')
     $transpilerSelection = $transpilerSelection.Replace('$"MatchWithGap: End pattern not found within {maxGap} instructions of start."', '"MatchWithGap: End pattern not found within " + maxGap + " instructions of start."')
     $shelteredPatternSource = Read-RepoFile 'ShelteredAPI\Harmony\ShelteredPatterns.cs'
     $shelteredPatternMethods = (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchUILocalization(') + (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchLog(')

@@ -74,6 +74,7 @@ namespace ModAPI.Harmony
             if (_matcher.IsValid)
             {
                 _stackExpectations.Add(new StackExpectation { index = _matcher.Pos, expectedDepth = depth });
+                _lastStackCheckPos = _matcher.Pos;
             }
             return this;
         }

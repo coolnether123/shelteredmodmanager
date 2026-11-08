@@ -1,6 +1,9 @@
 public enum SearchMode { Start, Current, Next }
 public partial class FluentTranspiler {
     private readonly CodeMatcher _matcher;
+    private readonly List<StackExpectation> _stackExpectations = new List<StackExpectation>();
+    private readonly List<StackDeltaExpectation> _stackDeltaExpectations = new List<StackDeltaExpectation>();
+    private int _lastStackCheckPos = -1;
     public int Failures;
     public FluentTranspiler(params CodeInstruction[] instructions) { _matcher = new CodeMatcher(instructions); }
     public bool HasMatch { get { return _matcher.IsValid; } }
@@ -16,6 +19,10 @@ public partial class FluentTranspiler {
     }
     private void AddSoftFailure(string message) { Failures++; }
     private void AddWarning(string message) { }
+    private void AddNote(string message) { }
+    public bool HasStackDelta(int index, int start, int end, int delta) {
+        return _stackDeltaExpectations.Count > index && _stackDeltaExpectations[index].startIndex == start && _stackDeltaExpectations[index].endIndex == end && _stackDeltaExpectations[index].expectedDelta == delta;
+    }
 }
 public static class TranspilerSelectionContractFixture {
     public static int Count;
@@ -31,6 +38,18 @@ public static class TranspilerSelectionContractFixture {
         VerifyLocalization();
         VerifyLogs();
         VerifyCombinators();
+        VerifyStackAnchors();
+    }
+    private static void VerifyStackAnchors() {
+        var t = new FluentTranspiler(new CodeInstruction(OpCodes.Nop), new CodeInstruction(OpCodes.Ldc_I4_1), new CodeInstruction(OpCodes.Pop), new CodeInstruction(OpCodes.Ret));
+        t.FindSequence(SearchMode.Start, delegate(CodeInstruction i) { return i.opcode == OpCodes.Nop; });
+        t.ExpectStack(0).Next().Next().EnsureStack(1);
+        Check(t.HasStackDelta(0, 0, 2, 1), "ExpectStack must anchor the following EnsureStack delta check");
+        t.Next().EnsureStack(-1);
+        Check(t.HasStackDelta(1, 2, 3, -1), "EnsureStack must anchor the next delta check");
+        t.FindSequence(SearchMode.Start, delegate(CodeInstruction i) { return i.opcode == OpCodes.Nop; });
+        t.ExpectStack(0).Next().EnsureStack(0);
+        Check(t.HasStackDelta(2, 0, 1, 0), "A later ExpectStack must reset the delta anchor");
     }
     private static void VerifyCombinators() {
         Func<FluentTranspiler, FluentTranspiler> first = delegate(FluentTranspiler t) { return t.FindSequence(SearchMode.Current, delegate(CodeInstruction i) { return i.opcode == OpCodes.Ldc_I4_1; }); };
