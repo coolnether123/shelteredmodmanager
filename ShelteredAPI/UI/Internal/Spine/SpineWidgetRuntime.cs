@@ -162,8 +162,7 @@ namespace ShelteredAPI.UI.Internal.Spine
                 return false;
             }
 
-            SetValue(def, settingsObject, newValue);
-            return true;
+            return SetValue(def, settingsObject, newValue);
         }
 
         public static string FormatKeyCode(KeyCode key)
@@ -217,11 +216,11 @@ namespace ShelteredAPI.UI.Internal.Spine
             return null;
         }
 
-        private static void SetValue(SettingDefinition def, object obj, object value)
+        private static bool SetValue(SettingDefinition def, object obj, object value)
         {
             if (def.Setter == null)
             {
-                return;
+                return false;
             }
 
             try
@@ -246,10 +245,12 @@ namespace ShelteredAPI.UI.Internal.Spine
                 }
 
                 def.Setter(obj, converted);
+                return true;
             }
             catch (Exception ex)
             {
                 MMLog.WriteError($"Setter failed for {def.Id}: {ex.Message}");
+                return false;
             }
         }
 

@@ -1777,6 +1777,17 @@ try {
     $failures.Add('setting selection runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $setterSource = Read-RepoFile 'ShelteredAPI\UI\Internal\Spine\SpineWidgetRuntime.cs'
+    $setterMethods = (Read-ContractMethod $setterSource 'public static bool TryApplyValue(') + (Read-ContractMethod $setterSource 'private static bool SetValue(')
+    $setterMethods = [regex]::Replace($setterMethods, '\$"[^"\r\n]*"', '"setter diagnostic"')
+    Add-Type -IgnoreWarnings -TypeDefinition ('namespace SpineSetterFixture { using System;' + (Read-RepoFile 'tools\SpineSetter.ContractFixture.cs') + 'public static class SpineWidgetRuntime {' + $setterMethods + '}}')
+    [SpineSetterFixture.SpineSetterContractFixture]::Verify()
+    $script:contractCount += [SpineSetterFixture.SpineSetterContractFixture]::Count
+} catch {
+    $failures.Add('setting setter runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
