@@ -1524,6 +1524,17 @@ try {
     $failures.Add('mod stores runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $lifetimeMethods = (Read-ContractMethod $characterSystemImpl 'public void UnregisterCharacter(') + (Read-ContractMethod $characterSystemImpl 'private void HandleSessionStarted(')
+    $lifetimeFixture = Read-RepoFile 'tools\CharacterLifetime.ContractFixture.cs'
+    $lifetimeModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    Add-Type -TypeDefinition ('namespace LifetimeFixture { using System; using System.Collections.Generic; using System.Linq; using ModAPI.Actors;' + $lifetimeModels + $lifetimeFixture + 'public sealed partial class CharacterLifetimeContractFixture {' + $lifetimeMethods + '}}')
+    [LifetimeFixture.CharacterLifetimeContractFixture]::Verify()
+    $script:contractCount += [LifetimeFixture.CharacterLifetimeContractFixture]::Count
+} catch {
+    $failures.Add('character lifetime runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

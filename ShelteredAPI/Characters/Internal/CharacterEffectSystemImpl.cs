@@ -193,6 +193,8 @@ namespace ShelteredAPI.Characters.Internal
                     SyntheticCharacterProxy synthetic = character as SyntheticCharacterProxy;
                     if (synthetic != null)
                     {
+                        SyntheticCharacterProxy registered;
+                        if (!_syntheticById.TryGetValue(synthetic.UniqueId, out registered) || !ReferenceEquals(registered, synthetic)) return;
                         _syntheticById.Remove(synthetic.UniqueId);
                         if (!string.IsNullOrEmpty(synthetic.PersistenceKey)) _syntheticByKey.Remove(synthetic.PersistenceKey);
                         _temporarySyntheticIds.Remove(synthetic.UniqueId);
@@ -207,8 +209,10 @@ namespace ShelteredAPI.Characters.Internal
                 {
                     LiveCharacterProxy live = character as LiveCharacterProxy;
                     if (live == null) return;
-                    _liveFamily.Remove(live.UniqueId);
-                    _liveVisitors.Remove(live.UniqueId);
+                    Dictionary<int, LiveCharacterProxy> registry = live.Source == CharacterSource.RealFamily ? _liveFamily : _liveVisitors;
+                    LiveCharacterProxy registered;
+                    if (!registry.TryGetValue(live.UniqueId, out registered) || !ReferenceEquals(registered, live)) return;
+                    registry.Remove(live.UniqueId);
                     live.Unregister();
                 }
             }
@@ -460,13 +464,27 @@ namespace ShelteredAPI.Characters.Internal
 
         private void HandleSessionStarted()
         {
+            List<LiveCharacterProxy> live;
+            List<SyntheticCharacterProxy> synthetic;
             lock (_sync)
             {
+                live = _liveFamily.Values.Concat(_liveVisitors.Values).ToList();
+                synthetic = _syntheticById.Values.ToList();
                 _liveFamily.Clear();
                 _liveVisitors.Clear();
                 _temporarySyntheticIds.Clear();
                 _syntheticById.Clear();
                 _syntheticByKey.Clear();
+            }
+            foreach (LiveCharacterProxy proxy in live)
+            {
+                try { proxy.Unregister(); }
+                catch (Exception ex) { WriteError("Character session cleanup failed: " + ex.Message); }
+            }
+            foreach (SyntheticCharacterProxy proxy in synthetic)
+            {
+                try { proxy.Unregister(); }
+                catch (Exception ex) { WriteError("Character session cleanup failed: " + ex.Message); }
             }
         }
 
