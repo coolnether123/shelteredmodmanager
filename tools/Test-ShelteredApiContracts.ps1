@@ -1874,6 +1874,17 @@ try {
     $failures.Add('keybind display runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $previewSource = Read-RepoFile 'ShelteredAPI\Scenarios\Application\Runtime\Preview\ScenarioPreviewSession.cs'
+    $previewMethods = (Read-ContractMethod $previewSource 'public void Dispose(') + (Read-ContractMethod $previewSource 'private bool IsActive')
+    if ($previewSource.Contains('private bool OwnsCurrentBinding')) { $previewMethods += Read-ContractMethod $previewSource 'private bool OwnsCurrentBinding' }
+    Add-Type -IgnoreWarnings -TypeDefinition ('namespace PreviewOwnershipFixture { using System; using System.Collections.Generic;' + (Read-RepoFile 'tools\PreviewOwnership.ContractFixture.cs') + 'public sealed partial class ScenarioPreviewSession {' + $previewMethods + '}}')
+    [PreviewOwnershipFixture.PreviewOwnershipContractFixture]::Verify()
+    $script:contractCount += [PreviewOwnershipFixture.PreviewOwnershipContractFixture]::Count
+} catch {
+    $failures.Add('preview ownership runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

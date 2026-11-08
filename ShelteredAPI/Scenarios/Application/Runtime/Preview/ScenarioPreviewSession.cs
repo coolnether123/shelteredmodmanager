@@ -45,12 +45,10 @@ namespace ShelteredAPI.Scenarios.Application.Runtime
 
         public ScenarioPreviewResult Refresh(ScenarioDefinition definition, ScenarioPreviewRefreshScope scope)
         {
-            if (_disposed)
-                return ScenarioPreviewResult.Failed("Preview refresh was rejected because the session is closed.");
+            if (!IsActive)
+                return ScenarioPreviewResult.Failed("Preview refresh was rejected because the session is not active.");
             if (definition == null)
                 return ScenarioPreviewResult.Failed("Preview refresh requires a scenario definition.");
-            if (!StartResult.Started)
-                return ScenarioPreviewResult.Failed("Preview refresh was rejected because the session did not start.");
 
             try
             {
@@ -241,6 +239,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime
             string targetPath,
             ScenarioSpriteTargetComponentKind targetKind)
         {
+            if (!IsActive)
+                return;
             ScenarioRuntimeAssetFacade.StopRuntimeSpriteAnimation(targetPath, targetKind);
             for (int i = _animationPreviewPaths.Count - 1; i >= 0; i--)
             {
@@ -325,27 +325,34 @@ namespace ShelteredAPI.Scenarios.Application.Runtime
         {
             if (_disposed)
                 return;
+            bool ownsCurrentBinding = OwnsCurrentBinding;
             _disposed = true;
-            ModRandomBridge.SetScenarioFixedSeedActive(false);
-
-            for (int i = 0; i < _animationPreviewPaths.Count; i++)
+            if (ownsCurrentBinding)
             {
-                ScenarioRuntimeAssetFacade.StopRuntimeSpriteAnimation(
-                    _animationPreviewPaths[i], _animationPreviewKinds[i]);
+                ModRandomBridge.SetScenarioFixedSeedActive(false);
+                for (int i = 0; i < _animationPreviewPaths.Count; i++)
+                {
+                    ScenarioRuntimeAssetFacade.StopRuntimeSpriteAnimation(
+                        _animationPreviewPaths[i], _animationPreviewKinds[i]);
+                }
             }
             _animationPreviewPaths.Clear();
             _animationPreviewKinds.Clear();
 
-            try
+            if (ownsCurrentBinding)
             {
-                ScenarioRuntimeCompositionRoot.Resolve<IScenarioSpriteSwapEngine>()
-                    .Clear("Scenario preview session closed.");
-                ScenarioRuntimeCompositionRoot.Resolve<IScenarioSceneSpritePlacementEngine>()
-                    .Clear("Scenario preview session closed.");
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ShelteredScenarioRuntime] Preview scene asset cleanup failed: " + ex.Message);
+                try
+                {
+                    ScenarioRuntimeCompositionRoot.Resolve<IScenarioSpriteSwapEngine>()
+                        .Clear("Scenario preview session closed.");
+                    ScenarioRuntimeCompositionRoot.Resolve<IScenarioSceneSpritePlacementEngine>()
+                        .Clear("Scenario preview session closed.");
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteWarning("[ShelteredScenarioRuntime] Preview scene asset cleanup failed: " + ex.Message);
+                }
+
             }
 
             try
@@ -387,7 +394,17 @@ namespace ShelteredAPI.Scenarios.Application.Runtime
 
         private bool IsActive
         {
-            get { return !_disposed && StartResult != null && StartResult.Started; }
+            get { return !_disposed && StartResult != null && StartResult.Started && OwnsCurrentBinding; }
+        }
+
+        private bool OwnsCurrentBinding
+        {
+            get
+            {
+                ScenarioRuntimeBinding current = _bindings != null ? _bindings.CurrentBinding : null;
+                return current != null && current.IsPreview
+                    && string.Equals(current.RunId, _runId, StringComparison.Ordinal);
+            }
         }
 
         private void TrackAnimationPreview(
