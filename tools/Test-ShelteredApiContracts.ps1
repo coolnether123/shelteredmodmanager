@@ -1590,6 +1590,15 @@ try {
     $failures.Add('character lifetime runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $cookingMethods = (Read-ContractMethod $shelteredCooking 'private static bool IsAvailable(') + (Read-ContractMethod $shelteredCooking 'private static string ResolveUnavailableReason(') + (Read-ContractMethod $shelteredCooking 'private static void ExecuteCraft(')
+    Add-Type -TypeDefinition ('namespace CookingFixture { using System;' + (Read-RepoFile 'tools\Cooking.ContractFixture.cs') + 'public static partial class CookingContractFixture {' + $cookingMethods + '}}')
+    [CookingFixture.CookingContractFixture]::Verify()
+    $script:contractCount += [CookingFixture.CookingContractFixture]::Count
+} catch {
+    $failures.Add('cooking availability runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
