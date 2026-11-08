@@ -199,8 +199,7 @@ namespace ShelteredAPI.Characters.Internal
                         if (!string.IsNullOrEmpty(synthetic.PersistenceKey)) _syntheticByKey.Remove(synthetic.PersistenceKey);
                         _temporarySyntheticIds.Remove(synthetic.UniqueId);
                         synthetic.Unregister();
-                        var evt = SyntheticCharacterUnloaded;
-                        if (evt != null) evt(synthetic);
+                        ModAPI.Core.SubscriberDispatch.Invoke(SyntheticCharacterUnloaded, "SyntheticCharacterUnloaded", synthetic);
                         actorId = ResolveActorId(synthetic);
                         destroyActor = actorId != null;
                     }
@@ -249,8 +248,7 @@ namespace ShelteredAPI.Characters.Internal
                 _syntheticById[id] = p;
                 if (!string.IsNullOrEmpty(p.PersistenceKey)) _syntheticByKey[p.PersistenceKey] = p;
                 if (!isPersistent) _temporarySyntheticIds.Add(id);
-                var evt = SyntheticCharacterCreated;
-                if (evt != null) evt(p);
+                ModAPI.Core.SubscriberDispatch.Invoke(SyntheticCharacterCreated, "SyntheticCharacterCreated", p);
                 created = p;
             }
 
@@ -348,8 +346,7 @@ namespace ShelteredAPI.Characters.Internal
                 SyntheticCharacterProxy p = BuildSynthetic(id, first, last, key, sourceModId, true);
                 _syntheticById[id] = p;
                 _syntheticByKey[key] = p;
-                var evt = SyntheticCharacterCreated;
-                if (evt != null) evt(p);
+                ModAPI.Core.SubscriberDispatch.Invoke(SyntheticCharacterCreated, "SyntheticCharacterCreated", p);
                 created = p;
             }
 
@@ -419,14 +416,12 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void OnEffectApplied(ICharacterProxy character, EffectInstance effect)
         {
-            var evt = EffectApplied;
-            if (evt != null) evt(character, effect);
+            ModAPI.Core.SubscriberDispatch.Invoke(EffectApplied, "CharacterEffectApplied", character, effect);
         }
 
         internal void OnEffectRemoved(ICharacterProxy character, EffectInstance effect, RemovalReason reason)
         {
-            var evt = EffectRemoved;
-            if (evt != null) evt(character, effect, reason);
+            ModAPI.Core.SubscriberDispatch.Invoke(EffectRemoved, "CharacterEffectRemoved", character, effect, reason);
         }
 
         private SyntheticCharacterProxy BuildSynthetic(int id, string firstName, string lastName, string key, string sourceModId, bool isPersistent)
@@ -508,8 +503,7 @@ namespace ShelteredAPI.Characters.Internal
 
         private void OnDataChangedInternal(ICharacterProxy c, string key, object value)
         {
-            var evt = DataChanged;
-            if (evt != null) evt(c, key, value);
+            ModAPI.Core.SubscriberDispatch.Invoke(DataChanged, "CharacterDataChanged", c, key, value);
 
             try { EnsureActorMirror(ShelteredActors.Instance, c); }
             catch { }

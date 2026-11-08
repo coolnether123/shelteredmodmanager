@@ -54,8 +54,7 @@ namespace ShelteredAPI.Characters.Models{
         {
             if (!IsActive) return;
             IsActive = false;
-            var evt = OnUnregistered;
-            if (evt != null) evt(this);
+            ModAPI.Core.SubscriberDispatch.Invoke(OnUnregistered, "CharacterUnregistered", this);
         }
     }
 }

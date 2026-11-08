@@ -1,4 +1,9 @@
 public enum CharacterSource { RealFamily, Visitor, Synthetic }
+namespace ModAPI.Core {
+    public class ModEntry { public string Id = "fixture"; }
+    public static class ModRegistry { public static bool TryGetModByAssembly(System.Reflection.Assembly value, out ModEntry entry) { entry = null; return false; } }
+    public static class MMLog { public static void WarnOnce(string key, string message) { } }
+}
 public interface ICharacterProxy { int UniqueId { get; } CharacterSource Source { get; } }
 public class LiveCharacterProxy : ICharacterProxy {
     public int UniqueId { get; set; }

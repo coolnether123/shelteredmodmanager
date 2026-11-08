@@ -1483,14 +1483,19 @@ try {
         'private sealed class ActorComponentSlot',
         'private void RestoreComponentLocked(', 'private void HydrateUnknownSlotsLocked(',
         'private ActorComponentSaveEntry BuildComponentSaveEntryLocked(',
+        'private void RaiseActorCreated(', 'private void RaiseActorDestroyed(', 'private void RaiseActorStateChanged(', 'private void Publish(',
         'private sealed class ActorSubscription :'
     ) | ForEach-Object { Read-ContractMethod $actorOwner $_ }
     $actorModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')
     $actorModels += [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorComponents.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $actorModels += [regex]::Replace($dispatchSource, '(?m)^using [^\r\n]+\r?\n', '')
     $actorFixture = Read-RepoFile 'tools\ActorIdentity.ContractFixture.cs'
-    Add-Type -TypeDefinition ('namespace ActorIdentityFixture { using System; using System.Collections.Generic; using ModAPI.Actors;' + $actorModels + $actorFixture + 'public sealed partial class ActorIdentityContractFixture {' + ($actorMethods -join [Environment]::NewLine) + '}}')
+    Add-Type -TypeDefinition ('namespace ActorIdentityFixture { using System; using System.Collections.Generic; using System.Reflection; using ModAPI.Actors; using ModAPI.Core;' + $actorModels + $actorFixture + 'public sealed partial class ActorIdentityContractFixture {' + ($actorMethods -join [Environment]::NewLine) + '}}')
     [ActorIdentityFixture.ActorIdentityContractFixture]::Verify()
     $script:contractCount += [ActorIdentityFixture.ActorIdentityContractFixture]::Count
+    Assert-Contains 'queue subscriber isolation' (Read-RepoFile 'ShelteredAPI\Queues\Internal\PlayerQueueRuntime.cs') 'SubscriberDispatch.Invoke\(QueueChanged,' 'Queue callbacks must survive another subscriber throwing.'
+    Assert-Contains 'six hour subscriber isolation' (Read-RepoFile 'ShelteredAPI\Events\GameTimeTriggerHelper.cs') 'SubscriberDispatch.Invoke\(OnSixHourTick,' 'Six-hour callbacks must survive another subscriber throwing.'
+    Assert-Contains 'staggered subscriber isolation' (Read-RepoFile 'ShelteredAPI\Events\GameTimeTriggerHelper.cs') 'SubscriberDispatch.Invoke\(OnStaggeredTick,' 'Staggered callbacks must survive another subscriber throwing.'
 } catch {
     $failures.Add('actor identity runtime contract: ' + $_.Exception.Message)
 }
@@ -1528,9 +1533,15 @@ try {
     $lifetimeMethods = (Read-ContractMethod $characterSystemImpl 'public void UnregisterCharacter(') + (Read-ContractMethod $characterSystemImpl 'private void HandleSessionStarted(')
     $lifetimeFixture = Read-RepoFile 'tools\CharacterLifetime.ContractFixture.cs'
     $lifetimeModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')
-    Add-Type -TypeDefinition ('namespace LifetimeFixture { using System; using System.Collections.Generic; using System.Linq; using ModAPI.Actors;' + $lifetimeModels + $lifetimeFixture + 'public sealed partial class CharacterLifetimeContractFixture {' + $lifetimeMethods + '}}')
+    $lifetimeModels += [regex]::Replace($dispatchSource, '(?m)^using [^\r\n]+\r?\n', '')
+    Add-Type -TypeDefinition ('namespace LifetimeFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using ModAPI.Actors;' + $lifetimeModels + $lifetimeFixture + 'public sealed partial class CharacterLifetimeContractFixture {' + $lifetimeMethods + '}}')
     [LifetimeFixture.CharacterLifetimeContractFixture]::Verify()
     $script:contractCount += [LifetimeFixture.CharacterLifetimeContractFixture]::Count
+    foreach ($characterEvent in @('SyntheticCharacterCreated', 'SyntheticCharacterUnloaded', 'EffectApplied', 'EffectRemoved', 'DataChanged')) {
+        Assert-Contains ('character subscriber isolation: ' + $characterEvent) $characterSystemImpl ('SubscriberDispatch.Invoke\(' + $characterEvent + ',') 'Character callbacks must survive another subscriber throwing.'
+    }
+    Assert-Contains 'live unregistration subscriber isolation' $sharedRuntime 'SubscriberDispatch.Invoke\(OnUnregistered,' 'Live unregistration must deliver to every subscriber.'
+    Assert-Contains 'synthetic unregistration subscriber isolation' (Read-RepoFile 'ShelteredAPI\Characters\Models\SyntheticCharacterProxy.cs') 'SubscriberDispatch.Invoke\(OnUnregistered,' 'Synthetic unregistration must deliver to every subscriber.'
 } catch {
     $failures.Add('character lifetime runtime contract: ' + $_.Exception.Message)
 }

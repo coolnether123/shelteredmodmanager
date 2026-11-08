@@ -272,8 +272,7 @@ namespace ShelteredAPI.Characters.Internal
             IsActive = false;
             _member = null;
             _npc = null;
-            var evt = OnUnregistered;
-            if (evt != null) evt(this);
+            ModAPI.Core.SubscriberDispatch.Invoke(OnUnregistered, "CharacterUnregistered", this);
         }
 
         private static bool TrySetField(object target, string fieldName, object value)

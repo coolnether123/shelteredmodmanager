@@ -4,6 +4,11 @@ public static class JsonUtility {
     public static string ToJson(object value) { throw new InvalidOperationException("Fixture serializer"); }
     public static T FromJson<T>(string value) { throw new InvalidOperationException("Fixture serializer"); }
 }
+namespace ModAPI.Core {
+    public class ModEntry { public string Id = "fixture"; }
+    public static class ModRegistry { public static bool TryGetModByAssembly(System.Reflection.Assembly value, out ModEntry entry) { entry = null; return false; } }
+    public static class MMLog { public static void WarnOnce(string key, string message) { } }
+}
 public sealed partial class ActorIdentityContractFixture {
     private class NullSerializer : IActorComponentSerializer {
         public string ComponentId { get { return "fixture.null"; } }
@@ -21,7 +26,12 @@ public sealed partial class ActorIdentityContractFixture {
     private readonly Dictionary<ActorId, Dictionary<string, ActorComponentSlot>> _components = new Dictionary<ActorId, Dictionary<string, ActorComponentSlot>>();
     private readonly Dictionary<string, HashSet<ActorId>> _componentIndex = new Dictionary<string, HashSet<ActorId>>();
     private readonly Dictionary<string, IActorComponentSerializer> _serializers = new Dictionary<string, IActorComponentSerializer>();
-    private void PublishLocked(ActorEventType type, string source, ActorId id, string component, string message) { }
+    private readonly object _sync = new object();
+    private readonly List<ActorSubscription> _subscriptions = new List<ActorSubscription>();
+    private ActorEventEnvelope PublishLocked(ActorEventType type, string source, ActorId id, string component, string message) { return new ActorEventEnvelope { ActorId = id }; }
+    public event Action<IActorRecord> ActorCreated, ActorStateChanged;
+    public event Action<IActorRecord, ActorDestroyReason> ActorDestroyed;
+    public event Action<ActorEventEnvelope> EventPublished;
     public static int Count;
     private static void Check(bool value, string message) { Count++; if (!value) throw new Exception(message); }
     public static void Verify() {
@@ -72,5 +82,18 @@ public sealed partial class ActorIdentityContractFixture {
         try { new ActorJsonComponentSerializer<ActorProfileComponent>("profile", 1).Deserialize("invalid-json", 1); }
         catch (InvalidOperationException) { rejected = true; }
         Check(rejected, "The JSON serializer must report decode failure instead of silently constructing empty data");
+        int notifications = 0;
+        owner.ActorCreated += delegate { throw new Exception("fixture"); };
+        owner.ActorCreated += delegate { notifications++; };
+        owner.ActorDestroyed += delegate { throw new Exception("fixture"); };
+        owner.ActorDestroyed += delegate { notifications++; };
+        owner.ActorStateChanged += delegate { throw new Exception("fixture"); };
+        owner.ActorStateChanged += delegate { notifications++; };
+        owner.EventPublished += delegate { throw new Exception("fixture"); };
+        owner.EventPublished += delegate { notifications++; };
+        owner._subscriptions.Add(new ActorSubscription(2, null, delegate { notifications++; }, null));
+        owner.RaiseActorCreated(record); owner.RaiseActorDestroyed(record, ActorDestroyReason.Explicit); owner.RaiseActorStateChanged(record);
+        owner.Publish(ActorEventType.ActorCreated, "fixture", other, null, "fixture");
+        Check(notifications == 5, "Throwing actor event handlers must not suppress later handlers or subscription delivery");
     }
 }

@@ -1261,20 +1261,17 @@ namespace ShelteredAPI.Actors.Internal
 
         private void RaiseActorCreated(IActorRecord record)
         {
-            Action<IActorRecord> handler = ActorCreated;
-            if (handler != null) handler(record);
+            SubscriberDispatch.Invoke(ActorCreated, "ActorCreated", record);
         }
 
         private void RaiseActorDestroyed(IActorRecord record, ActorDestroyReason reason)
         {
-            Action<IActorRecord, ActorDestroyReason> handler = ActorDestroyed;
-            if (handler != null) handler(record, reason);
+            SubscriberDispatch.Invoke(ActorDestroyed, "ActorDestroyed", record, reason);
         }
 
         private void RaiseActorStateChanged(IActorRecord record)
         {
-            Action<IActorRecord> handler = ActorStateChanged;
-            if (handler != null) handler(record);
+            SubscriberDispatch.Invoke(ActorStateChanged, "ActorStateChanged", record);
         }
 
         private void Publish(ActorEventType type, string sourceModId, ActorId actorId, string componentId, string message)
@@ -1287,8 +1284,7 @@ namespace ShelteredAPI.Actors.Internal
                 subscriptions = new List<ActorSubscription>(_subscriptions);
             }
 
-            Action<ActorEventEnvelope> handler = EventPublished;
-            if (handler != null) handler(CloneEvent(envelope));
+            SubscriberDispatch.Invoke(EventPublished, "ActorEventPublished", CloneEvent(envelope));
 
             for (int i = 0; i < subscriptions.Count; i++)
             {

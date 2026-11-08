@@ -468,18 +468,7 @@ namespace ShelteredAPI.Queues.Internal
 
         private static void RaiseChanged(PlayerQueueChangeKind changeKind, PlayerQueueSnapshot queue)
         {
-            Action<PlayerQueueChangedEventArgs> handler = QueueChanged;
-            if (handler == null)
-                return;
-
-            try
-            {
-                handler(new PlayerQueueChangedEventArgs(changeKind, queue));
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError("[ShelteredQueues] QueueChanged subscriber failed: " + ex.Message);
-            }
+            ModAPI.Core.SubscriberDispatch.Invoke(QueueChanged, "PlayerQueueChanged", new PlayerQueueChangedEventArgs(changeKind, queue));
         }
 
         private static string GetJobType(Job job)
