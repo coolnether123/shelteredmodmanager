@@ -27,6 +27,12 @@ namespace ModAPI.Harmony
                 return false;
             }
 
+            if (method.ContainsGenericParameters)
+            {
+                Warn(transpiler, $"{caller} expected a closed method {FluentTranspilerFormatting.FormatMethod(method)}.");
+                return false;
+            }
+
             return true;
         }
 
@@ -707,6 +713,7 @@ namespace ModAPI.Harmony
         {
             return method != null &&
                    method.IsStatic &&
+                   !method.ContainsGenericParameters &&
                    method.ReturnType != typeof(void) &&
                    method.GetParameters().Length == 0;
         }
@@ -719,6 +726,7 @@ namespace ModAPI.Harmony
             }
 
             return method.IsStatic &&
+                   !method.ContainsGenericParameters &&
                    method.ReturnType == valueType &&
                    method.GetParameters().Length == 1 &&
                    method.GetParameters()[0].ParameterType == valueType;

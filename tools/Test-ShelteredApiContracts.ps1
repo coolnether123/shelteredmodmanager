@@ -1821,6 +1821,19 @@ try {
     $failures.Add('normalized bound replacement runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $genericValidation = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs') 'internal static bool ValidateStaticMethod('
+    $genericValidation = [regex]::Replace($genericValidation, '\$"[^"\r\n]*"', '"generic diagnostic"')
+    $genericUtility = (Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs') 'internal static bool IsStaticParameterlessValueProvider(') + (Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs') 'internal static bool IsCompatibleUnaryWrapper(')
+    $genericCompat = $receiverCompat + (Read-ContractMethod $compatSource 'internal static bool IsCompatibleConstantReplacement(')
+    $genericPrelude = 'public sealed class FluentTranspiler {} public static class FluentTranspilerFormatting { public static string FormatMethod(MethodInfo method) { return method.Name; }}'
+    Add-Type -TypeDefinition ('namespace GenericHooksFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection;' + $genericPrelude + (Read-RepoFile 'tools\GenericHooks.ContractFixture.cs') + 'public static class FluentTranspilerRecipeValidation { private static void Warn(FluentTranspiler t, string message) {}' + $genericValidation + '} public static class FluentRecipeUtility {' + $genericUtility + '} public static class FluentTranspilerCompatibilityExtensions {' + $genericCompat + '}}')
+    [GenericHooksFixture.GenericHooksContractFixture]::Verify()
+    $script:contractCount += [GenericHooksFixture.GenericHooksContractFixture]::Count
+} catch {
+    $failures.Add('generic hook runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

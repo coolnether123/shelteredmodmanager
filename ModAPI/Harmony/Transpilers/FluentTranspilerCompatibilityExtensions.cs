@@ -349,9 +349,9 @@ namespace ModAPI.Harmony
                 return false;
             }
 
-            if (!replacementMethod.IsStatic)
+            if (!replacementMethod.IsStatic || replacementMethod.ContainsGenericParameters)
             {
-                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " is not static";
+                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " must be static and closed";
                 return false;
             }
 
@@ -393,9 +393,9 @@ namespace ModAPI.Harmony
                 return false;
             }
 
-            if (!replacementMethod.IsStatic)
+            if (!replacementMethod.IsStatic || replacementMethod.ContainsGenericParameters)
             {
-                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " is not static";
+                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " must be static and closed";
                 return false;
             }
 
