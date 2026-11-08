@@ -1704,6 +1704,15 @@ try {
     $failures.Add('scenario condition groups runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $scenarioEventRaise = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Registration\ScenarioEventHub.cs') 'private static void Raise(Action<CustomScenarioEventArgs> handler, CustomScenarioEventArgs args)'
+    Add-Type -TypeDefinition ('namespace ScenarioEventsFixture { using System; using System.Reflection; using ModAPI.Core;' + (Read-RepoFile 'tools\ScenarioEvents.ContractFixture.cs') + [regex]::Replace($dispatchSource, '(?m)^using [^\r\n]+\r?\n', '') + 'public sealed partial class ScenarioEventsContractFixture {' + $scenarioEventRaise + '}}')
+    [ScenarioEventsFixture.ScenarioEventsContractFixture]::Verify()
+    $script:contractCount += [ScenarioEventsFixture.ScenarioEventsContractFixture]::Count
+} catch {
+    $failures.Add('scenario event subscribers runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

@@ -73,14 +73,7 @@ namespace ShelteredAPI.Scenarios.Registration{
             if (handler == null || args == null)
                 return;
 
-            try
-            {
-                handler(args);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WarnOnce("ScenarioEventHub.Event." + args.EventType, ex.Message);
-            }
+            SubscriberDispatch.Invoke(handler, "ScenarioEventHub." + args.EventType, args);
         }
     }
 }
