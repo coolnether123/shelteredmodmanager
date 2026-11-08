@@ -1738,6 +1738,16 @@ try {
     $failures.Add('sprite cache runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $zeroMethod = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\UnityPatterns.cs') 'public static FluentTranspiler ReplaceAllVectorZero('
+    $zeroMethod = [regex]::Replace($zeroMethod, '\$"[^"\r\n]*"', '"Expected a vector type"')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace UnityZeroFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + (Read-RepoFile 'tools\UnityZero.ContractFixture.cs') + 'public static class UnityPatterns {' + $zeroMethod + '}}')
+    [UnityZeroFixture.UnityZeroContractFixture]::Verify()
+    $script:contractCount += [UnityZeroFixture.UnityZeroContractFixture]::Count
+} catch {
+    $failures.Add('Unity vector-zero runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
