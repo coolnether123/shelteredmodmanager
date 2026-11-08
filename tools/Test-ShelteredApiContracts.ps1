@@ -1411,6 +1411,27 @@ try {
     $failures.Add("shared hooks runtime contract: " + $_.Exception.Message)
 }
 
+# Execute the production effect owner with isolated callback stand-ins.
+try {
+    $effectsStart = $sharedRuntime.IndexOf('    internal sealed class BasicCharacterEffects')
+    $effectsEnd = $sharedRuntime.IndexOf('        internal List<EffectSaveData>', $effectsStart)
+    $contextStart = $sharedRuntime.IndexOf('    internal sealed class EffectContext')
+    $contextEnd = $sharedRuntime.IndexOf('    internal static class CharacterFactory', $contextStart)
+    $effectSources = @(
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterEffect.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterEffects.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\EffectInstance.cs'),
+        ('namespace ShelteredAPI.Characters.Internal {' + $sharedRuntime.Substring($effectsStart, $effectsEnd - $effectsStart) + '}' + $sharedRuntime.Substring($contextStart, $contextEnd - $contextStart) + '}')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    $fixture = (Read-RepoFile 'tools\CharacterEffects.ContractFixture.cs').Replace('using System.Linq;', 'using System.Linq; using ModAPI.Util;')
+    $effectCompilation = ($fixture + [Environment]::NewLine + ($effectSources -join [Environment]::NewLine)).Replace('ShelteredAPI.', 'EffectFixture.').Replace('ModAPI.Util', 'EffectFixture.Util')
+    Add-Type -TypeDefinition $effectCompilation
+    [CharacterEffectsContractFixture]::Verify()
+    $script:contractCount += [CharacterEffectsContractFixture]::Count
+} catch {
+    $failures.Add('character effects runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

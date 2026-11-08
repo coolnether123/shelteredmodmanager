@@ -325,13 +325,7 @@ namespace ShelteredAPI.Characters.Internal
         {
             if (effect == null) return null;
             EffectInstance existing = Get(effect.EffectId);
-            if (existing != null)
-            {
-                if (effect.StackBehavior == StackBehavior.Ignore) return existing;
-                if (effect.StackBehavior == StackBehavior.Refresh) { existing.TimeRemaining = duration; existing.StackCount++; return existing; }
-                if (effect.StackBehavior == StackBehavior.Extend) { existing.TimeRemaining += duration; existing.StackCount++; return existing; }
-                if (effect.StackBehavior == StackBehavior.Replace) Remove(existing);
-            }
+            if (existing != null && effect.StackBehavior == StackBehavior.Ignore) return existing;
 
             EffectInstance instance = new EffectInstance
             {
@@ -343,6 +337,28 @@ namespace ShelteredAPI.Characters.Internal
             };
             EffectContext ctx = new EffectContext(_character, instance);
             if (!effect.CanApply(ctx)) return null;
+            if (existing != null)
+            {
+                if (effect.StackBehavior == StackBehavior.Refresh)
+                {
+                    existing.Duration = instance.Duration;
+                    existing.TimeRemaining = instance.TimeRemaining;
+                    existing.StackCount++;
+                    return existing;
+                }
+                if (effect.StackBehavior == StackBehavior.Extend)
+                {
+                    if (existing.IsPermanent || instance.IsPermanent)
+                    {
+                        existing.Duration = 0f;
+                        existing.TimeRemaining = 0f;
+                    }
+                    else existing.TimeRemaining += instance.Duration;
+                    existing.StackCount++;
+                    return existing;
+                }
+                if (effect.StackBehavior == StackBehavior.Replace) Remove(existing);
+            }
             _effects.Add(instance);
             effect.OnApplied(ctx);
             SyncLiveCharacter();
@@ -399,10 +415,12 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Tick(float dt)
         {
-            for (int i = _effects.Count - 1; i >= 0; i--)
+            EffectInstance[] pending = _effects.ToArray();
+            for (int i = pending.Length - 1; i >= 0; i--)
             {
-                EffectInstance e = _effects[i];
-                if (e == null || e.Effect == null) { _effects.RemoveAt(i); continue; }
+                EffectInstance e = pending[i];
+                if (!_effects.Contains(e)) continue;
+                if (e == null || e.Effect == null) { _effects.Remove(e); continue; }
                 if (!e.IsPermanent) e.TimeRemaining -= dt;
                 EffectContext ctx = new EffectContext(_character, e);
                 e.Effect.OnTick(ctx, dt);
