@@ -1599,6 +1599,17 @@ try {
     $failures.Add('cooking availability runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $saveOverwrite = Read-ContractMethod $saveRegistry 'public SaveEntry OverwriteSave('
+    $saveOverwrite = $saveOverwrite.Replace('if (!TryWriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc))', 'long size; uint crc; if (!TryWriteEntryFile(entry.absoluteSlot, xmlBytes, out size, out crc))')
+    $saveEventsSources = @($dispatchSource, (Read-RepoFile 'ShelteredAPI\Saves\Events.cs')) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    Add-Type -TypeDefinition ('namespace SaveFixture { using System; using System.Reflection; using ModAPI.Core;' + ($saveEventsSources -join [Environment]::NewLine) + (Read-RepoFile 'tools\SaveEvents.ContractFixture.cs') + 'namespace ShelteredAPI.Saves { public sealed partial class SaveEventsContractFixture {' + $saveOverwrite + '}}}')
+    [SaveFixture.ShelteredAPI.Saves.SaveEventsContractFixture]::Verify()
+    $script:contractCount += [SaveFixture.ShelteredAPI.Saves.SaveEventsContractFixture]::Count
+} catch {
+    $failures.Add('save lifecycle runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

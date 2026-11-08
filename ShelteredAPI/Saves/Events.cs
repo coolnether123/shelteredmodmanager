@@ -12,11 +12,11 @@ namespace ShelteredAPI.Saves
         public static event PageChangedEvent OnPageChanged;
         public static event ReservationChangedEvent OnReservationChanged;
 
-        internal static void RaiseBeforeSave(SaveEntry e) { var h = OnBeforeSave; if (h != null) h(e); }
-        internal static void RaiseAfterSave(SaveEntry e) { var h = OnAfterSave; if (h != null) h(e); }
-        internal static void RaiseBeforeLoad(SaveEntry e) { var h = OnBeforeLoad; if (h != null) h(e); }
-        internal static void RaiseAfterLoad(SaveEntry e) { var h = OnAfterLoad; if (h != null) h(e); }
-        internal static void RaisePageChanged(int p) { var h = OnPageChanged; if (h != null) h(p); }
-        internal static void RaiseReservationChanged(int slot, SlotReservation r) { var h = OnReservationChanged; if (h != null) h(slot, r); }
+        internal static void RaiseBeforeSave(SaveEntry e) { SubscriberDispatch.Invoke(OnBeforeSave, "BeforeSave", e); }
+        internal static void RaiseAfterSave(SaveEntry e) { SubscriberDispatch.Invoke(OnAfterSave, "AfterSave", e); }
+        internal static void RaiseBeforeLoad(SaveEntry e) { SubscriberDispatch.Invoke(OnBeforeLoad, "BeforeLoad", e); }
+        internal static void RaiseAfterLoad(SaveEntry e) { SubscriberDispatch.Invoke(OnAfterLoad, "AfterLoad", e); }
+        internal static void RaisePageChanged(int p) { SubscriberDispatch.Invoke(OnPageChanged, "PageChanged", p); }
+        internal static void RaiseReservationChanged(int slot, SlotReservation r) { SubscriberDispatch.Invoke(OnReservationChanged, "ReservationChanged", slot, r); }
     }
 }

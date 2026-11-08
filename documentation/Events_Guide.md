@@ -132,7 +132,7 @@ Reference `ShelteredAPI.dll` for these APIs.
 
 Common ones:
 - `BeforeSave`
-- `AfterSave`
+- `AfterSave`, once after a successful expanded-slot XML write, including writes through `ShelteredSaves`. Failed writes and metadata-only calls do not raise it.
 - `BeforeLoad`
 - `AfterLoad`
 - `PageChanged`
