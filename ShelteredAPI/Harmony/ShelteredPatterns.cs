@@ -82,6 +82,7 @@ namespace ShelteredAPI.Harmony
             return t.MatchFieldLoad(managerType, "instance");
         }
 
+        /// <summary>Matches a Localization.Get call, optionally restricted to a literal key argument.</summary>
         public static FluentTranspiler MatchUILocalization(this FluentTranspiler t, string key = null)
         {
             var localizationType = AccessTools.TypeByName("Localization");
@@ -90,7 +91,22 @@ namespace ShelteredAPI.Harmony
                 return t;
             }
 
-            return t.MatchCall(localizationType, "Get");
+            if (key == null)
+                return t.MatchCall(localizationType, "Get");
+
+            List<CodeInstruction> instructions = new List<CodeInstruction>(t.Instructions());
+            return t.FindSequence(SearchMode.Start, delegate(CodeInstruction instruction)
+            {
+                MethodInfo method = instruction.operand as MethodInfo;
+                if ((instruction.opcode != OpCodes.Call && instruction.opcode != OpCodes.Callvirt)
+                    || method == null || method.DeclaringType != localizationType || method.Name != "Get" || !method.IsStatic)
+                    return false;
+
+                int keyIndex = instructions.IndexOf(instruction) - method.GetParameters().Length;
+                return keyIndex >= 0
+                    && instructions[keyIndex].opcode == OpCodes.Ldstr
+                    && string.Equals(instructions[keyIndex].operand as string, key, StringComparison.Ordinal);
+            });
         }
 
         public static FluentTranspiler MatchCoroutineStart(this FluentTranspiler t)

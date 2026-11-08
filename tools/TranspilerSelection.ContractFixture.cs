@@ -8,6 +8,12 @@ public partial class FluentTranspiler {
     public CodeInstruction Current { get { return HasMatch ? _matcher.Instruction : null; } }
     public FluentTranspiler Next() { _matcher.Advance(1); return this; }
     public IEnumerable<CodeInstruction> Instructions() { return _matcher.Instructions(); }
+    public FluentTranspiler MatchCall(Type type, string name) {
+        return FindSequence(SearchMode.Start, delegate(CodeInstruction instruction) {
+            MethodInfo method = instruction.operand as MethodInfo;
+            return (instruction.opcode == OpCodes.Call || instruction.opcode == OpCodes.Callvirt) && method != null && method.DeclaringType == type && method.Name == name;
+        });
+    }
     private void AddSoftFailure(string message) { Failures++; }
     private void AddWarning(string message) { }
 }
@@ -22,5 +28,17 @@ public static class TranspilerSelectionContractFixture {
         Check(!t.HasMatch && t.Current == null && t.Failures == 1, "A missing predicate match must clear the previous selection");
         t.FindSequence(SearchMode.Start, delegate(CodeInstruction instruction) { return instruction.opcode == OpCodes.Ldc_I4_1; });
         Check(t.HasMatch && t.CurrentIndex == 0, "A later search from Start must recover after a missing match");
+        VerifyLocalization();
+    }
+    private static void VerifyLocalization() {
+        var get = typeof(Localization).GetMethod("Get");
+        var t = new FluentTranspiler(new CodeInstruction(OpCodes.Ldstr, "first"), new CodeInstruction(OpCodes.Ldc_I4_0), new CodeInstruction(OpCodes.Call, get), new CodeInstruction(OpCodes.Pop), new CodeInstruction(OpCodes.Ldstr, "second"), new CodeInstruction(OpCodes.Ldc_I4_0), new CodeInstruction(OpCodes.Call, get));
+        ShelteredPatterns.MatchUILocalization(t, "second");
+        Check(t.HasMatch && t.CurrentIndex == 6, "Localization matching must select the requested key's call");
+        ShelteredPatterns.MatchUILocalization(t, "absent");
+        Check(!t.HasMatch, "An absent localization key must not select another key's call");
+        ShelteredPatterns.MatchUILocalization(t);
+        Check(t.HasMatch && t.CurrentIndex == 2, "An unspecified localization key must match the first Get call");
     }
 }
+public static class Localization { public static string Get(string key, bool suppressWarnings) { return key; } }
