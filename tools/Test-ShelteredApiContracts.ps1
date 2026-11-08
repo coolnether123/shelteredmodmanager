@@ -1646,6 +1646,7 @@ try {
     $transpilerSelection = $transpilerSelection.Replace('$"Predicate sequence not found: length {length}"', '"Predicate sequence not found: length " + length')
     $callPredicate = Read-ContractMethod $transpilerSource 'private Func<CodeInstruction, bool> BuildCallPredicate('
     $transpilerSelection += $callPredicate.Replace('if (!(instr.operand is MethodInfo method))', 'MethodInfo method = instr.operand as MethodInfo; if (method == null)')
+    $transpilerSelection += (Read-ContractMethod $transpilerSource 'public int CaptureLocalIndex(') + (Read-ContractMethod $transpilerSource 'public FluentTranspiler MatchLoadLocal(')
     $transpilerFeatures = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler_Features.cs'
     $transpilerSelection += (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchEither(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchWithGap(')
     $transpilerSelection += (Read-ContractMethod $transpilerSource 'private struct StackExpectation') + (Read-ContractMethod $transpilerFeatures 'private struct StackDeltaExpectation') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler ExpectStack(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler EnsureStack(')

@@ -642,19 +642,16 @@ namespace ModAPI.Harmony
         /// <returns>The local variable index (0-N), or -1 if not found.</returns>
         public int CaptureLocalIndex(string matchName)
         {
-            // Use Harmony's NamedMatch feature (Line 699 in their source)
-            // to pull the instruction that was matched by name.
-            var match = _matcher.NamedMatch(matchName);
-            if (match == null) return -1;
-
-            if (match.operand is int idx) return idx;
-            if (match.opcode.ToString().Contains("."))
+            if (string.IsNullOrEmpty(matchName)) return -1;
+            try
             {
-                // Handles stloc.0, stloc.1 etc which have the index in the opcode name
-                var parts = match.opcode.ToString().Split('.');
-                if (parts.Length > 1 && int.TryParse(parts[1], out int opcodeIdx)) return opcodeIdx;
+                var match = _matcher.NamedMatch(matchName);
+                return match == null ? -1 : match.LocalIndex();
             }
-            return -1;
+            catch
+            {
+                return -1;
+            }
         }
 
         #region Expressive Matching (English-like API)

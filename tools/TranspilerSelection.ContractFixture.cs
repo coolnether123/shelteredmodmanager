@@ -42,6 +42,18 @@ public static class TranspilerSelectionContractFixture {
         VerifyStackAnchors();
         VerifyInheritedCalls();
         VerifyGenericCalls();
+        VerifyLocalCapture();
+    }
+    private static void VerifyLocalCapture() {
+        var generator = new DynamicMethod("locals", typeof(void), Type.EmptyTypes).GetILGenerator();
+        generator.DeclareLocal(typeof(int));
+        var local = generator.DeclareLocal(typeof(string));
+        foreach (var instruction in new[] { new CodeInstruction(OpCodes.Ldloc_S, local), new CodeInstruction(OpCodes.Ldloc_S, (byte)7), new CodeInstruction(OpCodes.Ldloc_2) }) {
+            var t = new FluentTranspiler(instruction);
+            t.MatchLoadLocal("captured");
+            Check(t.CaptureLocalIndex("captured") == instruction.LocalIndex(), "Named local capture must support all Harmony operand encodings");
+        }
+        Check(new FluentTranspiler(new CodeInstruction(OpCodes.Nop)).CaptureLocalIndex("missing") == -1, "A missing named local must return the documented unavailable index");
     }
     public static void GenericCall<T>() { }
     private static void VerifyGenericCalls() {
