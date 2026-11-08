@@ -364,7 +364,6 @@ namespace ModAPI.Harmony
                     for (int i = 0; i < args.Length; i++)
                     {
                         if (!args[i].Equals(genericArguments[i]) &&
-                            args[i].Name != genericArguments[i].Name &&
                             !(args[i].IsGenericParameter && genericArguments[i].IsGenericParameter))
                             return false;
                     }

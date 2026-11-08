@@ -41,6 +41,14 @@ public static class TranspilerSelectionContractFixture {
         VerifyCombinators();
         VerifyStackAnchors();
         VerifyInheritedCalls();
+        VerifyGenericCalls();
+    }
+    public static void GenericCall<T>() { }
+    private static void VerifyGenericCalls() {
+        var t = new FluentTranspiler();
+        var call = typeof(TranspilerSelectionContractFixture).GetMethod("GenericCall").MakeGenericMethod(typeof(FirstDomain.Item));
+        Check(t.MatchesCall(typeof(TranspilerSelectionContractFixture), "GenericCall", call, false, new[] { typeof(FirstDomain.Item) }), "A closed generic call must match its exact type argument");
+        Check(!t.MatchesCall(typeof(TranspilerSelectionContractFixture), "GenericCall", call, false, new[] { typeof(SecondDomain.Item) }), "Closed generic arguments with the same short name must remain distinct");
     }
     private static void VerifyInheritedCalls() {
         var t = new FluentTranspiler();
@@ -108,6 +116,8 @@ public static class TranspilerSelectionContractFixture {
 public static class Localization { public static string Get(string key, bool suppressWarnings) { return key; } }
 public class CallBase { public void Inherited() { } }
 public class CallDerived : CallBase { public void Own() { } }
+namespace FirstDomain { public sealed class Item { } }
+namespace SecondDomain { public sealed class Item { } }
 namespace ModAPI.Core { public static class MMLog {
     public static void WriteInfo(string message) { }
     public static void WriteDebug(string message) { }
