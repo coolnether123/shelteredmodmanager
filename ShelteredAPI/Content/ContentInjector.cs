@@ -796,7 +796,8 @@ namespace ShelteredAPI.Content
             var modId = ContentOwnerAssemblyResolver.ResolveModId(definition);
             var itemId = ResolveItemIdSegment(definition);
             var suffix = isName ? "name" : "desc";
-            return $"shelteredapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}";
+            return $"shelteredapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}"
+                + "." + definition.CustomTypeId.GetValueOrDefault().ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         private static string ResolveItemIdSegment(ItemDefinition definition)

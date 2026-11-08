@@ -1788,6 +1788,17 @@ try {
     $failures.Add('setting setter runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $keySource = Read-RepoFile 'ShelteredAPI\Content\ContentInjector.cs'
+    $keyMethods = (Read-ContractMethod $keySource 'private static string BuildGeneratedLocalizationKey(') + (Read-ContractMethod $keySource 'private static string ResolveItemIdSegment(') + (Read-ContractMethod $keySource 'private static string SanitizeKeyPart(')
+    $keyMethods = $keyMethods.Replace('$"shelteredapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}"', '"shelteredapi." + SanitizeKeyPart(modId) + "." + SanitizeKeyPart(itemId) + "." + suffix')
+    Add-Type -TypeDefinition ('namespace ContentKeyFixture { using System; using System.Globalization;' + (Read-RepoFile 'tools\ContentKey.ContractFixture.cs') + 'public static partial class ContentKeyContractFixture {' + $keyMethods + '}}')
+    [ContentKeyFixture.ContentKeyContractFixture]::Verify()
+    $script:contractCount += [ContentKeyFixture.ContentKeyContractFixture]::Count
+} catch {
+    $failures.Add('content localization key runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
