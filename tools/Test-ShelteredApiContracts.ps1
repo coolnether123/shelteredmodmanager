@@ -1504,8 +1504,10 @@ try {
 try {
     $inventoryRemove = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Content\Compatibility\InventoryHelper.cs') 'public static bool TryRemoveFromInventory('
     $inventoryRemove = $inventoryRemove.Replace('if (ResolveItemType(itemId, out var type))', 'ItemManager.ItemType type; if (ResolveItemType(itemId, out type))')
-    Add-Type -TypeDefinition ('namespace InventoryFixture { using System;' + (Read-RepoFile 'tools\Inventory.ContractFixture.cs') + 'public static partial class InventoryContractFixture {' + $inventoryRemove + '}}')
+    $inventoryCount = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Adapters\GameHelperExtensions.cs') 'internal static int GetItemCountStrict('
+    Add-Type -TypeDefinition ('namespace InventoryFixture { using System;' + (Read-RepoFile 'tools\Inventory.ContractFixture.cs') + 'public static partial class InventoryContractFixture {' + $inventoryRemove + $inventoryCount + '}}')
     [InventoryFixture.InventoryContractFixture]::VerifyRemoval()
+    [InventoryFixture.InventoryContractFixture]::VerifyCounts()
     $script:contractCount += [InventoryFixture.InventoryContractFixture]::Count
 } catch {
     $failures.Add('inventory removal runtime contract: ' + $_.Exception.Message)

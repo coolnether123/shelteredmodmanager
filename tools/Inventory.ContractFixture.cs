@@ -19,4 +19,7 @@ public static partial class InventoryContractFixture {
         Check(!TryRemoveFromInventory("Nail", 3) && Mgr.Count == 2, "An insufficient removal must preserve all remaining items");
         Check(TryRemoveFromInventory("Nail", 2) && Mgr.Count == 0, "A sufficient removal must remove the requested items");
     }
+    public static void VerifyCounts() {
+        Check(GetItemCountStrict(ItemManager.ItemType.DesperateMeat) == 5, "Total owned counts must include desperate meat in freezers");
+    }
 }
