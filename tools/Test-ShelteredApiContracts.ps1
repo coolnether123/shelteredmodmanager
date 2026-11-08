@@ -1502,6 +1502,16 @@ try {
 }
 
 try {
+    $inventoryRemove = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Content\Compatibility\InventoryHelper.cs') 'public static bool TryRemoveFromInventory('
+    $inventoryRemove = $inventoryRemove.Replace('if (ResolveItemType(itemId, out var type))', 'ItemManager.ItemType type; if (ResolveItemType(itemId, out type))')
+    Add-Type -TypeDefinition ('namespace InventoryFixture { using System;' + (Read-RepoFile 'tools\Inventory.ContractFixture.cs') + 'public static partial class InventoryContractFixture {' + $inventoryRemove + '}}')
+    [InventoryFixture.InventoryContractFixture]::VerifyRemoval()
+    $script:contractCount += [InventoryFixture.InventoryContractFixture]::Count
+} catch {
+    $failures.Add('inventory removal runtime contract: ' + $_.Exception.Message)
+}
+
+try {
     $assignmentSource = Read-RepoFile 'ShelteredAPI\Storage\CharacterItemAssignments.cs'
     $assignmentEnd = $assignmentSource.IndexOf('    internal sealed class CharacterItemAssignmentPersistence')
     $storeSources = @(

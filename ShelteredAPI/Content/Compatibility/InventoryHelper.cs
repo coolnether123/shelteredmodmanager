@@ -65,6 +65,7 @@ namespace ShelteredAPI.Content.Compatibility{
             if (Mgr == null || quantity <= 0) return false;
             if (ResolveItemType(itemId, out var type))
             {
+                if (Mgr.GetItemCountInStorage(type, false) < quantity) return false;
                 return Mgr.RemoveItemsOfType(type, quantity);
             }
             return false;

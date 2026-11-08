@@ -21,7 +21,10 @@ public class FoodManager {
 }
 namespace ShelteredAPI.Content {
     internal class InventoryMutationResult { public bool Success = true; public string ErrorMessage = ""; }
-    internal static class ShelteredContent { public static InventoryMutationResult AddToInventory(string id, int quantity) { return new InventoryMutationResult(); } }
+    internal static class ShelteredContent {
+        internal static int Stored = 19;
+        public static InventoryMutationResult AddToInventory(string id, int quantity) { int before = Stored; Stored = Math.Min(20, Stored + quantity); return new InventoryMutationResult { Success = Stored - before == quantity }; }
+    }
 }
 namespace ShelteredAPI.Storage {
     internal partial class InventoryItemStore : ItemStoreBase {
@@ -31,10 +34,10 @@ namespace ShelteredAPI.Storage {
         public override int Capacity { get { return 20; } }
         public override int Used { get { return FoodManager.Instance.Rations; } }
         public override ItemStoreSnapshot Snapshot() { return new ItemStoreSnapshot(); }
-        public override int GetCount(string id) { return FoodManager.Instance.Rations; }
+        public override int GetCount(string id) { return IsRation(id) ? FoodManager.Instance.Rations : ShelteredAPI.Content.ShelteredContent.Stored; }
         public override bool CanAdd(string id, int quantity) { return true; }
         public override bool CanRemove(string id, int quantity) { return GetCount(id) >= quantity; }
-        public override ItemTransferResult Remove(string id, int quantity) { return ItemTransferResult.Ok(id, quantity, FoodManager.Instance.TakeRations(quantity)); }
+        public override ItemTransferResult Remove(string id, int quantity) { if (IsRation(id)) return ItemTransferResult.Ok(id, quantity, FoodManager.Instance.TakeRations(quantity)); ShelteredAPI.Content.ShelteredContent.Stored -= quantity; return ItemTransferResult.Ok(id, quantity, quantity); }
         private static bool IsRation(string id) { return id == "Ration"; }
         private static bool IsMeat(string id) { return false; }
         private static bool IsDesperateMeat(string id) { return false; }
@@ -85,5 +88,8 @@ public static class StorageContractFixture {
         original.Add("Ration", 5);
         var transfer = ShelteredAPI.Storage.ShelteredStores.Transfer(original, inventory, "Ration", 5);
         Check(!transfer.Success && original.GetCount("Ration") == 5 && FoodManager.Instance.Rations == 19, "A rejected partial ration transfer must restore both stores without duplicating items");
+        original.Add("Nail", 5);
+        transfer = ShelteredAPI.Storage.ShelteredStores.Transfer(original, inventory, "Nail", 5);
+        Check(!transfer.Success && original.GetCount("Nail") == 5 && ShelteredAPI.Content.ShelteredContent.Stored == 19, "A partial ordinary-item transfer must roll back both stores");
     }
 }

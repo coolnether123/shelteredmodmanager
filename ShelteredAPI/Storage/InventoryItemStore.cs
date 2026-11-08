@@ -101,9 +101,11 @@ namespace ShelteredAPI.Storage
                 return moved > 0 ? ItemTransferResult.Ok(itemId, quantity, moved) : ItemTransferResult.Failed(itemId, quantity, "No freezer capacity for desperate meat");
             }
 
+            int countBefore = GetCount(itemId);
             InventoryMutationResult result = ShelteredContent.AddToInventory(itemId, quantity);
-            return result.Success
-                ? ItemTransferResult.Ok(itemId, quantity, quantity)
+            int accepted = result.Success ? quantity : Math.Max(0, GetCount(itemId) - countBefore);
+            return accepted > 0
+                ? ItemTransferResult.Ok(itemId, quantity, accepted)
                 : ItemTransferResult.Failed(itemId, quantity, result.ErrorMessage);
         }
 
