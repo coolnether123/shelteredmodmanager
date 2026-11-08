@@ -1644,6 +1644,9 @@ try {
     $transpilerSource = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler.cs'
     $transpilerSelection = (Read-ContractMethod $transpilerSource 'public FluentTranspiler FindSequence(SearchMode mode, params Func<CodeInstruction, bool>[] predicates)') + (Read-ContractMethod $transpilerSource 'public bool TryFindSequence(')
     $transpilerSelection = $transpilerSelection.Replace('$"Predicate sequence not found: length {length}"', '"Predicate sequence not found: length " + length')
+    $transpilerFeatures = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler_Features.cs'
+    $transpilerSelection += (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchEither(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchWithGap(')
+    $transpilerSelection = $transpilerSelection.Replace('$"MatchWithGap: End pattern not found within {maxGap} instructions of start."', '"MatchWithGap: End pattern not found within " + maxGap + " instructions of start."')
     $shelteredPatternSource = Read-RepoFile 'ShelteredAPI\Harmony\ShelteredPatterns.cs'
     $shelteredPatternMethods = (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchUILocalization(') + (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchLog(')
     $harmonyFixtureAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $RepoRoot 'mods\0Harmony\Assemblies\0Harmony.dll'))

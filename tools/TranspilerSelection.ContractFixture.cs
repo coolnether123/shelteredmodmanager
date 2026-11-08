@@ -30,6 +30,31 @@ public static class TranspilerSelectionContractFixture {
         Check(t.HasMatch && t.CurrentIndex == 0, "A later search from Start must recover after a missing match");
         VerifyLocalization();
         VerifyLogs();
+        VerifyCombinators();
+    }
+    private static void VerifyCombinators() {
+        Func<FluentTranspiler, FluentTranspiler> first = delegate(FluentTranspiler t) { return t.FindSequence(SearchMode.Current, delegate(CodeInstruction i) { return i.opcode == OpCodes.Ldc_I4_1; }); };
+        Func<FluentTranspiler, FluentTranspiler> last = delegate(FluentTranspiler t) { return t.FindSequence(SearchMode.Current, delegate(CodeInstruction i) { return i.opcode == OpCodes.Ret; }); };
+        var either = new FluentTranspiler(new CodeInstruction(OpCodes.Ldc_I4_1), new CodeInstruction(OpCodes.Ret));
+        first(either);
+        bool fallbackCalled = false;
+        either.MatchEither(first, delegate(FluentTranspiler t) { fallbackCalled = true; return last(t); });
+        Check(either.HasMatch && either.CurrentIndex == 0 && !fallbackCalled, "MatchEither must accept a first pattern at the current instruction");
+        var gap = new FluentTranspiler(new CodeInstruction(OpCodes.Ldc_I4_1), new CodeInstruction(OpCodes.Nop), new CodeInstruction(OpCodes.Ret));
+        first(gap);
+        gap.MatchWithGap(first, last, 1);
+        Check(!gap.HasMatch, "MatchWithGap must reject a callback that searches beyond the maximum gap");
+        gap.FindSequence(SearchMode.Start, delegate(CodeInstruction i) { return i.opcode == OpCodes.Ldc_I4_1; });
+        gap.MatchWithGap(first, last, 2);
+        Check(gap.HasMatch && gap.CurrentIndex == 2, "MatchWithGap must accept the inclusive maximum gap");
+        var same = new FluentTranspiler(new CodeInstruction(OpCodes.Ldc_I4_1));
+        first(same);
+        same.MatchWithGap(first, first, 0);
+        Check(same.HasMatch && same.CurrentIndex == 0, "MatchWithGap must accept a boundary selected without advancing");
+        var missing = new FluentTranspiler(new CodeInstruction(OpCodes.Nop));
+        missing.FindSequence(SearchMode.Start, delegate(CodeInstruction i) { return i.opcode == OpCodes.Nop; });
+        missing.MatchWithGap(first, last, 2);
+        Check(!missing.HasMatch, "A missing start boundary must leave no stale selection");
     }
     private static void VerifyLocalization() {
         var get = typeof(Localization).GetMethod("Get");
