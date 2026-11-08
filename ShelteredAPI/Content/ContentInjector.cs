@@ -370,6 +370,7 @@ namespace ShelteredAPI.Content
 
                 // Resolve Ingredients
                 var ingredients = new List<CraftingManager.Recipe.Ingredient>();
+                bool allIngredientsResolved = true;
                 foreach (var ingDef in def.Ingredients)
                 {
                     if (ResolveItemType(ingDef.ItemId, out var ingType))
@@ -378,13 +379,14 @@ namespace ShelteredAPI.Content
                     }
                     else
                     {
-                        MMLog.WriteWarning($"Recipe '{def.Id}' ingredient '{ingDef.ItemId}' could not be resolved and was skipped.");
+                        allIngredientsResolved = false;
+                        MMLog.WriteWarning($"Recipe '{def.Id}' ingredient '{ingDef.ItemId}' could not be resolved; the recipe will be skipped.");
                     }
                 }
 
-                if (ingredients.Count == 0)
+                if (!allIngredientsResolved || ingredients.Count == 0)
                 {
-                    MMLog.Write($"Recipe '{def.Id}' has no valid ingredients. Skipping.");
+                    MMLog.Write($"Recipe '{def.Id}' has unresolved or no ingredients. Skipping.");
                     failed++;
                     continue;
                 }

@@ -1799,6 +1799,17 @@ try {
     $failures.Add('content localization key runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $recipeMethod = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Content\ContentInjector.cs') 'private static void InjectRecipes('
+    $recipeMethod = [regex]::Replace($recipeMethod, '\$"[^"\r\n]*"', '"recipe diagnostic"')
+    $recipeMethod = $recipeMethod.Replace('def.NormalizeLegacyFields();', 'ItemManager.ItemType resultType; ItemManager.ItemType ingType; List<CraftingManager.Recipe> inspector; def.NormalizeLegacyFields();').Replace('out var resultType', 'out resultType').Replace('out var ingType', 'out ingType').Replace('out List<CraftingManager.Recipe> inspector', 'out inspector')
+    Add-Type -TypeDefinition ('namespace ContentRecipeFixture { using System; using System.Collections.Generic;' + (Read-RepoFile 'tools\ContentRecipe.ContractFixture.cs') + 'public static partial class ContentRecipeContractFixture {' + $recipeMethod + '}}')
+    [ContentRecipeFixture.ContentRecipeContractFixture]::Verify()
+    $script:contractCount += [ContentRecipeFixture.ContentRecipeContractFixture]::Count
+} catch {
+    $failures.Add('content recipe ingredients runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
