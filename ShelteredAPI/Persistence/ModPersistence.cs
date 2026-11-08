@@ -29,12 +29,12 @@ namespace ShelteredAPI.Persistence
         /// <summary>
         /// Registers a collection for automatic save/load.
         /// </summary>
-        internal static void Register(ISaveable collection, Action reset)
+        internal static void Register(ISaveable collection, Action reset = null)
         {
             if (!_registeredCollections.Contains(collection))
             {
                 _registeredCollections.Add(collection);
-                _resetCollections.Add(reset);
+                if (reset != null) _resetCollections.Add(reset);
                 // Ensure it's registered with the game's SaveManager
                 if (SaveManager.instance != null)
                 {
