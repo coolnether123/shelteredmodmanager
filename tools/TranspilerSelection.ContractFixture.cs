@@ -18,6 +18,7 @@ public partial class FluentTranspiler {
         });
     }
     private void AddSoftFailure(string message) { Failures++; }
+    private void AddSoftFailure(TranspilerDiagnosticCategory category, string message) { Failures++; }
     private void AddWarning(string message) { }
     private void AddNote(string message) { }
     public bool MatchesCall(Type type, string name, MethodInfo method, bool inherited, Type[] genericArguments) { return BuildCallPredicate(type, name, null, genericArguments, inherited)(new CodeInstruction(OpCodes.Call, method)); }
@@ -43,6 +44,33 @@ public static class TranspilerSelectionContractFixture {
         VerifyInheritedCalls();
         VerifyGenericCalls();
         VerifyLocalCapture();
+        VerifyLocalLoadEncoding();
+    }
+    private static void VerifyLocalLoadEncoding() {
+        foreach (int index in new[] { 3, 4, 255, 256 }) {
+            var t = new FluentTranspiler(new CodeInstruction(OpCodes.Ret));
+            t.FindSequence(SearchMode.Start, delegate(CodeInstruction i) { return i.opcode == OpCodes.Ret; });
+            t.CaptureLocal(index.ToString());
+            var load = new List<CodeInstruction>(t.Instructions())[0];
+            var method = new DynamicMethod("loadLocal" + index, typeof(int), Type.EmptyTypes);
+            var il = method.GetILGenerator();
+            LocalBuilder target = null;
+            for (int i = 0; i <= index; i++) target = il.DeclareLocal(typeof(int));
+            il.Emit(OpCodes.Ldc_I4, 42);
+            il.Emit(OpCodes.Stloc, target);
+            if (load.opcode == OpCodes.Ldloc_S) il.Emit(load.opcode, unchecked((byte)Convert.ToInt32(load.operand)));
+            else if (load.opcode == OpCodes.Ldloc) il.Emit(load.opcode, unchecked((short)Convert.ToInt32(load.operand)));
+            else il.Emit(load.opcode);
+            il.Emit(OpCodes.Ret);
+            try { Check(((Func<int>)method.CreateDelegate(typeof(Func<int>)))() == 42, "CaptureLocal must load index " + index + " without truncation"); }
+            catch (Exception error) { throw new Exception("CaptureLocal index " + index + " emitted " + load.opcode + ": " + error.Message); }
+        }
+        foreach (string index in new[] { "-1", "65536" }) {
+            var t = new FluentTranspiler(new CodeInstruction(OpCodes.Ret));
+            t.FindSequence(SearchMode.Start, delegate(CodeInstruction i) { return i.opcode == OpCodes.Ret; });
+            t.CaptureLocal(index);
+            Check(new List<CodeInstruction>(t.Instructions()).Count == 1 && t.Failures == 1, "An unencodable local index must fail without changing instructions");
+        }
     }
     private static void VerifyLocalCapture() {
         var generator = new DynamicMethod("locals", typeof(void), Type.EmptyTypes).GetILGenerator();
@@ -128,6 +156,7 @@ public static class TranspilerSelectionContractFixture {
 public static class Localization { public static string Get(string key, bool suppressWarnings) { return key; } }
 public class CallBase { public void Inherited() { } }
 public class CallDerived : CallBase { public void Own() { } }
+public enum TranspilerDiagnosticCategory { Match }
 namespace FirstDomain { public sealed class Item { } }
 namespace SecondDomain { public sealed class Item { } }
 namespace ModAPI.Core { public static class MMLog {

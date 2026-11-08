@@ -1138,7 +1138,7 @@ namespace ModAPI.Harmony
         /// <summary>
         /// Emits an <c>Ldloc</c> instruction for a numeric local variable index.
         /// </summary>
-        /// <param name="localIndexOrName">The local variable index, such as "0". Names are rejected because symbols are unavailable.</param>
+        /// <param name="localIndexOrName">The local variable index from 0 through 65535, such as "0". Names are rejected because symbols are unavailable.</param>
         public FluentTranspiler CaptureLocal(string localIndexOrName)
         {
             if (!_matcher.IsValid) return this;
@@ -1149,6 +1149,11 @@ namespace ModAPI.Harmony
             // Return a soft failure for names instead of emitting no instruction.
             if (int.TryParse(localIndexOrName, out int index))
             {
+                if (index < 0 || index > ushort.MaxValue)
+                {
+                    AddSoftFailure(TranspilerDiagnosticCategory.Match, "CaptureLocal requires a local index from 0 through 65535.");
+                    return this;
+                }
                 _matcher.Insert(new CodeInstruction(GetLdlocOpCode(index), index > 3 ? (object)index : null));
                 return this;
             }
@@ -1169,7 +1174,7 @@ namespace ModAPI.Harmony
                 case 1: return OpCodes.Ldloc_1;
                 case 2: return OpCodes.Ldloc_2;
                 case 3: return OpCodes.Ldloc_3;
-                default: return OpCodes.Ldloc_S;
+                default: return index <= byte.MaxValue ? OpCodes.Ldloc_S : OpCodes.Ldloc;
             }
         }
 

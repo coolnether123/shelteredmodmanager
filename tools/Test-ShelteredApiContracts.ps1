@@ -1647,6 +1647,10 @@ try {
     $callPredicate = Read-ContractMethod $transpilerSource 'private Func<CodeInstruction, bool> BuildCallPredicate('
     $transpilerSelection += $callPredicate.Replace('if (!(instr.operand is MethodInfo method))', 'MethodInfo method = instr.operand as MethodInfo; if (method == null)')
     $transpilerSelection += (Read-ContractMethod $transpilerSource 'public int CaptureLocalIndex(') + (Read-ContractMethod $transpilerSource 'public FluentTranspiler MatchLoadLocal(')
+    $localLoad = (Read-ContractMethod $transpilerSource 'public FluentTranspiler CaptureLocal(') + (Read-ContractMethod $transpilerSource 'private OpCode GetLdlocOpCode(')
+    $localLoad = $localLoad.Replace('if (int.TryParse(localIndexOrName, out int index))', 'int index; if (int.TryParse(localIndexOrName, out index))')
+    $localLoad = [regex]::Replace($localLoad, '\$"CaptureLocal could not resolve local name [^\r\n]+', '"CaptureLocal could not resolve a local name: local variable names " +')
+    $transpilerSelection += $localLoad
     $transpilerFeatures = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler_Features.cs'
     $transpilerSelection += (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchEither(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchWithGap(')
     $transpilerSelection += (Read-ContractMethod $transpilerSource 'private struct StackExpectation') + (Read-ContractMethod $transpilerFeatures 'private struct StackDeltaExpectation') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler ExpectStack(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler EnsureStack(')
