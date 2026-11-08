@@ -35,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Public{
         {
             ScenarioDefinition definition = new ScenarioDefinition();
             definition.BaseGameMode = baseGameMode;
+            definition.SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(baseGameMode);
             return definition;
         }
 

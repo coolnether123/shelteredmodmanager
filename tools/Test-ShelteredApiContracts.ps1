@@ -1619,6 +1619,16 @@ try {
     $failures.Add('runtime UI cleanup contract: ' + $_.Exception.Message)
 }
 
+try {
+    $scenarioModeModels = @('public enum ScenarioBaseGameMode', 'public class ScenarioDefinition', 'public class ScenarioModeAvailabilityDefinition', 'public class ScenarioSelectionRulesDefinition') | ForEach-Object { Read-ContractMethod $scenarioDefinitionModel $_ }
+    $scenarioCreate = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Public\ShelteredScenarioAuthoring.cs') 'public static ScenarioDefinition CreateDefinition(ScenarioBaseGameMode'
+    Add-Type -TypeDefinition ('namespace ScenarioAuthoringFixture { using System; using System.Collections.Generic;' + ($scenarioModeModels -join [Environment]::NewLine) + (Read-RepoFile 'tools\ScenarioAuthoring.ContractFixture.cs') + 'public static partial class ScenarioAuthoringContractFixture {' + $scenarioCreate + '}}')
+    [ScenarioAuthoringFixture.ScenarioAuthoringContractFixture]::Verify()
+    $script:contractCount += [ScenarioAuthoringFixture.ScenarioAuthoringContractFixture]::Count
+} catch {
+    $failures.Add('scenario base mode runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
