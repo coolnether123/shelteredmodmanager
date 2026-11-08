@@ -66,7 +66,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return mesh != null;
         }
 
-        internal static bool TrySetBody(FamilyMember member, string meshId, out string message)
+        internal static bool TrySetBody(BaseCharacter member, string meshId, out string message)
         {
             message = null;
             CharacterMesh current;
@@ -175,7 +175,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return true;
         }
 
-        public bool AlignLiveMesh(FamilyMemberConfig config, FamilyMember member, out string message)
+        public bool AlignLiveMesh(FamilyMemberConfig config, BaseCharacter member, out string message)
         {
             message = null;
             if (config == null || member == null)
@@ -220,7 +220,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             return true;
         }
 
-        private static void AlignBodyIdentity(FamilyMember member, CharacterMeshOptions.CharacterMeshType meshType, string meshId)
+        private static void AlignBodyIdentity(BaseCharacter member, CharacterMeshOptions.CharacterMeshType meshType, string meshId)
         {
             if (BaseCharacterMaleField != null) BaseCharacterMaleField.SetValue(member, meshType.m_male);
             if (BaseCharacterChildField != null) BaseCharacterChildField.SetValue(member, !meshType.m_adult);
@@ -361,7 +361,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         }
 
         private void ApplyReplacementDefaults(
-            FamilyMember member,
+            BaseCharacter member,
             CharacterMesh mesh,
             CharacterMeshOptions.CharacterMeshType meshType,
             FamilyMemberAppearanceConfig appearance)
@@ -387,7 +387,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             ApplyTextureId(target, ScenarioCharacterTexturePart.Legs, GetAppearanceTextureId(appearance, ScenarioCharacterTexturePart.Legs) ?? "default", null, out ignored);
         }
 
-        private static string ResolveConfiguredMeshId(FamilyMemberConfig config, FamilyMember member)
+        private static string ResolveConfiguredMeshId(FamilyMemberConfig config, BaseCharacter member)
         {
             if (config != null && config.Appearance != null && !string.IsNullOrEmpty(config.Appearance.MeshId))
                 return config.Appearance.MeshId;

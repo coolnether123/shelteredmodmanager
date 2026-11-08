@@ -139,6 +139,10 @@ namespace ShelteredAPI.Characters.Internal
             _data.UniqueId = game.UniqueId;
             _data.FirstName = Pick(_data.FirstName, _synced.FirstName, game.FirstName, keepPendingEdits);
             _data.LastName = Pick(_data.LastName, _synced.LastName, game.LastName, keepPendingEdits);
+            _data.IsMale = Pick(_data.IsMale, _synced.IsMale, game.IsMale, keepPendingEdits);
+            _data.MeshId = Pick(_data.MeshId, _synced.MeshId, game.MeshId, keepPendingEdits);
+            _data.SkinColor = Pick(_data.SkinColor, _synced.SkinColor, game.SkinColor, keepPendingEdits);
+            _data.HairColor = Pick(_data.HairColor, _synced.HairColor, game.HairColor, keepPendingEdits);
             _data.Health = Pick(_data.Health, _synced.Health, game.Health, keepPendingEdits);
             _data.MaxHealth = Pick(_data.MaxHealth, _synced.MaxHealth, game.MaxHealth, keepPendingEdits);
             _data.StrengthLevel = Pick(_data.StrengthLevel, _synced.StrengthLevel, game.StrengthLevel, keepPendingEdits);
@@ -150,6 +154,10 @@ namespace ShelteredAPI.Characters.Internal
             _synced.UniqueId = game.UniqueId;
             _synced.FirstName = game.FirstName;
             _synced.LastName = game.LastName;
+            _synced.IsMale = game.IsMale;
+            _synced.MeshId = game.MeshId;
+            _synced.SkinColor = game.SkinColor;
+            _synced.HairColor = game.HairColor;
             _synced.Health = game.Health;
             _synced.MaxHealth = game.MaxHealth;
             _synced.StrengthLevel = game.StrengthLevel;
@@ -213,6 +221,7 @@ namespace ShelteredAPI.Characters.Internal
             if (_member != null)
             {
                 WriteNamesAndStats(_member, _member.BaseStats);
+                SyncAppearance(_member);
                 SyncHealth(_member);
                 CharacterDataModel game = new CharacterDataModel();
                 CharacterFactory.FillFromFamilyMember(game, _member);
@@ -222,11 +231,43 @@ namespace ShelteredAPI.Characters.Internal
             if (_npc != null)
             {
                 WriteNamesAndStats(_npc, _npc.BaseStats);
+                SyncAppearance(_npc);
                 SyncHealth(_npc);
                 CharacterDataModel game = new CharacterDataModel();
                 CharacterFactory.FillFromVisitor(game, _npc);
                 PullFromGame(game, false);
             }
+        }
+
+        private void SyncAppearance(BaseCharacter character)
+        {
+            bool meshChanged = !string.Equals(_data.MeshId, _synced.MeshId, StringComparison.Ordinal);
+            bool genderChanged = _data.IsMale != _synced.IsMale;
+            if (meshChanged || genderChanged)
+            {
+                string meshId = meshChanged ? _data.MeshId
+                    : (_data.IsMale ? (character.isAdult ? "man" : "boy") : (character.isAdult ? "woman" : "girl"));
+                string message;
+                ShelteredAPI.Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.TrySetBody(character, meshId, out message);
+            }
+
+            bool skinChanged = !_data.SkinColor.Equals(_synced.SkinColor);
+            bool hairChanged = !_data.HairColor.Equals(_synced.HairColor);
+            if (!skinChanged && !hairChanged) return;
+            if (skinChanged) TrySetField(character, "m_skinColor", _data.SkinColor);
+            if (hairChanged)
+            {
+                TrySetField(character, "m_hairColor", _data.HairColor);
+                TrySetField(character, "m_originalHairColor", _data.HairColor);
+            }
+            CharacterMesh mesh;
+            if (ShelteredAPI.Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.TryGetBody(character, out mesh))
+            {
+                if (skinChanged) mesh.SetColor(CharacterMesh.ColorCustomization.SkinColor, _data.SkinColor);
+                if (hairChanged) mesh.SetColor(CharacterMesh.ColorCustomization.HairColor, _data.HairColor);
+                mesh.RefreshColors();
+            }
+            character.UpdateAvatarSprite();
         }
 
         private void WriteNamesAndStats(object character, BaseStats stats)
@@ -682,6 +723,10 @@ namespace ShelteredAPI.Characters.Internal
             d.UniqueId = member.GetId();
             d.FirstName = member.firstName;
             d.LastName = member.lastName;
+            d.IsMale = member.isMale;
+            d.MeshId = member.meshId;
+            d.SkinColor = member.skinColor;
+            d.HairColor = member.hairColor;
             d.Health = member.health;
             d.MaxHealth = member.maxHealth;
             d.StrengthLevel = member.BaseStats.Strength.Level;
@@ -709,6 +754,10 @@ namespace ShelteredAPI.Characters.Internal
             d.UniqueId = npc.npcId;
             d.FirstName = npc.firstName;
             d.LastName = npc.lastName;
+            d.IsMale = npc.isMale;
+            d.MeshId = npc.meshId;
+            d.SkinColor = npc.skinColor;
+            d.HairColor = npc.hairColor;
             d.Health = npc.health;
             d.MaxHealth = npc.maxHealth;
             d.StrengthLevel = npc.BaseStats.Strength.Level;

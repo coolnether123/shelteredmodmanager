@@ -1428,6 +1428,22 @@ try {
     $failures.Add("shared hooks runtime contract: " + $_.Exception.Message)
 }
 
+try {
+    $appearanceSources = @(
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterData.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\CharacterDataModel.cs'),
+        ('namespace ShelteredAPI.Characters.Internal {' + (Read-ContractMethod $sharedRuntime 'internal static class CharacterFactory') + '}')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    $appearanceMethods = @('private void PullFromGame(', 'private static T Pick<T>(', 'private void SyncAppearance(', 'private static bool TrySetField(') | ForEach-Object { Read-ContractMethod $sharedRuntime $_ }
+    $appearanceCompilation = (Read-RepoFile 'tools\CharacterAppearance.ContractFixture.cs') + ($appearanceSources -join [Environment]::NewLine) + 'public partial class CharacterAppearanceContractFixture {' + ($appearanceMethods -join [Environment]::NewLine) + '}'
+    $appearanceCompilation = $appearanceCompilation.Replace('ShelteredAPI.', 'AppearanceFixture.')
+    Add-Type -TypeDefinition ('namespace AppearanceContract {' + $appearanceCompilation + '}')
+    [AppearanceContract.CharacterAppearanceContractFixture]::Verify()
+    $script:contractCount += [AppearanceContract.CharacterAppearanceContractFixture]::Count
+} catch {
+    $failures.Add('character appearance runtime contract: ' + $_.Exception.Message)
+}
+
 # Execute the production effect owner with isolated callback stand-ins.
 try {
     $effectsStart = $sharedRuntime.IndexOf('    internal sealed class BasicCharacterEffects')
