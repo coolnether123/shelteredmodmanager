@@ -109,7 +109,7 @@ namespace ShelteredAPI.UI.Spine
 
             string text = DisplayTextProvider();
             if (text == null) text = string.Empty;
-            if (text == _lastRenderedText) return;
+            if (text == _lastRenderedText && ValueLabel.text == text) return;
 
             _lastRenderedText = text;
             ValueLabel.text = text;

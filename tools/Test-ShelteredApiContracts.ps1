@@ -1864,6 +1864,16 @@ try {
     $failures.Add('slider text submission runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $keybindClass = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\UI\Spine\KeybindCaptureListener.cs') 'internal class KeybindCaptureListener'
+    $keybindInput = 'namespace UnityEngine { public static class Input { public static KeybindDisplayFixture.KeyCode Pressed; public static bool GetKeyDown(KeybindDisplayFixture.KeyCode code) { return Pressed == code; } } }'
+    Add-Type -TypeDefinition ($keybindInput + 'namespace KeybindDisplayFixture { using System; using System.Collections.Generic; using System.Reflection;' + (Read-RepoFile 'tools\KeybindDisplay.ContractFixture.cs') + $keybindClass + '}')
+    [KeybindDisplayFixture.KeybindDisplayContractFixture]::Verify()
+    $script:contractCount += [KeybindDisplayFixture.KeybindDisplayContractFixture]::Count
+} catch {
+    $failures.Add('keybind display runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
