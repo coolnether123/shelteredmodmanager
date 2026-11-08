@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using ModAPI.Core;
@@ -56,6 +57,7 @@ namespace ShelteredAPI.Content
         {
             var key = CacheKey(asm, "sprite:" + relativePath);
             if (key == null) return null;
+            key += ":" + pixelsPerUnit.ToString("R", CultureInfo.InvariantCulture);
             Sprite cached;
             if (_spriteCache.TryGetValue(key, out cached)) return cached;
 
@@ -75,7 +77,7 @@ namespace ShelteredAPI.Content
             var tex = LoadTexture(modRootPath, relativePath);
             if (tex == null) return null;
 
-            var key = "root:sprite:" + Path.GetFullPath(Path.Combine(modRootPath ?? string.Empty, relativePath ?? string.Empty));
+            var key = "root:sprite:" + Path.GetFullPath(Path.Combine(modRootPath ?? string.Empty, relativePath ?? string.Empty)) + ":" + pixelsPerUnit.ToString("R", CultureInfo.InvariantCulture);
             Sprite cached;
             if (_spriteCache.TryGetValue(key, out cached)) return cached;
 

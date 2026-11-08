@@ -1728,6 +1728,16 @@ try {
     $failures.Add('transpiler bulk pattern runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $assetSource = Read-RepoFile 'ShelteredAPI\Content\AssetLoader.cs'
+    $spriteMethods = (Read-ContractMethod $assetSource 'public static Sprite LoadSprite(Assembly asm,') + (Read-ContractMethod $assetSource 'public static Sprite LoadSprite(string modRootPath,')
+    Add-Type -TypeDefinition ('namespace AssetSpriteFixture { using System; using System.Collections.Generic; using System.Globalization; using System.IO; using System.Reflection;' + (Read-RepoFile 'tools\AssetSprite.ContractFixture.cs') + 'public static partial class AssetLoader {' + $spriteMethods + '}}')
+    [AssetSpriteFixture.AssetSpriteContractFixture]::Verify()
+    $script:contractCount += [AssetSpriteFixture.AssetSpriteContractFixture]::Count
+} catch {
+    $failures.Add('sprite cache runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
