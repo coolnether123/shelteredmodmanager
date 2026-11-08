@@ -93,7 +93,7 @@ Use `IPluginContext.SaveSystem` instead when the data is runtime state rather th
 
 ## Raw providers
 
-Implement `ISettingsProvider` only when the plugin owns scanning, defaults, loading, and saving. The current loader registers a raw provider but does not create or load a `SettingsController` for it. A raw provider must not rely on `OnSettingsLoaded()` being called automatically before `Start(...)`.
+Implement `ISettingsProvider` only when the plugin must supply its own setting definitions. The loader wraps a raw provider (one that does not implement `ISettingsProvider2`) in a `SettingsController`, loads persisted values and calls `OnSettingsLoaded()` before `Start(...)`, and saves it before the active game save. Do not add your own load call. Implement `ISettingsProvider2` only when the plugin owns loading and saving itself.
 
 ## Diagnose scanning
 

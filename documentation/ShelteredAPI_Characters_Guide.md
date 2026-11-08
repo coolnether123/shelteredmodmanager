@@ -223,8 +223,9 @@ public class LoyaltyDecaySystem : IActorSimulationSystem
 }
 
 _actors.RegisterSystem(new LoyaltyDecaySystem());
-_actors.Tick(1, "mymod.sim");
 ```
+
+Registered systems run on the shared actor scheduler. Do not call `_actors.Tick(...)` after registering: `Tick` advances the shared clock and runs every registered system, including other mods' systems. Call it only from code that owns the whole actor lifecycle, such as an isolated test.
 
 ## 10. Events and persistence
 

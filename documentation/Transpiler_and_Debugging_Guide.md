@@ -56,7 +56,8 @@ public static class TargetMethod_Patch
 ## 2. Core types
 
 - `FluentTranspiler`: primary match/edit API
-- `IntentAPI`: high-level helpers such as `RedirectCall` and `ChangeConstant`
+- `IntentAPI`: high-level helpers such as `ChangeConstant` and `RemoveCall`
+- `ForCall(...)`: call-site recipes such as `ReplaceWith` and `ReplaceAllWith`
 - `StackSentinel`: stack validation during build
 - `CooperativePatcher`: ordered multi-mod transpiler composition
 - `TranspilerDebugger`: before/after dumps and diagnostics
@@ -90,7 +91,7 @@ Common calls:
 - `ReplaceWithCall(...)`
 - `ReplaceSequence(...)`
 - `ReplaceAll(...)`
-- `ReplaceAllCalls(...)`
+- `ForCall(...).ReplaceAllWith(...)`
 - `ReplaceAllPatterns(...)`
 - `WithTransaction(...)`
 
@@ -101,14 +102,14 @@ Common calls:
 Intent helpers reduce opcode choreography:
 
 ```csharp
-t.RedirectCall(typeof(GameModeManager), "OnDayPassed", typeof(Hooks), "OnDayPassedHook");
-t.RedirectCallAll(typeof(GameModeManager), "OnDayPassed", typeof(Hooks), "OnDayPassedHook");
+t.ForCall(typeof(GameModeManager), "OnDayPassed").ReplaceWith(typeof(Hooks), "OnDayPassedHook");
+t.ForCall(typeof(GameModeManager), "OnDayPassed").ReplaceAllWith(typeof(Hooks), "OnDayPassedHook");
 t.ChangeConstant(1.0f, 1.5f);
 t.ChangeConstantAll(5, 10);
 t.RemoveCall(typeof(Analytics), "TrackEvent");
 ```
 
-Use them when an intent helper can express the change.
+Use them when an intent helper can express the change. `ReplaceWith` reports an ambiguous match instead of silently taking the first call. `RedirectCall`, `RedirectCallAll`, and `ReplaceAllCalls` still compile but are obsolete.
 
 ## 6. Validation
 

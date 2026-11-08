@@ -86,7 +86,7 @@ Existing 2.0 names that predate these rules remain supported, including `SaveEnt
 | API area | 2.0 status | What authors should do |
 |---------|---------------|-------------------------|
 | Content, events, input, actors/characters, and save facades | Documented public API | Follow the relevant guide and signature reference. |
-| Expedition map context and generation-policy intent | API preview | Query runtime facts safely; generation adapters consuming policy intent remain follow-up work. |
+| Expedition map context and generation-policy intent | API preview | Query runtime facts safely. Map size and location/town density apply during new-map generation; other policy kinds apply only through their documented consumers. |
 | Map-marker/expedition-actor snapshots and support bundles | API preview / diagnostics | Use copied facts for integrations and reports; do not treat them as mutable game state. |
 | Player queue snapshots and conservative restore | API preview | Queue capacity is observed metadata, not framework-owned policy. |
 | Runtime UI, stores, item reservations/assignments, and cooking stations | API preview | Expect small API or behavior adjustments within the 2.0 line. |

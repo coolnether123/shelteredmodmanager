@@ -39,7 +39,7 @@ public sealed class MyPlugin : IModPlugin
 
 After `Initialize(...)`, the loader finds the holder, creates a `SettingsController`, loads persisted values, and then calls `Start(...)`. It also reloads the controller at session start and saves it before the active game save.
 
-Do not implement a raw `ISettingsProvider` only to scan an attributed object. The current raw-provider path registers the provider but does not create or load a `SettingsController`. Use the discovered holder pattern unless the plugin owns the complete load and save behavior.
+Do not implement a raw `ISettingsProvider` only to scan an attributed object; the discovered holder pattern does that with less code. If a plugin does implement `ISettingsProvider` (and not `ISettingsProvider2`), the loader wraps it in a `SettingsController`, loads persisted values and calls `OnSettingsLoaded()` before `Start(...)`, and saves it before the active game save. Do not add your own load call for a raw provider.
 
 `ModManagerBase<T>` is not the recommended settings path until its `MonoBehaviour` activation and cleanup are verified. See [Develop a plugin](how%20to%20develop%20a%20plugin.md#modmanagerbase-status).
 

@@ -155,7 +155,7 @@ Prerequisites:
 - .NET 8 SDK for the decompiler helper project in the solution.
 - A local Sheltered install that provides `Assembly-CSharp.dll`, `UnityEngine.dll`, and `UnityEngine.UI.dll`.
 
-Current project files contain local `HintPath` fallbacks for the maintainer's Steam/Epic installs. If your Sheltered install is elsewhere, retarget those references locally before building.
+Game references resolve through `Directory.Build.props`, which defaults to the Epic x64 install at `D:\Epic Games Games\Sheltered\`. For another install, pass `/p:ShelteredInstallDir=<install folder>\` (or `/p:ShelteredManagedDir=<...>\Managed\` for the Steam x86 layout) instead of editing project files.
 
 Build command used for Dev/2.0 verification:
 
