@@ -1155,6 +1155,7 @@ namespace ModAPI.Harmony
                     return this;
                 }
                 _matcher.Insert(new CodeInstruction(GetLdlocOpCode(index), index > 3 ? (object)index : null));
+                InvalidateLabelIndexCache();
                 return this;
             }
 

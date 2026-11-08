@@ -4,6 +4,8 @@ public partial class FluentTranspiler {
     private readonly List<StackExpectation> _stackExpectations = new List<StackExpectation>();
     private readonly List<StackDeltaExpectation> _stackDeltaExpectations = new List<StackDeltaExpectation>();
     private int _lastStackCheckPos = -1;
+    private readonly Dictionary<Label, int> _labelIndexCache = new Dictionary<Label, int>();
+    private bool _labelIndexCacheDirty = true;
     public int Failures;
     public FluentTranspiler(params CodeInstruction[] instructions) { _matcher = new CodeMatcher(instructions); }
     public bool HasMatch { get { return _matcher.IsValid; } }
@@ -45,6 +47,20 @@ public static class TranspilerSelectionContractFixture {
         VerifyGenericCalls();
         VerifyLocalCapture();
         VerifyLocalLoadEncoding();
+        VerifyLocalLabelIndexes();
+    }
+    private static void VerifyLocalLabelIndexes() {
+        var il = new DynamicMethod("labels", typeof(void), Type.EmptyTypes).GetILGenerator();
+        var label = il.DefineLabel();
+        var target = new CodeInstruction(OpCodes.Ret);
+        target.labels.Add(label);
+        var t = new FluentTranspiler(new CodeInstruction(OpCodes.Nop), target);
+        Check(t.LabelToIndex(label) == 1, "Initial branch target must resolve");
+        t.FindSequence(SearchMode.Start, delegate(CodeInstruction i) { return i.opcode == OpCodes.Nop; });
+        t.CaptureLocal("0");
+        Check(t.LabelToIndex(label) == 2, "CaptureLocal must update cached branch indexes after inserting a load");
+        var resolved = new List<CodeInstruction>(t.Instructions())[t.LabelToIndex(label)];
+        Check(resolved.opcode == OpCodes.Ret && resolved.labels.Contains(label), "Branch navigation must still select the original target");
     }
     private static void VerifyLocalLoadEncoding() {
         foreach (int index in new[] { 3, 4, 255, 256 }) {
