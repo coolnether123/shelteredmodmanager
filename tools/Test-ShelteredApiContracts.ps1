@@ -1810,6 +1810,17 @@ try {
     $failures.Add('content recipe ingredients runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $boundClass = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRangeCheckRecipes.cs') 'public sealed class FluentBoundCheckSelection'
+    $boundClass = [regex]::Replace($boundClass, '\$"[^"\r\n]*"', '"bound diagnostic"')
+    $boundClass = $boundClass.Replace('nameof(ReplaceBoundWithCall)', '"ReplaceBoundWithCall"')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace BoundReplacementFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + (Read-RepoFile 'tools\BoundReplacement.ContractFixture.cs') + $boundClass + '}')
+    [BoundReplacementFixture.BoundReplacementContractFixture]::Verify()
+    $script:contractCount += [BoundReplacementFixture.BoundReplacementContractFixture]::Count
+} catch {
+    $failures.Add('normalized bound replacement runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
