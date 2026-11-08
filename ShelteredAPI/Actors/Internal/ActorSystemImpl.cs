@@ -852,6 +852,7 @@ namespace ShelteredAPI.Actors.Internal
         private bool BindLocked(ActorId actorId, ActorBinding binding, bool replaceExisting)
         {
             if (actorId == null || binding == null) return false;
+            actorId = new ActorId(actorId.Kind, actorId.LocalId, actorId.Domain);
 
             string bindingType = NormalizeKey(binding.BindingType);
             string bindingKey = NormalizeKey(binding.BindingKey);
@@ -1184,7 +1185,7 @@ namespace ShelteredAPI.Actors.Internal
                 if (query.PersistentOnly.Value != persistent) return false;
             }
 
-            if (query.Predicate != null && !query.Predicate(record)) return false;
+            if (query.Predicate != null && !query.Predicate(record.Clone())) return false;
             return true;
         }
 
@@ -1423,7 +1424,8 @@ namespace ShelteredAPI.Actors.Internal
 
         private static string BuildBindingIndexKey(string bindingType, string bindingKey)
         {
-            return NormalizeKey(bindingType) + "|" + NormalizeKey(bindingKey);
+            string type = NormalizeKey(bindingType);
+            return type.Length + ":" + type + NormalizeKey(bindingKey);
         }
 
         private static ActorBinding CreateBinding(string bindingType, string bindingKey, string sourceModId, bool persistent)
@@ -1578,6 +1580,7 @@ namespace ShelteredAPI.Actors.Internal
             public void Dispatch(ActorEventEnvelope envelope)
             {
                 if (_disposed || _handler == null || envelope == null) return;
+                envelope = CloneEvent(envelope);
                 if (_filter != null && !_filter(envelope)) return;
                 _handler(CloneEvent(envelope));
             }

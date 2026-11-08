@@ -40,6 +40,21 @@ function Assert-Contains {
     }
 }
 
+function Read-ContractMethod {
+    param([string]$Text, [string]$Signature)
+    $start = $Text.IndexOf($Signature, [StringComparison]::Ordinal)
+    if ($start -lt 0) { throw "Missing contract method: $Signature" }
+    $open = $Text.IndexOf('{', $start)
+    $depth = 1
+    $end = $open + 1
+    while ($depth -gt 0 -and $end -lt $Text.Length) {
+        if ($Text[$end] -eq '{') { $depth++ }
+        if ($Text[$end] -eq '}') { $depth-- }
+        $end++
+    }
+    return $Text.Substring($start, $end - $start)
+}
+
 function Assert-NotContains {
     param(
         [string]$Name,
@@ -1447,6 +1462,25 @@ try {
     $script:contractCount += [PersistenceFixture.PersistenceContractFixture]::Count
 } catch {
     $failures.Add('persistent collections runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $actorOwner = Read-RepoFile 'ShelteredAPI\Actors\Internal\ActorSystemImpl.cs'
+    $actorMethods = @(
+        'private bool BindLocked(', 'private bool RemoveBindingLocked(', 'private bool HasBindingTypeLocked(',
+        'private static string NormalizeKey(', 'private static string BuildBindingIndexKey(',
+        'private static bool IsValidBindingType(', 'private static bool IsOwnedBindingType(',
+        'private static void AddToStringIndex(', 'private static void RemoveFromStringIndex(',
+        'private bool MatchesQueryLocked(', 'private static ActorEventEnvelope CloneEvent(',
+        'private sealed class ActorSubscription :'
+    ) | ForEach-Object { Read-ContractMethod $actorOwner $_ }
+    $actorModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $actorFixture = Read-RepoFile 'tools\ActorIdentity.ContractFixture.cs'
+    Add-Type -TypeDefinition ('namespace ActorIdentityFixture { using System; using System.Collections.Generic; using ModAPI.Actors;' + $actorModels + $actorFixture + 'public sealed partial class ActorIdentityContractFixture {' + ($actorMethods -join [Environment]::NewLine) + '}}')
+    [ActorIdentityFixture.ActorIdentityContractFixture]::Verify()
+    $script:contractCount += [ActorIdentityFixture.ActorIdentityContractFixture]::Count
+} catch {
+    $failures.Add('actor identity runtime contract: ' + $_.Exception.Message)
 }
 
 if ($failures.Count -gt 0) {
