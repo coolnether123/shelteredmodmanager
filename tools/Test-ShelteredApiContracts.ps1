@@ -1610,6 +1610,15 @@ try {
     $failures.Add('save lifecycle runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $runtimeUiSources = @((Read-RepoFile 'ShelteredAPI\UI\Internal\Runtime\RuntimeUiRegistry.cs'), (Read-RepoFile 'ShelteredAPI\UI\Internal\Runtime\UIRuntimeServiceHelper.cs')) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r*\n', '') }
+    Add-Type -TypeDefinition ('namespace UiFixture { using System; using System.Collections.Generic; using UnityEngine; using ModAPI.Core;' + ($runtimeUiSources -join [Environment]::NewLine) + (Read-RepoFile 'tools\RuntimeUi.ContractFixture.cs') + '}')
+    [UiFixture.ShelteredAPI.UI.Internal.Runtime.RuntimeUiContractFixture]::Verify()
+    $script:contractCount += [UiFixture.ShelteredAPI.UI.Internal.Runtime.RuntimeUiContractFixture]::Count
+} catch {
+    $failures.Add('runtime UI cleanup contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
