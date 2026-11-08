@@ -133,6 +133,7 @@ namespace ShelteredAPI.Queues
     {
         private readonly ReadOnlyCollection<PlayerQueueEntry> _entries;
         private readonly byte[] _restorePayload;
+        private readonly WeakReference _runtimeOwner;
 
         internal PlayerQueueSnapshot(
             bool isAvailable,
@@ -141,7 +142,8 @@ namespace ShelteredAPI.Queues
             IList<PlayerQueueEntry> entries,
             string unavailableReason,
             string restoreBlockReason,
-            byte[] restorePayload)
+            byte[] restorePayload,
+            object runtimeOwner = null)
         {
             IsAvailable = isAvailable;
             Owner = owner;
@@ -153,6 +155,7 @@ namespace ShelteredAPI.Queues
             UnavailableReason = unavailableReason ?? string.Empty;
             RestoreBlockReason = restoreBlockReason ?? string.Empty;
             _restorePayload = restorePayload == null ? null : (byte[])restorePayload.Clone();
+            _runtimeOwner = new WeakReference(runtimeOwner);
         }
 
         public bool IsAvailable { get; private set; }
@@ -177,6 +180,11 @@ namespace ShelteredAPI.Queues
         internal byte[] CopyRestorePayload()
         {
             return _restorePayload == null ? null : (byte[])_restorePayload.Clone();
+        }
+
+        internal bool MatchesRuntimeOwner(object owner)
+        {
+            return owner != null && ReferenceEquals(_runtimeOwner.Target, owner);
         }
     }
 

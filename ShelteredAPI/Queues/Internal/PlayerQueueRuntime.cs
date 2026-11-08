@@ -76,6 +76,8 @@ namespace ShelteredAPI.Queues.Internal
             string unavailableReason;
             if (!TryResolveMember(snapshot.Owner.UniqueMemberId, out member, out unavailableReason))
                 return Failed(unavailableReason, Capture(snapshot.Owner.ActorId, false));
+            if (!snapshot.MatchesRuntimeOwner(member))
+                return Failed("The snapshot belongs to a different character instance or save session.", Capture(member, false));
 
             JobQueue liveQueue = member.job_queue;
             int liveCapacity = GetCapacity(liveQueue);
@@ -165,7 +167,8 @@ namespace ShelteredAPI.Queues.Internal
                 entries,
                 string.Empty,
                 restoreBlockReason,
-                restorePayload);
+                restorePayload,
+                member);
         }
 
         private static PlayerQueueSnapshot Unavailable(PlayerQueueOwnerIdentity owner, string reason)

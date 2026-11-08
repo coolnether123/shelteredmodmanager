@@ -1522,6 +1522,17 @@ try {
 }
 
 try {
+    $queueModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs') + (Read-RepoFile 'ShelteredAPI\Queues\PlayerQueueContracts.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $queueRestore = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Queues\Internal\PlayerQueueRuntime.cs') 'internal static PlayerQueueRestoreResult Restore('
+    Add-Type -TypeDefinition ('namespace QueueFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Collections.ObjectModel; using ModAPI.Actors; using ShelteredAPI.Queues;' + $queueModels + (Read-RepoFile 'tools\PlayerQueue.ContractFixture.cs') + 'public static partial class PlayerQueueContractFixture {' + $queueRestore + '}}')
+    [QueueFixture.PlayerQueueContractFixture]::Verify()
+    $script:contractCount += [QueueFixture.PlayerQueueContractFixture]::Count
+    Assert-Contains 'queue snapshot instance capture' (Read-RepoFile 'ShelteredAPI\Queues\Internal\PlayerQueueRuntime.cs') 'restorePayload,\s*member\);' 'Restore snapshots must capture their live owner instance.'
+} catch {
+    $failures.Add('player queue session runtime contract: ' + $_.Exception.Message)
+}
+
+try {
     $inventoryRemove = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Content\Compatibility\InventoryHelper.cs') 'public static bool TryRemoveFromInventory('
     $inventoryRemove = $inventoryRemove.Replace('if (ResolveItemType(itemId, out var type))', 'ItemManager.ItemType type; if (ResolveItemType(itemId, out type))')
     $inventoryCount = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Adapters\GameHelperExtensions.cs') 'internal static int GetItemCountStrict('

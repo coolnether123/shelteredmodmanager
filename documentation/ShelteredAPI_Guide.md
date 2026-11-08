@@ -88,7 +88,7 @@ Existing 2.0 names that predate these rules remain supported, including `SaveEnt
 | Content, events, input, actors/characters, and save facades | Documented public API | Follow the relevant guide and signature reference. |
 | Expedition map context and generation-policy intent | API preview | Query runtime facts safely. Map size and location/town density apply during new-map generation; other policy kinds apply only through their documented consumers. |
 | Map-marker/expedition-actor snapshots and support bundles | API preview / diagnostics | Use copied facts for integrations and reports; do not treat them as mutable game state. |
-| Player queue snapshots and conservative restore | API preview | Queue capacity is observed metadata, not framework-owned policy. |
+| Player queue snapshots and conservative restore | API preview | Restore is limited to the same live character instance and save session. Queue capacity is observed metadata, not framework-owned policy. |
 | Runtime UI, stores, item reservations/assignments, and cooking stations | API preview | Expect small API or behavior adjustments within the 2.0 line. |
 | Installed-scenario browser, XML/code registration, runtime, and scoring snapshots | Supported 2.0 ShelteredAPI | Installed scenario playback remains available when the editor DLL is absent or disabled. |
 | In-game custom scenario editor | Separate optional preview assembly | Defaults off under `ShelteredScenarioEditor.Enabled`; enable it only while creating or testing drafts and use disposable saves for playtests. |
