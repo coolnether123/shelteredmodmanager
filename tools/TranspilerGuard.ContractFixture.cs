@@ -31,8 +31,29 @@ public static class TranspilerGuardContractFixture {
     private static bool _enabled;
     public static bool Enabled() { return _enabled; }
     public static void Original() { _calls++; }
+    public static void WithArgument(int value) { _calls += value; }
+    public static int WithResult() { return 1; }
     private static void Check(bool value, string message) { Count++; if (!value) throw new Exception(message); }
     public static void Verify() {
+        var argument = typeof(TranspilerGuardContractFixture).GetMethod("WithArgument");
+        var valueCall = typeof(TranspilerGuardContractFixture).GetMethod("WithResult");
+        var prefixed = new FluentTranspiler(new CodeInstruction(OpCodes.Tailcall), new CodeInstruction(OpCodes.Call, typeof(TranspilerGuardContractFixture).GetMethod("Original")), new CodeInstruction(OpCodes.Ret));
+        var prefixResult = new FluentCallGuardSelection(prefixed, typeof(TranspilerGuardContractFixture).GetMethod("Original"), SearchMode.Start).SkipOriginalWhen(delegate(FluentGuardBuilder guard) { guard.RequireCallTrue(typeof(TranspilerGuardContractFixture).GetMethod("Enabled")); });
+        Check(prefixResult == FluentReplacementResult.UnsafeMatch && prefixed.Instructions().Count() == 3, "A call prefix must not be separated from its call by guard instructions");
+        foreach (var call in new[] { argument, valueCall }) {
+            var original = new CodeInstruction(OpCodes.Call, call);
+            var unsafeCall = new FluentTranspiler(new CodeInstruction(OpCodes.Ldc_I4_1), original, new CodeInstruction(OpCodes.Ret));
+            bool configured = false;
+            var rejected = new FluentCallGuardSelection(unsafeCall, call, SearchMode.Start).SkipOriginalWhen(delegate(FluentGuardBuilder guard) { configured = true; guard.RequireCallTrue(typeof(TranspilerGuardContractFixture).GetMethod("Enabled")); });
+            Check(rejected == FluentReplacementResult.UnsafeMatch && !configured && unsafeCall.Instructions().Count() == 3 && ReferenceEquals(unsafeCall.Instructions().ElementAt(1), original), "Unsupported call inputs or outputs must leave the instruction stream unchanged");
+        }
+        foreach (bool enabled in new[] { false, true }) {
+            _calls = 0; _enabled = enabled;
+            var input = new FluentTranspiler(new CodeInstruction(OpCodes.Ldc_I4_1), new CodeInstruction(OpCodes.Call, argument), new CodeInstruction(OpCodes.Ret));
+            var applied = new FluentCallGuardSelection(input, argument, SearchMode.Start).IncludingPreviousInstruction().SkipOriginalWhen(delegate(FluentGuardBuilder guard) { guard.RequireCallTrue(typeof(TranspilerGuardContractFixture).GetMethod("Enabled")); });
+            input.Execute();
+            Check(applied == FluentReplacementResult.PatternReplaced && _calls == (enabled ? 0 : 1), "Including one argument load must leave both guard paths balanced");
+        }
         foreach (bool enabled in new[] { false, true }) {
             _calls = 0; _enabled = enabled;
             var t = new FluentTranspiler(new CodeInstruction(OpCodes.Call, typeof(TranspilerGuardContractFixture).GetMethod("Original")), new CodeInstruction(OpCodes.Ret));

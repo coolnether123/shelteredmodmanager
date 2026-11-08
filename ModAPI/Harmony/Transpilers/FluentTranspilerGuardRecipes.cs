@@ -75,6 +75,24 @@ namespace ModAPI.Harmony
                 return FluentReplacementResult.NoMatch;
             }
 
+            int inputCount = _targetCall.GetParameters().Length + (_targetCall.IsStatic ? 0 : 1);
+            bool safeInputs = inputCount == 0 && _includedPreviousInstructionCount == 0;
+            if (inputCount == 1 && _includedPreviousInstructionCount == 1)
+            {
+                CodeInstruction input = instructions[replaceStart];
+                StackBehaviour push = input.opcode.StackBehaviourPush;
+                safeInputs = input.opcode.StackBehaviourPop == StackBehaviour.Pop0
+                    && (push == StackBehaviour.Push1 || push == StackBehaviour.Pushi
+                        || push == StackBehaviour.Pushi8 || push == StackBehaviour.Pushr4
+                        || push == StackBehaviour.Pushr8 || push == StackBehaviour.Pushref);
+            }
+            bool hasPrefix = replaceStart > 0 && instructions[replaceStart - 1].opcode.OpCodeType == OpCodeType.Prefix;
+            if (!safeInputs || hasPrefix || _targetCall.ReturnType != typeof(void))
+            {
+                _transpiler.AddWarning("BeforeCall cannot skip this call without changing its stack shape. Select a void call and include its single input load when applicable.");
+                return FluentReplacementResult.UnsafeMatch;
+            }
+
             _transpiler.DefineLabel(out Label runOriginalLabel)
                        .DefineLabel(out Label skipOriginalLabel);
 
