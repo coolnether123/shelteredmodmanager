@@ -1844,6 +1844,14 @@ try {
     $failures.Add('boolean stack runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    Add-Type -TypeDefinition ('namespace ReplacementTypeIdentityFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit;' + $genericPrelude + (Read-RepoFile 'tools\ReplacementTypeIdentity.ContractFixture.cs') + 'public static class FluentTranspilerCompatibilityExtensions {' + $receiverCompat + '}}')
+    [ReplacementTypeIdentityFixture.ReplacementTypeIdentityContractFixture]::Verify()
+    $script:contractCount += [ReplacementTypeIdentityFixture.ReplacementTypeIdentityContractFixture]::Count
+} catch {
+    $failures.Add('replacement type identity runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

@@ -482,8 +482,7 @@ namespace ModAPI.Harmony
                 return false;
             }
 
-            return parameterType.IsAssignableFrom(providedType) ||
-                   parameterType.FullName == providedType.FullName;
+            return parameterType.IsAssignableFrom(providedType);
         }
 
         private static bool IsReturnCompatible(Type expected, Type actual)
@@ -508,7 +507,7 @@ namespace ModAPI.Harmony
                 return true;
             }
 
-            return expected.IsAssignableFrom(actual) || expected.FullName == actual.FullName;
+            return expected.IsAssignableFrom(actual);
         }
 
         private static bool IsInt32StackType(Type type)
