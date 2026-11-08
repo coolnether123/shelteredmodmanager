@@ -1677,6 +1677,19 @@ try {
     $failures.Add('scenario story item runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $guardRecipes = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerGuardRecipes.cs'
+    $guardRecipes = [regex]::Replace($guardRecipes, '(?m)^using [^\r\n]+\r?\n', '')
+    $guardRecipes = [regex]::Replace($guardRecipes, '\$"[^"\r\n]*"', '"guard warning"')
+    $guardRecipes = [regex]::Replace($guardRecipes, 'nameof\(([^)]+)\)', '"$1"')
+    $guardRecipes = $guardRecipes.Replace('_transpiler.DefineLabel(out Label runOriginalLabel)', 'Label runOriginalLabel; Label skipOriginalLabel; _transpiler.DefineLabel(out runOriginalLabel)').Replace('.DefineLabel(out Label skipOriginalLabel)', '.DefineLabel(out skipOriginalLabel)')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace GuardFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit; using HarmonyLib; using ModAPI.Harmony;' + (Read-RepoFile 'tools\TranspilerGuard.ContractFixture.cs') + $guardRecipes + '}')
+    [GuardFixture.TranspilerGuardContractFixture]::Verify()
+    $script:contractCount += [GuardFixture.TranspilerGuardContractFixture]::Count
+} catch {
+    $failures.Add('transpiler guard runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

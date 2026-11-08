@@ -156,6 +156,7 @@ namespace ModAPI.Harmony
         private readonly FluentTranspiler _transpiler;
         private readonly Label _runOriginalLabel;
         private readonly Label _skipOriginalLabel;
+        private Label _fallthroughLabel;
         private readonly List<CodeInstruction> _instructions = new List<CodeInstruction>();
 
         internal FluentGuardBuilder(FluentTranspiler transpiler, Label runOriginalLabel, Label skipOriginalLabel)
@@ -163,6 +164,7 @@ namespace ModAPI.Harmony
             _transpiler = transpiler;
             _runOriginalLabel = runOriginalLabel;
             _skipOriginalLabel = skipOriginalLabel;
+            _fallthroughLabel = runOriginalLabel;
         }
 
         public FluentGuardBuilder RequireStaticFieldNotNull(FieldInfo field)
@@ -180,6 +182,7 @@ namespace ModAPI.Harmony
 
             _instructions.Add(new CodeInstruction(OpCodes.Ldsfld, field));
             _instructions.Add(new CodeInstruction(OpCodes.Brfalse, _runOriginalLabel));
+            _fallthroughLabel = _skipOriginalLabel;
             return this;
         }
 
@@ -206,6 +209,7 @@ namespace ModAPI.Harmony
             _instructions.Add(new CodeInstruction(OpCodes.Ldsfld, ownerField));
             _instructions.Add(new CodeInstruction(OpCodes.Ldfld, boolField));
             _instructions.Add(new CodeInstruction(OpCodes.Brfalse, _runOriginalLabel));
+            _fallthroughLabel = _skipOriginalLabel;
             return this;
         }
 
@@ -225,6 +229,7 @@ namespace ModAPI.Harmony
 
             _instructions.Add(new CodeInstruction(OpCodes.Call, method));
             _instructions.Add(new CodeInstruction(OpCodes.Brfalse, _runOriginalLabel));
+            _fallthroughLabel = _skipOriginalLabel;
             return this;
         }
 
@@ -239,12 +244,16 @@ namespace ModAPI.Harmony
             _instructions.Add(new CodeInstruction(OpCodes.Ldarg_0));
             _instructions.Add(new CodeInstruction(OpCodes.Isinst, type));
             _instructions.Add(new CodeInstruction(OpCodes.Brtrue, _skipOriginalLabel));
+            _fallthroughLabel = _runOriginalLabel;
             return this;
         }
 
         internal List<CodeInstruction> Build()
         {
-            return _instructions.Select(instruction => new CodeInstruction(instruction)).ToList();
+            var result = _instructions.Select(instruction => new CodeInstruction(instruction)).ToList();
+            if (result.Count > 0)
+                result.Add(new CodeInstruction(OpCodes.Br, _fallthroughLabel));
+            return result;
         }
 
         private bool ValidateField(FieldInfo field, string caller)
