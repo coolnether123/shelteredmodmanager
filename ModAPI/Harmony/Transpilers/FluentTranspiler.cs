@@ -439,6 +439,7 @@ namespace ModAPI.Harmony
         {
             if (!TryFindSequence(mode, predicates))
             {
+                _matcher.End().Advance(1);
                 int length = predicates != null ? predicates.Length : 0;
                 AddSoftFailure($"Predicate sequence not found: length {length}");
             }

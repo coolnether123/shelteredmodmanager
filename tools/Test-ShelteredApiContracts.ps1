@@ -1640,6 +1640,18 @@ try {
     $failures.Add('object panel registration runtime contract: ' + $_.Exception.Message)
 }
 
+try {
+    $transpilerSource = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler.cs'
+    $transpilerSelection = (Read-ContractMethod $transpilerSource 'public FluentTranspiler FindSequence(SearchMode mode, params Func<CodeInstruction, bool>[] predicates)') + (Read-ContractMethod $transpilerSource 'public bool TryFindSequence(')
+    $transpilerSelection = $transpilerSelection.Replace('$"Predicate sequence not found: length {length}"', '"Predicate sequence not found: length " + length')
+    $harmonyFixtureAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $RepoRoot 'mods\0Harmony\Assemblies\0Harmony.dll'))
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace TranspilerSelectionFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + (Read-RepoFile 'tools\TranspilerSelection.ContractFixture.cs') + 'public partial class FluentTranspiler {' + $transpilerSelection + '}}')
+    [TranspilerSelectionFixture.TranspilerSelectionContractFixture]::Verify()
+    $script:contractCount += [TranspilerSelectionFixture.TranspilerSelectionContractFixture]::Count
+} catch {
+    $failures.Add('transpiler selection runtime contract: ' + $_.Exception.Message)
+}
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {
