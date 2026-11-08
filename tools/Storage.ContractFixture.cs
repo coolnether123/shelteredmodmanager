@@ -78,14 +78,14 @@ public static class StorageContractFixture {
         original.Add("item", 1);
         Check(reopened.GetCount("item") == 6, "Cached and reopened stores must keep sharing the loaded state");
         Check(!((ShelteredAPI.Storage.IReservableItemStore)original).CommitReservation(reserved.ReservationId).Success, "Loading must discard reservations from the previous save");
-        ShelteredAPI.Storage.ModItemStoreRegistry.ResetContents();
-        Check(original.GetCount("item") == 0 && reopened.GetCount("item") == 0, "New sessions must clear all existing store handles");
+        ShelteredAPI.Storage.ModItemStoreRegistry.ReplaceAll(null);
+        Check(original.GetCount("item") == 0 && reopened.GetCount("item") == 0, "Loading an empty store set must clear all existing store handles");
         original.Add("item", 5);
         var assignments = ShelteredAPI.Storage.CharacterItemAssignmentService.Instance;
         assignments.Assign(new FamilyMember(), original, "item", 1, ShelteredAPI.Storage.CharacterItemAssignmentKind.Assigned, ShelteredAPI.Storage.CharacterItemSlot.None);
         Check(assignments.Snapshot().Count == 1, "Assignment fixture must create an assignment");
-        assignments.ResetForSession();
-        Check(assignments.Snapshot().Count == 0, "A new session must discard the previous character assignments");
+        assignments.ReplaceAll(null);
+        Check(assignments.Snapshot().Count == 0, "Loading an empty assignment set must discard previous character assignments");
         var sources = (System.Collections.IDictionary)assignments.GetType().GetField("_knownSources", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(assignments);
         Check(sources.Count == 0, "Loaded assignments must resolve stores from the current scene");
         var inventory = new ShelteredAPI.Storage.InventoryItemStore();
