@@ -1,5 +1,7 @@
 param(
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$CandidatePackage,
+    [string]$PublishedRc6Package
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,13 +55,133 @@ function Invoke-Updater {
 
     $arguments = @(
         '--parent-pid', '2147483646',
-        '--current', $Current,
-        '--staged', $Staged,
-        '--backup', $Backup,
-        '--restart', (Join-Path $Current 'Manager.exe')
+        '--current', ('"{0}"' -f $Current),
+        '--staged', ('"{0}"' -f $Staged),
+        '--backup', ('"{0}"' -f $Backup),
+        '--restart', ('"{0}"' -f (Join-Path $Current 'Manager.exe'))
     )
     $process = Start-Process -FilePath $updater -ArgumentList $arguments -Wait -PassThru
     return $process.ExitCode
+}
+
+function Assert-SameFile([string]$Left, [string]$Right) {
+    if ((Get-FileHash -LiteralPath $Left).Hash -ne (Get-FileHash -LiteralPath $Right).Hash) {
+        throw "File changed during update: $Right"
+    }
+}
+
+function Test-Rc6Upgrade {
+    $rc6Zip = $PublishedRc6Package
+    if (-not $rc6Zip) {
+        $asset = 'ShelteredModManager-2.0.0-Update.zip'
+        $url = "https://github.com/coolnether123/shelteredmodmanager/releases/download/v2.0.0-rc.6/$asset"
+        $rc6Zip = Join-Path $testRoot $asset
+        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $rc6Zip
+        Invoke-WebRequest -UseBasicParsing -Uri "$url.sha256" -OutFile "$rc6Zip.sha256"
+    }
+    $publishedHash = 'B3B7336A76D83521587AE5758ADF77861C065B995CC093B1252C85BEF03362C3'
+    $sidecarHash = ((Get-Content -LiteralPath "$rc6Zip.sha256" -Raw).Trim() -split '\s+')[0]
+    if ($sidecarHash -ne $publishedHash -or (Get-FileHash -LiteralPath $rc6Zip).Hash -ne $publishedHash) {
+        throw 'The RC6 ZIP and sidecar must match the checksum on the GitHub release page.'
+    }
+    $rc6Extract = Join-Path $testRoot 'published-rc6'
+    Expand-Archive -LiteralPath $rc6Zip -DestinationPath $rc6Extract
+    $original = Join-Path $rc6Extract 'SMM'
+    $rc6Manager = Join-Path $original 'Manager.exe'
+    $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($rc6Manager).Version
+    $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($rc6Manager).FileVersion
+    if ($assemblyVersion -ne [Version]'2.0.0.0') { throw "Unexpected RC6 assembly version: $assemblyVersion" }
+    Write-Host "Verified published RC6 ZIP $publishedHash. Assembly version $assemblyVersion, file version $fileVersion."
+
+    $insideSmm = @('SMM\bin\mod_manager.ini', 'SMM\bin\manager_options.json',
+        'SMM\nexus_uploads\custom.zip', 'SMM\bin\_nxm_inbox\pending.txt')
+    $outsideSmm = @('mods\loadorder.json', 'mods\ModAPI\Saves\Standard\Slot_1\SaveData.xml',
+        'mods\ModAPI\Saves\custom-scenario\Slot_2\SaveData.xml', 'save\savedata_01.dat')
+    $fixture = Join-Path $testRoot 'fixture'
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    Copy-Item -LiteralPath $original -Destination $fixture -Recurse
+    foreach ($relative in $insideSmm + $outsideSmm) {
+        $file = Join-Path $fixture $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
+        Set-Content -LiteralPath $file -Value "synthetic fixture for $relative"
+    }
+
+    # The success case uses the built final updater and a headless stand-in
+    # for the final manager's health handshake. The rollback case uses the
+    # unmodified candidate ZIP and fails before starting either manager.
+    $headlessExtract = Join-Path $testRoot 'headless-candidate'
+    Expand-Archive -LiteralPath $CandidatePackage -DestinationPath $headlessExtract
+    $headlessSmm = Join-Path $headlessExtract 'SMM'
+    $headlessManager = Join-Path $testRoot 'FakeFinalManager.exe'
+    Add-Type -TypeDefinition ($fakeManagerSource.Replace('FakeHealthyManager', 'FakeFinalManager').Replace(
+        'public static class', '[assembly: System.Reflection.AssemblyVersion("2.0.0.0")]' + "`r`npublic static class")) `
+        -OutputAssembly $headlessManager -OutputType WindowsApplication
+    Copy-Item -LiteralPath $headlessManager -Destination (Join-Path $headlessSmm 'Manager.exe') -Force
+    $headlessZip = Join-Path $testRoot 'headless-final.zip'
+    Compress-Archive -LiteralPath $headlessSmm -DestinationPath $headlessZip
+    $hash = (Get-FileHash -LiteralPath $headlessZip).Hash
+    Set-Content -LiteralPath "$headlessZip.sha256" -Value $hash -Encoding ASCII
+
+    New-Item -ItemType Directory -Path $crossVolumeStageRoot -Force | Out-Null
+    $upgrade = Join-Path $repoRoot 'tools\Upgrade-SmmRc6.ps1'
+    foreach ($mode in @('rollback', 'success')) {
+        $install = Join-Path $testRoot "RC6 $mode"
+        Copy-Item -LiteralPath $fixture -Destination $install -Recurse
+        $currentSmm = Join-Path $install 'SMM'
+        $zip = if ($mode -eq 'success') { $headlessZip } else { $CandidatePackage }
+        if ($mode -eq 'rollback') { $env:SMM_UPDATER_TEST_FAIL_BEFORE_RESTART = '1' }
+        $upgradeError = $null
+        $previousTemp = $env:TEMP
+        $previousTmp = $env:TMP
+        $env:TEMP = $crossVolumeStageRoot
+        $env:TMP = $crossVolumeStageRoot
+        try { & $upgrade -SmmPath $currentSmm -PackagePath $zip -StagingRoot $crossVolumeStageRoot }
+        catch { $upgradeError = $_ }
+        finally {
+            $env:TEMP = $previousTemp
+            $env:TMP = $previousTmp
+            Remove-Item Env:SMM_UPDATER_TEST_FAIL_BEFORE_RESTART -ErrorAction SilentlyContinue
+        }
+
+        if ($mode -eq 'success') {
+            if ($upgradeError) { throw $upgradeError }
+        }
+        elseif (-not $upgradeError -or $upgradeError.Exception.Message -notmatch 'updater returned exit code') {
+            throw "Expected the candidate updater to fail after promotion: $upgradeError"
+        }
+        $backups = @(Get-ChildItem -LiteralPath (Join-Path $install '_smm_update') -Directory -Filter 'rc6-backup-*')
+        if ($mode -eq 'success') {
+            Get-Process -Name Manager -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -eq (Join-Path $currentSmm 'Manager.exe') } |
+                ForEach-Object { $_.WaitForExit() }
+            if ($backups.Count -ne 1) { throw 'The RC6 rollback copy was not retained.' }
+            Assert-SameFile $rc6Manager (Join-Path $backups[0].FullName 'Manager.exe')
+            Assert-SameFile $headlessManager (Join-Path $currentSmm 'Manager.exe')
+            if ((Get-Content -LiteralPath (Join-Path $currentSmm 'manager-update.hashes')) -notcontains "sha256:$hash") {
+                throw 'The upgraded manager did not record its verified package hash.'
+            }
+        }
+        else {
+            $logs = Get-ChildItem -LiteralPath (Join-Path $crossVolumeStageRoot 'ShelteredModManager') -Filter 'ManagerUpdater-*.log'
+            $rollbackLog = Get-Content -LiteralPath $logs.FullName -Raw
+            if ($backups.Count -ne 0 -or $rollbackLog -notmatch 'Injected updater restart failure' -or
+                $rollbackLog -notmatch 'Restored the previous installation') {
+                throw 'RC6 was not restored after the injected promotion failure.'
+            }
+            Assert-SameFile $rc6Manager (Join-Path $currentSmm 'Manager.exe')
+            Assert-SameFile (Join-Path $original 'ManagerUpdater.exe') (Join-Path $currentSmm 'ManagerUpdater.exe')
+            if (Test-Path -LiteralPath (Join-Path $currentSmm 'manager-update.hashes')) {
+                throw 'Rollback left the candidate package receipt in RC6.'
+            }
+        }
+        foreach ($relative in $insideSmm + $outsideSmm) {
+            Assert-SameFile (Join-Path $fixture $relative) (Join-Path $install $relative)
+        }
+    }
+    $volumeKind = if ([IO.Path]::GetPathRoot($testRoot) -ne [IO.Path]::GetPathRoot($crossVolumeStageRoot)) {
+        'different drive letters'
+    } else { 'same drive letter' }
+    Write-Host "Published RC6 migration passed: 2 scenarios, staging on $volumeKind."
 }
 
 try {
@@ -184,6 +306,7 @@ public static class FakeHealthyManager
     if (-not (Test-Path -LiteralPath (Join-Path $crossCurrent 'cross-volume.dll'))) { throw 'Cross-volume staging payload was not promoted.' }
 
     Write-Host 'Manager self-update process tests passed: 5 scenarios.'
+    if ($CandidatePackage) { Test-Rc6Upgrade }
 }
 finally {
     Remove-Item Env:SMM_UPDATER_NO_UI -ErrorAction SilentlyContinue

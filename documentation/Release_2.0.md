@@ -24,6 +24,38 @@ Custom-scenario save APIs reject reserved built-in save IDs such as `Standard`, 
 
 Mods built for SMM 1.2.2 or the old 1.3 beta may need a 2.0 rebuild. Back up saves and test framework upgrades with a disposable save. See the [player migration guide](SMM_2.0_Migration.md) and [modder migration guide](For_Modders_2.0_API_Migration.md).
 
+## Upgrade from RC6
+
+RC6 already displays 2.0.0. Its update check requires a newer version, and its
+updater leaves pending Nexus links and generated archives in the old SMM
+folder. Use the one-time script to run the final updater. It checks the
+download, carries over settings and pending Nexus files, and keeps a copy of
+RC6. Your mod order and saves live outside SMM and stay in place.
+
+1. Close Sheltered and Sheltered Mod Manager.
+2. Download `Upgrade-SmmRc6.ps1`, `ShelteredModManager-2.0.0-Update.zip`,
+   and the ZIP's `.sha256` file from the final GitHub release. Put all
+   three in the same folder.
+3. Open Windows PowerShell in that folder. If Windows protects your game
+   folder, open PowerShell as administrator. Run this command with your
+   installed SMM folder.
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Upgrade-SmmRc6.ps1 -SmmPath "C:\Games\Sheltered\SMM" -PackagePath ".\ShelteredModManager-2.0.0-Update.zip"
+   ```
+
+The final updater starts the manager and restores RC6 if startup fails. To
+roll back after a successful upgrade, close both programs, rename the current
+`SMM` folder to `SMM-final`, then move the `rc6-backup-…` folder printed
+by the script back beside `mods` and rename it to `SMM`. Keep `SMM-final`
+if you need settings or Nexus files created since upgrading.
+
+Include `tools/Upgrade-SmmRc6.ps1` with the final GitHub release assets.
+Upload the same neutral Update ZIP to Nexus as the manager update file. Put
+`sha256:<ZIP hash>` in that file's description. The manager offers a
+same-version replacement when the advertised hash differs from the installed
+package's hash, then verifies the ZIP before staging it.
+
 ## Nexus limitation
 
 Nexus verified SMM and issued the public OAuth client ID. Stable promotion stays blocked until real-account sign-in, token refresh and revocation, and authorized downloads are verified.

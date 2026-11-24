@@ -18,7 +18,8 @@ namespace ManagerUpdater
             "Usage:\n" +
             "  ManagerUpdater.exe --parent-pid <pid> --current <SMM directory>\n" +
             "    --staged <staged SMM directory> --backup <backup directory>\n" +
-            "    --restart <current SMM Manager.exe>\n\n" +
+            "    --restart <current SMM Manager.exe> [--restart-on-rollback false]\n\n" +
+            "Use parent PID 0 when the manager is already closed.\n" +
             "The current and backup directories must be on the same volume. The backup path must not exist.";
 
         [STAThread]
@@ -47,7 +48,8 @@ namespace ManagerUpdater
                         throw new InvalidOperationException("Another manager update is already running.");
                     try
                     {
-                        WaitForParent(options.ParentProcessId, log);
+                        if (options.ParentProcessId != 0)
+                            WaitForParent(options.ParentProcessId, log);
                         ApplyUpdate(options, log);
                     }
                     finally
@@ -157,7 +159,8 @@ namespace ManagerUpdater
                         throw new IOException("Update rollback failed. Restore the previous installation from " + options.BackupDirectory, rollbackError);
                     }
                 }
-                TryRestartPreviousManager(options, log);
+                if (options.RestartOnRollback)
+                    TryRestartPreviousManager(options, log);
                 throw;
             }
             // Maintenance cannot invalidate an installation that has started successfully.
@@ -587,6 +590,7 @@ namespace ManagerUpdater
         public string StagedDirectory { get; private set; }
         public string BackupDirectory { get; private set; }
         public string RestartExecutable { get; private set; }
+        public bool RestartOnRollback { get; private set; }
 
         public static UpdateArguments Parse(string[] args)
         {
@@ -600,7 +604,7 @@ namespace ManagerUpdater
             for (int i = 0; i < args.Length; i += 2)
             {
                 string name = args[i];
-                if (!IsRequiredName(name))
+                if (!IsRequiredName(name) && !string.Equals(name, "--restart-on-rollback", StringComparison.OrdinalIgnoreCase))
                     throw new ArgumentException("Unknown option: " + name + "\n\n" + UsageText());
                 if (values.ContainsKey(name))
                     throw new ArgumentException("Duplicate option: " + name);
@@ -617,10 +621,16 @@ namespace ManagerUpdater
 
             int parentProcessId;
             if (!int.TryParse(values["--parent-pid"], NumberStyles.None, CultureInfo.InvariantCulture, out parentProcessId) ||
-                parentProcessId <= 0)
+                parentProcessId < 0)
             {
-                throw new ArgumentException("--parent-pid must be a positive process ID.");
+                throw new ArgumentException("--parent-pid must be a process ID or 0 if the manager is closed.");
             }
+
+            bool restartOnRollback = true;
+            string restartOnRollbackValue;
+            if (values.TryGetValue("--restart-on-rollback", out restartOnRollbackValue) &&
+                !bool.TryParse(restartOnRollbackValue, out restartOnRollback))
+                throw new ArgumentException("--restart-on-rollback must be true or false.");
 
             UpdateArguments result = new UpdateArguments();
             result.ParentProcessId = parentProcessId;
@@ -628,6 +638,7 @@ namespace ManagerUpdater
             result.StagedDirectory = CanonicalizeDirectory(values["--staged"], "--staged");
             result.BackupDirectory = CanonicalizeDirectory(values["--backup"], "--backup");
             result.RestartExecutable = CanonicalizeFile(values["--restart"], "--restart");
+            result.RestartOnRollback = restartOnRollback;
             return result;
         }
 
