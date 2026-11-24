@@ -72,7 +72,12 @@ $saveDto = Get-Content (Join-Path $root 'ShelteredAPI/Characters/Models/Characte
 $livePath = 'ShelteredAPI/Characters/Internal/CharacterRuntime.cs'
 $liveEffect = @(
     (Read-Method $livePath 'internal void Tick(').Replace('internal void Tick(', 'public void Tick('),
-    (Read-Method $livePath 'internal void SyncToGameObject('),
+    (Read-Method $livePath 'internal void SyncToGameObject(').Replace('CharacterFactory.', 'CharacterFixture.'),
+    (Read-Method $livePath 'private void PullFromGame('),
+    (Read-Method $livePath 'private static T Pick<T>('),
+    (Read-Method $livePath 'private void SyncAppearance('),
+    (Read-Method $livePath 'private void WriteNamesAndStats('),
+    (Read-Method $livePath 'private static void WriteStatLevel('),
     (Read-Method $livePath 'private void SyncHealth('),
     (Read-Method $livePath 'private static bool TrySetField(')
 ) -join "`n"
@@ -97,6 +102,10 @@ using UnityEngine.SceneManagement;
 using ModAPI.Core;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace UnityEngine {
+    public struct Color {
+        public float r, g, b, a;
+        public Color(float red, float green, float blue, float alpha) { r = red; g = green; b = blue; a = alpha; }
+    }
     public class GameObject { public bool active = true; public void SetActive(bool value) { active = value; } }
     public static class Time { public static float timeScale; public static float deltaTime = 1f; }
     public static class AudioListener { public static bool pause; }
@@ -163,6 +172,8 @@ public static class ProxyRegistration {
 }
 public static class CollectionRegistration {
     private static System.Collections.Generic.List<object> _registeredCollections = new System.Collections.Generic.List<object> { new object(), new object() };
+    private static readonly List<Action> _resetCollections = new List<Action> { () => ResetCount++ };
+    public static int ResetCount { get; private set; }
     $collectionRegistration
 }
 public class UIPanelManager { public static UIPanelManager instance; public bool timePaused; }
@@ -188,6 +199,7 @@ public static class RecoveryFixture {
 public class BaseStat {
     public int Level;
     public int LevelCap = 20;
+    public int LevelModifier { get { return 0; } }
     public void SetInitialLevel(int level, int cap) { LevelCap = cap; Level = Math.Min(level, cap); }
 }
 public class BaseStats {
@@ -209,9 +221,11 @@ public class CharacterDataModel {
     public int UniqueId, Health, MaxHealth, StrengthLevel, DexterityLevel, IntelligenceLevel, CharismaLevel, PerceptionLevel;
     public string FirstName, LastName, MeshId, PersistenceKey, SourceMod;
     public bool IsMale, IsPersistent;
+    public Color SkinColor, HairColor;
     public float CreatedAtTime;
     public CharacterSource Source;
-    public void SetCustomData(string key, object value) {}
+    public Action<string, object> CustomDataChanged;
+    public void SetCustomData(string key, object value) { if (CustomDataChanged != null) CustomDataChanged(key, value); }
     public Dictionary<string, object> SnapshotCustomData() { return new Dictionary<string, object>(); }
 }
 public interface ICharacterProxy { CharacterDataModel Data { get; } }
@@ -220,10 +234,14 @@ public class CharacterProxy : ICharacterProxy {
 }
 public class BaseCharacter {
     public string firstName = "Family", lastName = "Name";
+    public string meshId = "man";
+    public bool isMale = true, isAdult = true;
+    public Color skinColor, hairColor;
     public int health = 82, maxHealth = 120;
     public bool isDead { get { return health <= 0; } }
     public int damageCalls, healCalls;
     public bool preventDeath;
+    public void UpdateAvatarSprite() {}
     public void SetMaxHealth(int value) { maxHealth = value; }
     public void Damage(int value) { damageCalls++; health = Math.Max(0, health - value); if (preventDeath && health == 0) health = 1; }
     public void Heal(int value) { healCalls++; health = Math.Min(maxHealth, health + value); }
@@ -233,6 +251,21 @@ public class FamilyMember : BaseCharacter {
     public int GetId() { return 4; }
 }
 public class NpcVisitor : FamilyMember { public int npcId = 5; }
+public class CharacterMesh {
+    public enum ColorCustomization { SkinColor, HairColor }
+    public void SetColor(ColorCustomization target, Color color) {}
+    public void RefreshColors() {}
+}
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets {
+    public static class ScenarioCharacterAppearanceService {
+        public static bool TrySetBody(BaseCharacter character, string meshId, out string message) {
+            character.meshId = meshId;
+            message = null;
+            return true;
+        }
+        public static bool TryGetBody(BaseCharacter character, out CharacterMesh mesh) { mesh = null; return false; }
+    }
+}
 public class ItemManager { public enum ItemType { Undefined, Knife } }
 public static class InventoryHelper {
     public static bool ResolveItemType(string id, out ItemManager.ItemType type) { type = ItemManager.ItemType.Knife; return id == "knife"; }
@@ -267,6 +300,7 @@ public class SyntheticCharacterProxy : ICharacterProxy {
     public CharacterState State;
     public bool IsLoadedOnShelterEntry;
     public bool IsActive = true;
+    public void Unregister() { IsActive = false; }
     public string PersistenceKey { get { return Data.PersistenceKey; } }
     public string SourceMod { get { return Data.SourceMod; } }
     public CharacterSource Source { get { return Data.Source; } }
@@ -294,14 +328,19 @@ public class LiveCharacterProxy : ICharacterProxy {
     private FamilyMember _member;
     private NpcVisitor _npc = null;
     private CharacterDataModel _data;
+    private CharacterDataModel _synced;
     private BasicCharacterEffects _effects;
     private BasicCharacterAttributes _attributes = new BasicCharacterAttributes();
-    private Action<ICharacterProxy, string, object> _dataChanged = delegate {};
-    private CharacterState State = CharacterState.SyntheticAbsent;
     public CharacterDataModel Data { get { return _data; } }
     private void RefreshState() {}
     $liveEffect
-    public LiveCharacterProxy(FamilyMember member) { _member = member; _data = CharacterFixture.Family(member); _effects = new BasicCharacterEffects(this); }
+    public LiveCharacterProxy(FamilyMember member) {
+        _member = member;
+        _data = CharacterFixture.Family(member);
+        _synced = CharacterFixture.Family(member);
+        _effects = new BasicCharacterEffects(this);
+    }
+    public void Unregister() { _member = null; _npc = null; }
     public void SetHealthOnTick(int value) { _effects.OnTick = delegate { _data.Health = value; }; }
     public void Sync() { SyncToGameObject(); }
 }
@@ -336,12 +375,14 @@ public class ActorUpdateFixture {
 }
 public class CharacterPersistenceFixture {
     private object _sync = new object();
-    private Dictionary<int, object> _liveFamily = new Dictionary<int, object>(), _liveVisitors = new Dictionary<int, object>();
+    private Dictionary<int, LiveCharacterProxy> _liveFamily = new Dictionary<int, LiveCharacterProxy>(), _liveVisitors = new Dictionary<int, LiveCharacterProxy>();
     private HashSet<int> _temporarySyntheticIds = new HashSet<int>();
     private Dictionary<int, SyntheticCharacterProxy> _syntheticById = new Dictionary<int, SyntheticCharacterProxy>();
     private Dictionary<string, SyntheticCharacterProxy> _syntheticByKey = new Dictionary<string, SyntheticCharacterProxy>();
     private static float NowSeconds() { return 0; }
     private static void EnsureActorMirror(object actors, ICharacterProxy p) {}
+    private void OnDataChangedInternal(ICharacterProxy character, string key, object value) {}
+    private static void WriteError(string message) { throw new InvalidOperationException(message); }
     $characterPersistence
     public void ResetSession() { HandleSessionStarted(); }
     public static CharacterSaveData Save(SyntheticCharacterProxy p) { return ToSaveData(p); }
@@ -527,6 +568,7 @@ Check ([SaveManager]::instance.saveables.Count -eq 5) 'all persistent services r
 [SaveManager]::instance.ClearAll()
 Register-Scene
 Check ([SaveManager]::instance.saveables.Count -eq 5) 'all persistent services register again after slot change'
+Check ([CollectionRegistration]::ResetCount -eq 2) 'persistent collections reset on each shelter entry'
 [SaveManager]::instance.isLoading = $true
 [SaveManager]::instance.toLoad.Clear()
 [ShelteredActors]::InternalInstance.Tick()
@@ -550,6 +592,7 @@ Check ($restored.Data.Health -eq 0) 'loading a zero-health synthetic character d
 $saved = [CharacterPersistenceFixture]::RoundTrip([CharacterPersistenceFixture]::Save($restored))
 Check ($saved.CharismaLevel -eq 11 -and $saved.PerceptionLevel -eq 7) 'synthetic combat stats survive serialization'
 $characters.ResetSession()
+Check (-not $restored.IsActive) 'previous slot synthetic characters are unregistered'
 $dto.FirstName = 'Second'
 $dto.Health = 75
 $restored = $characters.RestoreSyntheticCharacter($dto)
