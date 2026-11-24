@@ -26,6 +26,13 @@ public class BaseCharacter {
 public class FamilyMember : BaseCharacter { public bool isAway; }
 public class NpcVisitor : BaseCharacter { }
 public class PartyMember { public FamilyMember person; }
+public class ExplorationParty { public int id; }
+namespace ShelteredAPI.Characters {
+    internal static class PartyHelper {
+        internal static int Notifications;
+        internal static void NotifyPartyChanged(int id) { Notifications++; }
+    }
+}
 public class BreachMan { public static BreachMan instance; public bool inProgress; }
 public class ItemDefinition_Combat { public enum DamageTypeEnum { Undefined, Blunt, Sharp } }
 public class EncounterCharacter {
@@ -56,9 +63,11 @@ namespace HarmonyLib {
     public enum MethodType { Setter }
     [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Method, AllowMultiple=true)]
     public class HarmonyPatch : System.Attribute {
-        public HarmonyPatch() { } public HarmonyPatch(System.Type type, string member) { }
+        public System.Type TargetType; public string TargetMethod;
+        public HarmonyPatch() { } public HarmonyPatch(System.Type type, string member) { TargetType = type; TargetMethod = member; }
         public HarmonyPatch(System.Type type, string member, MethodType kind) { }
     }
+    public class HarmonyPostfix : System.Attribute { }
     public static class AccessTools {
         public static System.Reflection.FieldInfo Field(System.Type type, string name) { return type.GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance); }
         public static System.Reflection.MethodInfo Method(System.Type type, string name) { return type.GetMethod(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance); }
@@ -80,6 +89,18 @@ namespace ModAPI.Harmony {
 }
 namespace ShelteredAPI.Map { public struct ExpeditionMapGridPosition { public int X, Y; } }
 namespace ShelteredAPI.Characters.Internal { internal static class CharacterEffectSystemImpl { internal static float NowSeconds() { return 0; } } }
+namespace ShelteredAPI.Characters.Abstractions {
+    public interface ICharacterProxy { ICharacterAttributes Attributes { get; } }
+}
+namespace ShelteredAPI.Characters.Models {
+    public partial class CharacterQuery {
+        private readonly List<Func<ICharacterProxy, bool>> _predicates = new List<Func<ICharacterProxy, bool>>();
+        internal bool Matches(ICharacterProxy value) { return _predicates.All(p => p(value)); }
+    }
+}
+public sealed class AttributeQueryProxy : ICharacterProxy {
+    public ICharacterAttributes Attributes { get; set; }
+}
 public static class SharedModHooksContractFixture {
     public static int Count;
     private static void Check(bool condition, string description) { Count++; if (!condition) throw new System.Exception(description); }
@@ -87,13 +108,38 @@ public static class SharedModHooksContractFixture {
         return type.GetMethod(method, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).Invoke(null, arguments);
     }
     public static void Verify() {
-        Attributes(); Events(); Panels(); Wear(); Maps();
+        var appearance = new CharacterSaveData { SkinColor = new float[4], HairColor = new float[4] };
+        if (appearance.SkinColor.Length != appearance.HairColor.Length) throw new Exception("Invalid color fixture");
+        Attributes(); Events(); Panels(); Wear(); Maps(); Parties();
+    }
+    private static void PartyPostfix(string target, params object[] args) {
+        foreach (var method in typeof(ShelteredAPI.Characters.PartyPatches).GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)) {
+            foreach (HarmonyLib.HarmonyPatch patch in method.GetCustomAttributes(typeof(HarmonyLib.HarmonyPatch), false))
+                if (patch.TargetMethod == target) method.Invoke(null, args);
+        }
+    }
+    private static void Parties() {
+        // ExplorationManager.PartyHasReturned disbands only an existing party.
+        ShelteredAPI.Characters.PartyHelper.Notifications = 0;
+        PartyPostfix("DisbandExplorationParty", true, 7);
+        PartyPostfix("PartyHasReturned", 7);
+        Check(ShelteredAPI.Characters.PartyHelper.Notifications == 1, "Returning a party must publish one composition change");
+        PartyPostfix("PartyHasReturned", 99);
+        PartyPostfix("DisbandExplorationParty", false, 99);
+        Check(ShelteredAPI.Characters.PartyHelper.Notifications == 1, "An absent party must not publish a composition change");
     }
     private static void Attributes() {
         var values = new ShelteredAPI.Characters.Internal.BasicCharacterAttributes();
         Check(values.ApplyTo("WalkSpeed", -2) == -2, "No contribution must preserve even unusual vanilla results");
         var add = values.Apply("walkspeed", 2, 0, "first");
         var mult = values.Apply("WalkSpeed", .5f, 0, "second"); mult.IsMultiplicative = true;
+        var query = new ShelteredAPI.Characters.Models.CharacterQuery().WithAttribute("WalkSpeed");
+        var factorOnly = new ShelteredAPI.Characters.Internal.BasicCharacterAttributes();
+        factorOnly.Apply("WalkSpeed", .5f, 0, "factor").IsMultiplicative = true;
+        Check(query.Matches(new AttributeQueryProxy { Attributes = factorOnly }), "Attribute queries must include multiplicative contributions");
+        var cancelling = new ShelteredAPI.Characters.Internal.BasicCharacterAttributes();
+        cancelling.Apply("WalkSpeed", 2, 0, "one"); cancelling.Apply("WalkSpeed", -2, 0, "two");
+        Check(query.Matches(new AttributeQueryProxy { Attributes = cancelling }), "Cancelling additions still count as attributes");
         Check(values.ApplyTo("WalkSpeed", 4) == 3, "Speed must combine additions then factors");
         Check(values.GetModifier("WalkSpeed") == 2, "Legacy additive accessor must not sum factors");
         mult.MinimumResult = 4; Check(values.ApplyTo("WalkSpeed", 4) == 4, "Shared minimum must apply after all factors");
@@ -101,9 +147,15 @@ public static class SharedModHooksContractFixture {
         Check(restored.ApplyTo("WalkSpeed", 4) == 4, "Factor and floor must survive save roundtrip");
         Check(values.RemoveAllFromMod("SECOND") == 1 && values.ApplyTo("WalkSpeed", 4) == 6, "Mod removal must remove its factor only");
         values.Remove(add); var timed = values.Apply("WalkSpeed", 9, 1, "timer"); timed.TimeRemaining = 0;
+        Check(values.GetModifier("WalkSpeed") == 0, "Expired additions must not affect the public additive accessor");
         Check(values.ApplyTo("WalkSpeed", 4) == 4, "Expired contribution must not affect the game before cleanup");
         values.Tick(1); Check(values.GetModifiers("WalkSpeed").Count == 0, "Tick must remove expired handles");
         values.Apply("WalkSpeed", float.NaN, 0, "invalid"); Check(values.ApplyTo("WalkSpeed", 4) == 4, "Nonfinite contributions must not poison game speed");
+        var changing = new ShelteredAPI.Characters.Internal.BasicCharacterAttributes();
+        changing.Apply("WalkSpeed", 1, 1, "fixture"); changing.Apply("WalkSpeed", 2, 1, "fixture");
+        changing.ModifierChanged += delegate { changing.RemoveAllFromMod("fixture"); };
+        changing.Tick(1);
+        Check(changing.GetModifiers("WalkSpeed").Count == 0, "Removing modifiers in an expiry callback must not index removed entries");
     }
     private static void Events() {
         int deaths = 0, fatal = 0, ticks = 0;

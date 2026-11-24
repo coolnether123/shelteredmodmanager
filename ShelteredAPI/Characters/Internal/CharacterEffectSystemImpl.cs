@@ -125,6 +125,35 @@ namespace ShelteredAPI.Characters.Internal
             return null;
         }
 
+        /// <summary>
+        /// Resolves a character by kind, ID, and (for synthetic characters) source-mod domain,
+        /// so a family member, visitor, and synthetic character that share a number never alias.
+        /// </summary>
+        internal ICharacterProxy GetCharacterByActorId(ActorId actorId)
+        {
+            if (actorId == null) return null;
+            EnsureRegistered();
+            lock (_sync)
+            {
+                LiveCharacterProxy live;
+                switch (actorId.Kind)
+                {
+                    case ActorKind.Player:
+                        return _liveFamily.TryGetValue(actorId.LocalId, out live) ? live : null;
+                    case ActorKind.Visitor:
+                        return _liveVisitors.TryGetValue(actorId.LocalId, out live) ? live : null;
+                    case ActorKind.Synthetic:
+                        SyntheticCharacterProxy synthetic;
+                        if (!_syntheticById.TryGetValue(actorId.LocalId, out synthetic)) return null;
+                        return string.Equals(NormalizeDomain(actorId.Domain), NormalizeDomain(synthetic.SourceMod), StringComparison.OrdinalIgnoreCase)
+                            ? synthetic
+                            : null;
+                    default:
+                        return null;
+                }
+            }
+        }
+
         public CharacterQuery Query()
         {
             return new CharacterQuery(GetAllCharacters);
@@ -164,12 +193,13 @@ namespace ShelteredAPI.Characters.Internal
                     SyntheticCharacterProxy synthetic = character as SyntheticCharacterProxy;
                     if (synthetic != null)
                     {
+                        SyntheticCharacterProxy registered;
+                        if (!_syntheticById.TryGetValue(synthetic.UniqueId, out registered) || !ReferenceEquals(registered, synthetic)) return;
                         _syntheticById.Remove(synthetic.UniqueId);
                         if (!string.IsNullOrEmpty(synthetic.PersistenceKey)) _syntheticByKey.Remove(synthetic.PersistenceKey);
                         _temporarySyntheticIds.Remove(synthetic.UniqueId);
                         synthetic.Unregister();
-                        var evt = SyntheticCharacterUnloaded;
-                        if (evt != null) evt(synthetic);
+                        ModAPI.Core.SubscriberDispatch.Invoke(SyntheticCharacterUnloaded, "SyntheticCharacterUnloaded", synthetic);
                         actorId = ResolveActorId(synthetic);
                         destroyActor = actorId != null;
                     }
@@ -178,8 +208,10 @@ namespace ShelteredAPI.Characters.Internal
                 {
                     LiveCharacterProxy live = character as LiveCharacterProxy;
                     if (live == null) return;
-                    _liveFamily.Remove(live.UniqueId);
-                    _liveVisitors.Remove(live.UniqueId);
+                    Dictionary<int, LiveCharacterProxy> registry = live.Source == CharacterSource.RealFamily ? _liveFamily : _liveVisitors;
+                    LiveCharacterProxy registered;
+                    if (!registry.TryGetValue(live.UniqueId, out registered) || !ReferenceEquals(registered, live)) return;
+                    registry.Remove(live.UniqueId);
                     live.Unregister();
                 }
             }
@@ -216,8 +248,7 @@ namespace ShelteredAPI.Characters.Internal
                 _syntheticById[id] = p;
                 if (!string.IsNullOrEmpty(p.PersistenceKey)) _syntheticByKey[p.PersistenceKey] = p;
                 if (!isPersistent) _temporarySyntheticIds.Add(id);
-                var evt = SyntheticCharacterCreated;
-                if (evt != null) evt(p);
+                ModAPI.Core.SubscriberDispatch.Invoke(SyntheticCharacterCreated, "SyntheticCharacterCreated", p);
                 created = p;
             }
 
@@ -315,8 +346,7 @@ namespace ShelteredAPI.Characters.Internal
                 SyntheticCharacterProxy p = BuildSynthetic(id, first, last, key, sourceModId, true);
                 _syntheticById[id] = p;
                 _syntheticByKey[key] = p;
-                var evt = SyntheticCharacterCreated;
-                if (evt != null) evt(p);
+                ModAPI.Core.SubscriberDispatch.Invoke(SyntheticCharacterCreated, "SyntheticCharacterCreated", p);
                 created = p;
             }
 
@@ -342,6 +372,10 @@ namespace ShelteredAPI.Characters.Internal
                 SyntheticCharacterProxy p = BuildSynthetic(data.UniqueId, data.FirstName, data.LastName, data.PersistenceKey, data.SourceMod, data.IsPersistent);
                 p.Data.MeshId = data.MeshId;
                 p.Data.IsMale = data.IsMale;
+                if (data.SkinColor != null && data.SkinColor.Length == 4)
+                    p.Data.SkinColor = new Color(data.SkinColor[0], data.SkinColor[1], data.SkinColor[2], data.SkinColor[3]);
+                if (data.HairColor != null && data.HairColor.Length == 4)
+                    p.Data.HairColor = new Color(data.HairColor[0], data.HairColor[1], data.HairColor[2], data.HairColor[3]);
                 p.Data.MaxHealth = data.MaxHealth > 0 ? data.MaxHealth : Math.Max(100, data.Health);
                 p.Data.Health = Math.Max(0, Math.Min(data.Health, p.Data.MaxHealth));
                 p.Data.StrengthLevel = data.StrengthLevel;
@@ -386,14 +420,12 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void OnEffectApplied(ICharacterProxy character, EffectInstance effect)
         {
-            var evt = EffectApplied;
-            if (evt != null) evt(character, effect);
+            ModAPI.Core.SubscriberDispatch.Invoke(EffectApplied, "CharacterEffectApplied", character, effect);
         }
 
         internal void OnEffectRemoved(ICharacterProxy character, EffectInstance effect, RemovalReason reason)
         {
-            var evt = EffectRemoved;
-            if (evt != null) evt(character, effect, reason);
+            ModAPI.Core.SubscriberDispatch.Invoke(EffectRemoved, "CharacterEffectRemoved", character, effect, reason);
         }
 
         private SyntheticCharacterProxy BuildSynthetic(int id, string firstName, string lastName, string key, string sourceModId, bool isPersistent)
@@ -414,6 +446,7 @@ namespace ShelteredAPI.Characters.Internal
                 MeshId = "synthetic"
             };
             p.Data = data;
+            data.CustomDataChanged = delegate(string changedKey, object value) { OnDataChangedInternal(p, changedKey, value); };
             p.Effects = new BasicCharacterEffects(p);
             p.Attributes = new BasicCharacterAttributes();
             p.State = CharacterState.SyntheticAbsent;
@@ -430,13 +463,27 @@ namespace ShelteredAPI.Characters.Internal
 
         private void HandleSessionStarted()
         {
+            List<LiveCharacterProxy> live;
+            List<SyntheticCharacterProxy> synthetic;
             lock (_sync)
             {
+                live = _liveFamily.Values.Concat(_liveVisitors.Values).ToList();
+                synthetic = _syntheticById.Values.ToList();
                 _liveFamily.Clear();
                 _liveVisitors.Clear();
                 _temporarySyntheticIds.Clear();
                 _syntheticById.Clear();
                 _syntheticByKey.Clear();
+            }
+            foreach (LiveCharacterProxy proxy in live)
+            {
+                try { proxy.Unregister(); }
+                catch (Exception ex) { WriteError("Character session cleanup failed: " + ex.Message); }
+            }
+            foreach (SyntheticCharacterProxy proxy in synthetic)
+            {
+                try { proxy.Unregister(); }
+                catch (Exception ex) { WriteError("Character session cleanup failed: " + ex.Message); }
             }
         }
 
@@ -460,8 +507,7 @@ namespace ShelteredAPI.Characters.Internal
 
         private void OnDataChangedInternal(ICharacterProxy c, string key, object value)
         {
-            var evt = DataChanged;
-            if (evt != null) evt(c, key, value);
+            ModAPI.Core.SubscriberDispatch.Invoke(DataChanged, "CharacterDataChanged", c, key, value);
 
             try { EnsureActorMirror(ShelteredActors.Instance, c); }
             catch { }
@@ -545,6 +591,8 @@ namespace ShelteredAPI.Characters.Internal
                 LastName = p.Data.LastName,
                 IsMale = p.Data.IsMale,
                 MeshId = p.Data.MeshId,
+                SkinColor = new[] { p.Data.SkinColor.r, p.Data.SkinColor.g, p.Data.SkinColor.b, p.Data.SkinColor.a },
+                HairColor = new[] { p.Data.HairColor.r, p.Data.HairColor.g, p.Data.HairColor.b, p.Data.HairColor.a },
                 Health = p.Data.Health,
                 MaxHealth = p.Data.MaxHealth,
                 StrengthLevel = p.Data.StrengthLevel,

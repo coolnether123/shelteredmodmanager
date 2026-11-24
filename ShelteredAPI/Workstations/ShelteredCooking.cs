@@ -177,17 +177,7 @@ namespace ShelteredAPI.Workstations
 
         private static bool IsAvailable(CraftingUiRecipe uiRecipe, IItemStore ingredientStore, IItemStore outputStore, CookingStationRequest request)
         {
-            CookingStationRecipe recipe = ResolveRecipe(uiRecipe);
-            if (recipe == null)
-                return false;
-
-            if (!HasIngredients(recipe, ingredientStore))
-                return false;
-
-            if (!string.IsNullOrEmpty(recipe.OutputItemId) && outputStore != null)
-                return outputStore.CanAdd(recipe.OutputItemId, Math.Max(1, recipe.OutputCount));
-
-            return true;
+            return string.IsNullOrEmpty(ResolveUnavailableReason(uiRecipe, ingredientStore, outputStore, request));
         }
 
         private static string ResolveUnavailableReason(CraftingUiRecipe uiRecipe, IItemStore ingredientStore, IItemStore outputStore, CookingStationRequest request)
@@ -261,6 +251,14 @@ namespace ShelteredAPI.Workstations
             if (recipe == null)
             {
                 context.Result = ItemTransferResult.Failed(null, 0, "Recipe is unavailable");
+                NotifyFailed(request, context);
+                return;
+            }
+
+            string unavailableReason = ResolveUnavailableReason(craft.Recipe, ingredientStore, outputStore, request);
+            if (!string.IsNullOrEmpty(unavailableReason))
+            {
+                context.Result = ItemTransferResult.Failed(recipe.OutputItemId, recipe.OutputCount, unavailableReason);
                 NotifyFailed(request, context);
                 return;
             }

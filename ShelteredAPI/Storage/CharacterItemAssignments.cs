@@ -295,6 +295,7 @@ namespace ShelteredAPI.Storage
             lock (_sync)
             {
                 _assignments.Clear();
+                _knownSources.Clear();
                 for (int i = 0; assignments != null && i < assignments.Count; i++)
                 {
                     CharacterItemAssignment assignment = assignments[i];
@@ -304,6 +305,11 @@ namespace ShelteredAPI.Storage
                     _assignments.Add(assignment.Clone());
                 }
             }
+        }
+
+        internal void ResetForSession()
+        {
+            ReplaceAll(null);
         }
 
         private bool IsAssignmentAvailable(CharacterItemAssignment assignment)
@@ -557,7 +563,7 @@ namespace ShelteredAPI.Storage
             if (_registered)
                 return;
 
-            ModPersistence.Register(Instance);
+            ModPersistence.Register(Instance, CharacterItemAssignmentService.Instance.ResetForSession);
             _registered = true;
         }
 
@@ -569,6 +575,7 @@ namespace ShelteredAPI.Storage
             if (data == null)
                 return false;
 
+            if (data.isLoading) CharacterItemAssignmentService.Instance.ResetForSession();
             data.GroupStart(GroupName);
             try
             {

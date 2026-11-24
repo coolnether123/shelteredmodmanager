@@ -46,7 +46,7 @@ namespace ShelteredAPI.Characters.Models{
 
         public CharacterQuery WithAttribute(string attributeName)
         {
-            _predicates.Add(delegate(ICharacterProxy c) { return c != null && c.Attributes.GetModifier(attributeName) != 0f; });
+            _predicates.Add(delegate(ICharacterProxy c) { return c != null && c.Attributes.GetModifiers(attributeName).Any(x => !x.IsExpired); });
             return this;
         }
 
@@ -70,7 +70,11 @@ namespace ShelteredAPI.Characters.Models{
 
         public CharacterQuery WithData<T>(string key)
         {
-            _predicates.Add(delegate(ICharacterProxy c) { return c != null && string.Equals(c.Data.PersistenceKey, key, StringComparison.OrdinalIgnoreCase); });
+            _predicates.Add(delegate(ICharacterProxy c)
+            {
+                if (c == null || c.Data == null || !c.Data.HasCustomData(key)) return false;
+                return c.Data.GetCustomData<object>(key) is T;
+            });
             return this;
         }
 

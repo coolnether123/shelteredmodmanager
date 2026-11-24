@@ -349,7 +349,7 @@ namespace ModAPI.Harmony
 
                 bool typeMatch = includeInherited
                     ? method.DeclaringType == type
-                      || type.IsAssignableFrom(method.DeclaringType)
+                      || method.DeclaringType.IsAssignableFrom(type)
                       || method.DeclaringType.FullName == type.FullName
                     : method.DeclaringType == type
                       || method.DeclaringType.FullName == type.FullName;
@@ -364,7 +364,6 @@ namespace ModAPI.Harmony
                     for (int i = 0; i < args.Length; i++)
                     {
                         if (!args[i].Equals(genericArguments[i]) &&
-                            args[i].Name != genericArguments[i].Name &&
                             !(args[i].IsGenericParameter && genericArguments[i].IsGenericParameter))
                             return false;
                     }
@@ -439,6 +438,7 @@ namespace ModAPI.Harmony
         {
             if (!TryFindSequence(mode, predicates))
             {
+                _matcher.End().Advance(1);
                 int length = predicates != null ? predicates.Length : 0;
                 AddSoftFailure($"Predicate sequence not found: length {length}");
             }
@@ -642,19 +642,16 @@ namespace ModAPI.Harmony
         /// <returns>The local variable index (0-N), or -1 if not found.</returns>
         public int CaptureLocalIndex(string matchName)
         {
-            // Use Harmony's NamedMatch feature (Line 699 in their source)
-            // to pull the instruction that was matched by name.
-            var match = _matcher.NamedMatch(matchName);
-            if (match == null) return -1;
-
-            if (match.operand is int idx) return idx;
-            if (match.opcode.ToString().Contains("."))
+            if (string.IsNullOrEmpty(matchName)) return -1;
+            try
             {
-                // Handles stloc.0, stloc.1 etc which have the index in the opcode name
-                var parts = match.opcode.ToString().Split('.');
-                if (parts.Length > 1 && int.TryParse(parts[1], out int opcodeIdx)) return opcodeIdx;
+                var match = _matcher.NamedMatch(matchName);
+                return match == null ? -1 : match.LocalIndex();
             }
-            return -1;
+            catch
+            {
+                return -1;
+            }
         }
 
         #region Expressive Matching (English-like API)
@@ -1141,7 +1138,7 @@ namespace ModAPI.Harmony
         /// <summary>
         /// Emits an <c>Ldloc</c> instruction for a numeric local variable index.
         /// </summary>
-        /// <param name="localIndexOrName">The local variable index, such as "0". Names are rejected because symbols are unavailable.</param>
+        /// <param name="localIndexOrName">The local variable index from 0 through 65535, such as "0". Names are rejected because symbols are unavailable.</param>
         public FluentTranspiler CaptureLocal(string localIndexOrName)
         {
             if (!_matcher.IsValid) return this;
@@ -1152,7 +1149,13 @@ namespace ModAPI.Harmony
             // Return a soft failure for names instead of emitting no instruction.
             if (int.TryParse(localIndexOrName, out int index))
             {
+                if (index < 0 || index > ushort.MaxValue)
+                {
+                    AddSoftFailure(TranspilerDiagnosticCategory.Match, "CaptureLocal requires a local index from 0 through 65535.");
+                    return this;
+                }
                 _matcher.Insert(new CodeInstruction(GetLdlocOpCode(index), index > 3 ? (object)index : null));
+                InvalidateLabelIndexCache();
                 return this;
             }
 
@@ -1172,7 +1175,7 @@ namespace ModAPI.Harmony
                 case 1: return OpCodes.Ldloc_1;
                 case 2: return OpCodes.Ldloc_2;
                 case 3: return OpCodes.Ldloc_3;
-                default: return OpCodes.Ldloc_S;
+                default: return index <= byte.MaxValue ? OpCodes.Ldloc_S : OpCodes.Ldloc;
             }
         }
 
@@ -1903,14 +1906,19 @@ namespace ModAPI.Harmony
         /// </code>
         /// </para>
         /// </remarks>
-        /// <param name="patternPredicates">Predicates that match each instruction in the target sequence.</param>
-        /// <param name="replaceWith">The instructions to insert at every match location.</param>
+        /// <param name="patternPredicates">A nonempty array of nonnull predicates that match each instruction in the target sequence.</param>
+        /// <param name="replaceWith">The instructions to insert at every match location. An empty array removes matches.</param>
         /// <param name="preserveInstructionCount">If true, fills remaining slots with <c>OpCodes.Nop</c> to maintain stable instruction indices.</param>
         public FluentTranspiler ReplaceAllPatterns(
             Func<CodeInstruction, bool>[] patternPredicates,
             CodeInstruction[] replaceWith,
             bool preserveInstructionCount = false)
         {
+            if (patternPredicates == null || patternPredicates.Length == 0 || patternPredicates.Any(predicate => predicate == null) || replaceWith == null)
+            {
+                AddSoftFailure("ReplaceAllPatterns requires a nonempty array of nonnull predicates and a nonnull replacement array.");
+                return this;
+            }
             string methodName = _originalMethod != null ? _originalMethod.Name : "<unknown-method>";
             bool effectivePreserveInstructionCount = ResolvePatternPreserveMode(preserveInstructionCount, patternPredicates != null ? patternPredicates.Length : 0);
             LogTrace($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Searching for pattern (length {patternPredicates.Length}) in {methodName}. Preserve count: requested={preserveInstructionCount}, effective={effectivePreserveInstructionCount}.");

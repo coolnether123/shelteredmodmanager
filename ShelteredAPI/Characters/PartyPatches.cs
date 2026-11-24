@@ -38,12 +38,5 @@ namespace ShelteredAPI.Characters{
             if (__result) PartyHelper.NotifyPartyChanged(__instance.id);
         }
 
-        [HarmonyPatch(typeof(ExplorationManager), "PartyHasReturned")]
-        [HarmonyPostfix]
-        static void Postfix_PartyReturned(int partyId)
-        {
-            // Disband is called inside PartyHasReturned, but notifying here is also good
-            PartyHelper.NotifyPartyChanged(partyId);
-        }
     }
 }

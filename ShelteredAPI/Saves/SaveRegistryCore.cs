@@ -334,6 +334,8 @@ namespace ShelteredAPI.Saves
             }
             
             InvalidateCache();
+            if (xmlBytes != null)
+                Events.RaiseAfterSave(entry);
             return entry;
         }
 

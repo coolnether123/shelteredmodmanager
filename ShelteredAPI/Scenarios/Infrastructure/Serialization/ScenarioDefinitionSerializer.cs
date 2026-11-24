@@ -2419,7 +2419,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 return group;
 
             group.Mode = ReadEnumAttribute(element, "mode", ScenarioConditionGroupMode.All);
-            ReadConditionRefs(element, group.Conditions);
+            ReadConditionRefs(Child(element, "Conditions") ?? element, group.Conditions);
             XmlNodeList groupNodes = element.GetElementsByTagName("Group");
             for (int i = 0; i < groupNodes.Count; i++)
             {
@@ -2452,7 +2452,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             for (int i = 0; i < nodes.Count; i++)
             {
                 XmlElement node = nodes[i] as XmlElement;
-                if (node == null)
+                if (node == null || node.ParentNode != element)
                     continue;
 
                 ScenarioConditionRef condition = new ScenarioConditionRef();

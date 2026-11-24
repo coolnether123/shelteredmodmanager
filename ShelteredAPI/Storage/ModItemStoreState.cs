@@ -23,10 +23,10 @@ namespace ShelteredAPI.Storage
         {
             get
             {
-                int total = 0;
+                long total = 0;
                 foreach (KeyValuePair<string, int> pair in Items)
                     total += Math.Max(0, pair.Value);
-                return total;
+                return (int)Math.Min(int.MaxValue, total);
             }
         }
 

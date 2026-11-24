@@ -75,6 +75,24 @@ namespace ModAPI.Harmony
                 return FluentReplacementResult.NoMatch;
             }
 
+            int inputCount = _targetCall.GetParameters().Length + (_targetCall.IsStatic ? 0 : 1);
+            bool safeInputs = inputCount == 0 && _includedPreviousInstructionCount == 0;
+            if (inputCount == 1 && _includedPreviousInstructionCount == 1)
+            {
+                CodeInstruction input = instructions[replaceStart];
+                StackBehaviour push = input.opcode.StackBehaviourPush;
+                safeInputs = input.opcode.StackBehaviourPop == StackBehaviour.Pop0
+                    && (push == StackBehaviour.Push1 || push == StackBehaviour.Pushi
+                        || push == StackBehaviour.Pushi8 || push == StackBehaviour.Pushr4
+                        || push == StackBehaviour.Pushr8 || push == StackBehaviour.Pushref);
+            }
+            bool hasPrefix = replaceStart > 0 && instructions[replaceStart - 1].opcode.OpCodeType == OpCodeType.Prefix;
+            if (!safeInputs || hasPrefix || _targetCall.ReturnType != typeof(void))
+            {
+                _transpiler.AddWarning("BeforeCall cannot skip this call without changing its stack shape. Select a void call and include its single input load when applicable.");
+                return FluentReplacementResult.UnsafeMatch;
+            }
+
             _transpiler.DefineLabel(out Label runOriginalLabel)
                        .DefineLabel(out Label skipOriginalLabel);
 
@@ -156,6 +174,7 @@ namespace ModAPI.Harmony
         private readonly FluentTranspiler _transpiler;
         private readonly Label _runOriginalLabel;
         private readonly Label _skipOriginalLabel;
+        private Label _fallthroughLabel;
         private readonly List<CodeInstruction> _instructions = new List<CodeInstruction>();
 
         internal FluentGuardBuilder(FluentTranspiler transpiler, Label runOriginalLabel, Label skipOriginalLabel)
@@ -163,6 +182,7 @@ namespace ModAPI.Harmony
             _transpiler = transpiler;
             _runOriginalLabel = runOriginalLabel;
             _skipOriginalLabel = skipOriginalLabel;
+            _fallthroughLabel = runOriginalLabel;
         }
 
         public FluentGuardBuilder RequireStaticFieldNotNull(FieldInfo field)
@@ -180,6 +200,7 @@ namespace ModAPI.Harmony
 
             _instructions.Add(new CodeInstruction(OpCodes.Ldsfld, field));
             _instructions.Add(new CodeInstruction(OpCodes.Brfalse, _runOriginalLabel));
+            _fallthroughLabel = _skipOriginalLabel;
             return this;
         }
 
@@ -206,6 +227,7 @@ namespace ModAPI.Harmony
             _instructions.Add(new CodeInstruction(OpCodes.Ldsfld, ownerField));
             _instructions.Add(new CodeInstruction(OpCodes.Ldfld, boolField));
             _instructions.Add(new CodeInstruction(OpCodes.Brfalse, _runOriginalLabel));
+            _fallthroughLabel = _skipOriginalLabel;
             return this;
         }
 
@@ -225,6 +247,7 @@ namespace ModAPI.Harmony
 
             _instructions.Add(new CodeInstruction(OpCodes.Call, method));
             _instructions.Add(new CodeInstruction(OpCodes.Brfalse, _runOriginalLabel));
+            _fallthroughLabel = _skipOriginalLabel;
             return this;
         }
 
@@ -239,12 +262,16 @@ namespace ModAPI.Harmony
             _instructions.Add(new CodeInstruction(OpCodes.Ldarg_0));
             _instructions.Add(new CodeInstruction(OpCodes.Isinst, type));
             _instructions.Add(new CodeInstruction(OpCodes.Brtrue, _skipOriginalLabel));
+            _fallthroughLabel = _runOriginalLabel;
             return this;
         }
 
         internal List<CodeInstruction> Build()
         {
-            return _instructions.Select(instruction => new CodeInstruction(instruction)).ToList();
+            var result = _instructions.Select(instruction => new CodeInstruction(instruction)).ToList();
+            if (result.Count > 0)
+                result.Add(new CodeInstruction(OpCodes.Br, _fallthroughLabel));
+            return result;
         }
 
         private bool ValidateField(FieldInfo field, string caller)

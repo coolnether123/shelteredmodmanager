@@ -64,7 +64,8 @@ namespace ShelteredAPI.Storage
             {
                 return !string.IsNullOrEmpty(itemId)
                     && quantity > 0
-                    && (_state.Capacity <= 0 || _state.Used + quantity <= _state.Capacity);
+                    && (long)_state.Used + quantity <= int.MaxValue
+                    && (_state.Capacity <= 0 || (long)_state.Used + quantity <= _state.Capacity);
             }
         }
 

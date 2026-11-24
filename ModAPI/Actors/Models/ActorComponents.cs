@@ -93,10 +93,9 @@ namespace ModAPI.Actors
             if (string.IsNullOrEmpty(payload))
                 return new TComponent();
 
-            TComponent component = null;
-            try { component = JsonUtility.FromJson<TComponent>(payload); }
-            catch { component = null; }
-            return component ?? new TComponent();
+            TComponent component = JsonUtility.FromJson<TComponent>(payload);
+            if (component == null) throw new InvalidOperationException("Actor component payload could not be decoded");
+            return component;
         }
     }
 
@@ -150,6 +149,7 @@ namespace ModAPI.Actors
         public const string DefaultComponentId = "sheltered.attribute_set";
 
         public List<ActorAttributeEntry> Entries = new List<ActorAttributeEntry>();
+        [NonSerialized] private List<ActorAttributeEntry> _removedEntries;
 
         public string ComponentId { get { return DefaultComponentId; } }
         public int Version { get { return 1; } }
@@ -174,6 +174,9 @@ namespace ModAPI.Actors
         {
             if (string.IsNullOrEmpty(name)) return;
             if (Entries == null) Entries = new List<ActorAttributeEntry>();
+            if (_removedEntries != null)
+                _removedEntries.RemoveAll(entry => string.Equals(entry.Name, name, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(entry.SourceModId ?? string.Empty, sourceModId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 
             for (int i = Entries.Count - 1; i >= 0; i--)
             {
@@ -206,6 +209,8 @@ namespace ModAPI.Actors
                 if (!string.Equals(entry.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!string.Equals(entry.SourceModId ?? string.Empty, sourceModId ?? string.Empty, StringComparison.OrdinalIgnoreCase)) continue;
                 Entries.RemoveAt(i);
+                if (_removedEntries == null) _removedEntries = new List<ActorAttributeEntry>();
+                _removedEntries.Add(new ActorAttributeEntry { Name = name, SourceModId = sourceModId ?? string.Empty });
                 return true;
             }
             return false;
@@ -226,6 +231,10 @@ namespace ModAPI.Actors
                 }
             }
 
+            if (_removedEntries != null)
+                foreach (ActorAttributeEntry entry in _removedEntries)
+                    merged.Remove(entry.Name, entry.SourceModId);
+
             if (Entries != null)
             {
                 for (int i = 0; i < Entries.Count; i++)
@@ -236,6 +245,7 @@ namespace ModAPI.Actors
                 }
             }
 
+            merged._removedEntries = null;
             return merged;
         }
     }

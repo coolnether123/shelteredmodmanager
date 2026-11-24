@@ -349,9 +349,9 @@ namespace ModAPI.Harmony
                 return false;
             }
 
-            if (!replacementMethod.IsStatic)
+            if (!replacementMethod.IsStatic || replacementMethod.ContainsGenericParameters)
             {
-                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " is not static";
+                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " must be static and closed";
                 return false;
             }
 
@@ -393,9 +393,9 @@ namespace ModAPI.Harmony
                 return false;
             }
 
-            if (!replacementMethod.IsStatic)
+            if (!replacementMethod.IsStatic || replacementMethod.ContainsGenericParameters)
             {
-                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " is not static";
+                reason = "replacement " + FluentTranspilerFormatting.FormatMethod(replacementMethod) + " must be static and closed";
                 return false;
             }
 
@@ -438,7 +438,9 @@ namespace ModAPI.Harmony
 
             if (!sourceMethod.IsStatic && sourceMethod.DeclaringType != null)
             {
-                expectedParameters.Insert(0, sourceMethod.DeclaringType);
+                expectedParameters.Insert(0, sourceMethod.DeclaringType.IsValueType
+                    ? sourceMethod.DeclaringType.MakeByRefType()
+                    : sourceMethod.DeclaringType);
             }
 
             return expectedParameters.ToArray();
@@ -480,8 +482,7 @@ namespace ModAPI.Harmony
                 return false;
             }
 
-            return parameterType.IsAssignableFrom(providedType) ||
-                   parameterType.FullName == providedType.FullName;
+            return parameterType.IsAssignableFrom(providedType);
         }
 
         private static bool IsReturnCompatible(Type expected, Type actual)
@@ -506,7 +507,7 @@ namespace ModAPI.Harmony
                 return true;
             }
 
-            return expected.IsAssignableFrom(actual) || expected.FullName == actual.FullName;
+            return expected.IsAssignableFrom(actual);
         }
 
         private static bool IsInt32StackType(Type type)
@@ -521,7 +522,7 @@ namespace ModAPI.Harmony
                 type = Enum.GetUnderlyingType(type);
             }
 
-            return type == typeof(int) ||
+            return type == typeof(bool) || type == typeof(int) ||
                    type == typeof(uint) ||
                    type == typeof(short) ||
                    type == typeof(ushort) ||

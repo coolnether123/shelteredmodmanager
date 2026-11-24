@@ -1262,6 +1262,7 @@ namespace ModAPI.Harmony
             }
 
             _transpiler.ReplaceAtWithCall(candidate.ConstantIndex, replacementMethod);
+            ApplyNormalizedBranch(candidate);
             return FluentReplacementResult.PatternReplaced;
         }
 
@@ -1278,7 +1279,16 @@ namespace ModAPI.Harmony
             }
 
             _transpiler.ReplaceAt(candidate.ConstantIndex, new CodeInstruction(OpCodes.Ldc_I4, replacementValue));
+            ApplyNormalizedBranch(candidate);
             return FluentReplacementResult.PatternReplaced;
+        }
+
+        private void ApplyNormalizedBranch(BoundCheckCandidate candidate)
+        {
+            if (candidate.ReplacementBranch.HasValue)
+            {
+                _transpiler.Instructions().ElementAt(candidate.BranchIndex).opcode = candidate.ReplacementBranch.Value;
+            }
         }
 
         private FluentReplacementResult TryFindSingleCandidate(SearchMode mode, out BoundCheckCandidate candidate)
@@ -1335,7 +1345,7 @@ namespace ModAPI.Harmony
                     continue;
                 }
 
-                foreach (BoundCheckCandidate candidate in Classify(instructions[branchIndex].opcode, constantValue, constantIndex))
+                foreach (BoundCheckCandidate candidate in Classify(instructions[branchIndex].opcode, constantValue, constantIndex, branchIndex))
                 {
                     if (candidate.Kind == _kind && candidate.NormalizedBound == _boundValue)
                     {
@@ -1345,18 +1355,20 @@ namespace ModAPI.Harmony
             }
         }
 
-        private static IEnumerable<BoundCheckCandidate> Classify(OpCode branch, int constantValue, int constantIndex)
+        private static IEnumerable<BoundCheckCandidate> Classify(OpCode branch, int constantValue, int constantIndex, int branchIndex)
         {
             if (branch == OpCodes.Blt || branch == OpCodes.Blt_S)
             {
                 yield return new BoundCheckCandidate { Kind = RangeComparisonKind.Lower, NormalizedBound = constantValue, ConstantIndex = constantIndex };
-                yield return new BoundCheckCandidate { Kind = RangeComparisonKind.Upper, NormalizedBound = constantValue - 1, ConstantIndex = constantIndex };
+                if (constantValue != int.MinValue)
+                    yield return new BoundCheckCandidate { Kind = RangeComparisonKind.Upper, NormalizedBound = constantValue - 1, ConstantIndex = constantIndex, BranchIndex = branchIndex, ReplacementBranch = branch == OpCodes.Blt ? OpCodes.Ble : OpCodes.Ble_S };
             }
 
             if (branch == OpCodes.Bge || branch == OpCodes.Bge_S)
             {
                 yield return new BoundCheckCandidate { Kind = RangeComparisonKind.Lower, NormalizedBound = constantValue, ConstantIndex = constantIndex };
-                yield return new BoundCheckCandidate { Kind = RangeComparisonKind.Upper, NormalizedBound = constantValue - 1, ConstantIndex = constantIndex };
+                if (constantValue != int.MinValue)
+                    yield return new BoundCheckCandidate { Kind = RangeComparisonKind.Upper, NormalizedBound = constantValue - 1, ConstantIndex = constantIndex, BranchIndex = branchIndex, ReplacementBranch = branch == OpCodes.Bge ? OpCodes.Bgt : OpCodes.Bgt_S };
             }
 
             if (branch == OpCodes.Bgt || branch == OpCodes.Bgt_S ||
@@ -1371,6 +1383,8 @@ namespace ModAPI.Harmony
             public RangeComparisonKind Kind;
             public int NormalizedBound;
             public int ConstantIndex;
+            public int BranchIndex;
+            public OpCode? ReplacementBranch;
         }
     }
 }

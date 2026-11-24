@@ -8,6 +8,8 @@ This guide covers the actor system exposed through:
 IPluginContext.Actors
 ```
 
+Live character proxy `Data` reads the current body, gender, skin color and hair color. Edits write back on the character tick. `MeshId` selects a body and its gender; an `IsMale` edit without a body edit selects the standard body for that gender and the character's age group. Invalid or unavailable bodies leave the current body in place. Color edits update both the live mesh and the character's saved color fields.
+
 ## 1. Getting started
 
 ```csharp
@@ -223,8 +225,9 @@ public class LoyaltyDecaySystem : IActorSimulationSystem
 }
 
 _actors.RegisterSystem(new LoyaltyDecaySystem());
-_actors.Tick(1, "mymod.sim");
 ```
+
+Registered systems run on the shared actor scheduler. Do not call `_actors.Tick(...)` after registering: `Tick` advances the shared clock and runs every registered system, including other mods' systems. Call it only from code that owns the whole actor lifecycle, such as an isolated test.
 
 ## 10. Events and persistence
 

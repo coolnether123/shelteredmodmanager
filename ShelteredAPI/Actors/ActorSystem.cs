@@ -66,12 +66,7 @@ namespace ShelteredAPI.Actors
             if (actorId == null)
                 return false;
 
-            if (actorId.Kind != ActorKind.Player
-                && actorId.Kind != ActorKind.Visitor
-                && actorId.Kind != ActorKind.Synthetic)
-                return false;
-
-            character = ShelteredCharacters.GetByUniqueId(actorId.LocalId);
+            character = CharacterEffectSystem.InternalInstance.GetCharacterByActorId(actorId);
             return character != null;
         }
     }

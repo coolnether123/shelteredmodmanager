@@ -732,6 +732,7 @@ namespace ShelteredAPI.Actors.Internal
                 try
                 {
                     slot.Component = serializer.Deserialize(slot.RawPayload, slot.Version);
+                    if (slot.Component == null) throw new InvalidOperationException("Component serializer returned no value");
                     slot.RawPayload = null;
                 }
                 catch (Exception ex)
@@ -797,7 +798,11 @@ namespace ShelteredAPI.Actors.Internal
             IActorComponentSerializer serializer;
             if (_serializers.TryGetValue(entry.ComponentId, out serializer) && serializer != null)
             {
-                try { slot.Component = serializer.Deserialize(entry.PayloadJson ?? string.Empty, entry.Version); }
+                try
+                {
+                    slot.Component = serializer.Deserialize(entry.PayloadJson ?? string.Empty, entry.Version);
+                    if (slot.Component == null) throw new InvalidOperationException("Component serializer returned no value");
+                }
                 catch (Exception ex)
                 {
                     slot.RawPayload = entry.PayloadJson ?? string.Empty;
@@ -852,6 +857,7 @@ namespace ShelteredAPI.Actors.Internal
         private bool BindLocked(ActorId actorId, ActorBinding binding, bool replaceExisting)
         {
             if (actorId == null || binding == null) return false;
+            actorId = new ActorId(actorId.Kind, actorId.LocalId, actorId.Domain);
 
             string bindingType = NormalizeKey(binding.BindingType);
             string bindingKey = NormalizeKey(binding.BindingKey);
@@ -1184,7 +1190,7 @@ namespace ShelteredAPI.Actors.Internal
                 if (query.PersistentOnly.Value != persistent) return false;
             }
 
-            if (query.Predicate != null && !query.Predicate(record)) return false;
+            if (query.Predicate != null && !query.Predicate(record.Clone())) return false;
             return true;
         }
 
@@ -1255,20 +1261,17 @@ namespace ShelteredAPI.Actors.Internal
 
         private void RaiseActorCreated(IActorRecord record)
         {
-            Action<IActorRecord> handler = ActorCreated;
-            if (handler != null) handler(record);
+            SubscriberDispatch.Invoke(ActorCreated, "ActorCreated", record);
         }
 
         private void RaiseActorDestroyed(IActorRecord record, ActorDestroyReason reason)
         {
-            Action<IActorRecord, ActorDestroyReason> handler = ActorDestroyed;
-            if (handler != null) handler(record, reason);
+            SubscriberDispatch.Invoke(ActorDestroyed, "ActorDestroyed", record, reason);
         }
 
         private void RaiseActorStateChanged(IActorRecord record)
         {
-            Action<IActorRecord> handler = ActorStateChanged;
-            if (handler != null) handler(record);
+            SubscriberDispatch.Invoke(ActorStateChanged, "ActorStateChanged", record);
         }
 
         private void Publish(ActorEventType type, string sourceModId, ActorId actorId, string componentId, string message)
@@ -1281,8 +1284,7 @@ namespace ShelteredAPI.Actors.Internal
                 subscriptions = new List<ActorSubscription>(_subscriptions);
             }
 
-            Action<ActorEventEnvelope> handler = EventPublished;
-            if (handler != null) handler(CloneEvent(envelope));
+            SubscriberDispatch.Invoke(EventPublished, "ActorEventPublished", CloneEvent(envelope));
 
             for (int i = 0; i < subscriptions.Count; i++)
             {
@@ -1391,6 +1393,11 @@ namespace ShelteredAPI.Actors.Internal
             component.PantsColor = member.pantsColor;
             component.Health = member.health;
             component.MaxHealth = member.maxHealth;
+            component.StrengthLevel = member.BaseStats.Strength.Level;
+            component.DexterityLevel = member.BaseStats.Dexterity.Level;
+            component.IntelligenceLevel = member.BaseStats.Intelligence.Level;
+            component.CharismaLevel = member.BaseStats.Charisma.Level;
+            component.PerceptionLevel = member.BaseStats.Perception.Level;
             return component;
         }
 
@@ -1400,8 +1407,19 @@ namespace ShelteredAPI.Actors.Internal
             if (visitor == null) return component;
             component.FirstName = visitor.firstName;
             component.LastName = visitor.lastName;
+            component.IsMale = visitor.isMale;
+            component.MeshId = visitor.meshId;
+            component.SkinColor = visitor.skinColor;
+            component.HairColor = visitor.hairColor;
+            component.ShirtColor = visitor.shirtColor;
+            component.PantsColor = visitor.pantsColor;
             component.Health = visitor.health;
             component.MaxHealth = visitor.maxHealth;
+            component.StrengthLevel = visitor.BaseStats.Strength.Level;
+            component.DexterityLevel = visitor.BaseStats.Dexterity.Level;
+            component.IntelligenceLevel = visitor.BaseStats.Intelligence.Level;
+            component.CharismaLevel = visitor.BaseStats.Charisma.Level;
+            component.PerceptionLevel = visitor.BaseStats.Perception.Level;
             return component;
         }
 
@@ -1423,7 +1441,8 @@ namespace ShelteredAPI.Actors.Internal
 
         private static string BuildBindingIndexKey(string bindingType, string bindingKey)
         {
-            return NormalizeKey(bindingType) + "|" + NormalizeKey(bindingKey);
+            string type = NormalizeKey(bindingType);
+            return type.Length + ":" + type + NormalizeKey(bindingKey);
         }
 
         private static ActorBinding CreateBinding(string bindingType, string bindingKey, string sourceModId, bool persistent)
@@ -1460,6 +1479,7 @@ namespace ShelteredAPI.Actors.Internal
         private static bool IsOwnedComponentId(string componentId, string ownerModId)
         {
             if (string.IsNullOrEmpty(componentId) || string.IsNullOrEmpty(ownerModId)) return true;
+            if (string.Equals(componentId, ActorAttributeSetComponent.DefaultComponentId, StringComparison.OrdinalIgnoreCase)) return true;
             if (string.Equals(ownerModId, BuiltInOwner, StringComparison.OrdinalIgnoreCase))
                 return componentId.StartsWith("sheltered.", StringComparison.OrdinalIgnoreCase);
             return componentId.StartsWith(ownerModId + ".", StringComparison.OrdinalIgnoreCase);
@@ -1578,6 +1598,7 @@ namespace ShelteredAPI.Actors.Internal
             public void Dispatch(ActorEventEnvelope envelope)
             {
                 if (_disposed || _handler == null || envelope == null) return;
+                envelope = CloneEvent(envelope);
                 if (_filter != null && !_filter(envelope)) return;
                 _handler(CloneEvent(envelope));
             }

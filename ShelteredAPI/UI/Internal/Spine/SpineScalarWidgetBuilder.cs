@@ -250,11 +250,17 @@ namespace ShelteredAPI.UI.Internal.Spine
                         if (snapToInt)
                         {
                             var intValue = Mathf.RoundToInt(parsed);
-                            if (ShouldSnapSliderToStep(def))
+                            var step = Mathf.Max(1, Mathf.RoundToInt(ResolveSliderStep(def, true)));
+                            if (ShouldSnapSliderToStep(def) && step > 1)
                             {
-                                var step = ResolveSliderStep(def, true);
-                                intValue = Mathf.RoundToInt(Mathf.Round(parsed / step) * step);
+                                var offset = intValue - (int)min;
+                                var remainder = offset % step;
+                                intValue -= remainder;
+                                if (remainder > step / 2) intValue += step;
                             }
+
+                            if (intValue < (int)min) intValue = (int)min;
+                            if (intValue > (int)max) intValue = (int)max;
 
                             if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, intValue))
                             {

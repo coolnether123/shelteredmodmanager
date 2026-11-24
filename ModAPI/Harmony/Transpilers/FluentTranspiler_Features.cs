@@ -74,6 +74,7 @@ namespace ModAPI.Harmony
             if (_matcher.IsValid)
             {
                 _stackExpectations.Add(new StackExpectation { index = _matcher.Pos, expectedDepth = depth });
+                _lastStackCheckPos = _matcher.Pos;
             }
             return this;
         }
@@ -140,7 +141,7 @@ namespace ModAPI.Harmony
             try 
             {
                 patternA(this);
-                if (_matcher.IsValid && _matcher.Pos > startPos) return this; // A matched and advanced
+                if (_matcher.IsValid) return this;
             }
             catch { /* Ignore failure */ }
             
@@ -170,13 +171,11 @@ namespace ModAPI.Harmony
             int maxGap = 10)
         {
             if (!_matcher.IsValid) return this;
-            int entryPos = _matcher.Pos;
 
             // Match start
             startPattern(this);
             if (!_matcher.IsValid)
             {
-                _matcher.Start().Advance(entryPos);
                 return this;
             }
             
@@ -194,9 +193,8 @@ namespace ModAPI.Harmony
                 _matcher.Advance(currentProbe);
                 
                 // Check if end pattern matches here
-                int preCheck = _matcher.Pos;
                 endPattern(this);
-                if (_matcher.IsValid && _matcher.Pos > preCheck) 
+                if (_matcher.IsValid && _matcher.Pos >= currentProbe && _matcher.Pos - afterStart <= maxGap)
                 {
                     // Leave the matcher at the end pattern selected by the callback.
                     return this; 
@@ -204,7 +202,7 @@ namespace ModAPI.Harmony
             }
             
             AddSoftFailure($"MatchWithGap: End pattern not found within {maxGap} instructions of start.");
-            _matcher.Start().Advance(entryPos);
+            _matcher.End().Advance(1);
             return this;
         }
 

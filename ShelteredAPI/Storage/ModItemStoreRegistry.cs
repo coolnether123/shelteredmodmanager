@@ -60,12 +60,39 @@ namespace ShelteredAPI.Storage
         {
             lock (Sync)
             {
-                Stores.Clear();
+                ResetContents();
                 for (int i = 0; states != null && i < states.Count; i++)
                 {
                     ModItemStoreState state = states[i];
-                    if (state != null && !string.IsNullOrEmpty(state.StoreId))
+                    if (state == null || string.IsNullOrEmpty(state.StoreId)) continue;
+                    ModItemStoreState current;
+                    if (!Stores.TryGetValue(state.StoreId, out current))
+                    {
                         Stores[state.StoreId] = state;
+                        continue;
+                    }
+                    lock (current)
+                    {
+                        current.DisplayName = state.DisplayName;
+                        current.Capacity = state.Capacity;
+                        foreach (var item in state.Items) current.Items[item.Key] = item.Value;
+                        foreach (var reservation in state.Reservations) current.Reservations[reservation.Key] = reservation.Value;
+                    }
+                }
+            }
+        }
+
+        internal static void ResetContents()
+        {
+            lock (Sync)
+            {
+                foreach (ModItemStoreState state in Stores.Values)
+                {
+                    lock (state)
+                    {
+                        state.Items.Clear();
+                        state.Reservations.Clear();
+                    }
                 }
             }
         }

@@ -179,6 +179,9 @@ t.BeforeCall(AccessTools.Method(typeof(SomeType), "DoThing"))
 
 The guard builder emits branch-safe control flow and defines its own labels; you never
 touch `Label`s by hand.
+The call must return `void` and consume no stack inputs, or consume one input supplied
+by a single load selected with `IncludingPreviousInstruction()`. Other stack shapes
+return `UnsafeMatch` without changing the instructions.
 
 ### 4.5 Adjust or replace a method's return value
 

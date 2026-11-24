@@ -306,6 +306,7 @@ Use `ShelteredCooking.RegisterStation(...)` when a world object should open a re
 | `CanOpen` | Decides whether the object interaction can open the station. |
 | `IngredientStore` / `OutputStore` | Select the stores used for each craft. |
 | `Recipes` / `RecipeSource` | Supply fixed or context-dependent recipes. |
+| `GetUnavailableReason` | Return a nonempty reason to disable a recipe and reject craft requests. Return null or empty to allow the built-in ingredient and output checks. |
 | `JobOptions` | Queue timed survivor work. Without it, crafting applies immediately. |
 | `OnCraftQueued` / `OnCrafted` / `OnCraftFailed` | Add feedback or follow-up behavior at each result. |
 

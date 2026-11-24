@@ -532,21 +532,11 @@ namespace ShelteredAPI.Events
 
             if (job.Kind == TimeTriggerKind.SixHour)
             {
-                var evt = OnSixHourTick;
-                if (evt != null)
-                {
-                    try { evt(batch); }
-                    catch (Exception ex) { WarnOnce("GameTimeTriggerHelper.OnSixHourTick", "OnSixHourTick subscriber threw: " + ex.Message); }
-                }
+                ModAPI.Core.SubscriberDispatch.Invoke(OnSixHourTick, "SixHourTick", batch);
             }
             else
             {
-                var evt = OnStaggeredTick;
-                if (evt != null)
-                {
-                    try { evt(batch); }
-                    catch (Exception ex) { WarnOnce("GameTimeTriggerHelper.OnStaggeredTick", "OnStaggeredTick subscriber threw: " + ex.Message); }
-                }
+                ModAPI.Core.SubscriberDispatch.Invoke(OnStaggeredTick, "StaggeredTick", batch);
             }
 
             for (int i = 0; i < job.OrderedRegistrations.Count; i++)

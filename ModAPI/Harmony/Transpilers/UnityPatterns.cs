@@ -47,11 +47,14 @@ namespace ModAPI.Harmony
             if (vectorType != typeof(Vector2) && vectorType != typeof(Vector3))
                 throw new ArgumentException($"Expected Vector2 or Vector3, got {vectorType.Name}");
 
+            var zeroField = vectorType.GetField("zero", BindingFlags.Public | BindingFlags.Static);
+            if (zeroField == null) return t;
+
             t.Reset();
             t.MatchCall(vectorType, "get_zero");
             while (t.HasMatch)
             {
-                t.ReplaceWith(OpCodes.Ldsfld, vectorType.GetField("zero"));
+                t.ReplaceWith(OpCodes.Ldsfld, zeroField);
                 t.MatchCallNext(vectorType, "get_zero");
             }
             return t;

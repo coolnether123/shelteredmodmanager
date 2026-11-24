@@ -40,6 +40,21 @@ function Assert-Contains {
     }
 }
 
+function Read-ContractMethod {
+    param([string]$Text, [string]$Signature)
+    $start = $Text.IndexOf($Signature, [StringComparison]::Ordinal)
+    if ($start -lt 0) { throw "Missing contract method: $Signature" }
+    $open = $Text.IndexOf('{', $start)
+    $depth = 1
+    $end = $open + 1
+    while ($depth -gt 0 -and $end -lt $Text.Length) {
+        if ($Text[$end] -eq '{') { $depth++ }
+        if ($Text[$end] -eq '}') { $depth-- }
+        $end++
+    }
+    return $Text.Substring($start, $end - $start)
+}
+
 function Assert-NotContains {
     param(
         [string]$Name,
@@ -1305,6 +1320,19 @@ Assert-Contains "semantic contract serializer window" $rendererManifestSource 'I
 $dispatchSource = Read-RepoFile "ModAPI\Core\SubscriberDispatch.cs"
 $sharedGame = Read-RepoFile "ShelteredAPI\Events\GameEvents.cs"
 $sharedRuntime = Read-RepoFile "ShelteredAPI\Characters\Internal\CharacterRuntime.cs"
+$characterQuery = Read-RepoFile "ShelteredAPI\Characters\Models\CharacterQuery.cs"
+$shelteredActors = Read-RepoFile "ShelteredAPI\Actors\ActorSystem.cs"
+$characterSystemImpl = Read-RepoFile "ShelteredAPI\Characters\Internal\CharacterEffectSystemImpl.cs"
+Assert-Contains "character query custom data" $characterQuery 'WithData<T>\(string key\).*HasCustomData\(key\).*GetCustomData<object>\(key\) is T' "WithData<T> must test the custom-data key and the requested value type."
+Assert-NotContains "character query custom data" $characterQuery 'WithData<T>\(string key\)\s*\{\s*_predicates\.Add\(delegate\(ICharacterProxy c\) \{ return c != null && string\.Equals\(c\.Data\.PersistenceKey' "WithData<T> must not compare the persistence key."
+Assert-Contains "actor lookup identity" $shelteredActors 'TryGetCharacter\(ActorId actorId.*GetCharacterByActorId\(actorId\)' "TryGetCharacter must resolve by the full actor identity."
+Assert-NotContains "actor lookup identity" $shelteredActors 'GetByUniqueId\(actorId\.LocalId\)' "TryGetCharacter must not drop the actor kind and domain."
+Assert-Contains "actor lookup identity" $characterSystemImpl 'GetCharacterByActorId\(ActorId actorId\).*ActorKind\.Player:.*_liveFamily.*ActorKind\.Visitor:.*_liveVisitors.*ActorKind\.Synthetic:.*NormalizeDomain\(actorId\.Domain\), NormalizeDomain\(synthetic\.SourceMod\)' "actor lookup must pick the store by kind and match the synthetic source-mod domain."
+Assert-Contains "live character edits" $sharedRuntime 'internal void Bind\(FamilyMember member\).*PullFromGame\(game, sameObject\).*internal void Bind\(NpcVisitor npc\).*PullFromGame\(game, sameObject\)' "refreshing a live character must keep pending mod edits to the same game object."
+Assert-NotContains "live character edits" $sharedRuntime 'FillFromFamilyMember\(_data, member\)|FillFromVisitor\(_data, npc\)' "refreshing a live character must not copy game values over the mod-facing data."
+Assert-Contains "live character edits" $sharedRuntime 'keepPendingEdits && !EqualityComparer<T>\.Default\.Equals\(current, synced\) \? current : game' "only fields edited since the last sync may survive a refresh."
+Assert-Contains "live stat writeback" $sharedRuntime 'WriteStatLevel\(stats\.Strength.*WriteStatLevel\(stats\.Dexterity.*WriteStatLevel\(stats\.Intelligence.*WriteStatLevel\(stats\.Charisma.*WriteStatLevel\(stats\.Perception' "every editable stat level must be written back to the game."
+Assert-Contains "live stat writeback" $sharedRuntime 'desired - stat\.LevelModifier.*SetInitialLevel\(baseLevel, stat\.LevelCap\)' "stat writeback must keep the level modifier and the cap."
 $argsStart = $sharedGame.IndexOf('    public sealed class CharacterDeathEventArgs')
 $argsEnd = $sharedGame.IndexOf('    /// <summary>', $sharedGame.IndexOf('    public sealed class ObjectDegradingEventArgs'))
 # Use the next central-owner summary, rather than the property's XML summary.
@@ -1322,10 +1350,12 @@ $sharedSources = @(
     (Read-RepoFile "ShelteredAPI\Characters\Models\CharacterSaveData.cs"),
     (Read-RepoFile "ShelteredAPI\Characters\Abstractions\ICharacterAttributes.cs"),
     ('namespace ShelteredAPI.Characters.Internal {' + $sharedRuntime.Substring($attributesStart, $attributesEnd - $attributesStart) + '}'),
+    ('namespace ShelteredAPI.Characters.Models { public partial class CharacterQuery {' + (Read-ContractMethod $characterQuery 'public CharacterQuery WithAttribute(') + '}}'),
     ('namespace ShelteredAPI.Events {' + $sharedGame.Substring($argsStart, $argsEnd - $argsStart) + 'internal static class GameEvents {' + $sharedGame.Substring($eventsStart, $eventsEnd - $eventsStart) + '}}'),
     ('namespace ShelteredAPI.Events { internal static class UIEvents {' + $sharedUi.Substring($uiStart, $uiEnd - $uiStart) + '}}'),
     (Read-RepoFile "ShelteredAPI\Events\SharedPanelPatches.cs"),
     (Read-RepoFile "ShelteredAPI\Events\SharedGamePatches.cs"),
+    (Read-RepoFile "ShelteredAPI\Characters\PartyPatches.cs"),
     (Read-RepoFile "ShelteredAPI\Map\MapGenerationPolicies.cs"),
     (Read-RepoFile "ShelteredAPI\Map\Internal\MapGenerationPolicyRegistry.cs"),
     (Read-RepoFile "ShelteredAPI\Map\Internal\MapSizeGenerationScope.cs")
@@ -1396,6 +1426,472 @@ try {
     $script:contractCount += [SharedModHooksContractFixture]::Count
 } catch {
     $failures.Add("shared hooks runtime contract: " + $_.Exception.Message)
+}
+
+try {
+    $appearanceSources = @(
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterData.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\CharacterDataModel.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\CharacterSaveData.cs'),
+        ('namespace ShelteredAPI.Characters.Internal {' + (Read-ContractMethod $sharedRuntime 'internal static class RuntimeSerialization') + '}'),
+        ('namespace ShelteredAPI.Characters.Internal {' + (Read-ContractMethod $sharedRuntime 'internal static class CharacterFactory') + '}')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    $appearanceMethods = @('private void PullFromGame(', 'private static T Pick<T>(', 'private void SyncAppearance(', 'private static bool TrySetField(') | ForEach-Object { Read-ContractMethod $sharedRuntime $_ }
+    $appearanceMethods += Read-ContractMethod $characterSystemImpl 'private static CharacterSaveData ToSaveData('
+    $appearanceCompilation = (Read-RepoFile 'tools\CharacterAppearance.ContractFixture.cs') + ($appearanceSources -join [Environment]::NewLine) + 'public partial class CharacterAppearanceContractFixture {' + ($appearanceMethods -join [Environment]::NewLine) + '}'
+    $appearanceCompilation = $appearanceCompilation.Replace('ShelteredAPI.', 'AppearanceFixture.')
+    Add-Type -TypeDefinition ('namespace AppearanceContract {' + $appearanceCompilation + '}')
+    [AppearanceContract.CharacterAppearanceContractFixture]::Verify()
+    $script:contractCount += [AppearanceContract.CharacterAppearanceContractFixture]::Count
+    Assert-Contains 'synthetic color restoration' $characterSystemImpl 'p.Data.SkinColor = new Color\(data.SkinColor\[0\], data.SkinColor\[1\], data.SkinColor\[2\], data.SkinColor\[3\]\).*p.Data.HairColor = new Color\(data.HairColor\[0\], data.HairColor\[1\], data.HairColor\[2\], data.HairColor\[3\]\)' 'Synthetic restore must apply every saved color channel.'
+} catch {
+    $failures.Add('character appearance runtime contract: ' + $_.Exception.Message)
+}
+
+# Execute the production effect owner with isolated callback stand-ins.
+try {
+    $effectsStart = $sharedRuntime.IndexOf('    internal sealed class BasicCharacterEffects')
+    $effectsEnd = $sharedRuntime.IndexOf('        internal List<EffectSaveData>', $effectsStart)
+    $contextStart = $sharedRuntime.IndexOf('    internal sealed class EffectContext')
+    $contextEnd = $sharedRuntime.IndexOf('    internal static class CharacterFactory', $contextStart)
+    $effectSources = @(
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterEffect.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterEffects.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\EffectInstance.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Abstractions\ICharacterData.cs'),
+        (Read-RepoFile 'ShelteredAPI\Characters\Models\CharacterDataModel.cs'),
+        ('namespace ShelteredAPI.Characters.Internal {' + $sharedRuntime.Substring($effectsStart, $effectsEnd - $effectsStart) + '}' + $sharedRuntime.Substring($contextStart, $contextEnd - $contextStart) + '}')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    $fixture = (Read-RepoFile 'tools\CharacterEffects.ContractFixture.cs').Replace('using System.Linq;', 'using System.Linq; using ModAPI.Util;')
+    $effectCompilation = ($fixture + [Environment]::NewLine + ($effectSources -join [Environment]::NewLine)).Replace('ShelteredAPI.', 'EffectFixture.').Replace('ModAPI.Util', 'EffectFixture.Util')
+    Add-Type -TypeDefinition $effectCompilation
+    [CharacterEffectsContractFixture]::Verify()
+    $script:contractCount += [CharacterEffectsContractFixture]::Count
+    Assert-Contains 'live custom data notifications' $sharedRuntime 'CreateFromFamilyMember\(member\);\s*_data.CustomDataChanged = NotifyCustomDataChanged;.*CreateFromVisitor\(npc\);\s*_data.CustomDataChanged = NotifyCustomDataChanged;' 'Both live proxy kinds must forward custom-data writes.'
+    Assert-Contains 'synthetic custom data notifications' $characterSystemImpl 'data.CustomDataChanged = delegate\(string changedKey, object value\) \{ OnDataChangedInternal\(p, changedKey, value\); \}' 'Synthetic custom-data writes must reach the same event owner.'
+    Assert-NotContains 'custom data event meaning' $sharedRuntime '_dataChanged\(this, "state", State\)' 'Frame ticks must not emit a custom-data change without a write.'
+} catch {
+    $failures.Add('character effects runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $persistenceSources = @(
+        (Read-RepoFile 'tools\Persistence.ContractFixture.cs'),
+        (Read-RepoFile 'ShelteredAPI\Persistence\ModPersistence.cs'),
+        (Read-RepoFile 'ShelteredAPI\Persistence\ModList.cs'),
+        (Read-RepoFile 'ShelteredAPI\Persistence\ModDictionary.cs')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    # Windows PowerShell's compiler needs equivalent syntax for these newer C# forms.
+    $persistenceCompilation = ($persistenceSources -join [Environment]::NewLine).Replace('public bool IsReadyForLoad() => true;', 'public bool IsReadyForLoad() { return true; }').Replace('public bool IsRelocationEnabled() => true;', 'public bool IsRelocationEnabled() { return true; }').Replace('T val = default;', 'T val = default(T);').Replace('TValue val = default;', 'TValue val = default(TValue);')
+    Add-Type -TypeDefinition ('namespace PersistenceFixture { using System; using System.Collections.Generic; using ModAPI.Harmony;' + $persistenceCompilation + '}')
+    [PersistenceFixture.PersistenceContractFixture]::Verify()
+    $script:contractCount += [PersistenceFixture.PersistenceContractFixture]::Count
+} catch {
+    $failures.Add('persistent collections runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $actorOwner = Read-RepoFile 'ShelteredAPI\Actors\Internal\ActorSystemImpl.cs'
+    $actorMethods = @(
+        'private static ActorProfileComponent BuildProfile(FamilyMember', 'private static ActorProfileComponent BuildProfile(NpcVisitor',
+        'private bool BindLocked(', 'private bool RemoveBindingLocked(', 'private bool HasBindingTypeLocked(',
+        'private static string NormalizeKey(', 'private static string BuildBindingIndexKey(',
+        'private static bool IsValidBindingType(', 'private static bool IsOwnedBindingType(',
+        'private static void AddToStringIndex(', 'private static void RemoveFromStringIndex(',
+        'private bool MatchesQueryLocked(', 'private static ActorEventEnvelope CloneEvent(',
+        'private static bool IsOwnedComponentId(', 'private static bool IsValidComponentId(',
+        'private ActorComponentWriteResult SetComponentLocked(', 'private bool AreComponentsEquivalentLocked(',
+        'private sealed class ActorComponentSlot',
+        'private void RestoreComponentLocked(', 'private void HydrateUnknownSlotsLocked(',
+        'private ActorComponentSaveEntry BuildComponentSaveEntryLocked(',
+        'private void RaiseActorCreated(', 'private void RaiseActorDestroyed(', 'private void RaiseActorStateChanged(', 'private void Publish(',
+        'private sealed class ActorSubscription :'
+    ) | ForEach-Object { Read-ContractMethod $actorOwner $_ }
+    $actorModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $actorModels += [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorComponents.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $actorModels += [regex]::Replace($dispatchSource, '(?m)^using [^\r\n]+\r?\n', '')
+    $actorFixture = Read-RepoFile 'tools\ActorIdentity.ContractFixture.cs'
+    Add-Type -TypeDefinition ('namespace ActorIdentityFixture { using System; using System.Collections.Generic; using System.Reflection; using ModAPI.Actors; using ModAPI.Core;' + $actorModels + $actorFixture + 'public sealed partial class ActorIdentityContractFixture {' + ($actorMethods -join [Environment]::NewLine) + '}}')
+    [ActorIdentityFixture.ActorIdentityContractFixture]::Verify()
+    $script:contractCount += [ActorIdentityFixture.ActorIdentityContractFixture]::Count
+    Assert-Contains 'queue subscriber isolation' (Read-RepoFile 'ShelteredAPI\Queues\Internal\PlayerQueueRuntime.cs') 'SubscriberDispatch.Invoke\(QueueChanged,' 'Queue callbacks must survive another subscriber throwing.'
+    Assert-Contains 'six hour subscriber isolation' (Read-RepoFile 'ShelteredAPI\Events\GameTimeTriggerHelper.cs') 'SubscriberDispatch.Invoke\(OnSixHourTick,' 'Six-hour callbacks must survive another subscriber throwing.'
+    Assert-Contains 'staggered subscriber isolation' (Read-RepoFile 'ShelteredAPI\Events\GameTimeTriggerHelper.cs') 'SubscriberDispatch.Invoke\(OnStaggeredTick,' 'Staggered callbacks must survive another subscriber throwing.'
+} catch {
+    $failures.Add('actor identity runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $queueModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs') + (Read-RepoFile 'ShelteredAPI\Queues\PlayerQueueContracts.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $queueRestore = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Queues\Internal\PlayerQueueRuntime.cs') 'internal static PlayerQueueRestoreResult Restore('
+    Add-Type -TypeDefinition ('namespace QueueFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Collections.ObjectModel; using ModAPI.Actors; using ShelteredAPI.Queues;' + $queueModels + (Read-RepoFile 'tools\PlayerQueue.ContractFixture.cs') + 'public static partial class PlayerQueueContractFixture {' + $queueRestore + '}}')
+    [QueueFixture.PlayerQueueContractFixture]::Verify()
+    $script:contractCount += [QueueFixture.PlayerQueueContractFixture]::Count
+    Assert-Contains 'queue snapshot instance capture' (Read-RepoFile 'ShelteredAPI\Queues\Internal\PlayerQueueRuntime.cs') 'restorePayload,\s*member\);' 'Restore snapshots must capture their live owner instance.'
+} catch {
+    $failures.Add('player queue session runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $inventoryRemove = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Content\Compatibility\InventoryHelper.cs') 'public static bool TryRemoveFromInventory('
+    $inventoryRemove = $inventoryRemove.Replace('if (ResolveItemType(itemId, out var type))', 'ItemManager.ItemType type; if (ResolveItemType(itemId, out type))')
+    $inventoryCount = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Adapters\GameHelperExtensions.cs') 'internal static int GetItemCountStrict('
+    Add-Type -TypeDefinition ('namespace InventoryFixture { using System;' + (Read-RepoFile 'tools\Inventory.ContractFixture.cs') + 'public static partial class InventoryContractFixture {' + $inventoryRemove + $inventoryCount + '}}')
+    [InventoryFixture.InventoryContractFixture]::VerifyRemoval()
+    [InventoryFixture.InventoryContractFixture]::VerifyCounts()
+    $script:contractCount += [InventoryFixture.InventoryContractFixture]::Count
+} catch {
+    $failures.Add('inventory removal runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $assignmentSource = Read-RepoFile 'ShelteredAPI\Storage\CharacterItemAssignments.cs'
+    $assignmentEnd = $assignmentSource.IndexOf('    internal sealed class CharacterItemAssignmentPersistence')
+    $storeSources = @(
+        (Read-RepoFile 'tools\Storage.ContractFixture.cs'),
+        ('namespace ShelteredAPI.Storage { internal partial class InventoryItemStore {' + (Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Storage\InventoryItemStore.cs') 'public override ItemTransferResult Add(') + '}}'),
+        ('namespace ShelteredAPI.Storage { internal static partial class ShelteredStores {' + (Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Storage\ShelteredStores.cs') 'public static ItemTransferResult Transfer(') + (Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Storage\ShelteredStores.cs') 'private static void RollbackTransfer(') + '}}'),
+        (Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\CharacterItemAssignmentContracts.cs'),
+        ($assignmentSource.Substring(0, $assignmentEnd) + '}'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ItemStoreContracts.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ItemStoreBase.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemStoreState.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemReservation.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemStore.cs'),
+        (Read-RepoFile 'ShelteredAPI\Storage\ModItemStoreRegistry.cs')
+    ) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    Add-Type -TypeDefinition ('namespace StoreFixture { using System; using System.Collections.Generic; using ShelteredAPI.Content; using ModAPI.Actors; using ShelteredAPI.Actors;' + ($storeSources -join [Environment]::NewLine) + '}')
+    [StoreFixture.StorageContractFixture]::Verify()
+    $script:contractCount += [StoreFixture.StorageContractFixture]::Count
+    $storePersistence = Read-RepoFile 'ShelteredAPI\Storage\ModItemStorePersistence.cs'
+    Assert-Contains 'mod store session reset' $storePersistence 'ModPersistence.Register\(Instance, ModItemStoreRegistry.ResetContents\)' 'Registered stores must clear their contents when a new session starts.'
+    Assert-Contains 'mod store missing group' $storePersistence 'if \(data.isLoading\) ModItemStoreRegistry.ResetContents\(\);\s*data.GroupStart' 'A missing store group must not retain the previous save contents.'
+    Assert-Contains 'character assignment session reset' $assignmentSource 'ModPersistence.Register\(Instance, CharacterItemAssignmentService.Instance.ResetForSession\)' 'Assignments must clear on a new session.'
+    Assert-Contains 'character assignment missing group' $assignmentSource 'if \(data.isLoading\) CharacterItemAssignmentService.Instance.ResetForSession\(\);\s*data.GroupStart' 'A missing assignment group must not retain metadata from another save.'
+} catch {
+    $failures.Add('mod stores runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $lifetimeMethods = (Read-ContractMethod $characterSystemImpl 'public void UnregisterCharacter(') + (Read-ContractMethod $characterSystemImpl 'private void HandleSessionStarted(')
+    $lifetimeFixture = Read-RepoFile 'tools\CharacterLifetime.ContractFixture.cs'
+    $lifetimeModels = [regex]::Replace((Read-RepoFile 'ModAPI\Actors\Models\ActorModels.cs'), '(?m)^using [^\r\n]+\r?\n', '')
+    $lifetimeModels += [regex]::Replace($dispatchSource, '(?m)^using [^\r\n]+\r?\n', '')
+    Add-Type -TypeDefinition ('namespace LifetimeFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using ModAPI.Actors;' + $lifetimeModels + $lifetimeFixture + 'public sealed partial class CharacterLifetimeContractFixture {' + $lifetimeMethods + '}}')
+    [LifetimeFixture.CharacterLifetimeContractFixture]::Verify()
+    $script:contractCount += [LifetimeFixture.CharacterLifetimeContractFixture]::Count
+    foreach ($characterEvent in @('SyntheticCharacterCreated', 'SyntheticCharacterUnloaded', 'EffectApplied', 'EffectRemoved', 'DataChanged')) {
+        Assert-Contains ('character subscriber isolation: ' + $characterEvent) $characterSystemImpl ('SubscriberDispatch.Invoke\(' + $characterEvent + ',') 'Character callbacks must survive another subscriber throwing.'
+    }
+    Assert-Contains 'live unregistration subscriber isolation' $sharedRuntime 'SubscriberDispatch.Invoke\(OnUnregistered,' 'Live unregistration must deliver to every subscriber.'
+    Assert-Contains 'synthetic unregistration subscriber isolation' (Read-RepoFile 'ShelteredAPI\Characters\Models\SyntheticCharacterProxy.cs') 'SubscriberDispatch.Invoke\(OnUnregistered,' 'Synthetic unregistration must deliver to every subscriber.'
+} catch {
+    $failures.Add('character lifetime runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $cookingMethods = (Read-ContractMethod $shelteredCooking 'private static bool IsAvailable(') + (Read-ContractMethod $shelteredCooking 'private static string ResolveUnavailableReason(') + (Read-ContractMethod $shelteredCooking 'private static void ExecuteCraft(')
+    Add-Type -TypeDefinition ('namespace CookingFixture { using System;' + (Read-RepoFile 'tools\Cooking.ContractFixture.cs') + 'public static partial class CookingContractFixture {' + $cookingMethods + '}}')
+    [CookingFixture.CookingContractFixture]::Verify()
+    $script:contractCount += [CookingFixture.CookingContractFixture]::Count
+} catch {
+    $failures.Add('cooking availability runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $saveOverwrite = Read-ContractMethod $saveRegistry 'public SaveEntry OverwriteSave('
+    $saveOverwrite = $saveOverwrite.Replace('if (!TryWriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc))', 'long size; uint crc; if (!TryWriteEntryFile(entry.absoluteSlot, xmlBytes, out size, out crc))')
+    $saveEventsSources = @($dispatchSource, (Read-RepoFile 'ShelteredAPI\Saves\Events.cs')) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r?\n', '') }
+    Add-Type -TypeDefinition ('namespace SaveFixture { using System; using System.Reflection; using ModAPI.Core;' + ($saveEventsSources -join [Environment]::NewLine) + (Read-RepoFile 'tools\SaveEvents.ContractFixture.cs') + 'namespace ShelteredAPI.Saves { public sealed partial class SaveEventsContractFixture {' + $saveOverwrite + '}}}')
+    [SaveFixture.ShelteredAPI.Saves.SaveEventsContractFixture]::Verify()
+    $script:contractCount += [SaveFixture.ShelteredAPI.Saves.SaveEventsContractFixture]::Count
+} catch {
+    $failures.Add('save lifecycle runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $runtimeUiSources = @((Read-RepoFile 'ShelteredAPI\UI\Internal\Runtime\RuntimeUiRegistry.cs'), (Read-RepoFile 'ShelteredAPI\UI\Internal\Runtime\UIRuntimeServiceHelper.cs')) | ForEach-Object { [regex]::Replace($_, '(?m)^using [^\r\n]+\r*\n', '') }
+    Add-Type -TypeDefinition ('namespace UiFixture { using System; using System.Collections.Generic; using UnityEngine; using ModAPI.Core;' + ($runtimeUiSources -join [Environment]::NewLine) + (Read-RepoFile 'tools\RuntimeUi.ContractFixture.cs') + '}')
+    [UiFixture.ShelteredAPI.UI.Internal.Runtime.RuntimeUiContractFixture]::Verify()
+    $script:contractCount += [UiFixture.ShelteredAPI.UI.Internal.Runtime.RuntimeUiContractFixture]::Count
+} catch {
+    $failures.Add('runtime UI cleanup contract: ' + $_.Exception.Message)
+}
+
+try {
+    $scenarioModeModels = @('public enum ScenarioBaseGameMode', 'public class ScenarioDefinition', 'public class ScenarioModeAvailabilityDefinition', 'public class ScenarioSelectionRulesDefinition') | ForEach-Object { Read-ContractMethod $scenarioDefinitionModel $_ }
+    $scenarioCreate = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Public\ShelteredScenarioAuthoring.cs') 'public static ScenarioDefinition CreateDefinition(ScenarioBaseGameMode'
+    Add-Type -TypeDefinition ('namespace ScenarioAuthoringFixture { using System; using System.Collections.Generic;' + ($scenarioModeModels -join [Environment]::NewLine) + (Read-RepoFile 'tools\ScenarioAuthoring.ContractFixture.cs') + 'public static partial class ScenarioAuthoringContractFixture {' + $scenarioCreate + '}}')
+    [ScenarioAuthoringFixture.ScenarioAuthoringContractFixture]::Verify()
+    $script:contractCount += [ScenarioAuthoringFixture.ScenarioAuthoringContractFixture]::Count
+} catch {
+    $failures.Add('scenario base mode runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $objectPanelRegistry = Read-RepoFile 'ShelteredAPI\UI\Internal\Runtime\RuntimeObjectPanelRegistry.cs'
+    $objectPanelRegistry = $objectPanelRegistry.Substring(0, $objectPanelRegistry.IndexOf('    internal sealed class RuntimeObjectPanelInteraction')) + '}'
+    $objectPanelRegistry = [regex]::Replace($objectPanelRegistry, '(?m)^using [^\r\n]+\r?\n', '')
+    Add-Type -TypeDefinition ('namespace ObjectPanelFixture { using System; using System.Collections.Generic; using System.Text; using ModAPI.Core; using ShelteredAPI.Content; using ShelteredAPI.Interactions; using ShelteredAPI.UI.Runtime;' + $objectPanelRegistry + (Read-RepoFile 'tools\ObjectPanel.ContractFixture.cs') + '}')
+    [ObjectPanelFixture.ShelteredAPI.UI.Internal.Runtime.ObjectPanelContractFixture]::Verify()
+    $script:contractCount += [ObjectPanelFixture.ShelteredAPI.UI.Internal.Runtime.ObjectPanelContractFixture]::Count
+} catch {
+    $failures.Add('object panel registration runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $transpilerSource = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler.cs'
+    $transpilerSelection = (Read-ContractMethod $transpilerSource 'public FluentTranspiler FindSequence(SearchMode mode, params Func<CodeInstruction, bool>[] predicates)') + (Read-ContractMethod $transpilerSource 'public bool TryFindSequence(')
+    $transpilerSelection = $transpilerSelection.Replace('$"Predicate sequence not found: length {length}"', '"Predicate sequence not found: length " + length')
+    $callPredicate = Read-ContractMethod $transpilerSource 'private Func<CodeInstruction, bool> BuildCallPredicate('
+    $transpilerSelection += $callPredicate.Replace('if (!(instr.operand is MethodInfo method))', 'MethodInfo method = instr.operand as MethodInfo; if (method == null)')
+    $transpilerSelection += (Read-ContractMethod $transpilerSource 'public int CaptureLocalIndex(') + (Read-ContractMethod $transpilerSource 'public FluentTranspiler MatchLoadLocal(')
+    $localLoad = (Read-ContractMethod $transpilerSource 'public FluentTranspiler CaptureLocal(') + (Read-ContractMethod $transpilerSource 'private OpCode GetLdlocOpCode(')
+    $localLoad = $localLoad.Replace('if (int.TryParse(localIndexOrName, out int index))', 'int index; if (int.TryParse(localIndexOrName, out index))')
+    $localLoad = [regex]::Replace($localLoad, '\$"CaptureLocal could not resolve local name [^\r\n]+', '"CaptureLocal could not resolve a local name: local variable names " +')
+    $transpilerSelection += $localLoad
+    $transpilerSelection += (Read-ContractMethod $transpilerSource 'public int LabelToIndex(') + (Read-ContractMethod $transpilerSource 'private void InvalidateLabelIndexCache(') + (Read-ContractMethod $transpilerSource 'private void RebuildLabelIndexCache(')
+    $transpilerFeatures = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler_Features.cs'
+    $transpilerSelection += (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchEither(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler MatchWithGap(')
+    $transpilerSelection += (Read-ContractMethod $transpilerSource 'private struct StackExpectation') + (Read-ContractMethod $transpilerFeatures 'private struct StackDeltaExpectation') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler ExpectStack(') + (Read-ContractMethod $transpilerFeatures 'public FluentTranspiler EnsureStack(')
+    $transpilerSelection = $transpilerSelection.Replace('$"MatchWithGap: End pattern not found within {maxGap} instructions of start."', '"MatchWithGap: End pattern not found within " + maxGap + " instructions of start."')
+    $shelteredPatternSource = Read-RepoFile 'ShelteredAPI\Harmony\ShelteredPatterns.cs'
+    $shelteredPatternMethods = (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchUILocalization(') + (Read-ContractMethod $shelteredPatternSource 'public static FluentTranspiler MatchLog(')
+    $harmonyFixtureAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $RepoRoot 'mods\0Harmony\Assemblies\0Harmony.dll'))
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace TranspilerSelectionFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Reflection.Emit; using HarmonyLib; using ModAPI.Core;' + (Read-RepoFile 'tools\TranspilerSelection.ContractFixture.cs') + 'public partial class FluentTranspiler {' + $transpilerSelection + '} public static partial class ShelteredPatterns {' + $shelteredPatternMethods + '}}')
+    [TranspilerSelectionFixture.TranspilerSelectionContractFixture]::Verify()
+    $script:contractCount += [TranspilerSelectionFixture.TranspilerSelectionContractFixture]::Count
+} catch {
+    $failures.Add('transpiler selection runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $scenarioInventory = Read-RepoFile 'ShelteredAPI\Scenarios\Infrastructure\Runtime\ScheduledInventoryRuntimeService.cs'
+    $scenarioInventoryMethods = (Read-ContractMethod $scenarioInventory 'public bool Handle(') + (Read-ContractMethod $scenarioInventory 'public bool IsSatisfied(')
+    Add-Type -TypeDefinition ('namespace ScenarioInventoryFixture { using System; using System.Collections.Generic;' + (Read-RepoFile 'tools\ScenarioInventory.ContractFixture.cs') + 'public partial class ScenarioInventoryContractFixture {' + $scenarioInventoryMethods + '}}')
+    [ScenarioInventoryFixture.ScenarioInventoryContractFixture]::Verify()
+    $script:contractCount += [ScenarioInventoryFixture.ScenarioInventoryContractFixture]::Count
+} catch {
+    $failures.Add('scenario inventory runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $storyItems = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Infrastructure\Unity\ShelteredScenarioDefBuilder.cs') 'private static void ReplaceItemList('
+    Add-Type -TypeDefinition ('namespace StoryItemsFixture { using System; using System.Collections; using System.Collections.Generic; using System.Reflection;' + (Read-RepoFile 'tools\ScenarioStoryItems.ContractFixture.cs') + 'public static partial class ScenarioStoryItemsContractFixture {' + $storyItems + '}}')
+    [StoryItemsFixture.ScenarioStoryItemsContractFixture]::Verify()
+    $script:contractCount += [StoryItemsFixture.ScenarioStoryItemsContractFixture]::Count
+} catch {
+    $failures.Add('scenario story item runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $guardRecipes = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerGuardRecipes.cs'
+    $guardRecipes = [regex]::Replace($guardRecipes, '(?m)^using [^\r\n]+\r?\n', '')
+    $guardRecipes = [regex]::Replace($guardRecipes, '\$"[^"\r\n]*"', '"guard warning"')
+    $guardRecipes = [regex]::Replace($guardRecipes, 'nameof\(([^)]+)\)', '"$1"')
+    $guardRecipes = $guardRecipes.Replace('_transpiler.DefineLabel(out Label runOriginalLabel)', 'Label runOriginalLabel; Label skipOriginalLabel; _transpiler.DefineLabel(out runOriginalLabel)').Replace('.DefineLabel(out Label skipOriginalLabel)', '.DefineLabel(out skipOriginalLabel)')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace GuardFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit; using HarmonyLib; using ModAPI.Harmony;' + (Read-RepoFile 'tools\TranspilerGuard.ContractFixture.cs') + $guardRecipes + '}')
+    [GuardFixture.TranspilerGuardContractFixture]::Verify()
+    $script:contractCount += [GuardFixture.TranspilerGuardContractFixture]::Count
+} catch {
+    $failures.Add('transpiler guard runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $conditionSerializer = Read-RepoFile 'ShelteredAPI\Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs'
+    $conditionGroupMethods = (Read-ContractMethod $conditionSerializer 'private static ScenarioConditionGroup ReadConditionGroup(') + (Read-ContractMethod $conditionSerializer 'private static void ReadConditionRefs(')
+    $conditionGroupMethods += Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Application\Conditions\ScenarioConditionEvaluatorRegistry.cs') 'private bool IsGroupSatisfied('
+    Add-Type -ReferencedAssemblies System.Xml,System,System.Core -TypeDefinition ('namespace ConditionGroupsFixture { using System; using System.Collections.Generic; using System.Xml;' + (Read-RepoFile 'tools\ScenarioConditionGroups.ContractFixture.cs') + 'public sealed partial class ScenarioConditionGroupsContractFixture {' + $conditionGroupMethods + '}}')
+    [ConditionGroupsFixture.ScenarioConditionGroupsContractFixture]::Verify()
+    $script:contractCount += [ConditionGroupsFixture.ScenarioConditionGroupsContractFixture]::Count
+} catch {
+    $failures.Add('scenario condition groups runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $scenarioEventRaise = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Registration\ScenarioEventHub.cs') 'private static void Raise(Action<CustomScenarioEventArgs> handler, CustomScenarioEventArgs args)'
+    Add-Type -TypeDefinition ('namespace ScenarioEventsFixture { using System; using System.Reflection; using ModAPI.Core;' + (Read-RepoFile 'tools\ScenarioEvents.ContractFixture.cs') + [regex]::Replace($dispatchSource, '(?m)^using [^\r\n]+\r?\n', '') + 'public sealed partial class ScenarioEventsContractFixture {' + $scenarioEventRaise + '}}')
+    [ScenarioEventsFixture.ScenarioEventsContractFixture]::Verify()
+    $script:contractCount += [ScenarioEventsFixture.ScenarioEventsContractFixture]::Count
+} catch {
+    $failures.Add('scenario event subscribers runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $bulkMethod = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspiler.cs') 'public FluentTranspiler ReplaceAllPatterns('
+    $bulkMethod = [regex]::Replace($bulkMethod, '(LogTrace|AddSoftFailure|AddWarning)\(\$"[^\r\n]*\);', '$1("bulk pattern diagnostic");')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ((Read-RepoFile 'tools\TranspilerBulk.ContractFixture.cs') + 'namespace TranspilerBulkFixture { public partial class FluentTranspiler {' + $bulkMethod + '}}')
+    [TranspilerBulkFixture.TranspilerBulkContractFixture]::Verify()
+    $script:contractCount += [TranspilerBulkFixture.TranspilerBulkContractFixture]::Count
+} catch {
+    $failures.Add('transpiler bulk pattern runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $assetSource = Read-RepoFile 'ShelteredAPI\Content\AssetLoader.cs'
+    $spriteMethods = (Read-ContractMethod $assetSource 'public static Sprite LoadSprite(Assembly asm,') + (Read-ContractMethod $assetSource 'public static Sprite LoadSprite(string modRootPath,')
+    Add-Type -TypeDefinition ('namespace AssetSpriteFixture { using System; using System.Collections.Generic; using System.Globalization; using System.IO; using System.Reflection;' + (Read-RepoFile 'tools\AssetSprite.ContractFixture.cs') + 'public static partial class AssetLoader {' + $spriteMethods + '}}')
+    [AssetSpriteFixture.AssetSpriteContractFixture]::Verify()
+    $script:contractCount += [AssetSpriteFixture.AssetSpriteContractFixture]::Count
+} catch {
+    $failures.Add('sprite cache runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $zeroMethod = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\UnityPatterns.cs') 'public static FluentTranspiler ReplaceAllVectorZero('
+    $zeroMethod = [regex]::Replace($zeroMethod, '\$"[^"\r\n]*"', '"Expected a vector type"')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace UnityZeroFixture { using System; using System.Collections.Generic; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + (Read-RepoFile 'tools\UnityZero.ContractFixture.cs') + 'public static class UnityPatterns {' + $zeroMethod + '}}')
+    [UnityZeroFixture.UnityZeroContractFixture]::Verify()
+    $script:contractCount += [UnityZeroFixture.UnityZeroContractFixture]::Count
+} catch {
+    $failures.Add('Unity vector-zero runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $receiverSource = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs'
+    $receiverMethods = ''
+    foreach ($signature in @('internal static bool ValidateStaticMethod(', 'internal static bool ValidateReturnTypeAssignable(', 'internal static bool ValidateReplacementCallSignature(', 'internal static bool ValidateHookCanReceiveOriginalArguments(', 'private static Type[] GetCallStackInputTypes(', 'private static Type[] GetEnclosingArgumentTypes(', 'private static bool IsStackAssignable(', 'private static Type NormalizeByRef(', 'private static bool IsInt32StackType(', 'private static string FormatType(', 'private static void Warn(')) {
+        $receiverMethods += Read-ContractMethod $receiverSource $signature
+    }
+    $compatSource = Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerCompatibilityExtensions.cs'
+    $receiverCompat = ''
+    foreach ($signature in @('internal static bool IsCompatibleCallReplacement(', 'private static Type[] BuildExpectedReplacementParameters(', 'private static bool IsStackParameterCompatible(', 'private static bool IsReturnCompatible(', 'private static bool IsInt32StackType(', 'private static string FormatType(')) {
+        $receiverCompat += Read-ContractMethod $compatSource $signature
+    }
+    $receiverMethods = [regex]::Replace($receiverMethods, '\$"[^"\r\n]*"', '"receiver diagnostic"')
+    Add-Type -TypeDefinition ('namespace ReceiverFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit;' + (Read-RepoFile 'tools\TranspilerReceiver.ContractFixture.cs') + 'public static class FluentTranspilerRecipeValidation {' + $receiverMethods + '} public static class FluentTranspilerCompatibilityExtensions {' + $receiverCompat + '}}')
+    [ReceiverFixture.TranspilerReceiverContractFixture]::Verify()
+    $script:contractCount += [ReceiverFixture.TranspilerReceiverContractFixture]::Count
+} catch {
+    $failures.Add('struct receiver runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $selectionSource = Read-RepoFile 'ShelteredAPI\UI\Internal\Spine\SpineSelectionWidgetBuilder.cs'
+    $selectionMethods = (Read-ContractMethod $selectionSource 'public static GameObject CreateEnumWidget(') + (Read-ContractMethod $selectionSource 'public static GameObject CreateChoiceWidget(')
+    Add-Type -TypeDefinition ('namespace SpineSelectionFixture { using System; using System.Collections.Generic; using System.Linq;' + (Read-RepoFile 'tools\SpineSelection.ContractFixture.cs') + 'public static class SpineSelectionWidgetBuilder {' + $selectionMethods + '}}')
+    [SpineSelectionFixture.SpineSelectionContractFixture]::Verify()
+    $script:contractCount += [SpineSelectionFixture.SpineSelectionContractFixture]::Count
+} catch {
+    $failures.Add('setting selection runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $setterSource = Read-RepoFile 'ShelteredAPI\UI\Internal\Spine\SpineWidgetRuntime.cs'
+    $setterMethods = (Read-ContractMethod $setterSource 'public static bool TryApplyValue(') + (Read-ContractMethod $setterSource 'private static bool SetValue(')
+    $setterMethods = [regex]::Replace($setterMethods, '\$"[^"\r\n]*"', '"setter diagnostic"')
+    Add-Type -IgnoreWarnings -TypeDefinition ('namespace SpineSetterFixture { using System;' + (Read-RepoFile 'tools\SpineSetter.ContractFixture.cs') + 'public static class SpineWidgetRuntime {' + $setterMethods + '}}')
+    [SpineSetterFixture.SpineSetterContractFixture]::Verify()
+    $script:contractCount += [SpineSetterFixture.SpineSetterContractFixture]::Count
+} catch {
+    $failures.Add('setting setter runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $keySource = Read-RepoFile 'ShelteredAPI\Content\ContentInjector.cs'
+    $keyMethods = (Read-ContractMethod $keySource 'private static string BuildGeneratedLocalizationKey(') + (Read-ContractMethod $keySource 'private static string ResolveItemIdSegment(') + (Read-ContractMethod $keySource 'private static string SanitizeKeyPart(')
+    $keyMethods = $keyMethods.Replace('$"shelteredapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}"', '"shelteredapi." + SanitizeKeyPart(modId) + "." + SanitizeKeyPart(itemId) + "." + suffix')
+    Add-Type -TypeDefinition ('namespace ContentKeyFixture { using System; using System.Globalization;' + (Read-RepoFile 'tools\ContentKey.ContractFixture.cs') + 'public static partial class ContentKeyContractFixture {' + $keyMethods + '}}')
+    [ContentKeyFixture.ContentKeyContractFixture]::Verify()
+    $script:contractCount += [ContentKeyFixture.ContentKeyContractFixture]::Count
+} catch {
+    $failures.Add('content localization key runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $recipeMethod = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Content\ContentInjector.cs') 'private static void InjectRecipes('
+    $recipeMethod = [regex]::Replace($recipeMethod, '\$"[^"\r\n]*"', '"recipe diagnostic"')
+    $recipeMethod = $recipeMethod.Replace('def.NormalizeLegacyFields();', 'ItemManager.ItemType resultType; ItemManager.ItemType ingType; List<CraftingManager.Recipe> inspector; def.NormalizeLegacyFields();').Replace('out var resultType', 'out resultType').Replace('out var ingType', 'out ingType').Replace('out List<CraftingManager.Recipe> inspector', 'out inspector')
+    Add-Type -TypeDefinition ('namespace ContentRecipeFixture { using System; using System.Collections.Generic;' + (Read-RepoFile 'tools\ContentRecipe.ContractFixture.cs') + 'public static partial class ContentRecipeContractFixture {' + $recipeMethod + '}}')
+    [ContentRecipeFixture.ContentRecipeContractFixture]::Verify()
+    $script:contractCount += [ContentRecipeFixture.ContentRecipeContractFixture]::Count
+} catch {
+    $failures.Add('content recipe ingredients runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $boundClass = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRangeCheckRecipes.cs') 'public sealed class FluentBoundCheckSelection'
+    $boundClass = [regex]::Replace($boundClass, '\$"[^"\r\n]*"', '"bound diagnostic"')
+    $boundClass = $boundClass.Replace('nameof(ReplaceBoundWithCall)', '"ReplaceBoundWithCall"')
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace BoundReplacementFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + (Read-RepoFile 'tools\BoundReplacement.ContractFixture.cs') + $boundClass + '}')
+    [BoundReplacementFixture.BoundReplacementContractFixture]::Verify()
+    $script:contractCount += [BoundReplacementFixture.BoundReplacementContractFixture]::Count
+} catch {
+    $failures.Add('normalized bound replacement runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $genericValidation = Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs') 'internal static bool ValidateStaticMethod('
+    $genericValidation = [regex]::Replace($genericValidation, '\$"[^"\r\n]*"', '"generic diagnostic"')
+    $genericUtility = (Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs') 'internal static bool IsStaticParameterlessValueProvider(') + (Read-ContractMethod (Read-RepoFile 'ModAPI\Harmony\Transpilers\FluentTranspilerRecipeValidation.cs') 'internal static bool IsCompatibleUnaryWrapper(')
+    $genericCompat = $receiverCompat + (Read-ContractMethod $compatSource 'internal static bool IsCompatibleConstantReplacement(')
+    $genericPrelude = 'public sealed class FluentTranspiler {} public static class FluentTranspilerFormatting { public static string FormatMethod(MethodInfo method) { return method.Name; }}'
+    Add-Type -TypeDefinition ('namespace GenericHooksFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection;' + $genericPrelude + (Read-RepoFile 'tools\GenericHooks.ContractFixture.cs') + 'public static class FluentTranspilerRecipeValidation { private static void Warn(FluentTranspiler t, string message) {}' + $genericValidation + '} public static class FluentRecipeUtility {' + $genericUtility + '} public static class FluentTranspilerCompatibilityExtensions {' + $genericCompat + '}}')
+    [GenericHooksFixture.GenericHooksContractFixture]::Verify()
+    $script:contractCount += [GenericHooksFixture.GenericHooksContractFixture]::Count
+} catch {
+    $failures.Add('generic hook runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $booleanDefaults = (Read-ContractMethod $receiverSource 'internal static bool CanEmitDefaultValue(') + (Read-ContractMethod $receiverSource 'internal static CodeInstruction CreateDefaultValueInstruction(')
+    $booleanPrelude = 'public enum TranspilerDiagnosticCategory { Validation } public sealed class FluentTranspiler { public void AddWarning(TranspilerDiagnosticCategory category, string value) {} } public static class FluentTranspilerFormatting { public static string FormatMethod(MethodInfo method) { return method.Name; }}'
+    Add-Type -IgnoreWarnings -ReferencedAssemblies $harmonyFixtureAssembly.Location -TypeDefinition ('namespace BooleanStackFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit; using HarmonyLib;' + $booleanPrelude + (Read-RepoFile 'tools\BooleanStack.ContractFixture.cs') + 'public static class FluentTranspilerRecipeValidation {' + $receiverMethods + $booleanDefaults + '} public static class FluentTranspilerCompatibilityExtensions {' + $receiverCompat + '}}')
+    [BooleanStackFixture.BooleanStackContractFixture]::Verify()
+    $script:contractCount += [BooleanStackFixture.BooleanStackContractFixture]::Count
+} catch {
+    $failures.Add('boolean stack runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    Add-Type -TypeDefinition ('namespace ReplacementTypeIdentityFixture { using System; using System.Collections.Generic; using System.Linq; using System.Reflection; using System.Reflection.Emit;' + $genericPrelude + (Read-RepoFile 'tools\ReplacementTypeIdentity.ContractFixture.cs') + 'public static class FluentTranspilerCompatibilityExtensions {' + $receiverCompat + '}}')
+    [ReplacementTypeIdentityFixture.ReplacementTypeIdentityContractFixture]::Verify()
+    $script:contractCount += [ReplacementTypeIdentityFixture.ReplacementTypeIdentityContractFixture]::Count
+} catch {
+    $failures.Add('replacement type identity runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $sliderSource = Read-RepoFile 'ShelteredAPI\UI\Internal\Spine\SpineScalarWidgetBuilder.cs'
+    $sliderSubmit = Read-ContractMethod (Read-ContractMethod $sliderSource 'public static GameObject CreateSliderWidget(') 'Action handleSubmit = () =>'
+    $sliderHelpers = (Read-ContractMethod $sliderSource 'private static bool ShouldSnapSliderToStep(') + (Read-ContractMethod $sliderSource 'private static float ResolveSliderStep(')
+    $sliderMethod = 'private static void Submit(SettingDefinition def, string text, float min, float max, bool snapToInt) { object settingsObject = null; object panel = null; UIInput valueInput = new UIInput { value = text }; Action<float> refreshDisplay = ignored => {}; ' + $sliderSubmit + '; handleSubmit(); }'
+    Add-Type -TypeDefinition ('namespace SliderSubmitFixture { using System;' + (Read-RepoFile 'tools\SliderSubmit.ContractFixture.cs') + 'public static partial class SliderSubmitContractFixture {' + $sliderHelpers + $sliderMethod + '}}')
+    [SliderSubmitFixture.SliderSubmitContractFixture]::Verify()
+    $script:contractCount += [SliderSubmitFixture.SliderSubmitContractFixture]::Count
+} catch {
+    $failures.Add('slider text submission runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $keybindClass = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\UI\Spine\KeybindCaptureListener.cs') 'internal class KeybindCaptureListener'
+    $keybindInput = 'namespace UnityEngine { public static class Input { public static KeybindDisplayFixture.KeyCode Pressed; public static bool GetKeyDown(KeybindDisplayFixture.KeyCode code) { return Pressed == code; } } }'
+    Add-Type -TypeDefinition ($keybindInput + 'namespace KeybindDisplayFixture { using System; using System.Collections.Generic; using System.Reflection;' + (Read-RepoFile 'tools\KeybindDisplay.ContractFixture.cs') + $keybindClass + '}')
+    [KeybindDisplayFixture.KeybindDisplayContractFixture]::Verify()
+    $script:contractCount += [KeybindDisplayFixture.KeybindDisplayContractFixture]::Count
+} catch {
+    $failures.Add('keybind display runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $previewSource = Read-RepoFile 'ShelteredAPI\Scenarios\Application\Runtime\Preview\ScenarioPreviewSession.cs'
+    $previewMethods = (Read-ContractMethod $previewSource 'public void Dispose(') + (Read-ContractMethod $previewSource 'private bool IsActive')
+    if ($previewSource.Contains('private bool OwnsCurrentBinding')) { $previewMethods += Read-ContractMethod $previewSource 'private bool OwnsCurrentBinding' }
+    Add-Type -IgnoreWarnings -TypeDefinition ('namespace PreviewOwnershipFixture { using System; using System.Collections.Generic;' + (Read-RepoFile 'tools\PreviewOwnership.ContractFixture.cs') + 'public sealed partial class ScenarioPreviewSession {' + $previewMethods + '}}')
+    [PreviewOwnershipFixture.PreviewOwnershipContractFixture]::Verify()
+    $script:contractCount += [PreviewOwnershipFixture.PreviewOwnershipContractFixture]::Count
+} catch {
+    $failures.Add('preview ownership runtime contract: ' + $_.Exception.Message)
+}
+
+try {
+    $gateClass = Read-ContractMethod (Read-RepoFile 'ShelteredAPI\Scenarios\Domain\Validation\GateConditionValidationRule.cs') 'internal sealed class GateConditionValidationRule'
+    Add-Type -TypeDefinition ('namespace GateFlagValidationFixture { using System; using System.Collections.Generic; using System.Linq;' + (Read-RepoFile 'tools\GateFlagValidation.ContractFixture.cs') + $gateClass + '}')
+    [GateFlagValidationFixture.GateFlagValidationContractFixture]::Verify()
+    $script:contractCount += [GateFlagValidationFixture.GateFlagValidationContractFixture]::Count
+} catch {
+    $failures.Add('gate flag validation runtime contract: ' + $_.Exception.Message)
 }
 
 if ($failures.Count -gt 0) {

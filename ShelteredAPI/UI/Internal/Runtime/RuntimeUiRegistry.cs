@@ -123,12 +123,17 @@ namespace ShelteredAPI.UI.Internal.Runtime{
 
             UIRuntimeServiceHelper.Run("RuntimeUiRegistry.Close", delegate
             {
-                if (record.Close != null)
-                    record.Close(record);
-
-                if (record.Root != null)
-                    UnityEngine.Object.Destroy(record.Root);
-                record.Root = null;
+                try
+                {
+                    if (record.Close != null)
+                        record.Close(record);
+                }
+                finally
+                {
+                    if (record.Root != null)
+                        UnityEngine.Object.Destroy(record.Root);
+                    record.Root = null;
+                }
             });
         }
     }

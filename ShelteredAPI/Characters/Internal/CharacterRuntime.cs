@@ -23,6 +23,9 @@ namespace ShelteredAPI.Characters.Internal
         private readonly BasicCharacterEffects _effects;
         private readonly BasicCharacterAttributes _attributes;
         private readonly Action<ICharacterProxy, string, object> _dataChanged;
+        // Game values as of the last read or write. A data field that differs from this was edited by a mod
+        // and is pending writeback, so a refresh from the game must not overwrite it.
+        private readonly CharacterDataModel _synced = new CharacterDataModel();
 
         public int UniqueId { get; private set; }
         public string Name
@@ -76,6 +79,8 @@ namespace ShelteredAPI.Characters.Internal
             _dataChanged = dataChanged;
             UniqueId = member != null ? member.GetId() : -1;
             _data = CharacterFactory.CreateFromFamilyMember(member);
+            _data.CustomDataChanged = NotifyCustomDataChanged;
+            CharacterFactory.FillFromFamilyMember(_synced, member);
             _effects = new BasicCharacterEffects(this);
             _attributes = new BasicCharacterAttributes();
             IsActive = true;
@@ -90,6 +95,8 @@ namespace ShelteredAPI.Characters.Internal
             _dataChanged = dataChanged;
             UniqueId = npc != null ? npc.npcId : -1;
             _data = CharacterFactory.CreateFromVisitor(npc);
+            _data.CustomDataChanged = NotifyCustomDataChanged;
+            CharacterFactory.FillFromVisitor(_synced, npc);
             _effects = new BasicCharacterEffects(this);
             _attributes = new BasicCharacterAttributes();
             IsActive = true;
@@ -99,10 +106,13 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Bind(FamilyMember member)
         {
+            bool sameObject = ReferenceEquals(_member, member);
             _member = member;
             if (member != null)
             {
-                CharacterFactory.FillFromFamilyMember(_data, member);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromFamilyMember(game, member);
+                PullFromGame(game, sameObject);
                 IsActive = true;
             }
             RefreshState();
@@ -110,13 +120,56 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Bind(NpcVisitor npc)
         {
+            bool sameObject = ReferenceEquals(_npc, npc);
             _npc = npc;
             if (npc != null)
             {
-                CharacterFactory.FillFromVisitor(_data, npc);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromVisitor(game, npc);
+                PullFromGame(game, sameObject);
                 IsActive = true;
             }
             RefreshState();
+        }
+
+        // Takes the game's current values but keeps mod edits that have not been written back yet.
+        // Pending edits only survive a refresh of the same game object; a new object starts from the game.
+        private void PullFromGame(CharacterDataModel game, bool keepPendingEdits)
+        {
+            _data.UniqueId = game.UniqueId;
+            _data.FirstName = Pick(_data.FirstName, _synced.FirstName, game.FirstName, keepPendingEdits);
+            _data.LastName = Pick(_data.LastName, _synced.LastName, game.LastName, keepPendingEdits);
+            _data.IsMale = Pick(_data.IsMale, _synced.IsMale, game.IsMale, keepPendingEdits);
+            _data.MeshId = Pick(_data.MeshId, _synced.MeshId, game.MeshId, keepPendingEdits);
+            _data.SkinColor = Pick(_data.SkinColor, _synced.SkinColor, game.SkinColor, keepPendingEdits);
+            _data.HairColor = Pick(_data.HairColor, _synced.HairColor, game.HairColor, keepPendingEdits);
+            _data.Health = Pick(_data.Health, _synced.Health, game.Health, keepPendingEdits);
+            _data.MaxHealth = Pick(_data.MaxHealth, _synced.MaxHealth, game.MaxHealth, keepPendingEdits);
+            _data.StrengthLevel = Pick(_data.StrengthLevel, _synced.StrengthLevel, game.StrengthLevel, keepPendingEdits);
+            _data.DexterityLevel = Pick(_data.DexterityLevel, _synced.DexterityLevel, game.DexterityLevel, keepPendingEdits);
+            _data.IntelligenceLevel = Pick(_data.IntelligenceLevel, _synced.IntelligenceLevel, game.IntelligenceLevel, keepPendingEdits);
+            _data.CharismaLevel = Pick(_data.CharismaLevel, _synced.CharismaLevel, game.CharismaLevel, keepPendingEdits);
+            _data.PerceptionLevel = Pick(_data.PerceptionLevel, _synced.PerceptionLevel, game.PerceptionLevel, keepPendingEdits);
+
+            _synced.UniqueId = game.UniqueId;
+            _synced.FirstName = game.FirstName;
+            _synced.LastName = game.LastName;
+            _synced.IsMale = game.IsMale;
+            _synced.MeshId = game.MeshId;
+            _synced.SkinColor = game.SkinColor;
+            _synced.HairColor = game.HairColor;
+            _synced.Health = game.Health;
+            _synced.MaxHealth = game.MaxHealth;
+            _synced.StrengthLevel = game.StrengthLevel;
+            _synced.DexterityLevel = game.DexterityLevel;
+            _synced.IntelligenceLevel = game.IntelligenceLevel;
+            _synced.CharismaLevel = game.CharismaLevel;
+            _synced.PerceptionLevel = game.PerceptionLevel;
+        }
+
+        private static T Pick<T>(T current, T synced, T game, bool keepPendingEdits)
+        {
+            return keepPendingEdits && !EqualityComparer<T>.Default.Equals(current, synced) ? current : game;
         }
 
         internal void ClearBinding()
@@ -156,28 +209,92 @@ namespace ShelteredAPI.Characters.Internal
             _attributes.Tick(dt);
             SyncToGameObject();
             RefreshState();
-            _dataChanged(this, "state", State);
+        }
+
+        private void NotifyCustomDataChanged(string key, object value)
+        {
+            if (_dataChanged != null) _dataChanged(this, key, value);
         }
 
         internal void SyncToGameObject()
         {
             if (_member != null)
             {
-                TrySetField(_member, "m_firstName", _data.FirstName);
-                TrySetField(_member, "m_lastName", _data.LastName);
+                WriteNamesAndStats(_member, _member.BaseStats);
+                SyncAppearance(_member);
                 SyncHealth(_member);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromFamilyMember(game, _member);
+                PullFromGame(game, false);
             }
 
             if (_npc != null)
             {
-                TrySetField(_npc, "m_firstName", _data.FirstName);
-                TrySetField(_npc, "m_lastName", _data.LastName);
+                WriteNamesAndStats(_npc, _npc.BaseStats);
+                SyncAppearance(_npc);
                 SyncHealth(_npc);
+                CharacterDataModel game = new CharacterDataModel();
+                CharacterFactory.FillFromVisitor(game, _npc);
+                PullFromGame(game, false);
             }
+        }
+
+        private void SyncAppearance(BaseCharacter character)
+        {
+            bool meshChanged = !string.Equals(_data.MeshId, _synced.MeshId, StringComparison.Ordinal);
+            bool genderChanged = _data.IsMale != _synced.IsMale;
+            if (meshChanged || genderChanged)
+            {
+                string meshId = meshChanged ? _data.MeshId
+                    : (_data.IsMale ? (character.isAdult ? "man" : "boy") : (character.isAdult ? "woman" : "girl"));
+                string message;
+                ShelteredAPI.Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.TrySetBody(character, meshId, out message);
+            }
+
+            bool skinChanged = !_data.SkinColor.Equals(_synced.SkinColor);
+            bool hairChanged = !_data.HairColor.Equals(_synced.HairColor);
+            if (!skinChanged && !hairChanged) return;
+            if (skinChanged) TrySetField(character, "m_skinColor", _data.SkinColor);
+            if (hairChanged)
+            {
+                TrySetField(character, "m_hairColor", _data.HairColor);
+                TrySetField(character, "m_originalHairColor", _data.HairColor);
+            }
+            CharacterMesh mesh;
+            if (ShelteredAPI.Scenarios.Infrastructure.Assets.ScenarioCharacterAppearanceService.TryGetBody(character, out mesh))
+            {
+                if (skinChanged) mesh.SetColor(CharacterMesh.ColorCustomization.SkinColor, _data.SkinColor);
+                if (hairChanged) mesh.SetColor(CharacterMesh.ColorCustomization.HairColor, _data.HairColor);
+                mesh.RefreshColors();
+            }
+            character.UpdateAvatarSprite();
+        }
+
+        private void WriteNamesAndStats(object character, BaseStats stats)
+        {
+            if (!string.Equals(_data.FirstName, _synced.FirstName, StringComparison.Ordinal))
+                TrySetField(character, "m_firstName", _data.FirstName);
+            if (!string.Equals(_data.LastName, _synced.LastName, StringComparison.Ordinal))
+                TrySetField(character, "m_lastName", _data.LastName);
+            if (stats == null) return;
+            WriteStatLevel(stats.Strength, _data.StrengthLevel, _synced.StrengthLevel);
+            WriteStatLevel(stats.Dexterity, _data.DexterityLevel, _synced.DexterityLevel);
+            WriteStatLevel(stats.Intelligence, _data.IntelligenceLevel, _synced.IntelligenceLevel);
+            WriteStatLevel(stats.Charisma, _data.CharismaLevel, _synced.CharismaLevel);
+            WriteStatLevel(stats.Perception, _data.PerceptionLevel, _synced.PerceptionLevel);
+        }
+
+        // Data levels are effective levels (base plus modifier), so the modifier is kept and only the base level moves.
+        private static void WriteStatLevel(BaseStat stat, int desired, int synced)
+        {
+            if (stat == null || desired == synced) return;
+            int baseLevel = Math.Max(0, Math.Min(desired - stat.LevelModifier, stat.LevelCap));
+            stat.SetInitialLevel(baseLevel, stat.LevelCap);
         }
 
         private void SyncHealth(BaseCharacter character)
         {
+            if (_data.Health == _synced.Health && _data.MaxHealth == _synced.MaxHealth) return;
             int maxHealth = Math.Max(1, _data.MaxHealth);
             int health = Math.Max(0, Math.Min(_data.Health, maxHealth));
             character.SetMaxHealth(maxHealth);
@@ -196,8 +313,7 @@ namespace ShelteredAPI.Characters.Internal
             IsActive = false;
             _member = null;
             _npc = null;
-            var evt = OnUnregistered;
-            if (evt != null) evt(this);
+            ModAPI.Core.SubscriberDispatch.Invoke(OnUnregistered, "CharacterUnregistered", this);
         }
 
         private static bool TrySetField(object target, string fieldName, object value)
@@ -255,13 +371,7 @@ namespace ShelteredAPI.Characters.Internal
         {
             if (effect == null) return null;
             EffectInstance existing = Get(effect.EffectId);
-            if (existing != null)
-            {
-                if (effect.StackBehavior == StackBehavior.Ignore) return existing;
-                if (effect.StackBehavior == StackBehavior.Refresh) { existing.TimeRemaining = duration; existing.StackCount++; return existing; }
-                if (effect.StackBehavior == StackBehavior.Extend) { existing.TimeRemaining += duration; existing.StackCount++; return existing; }
-                if (effect.StackBehavior == StackBehavior.Replace) Remove(existing);
-            }
+            if (existing != null && effect.StackBehavior == StackBehavior.Ignore) return existing;
 
             EffectInstance instance = new EffectInstance
             {
@@ -273,6 +383,28 @@ namespace ShelteredAPI.Characters.Internal
             };
             EffectContext ctx = new EffectContext(_character, instance);
             if (!effect.CanApply(ctx)) return null;
+            if (existing != null)
+            {
+                if (effect.StackBehavior == StackBehavior.Refresh)
+                {
+                    existing.Duration = instance.Duration;
+                    existing.TimeRemaining = instance.TimeRemaining;
+                    existing.StackCount++;
+                    return existing;
+                }
+                if (effect.StackBehavior == StackBehavior.Extend)
+                {
+                    if (existing.IsPermanent || instance.IsPermanent)
+                    {
+                        existing.Duration = 0f;
+                        existing.TimeRemaining = 0f;
+                    }
+                    else existing.TimeRemaining += instance.Duration;
+                    existing.StackCount++;
+                    return existing;
+                }
+                if (effect.StackBehavior == StackBehavior.Replace) Remove(existing);
+            }
             _effects.Add(instance);
             effect.OnApplied(ctx);
             SyncLiveCharacter();
@@ -329,10 +461,12 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Tick(float dt)
         {
-            for (int i = _effects.Count - 1; i >= 0; i--)
+            EffectInstance[] pending = _effects.ToArray();
+            for (int i = pending.Length - 1; i >= 0; i--)
             {
-                EffectInstance e = _effects[i];
-                if (e == null || e.Effect == null) { _effects.RemoveAt(i); continue; }
+                EffectInstance e = pending[i];
+                if (!_effects.Contains(e)) continue;
+                if (e == null || e.Effect == null) { _effects.Remove(e); continue; }
                 if (!e.IsPermanent) e.TimeRemaining -= dt;
                 EffectContext ctx = new EffectContext(_character, e);
                 e.Effect.OnTick(ctx, dt);
@@ -441,7 +575,7 @@ namespace ShelteredAPI.Characters.Internal
 
         public float GetModifier(string attributeName)
         {
-            return _mods.Where(x => !x.IsMultiplicative && string.Equals(x.AttributeName, attributeName, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
+            return _mods.Where(x => !x.IsExpired && !x.IsMultiplicative && string.Equals(x.AttributeName, attributeName, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
         }
 
         internal float ApplyTo(string attributeName, float baseValue)
@@ -477,11 +611,13 @@ namespace ShelteredAPI.Characters.Internal
 
         internal void Tick(float dt)
         {
-            for (int i = _mods.Count - 1; i >= 0; i--)
+            AttributeModifier[] pending = _mods.ToArray();
+            for (int i = pending.Length - 1; i >= 0; i--)
             {
-                AttributeModifier m = _mods[i];
+                AttributeModifier m = pending[i];
+                if (!_mods.Contains(m)) continue;
                 if (!m.IsPermanent) m.TimeRemaining -= dt;
-                if (m.IsExpired) { _mods.RemoveAt(i); Raise(m.AttributeName); }
+                if (m.IsExpired) Remove(m);
             }
         }
 
@@ -587,6 +723,10 @@ namespace ShelteredAPI.Characters.Internal
             d.UniqueId = member.GetId();
             d.FirstName = member.firstName;
             d.LastName = member.lastName;
+            d.IsMale = member.isMale;
+            d.MeshId = member.meshId;
+            d.SkinColor = member.skinColor;
+            d.HairColor = member.hairColor;
             d.Health = member.health;
             d.MaxHealth = member.maxHealth;
             d.StrengthLevel = member.BaseStats.Strength.Level;
@@ -614,6 +754,10 @@ namespace ShelteredAPI.Characters.Internal
             d.UniqueId = npc.npcId;
             d.FirstName = npc.firstName;
             d.LastName = npc.lastName;
+            d.IsMale = npc.isMale;
+            d.MeshId = npc.meshId;
+            d.SkinColor = npc.skinColor;
+            d.HairColor = npc.hairColor;
             d.Health = npc.health;
             d.MaxHealth = npc.maxHealth;
             d.StrengthLevel = npc.BaseStats.Strength.Level;

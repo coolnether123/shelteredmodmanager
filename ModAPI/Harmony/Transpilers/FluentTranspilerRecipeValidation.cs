@@ -27,6 +27,12 @@ namespace ModAPI.Harmony
                 return false;
             }
 
+            if (method.ContainsGenericParameters)
+            {
+                Warn(transpiler, $"{caller} expected a closed method {FluentTranspilerFormatting.FormatMethod(method)}.");
+                return false;
+            }
+
             return true;
         }
 
@@ -466,7 +472,7 @@ namespace ModAPI.Harmony
             var inputs = new List<Type>();
             if (!method.IsStatic)
             {
-                inputs.Add(method.DeclaringType);
+                inputs.Add(method.DeclaringType.IsValueType ? method.DeclaringType.MakeByRefType() : method.DeclaringType);
             }
 
             inputs.AddRange(method.GetParameters().Select(parameter => parameter.ParameterType));
@@ -478,7 +484,7 @@ namespace ModAPI.Harmony
             var inputs = new List<Type>();
             if (!method.IsStatic)
             {
-                inputs.Add(method.DeclaringType);
+                inputs.Add(method.DeclaringType.IsValueType ? method.DeclaringType.MakeByRefType() : method.DeclaringType);
             }
 
             inputs.AddRange(method.GetParameters().Select(parameter => parameter.ParameterType));
@@ -545,7 +551,7 @@ namespace ModAPI.Harmony
                 type = Enum.GetUnderlyingType(type);
             }
 
-            return type == typeof(int)
+            return type == typeof(bool) || type == typeof(int)
                 || type == typeof(uint)
                 || type == typeof(short)
                 || type == typeof(ushort)
@@ -707,6 +713,7 @@ namespace ModAPI.Harmony
         {
             return method != null &&
                    method.IsStatic &&
+                   !method.ContainsGenericParameters &&
                    method.ReturnType != typeof(void) &&
                    method.GetParameters().Length == 0;
         }
@@ -719,6 +726,7 @@ namespace ModAPI.Harmony
             }
 
             return method.IsStatic &&
+                   !method.ContainsGenericParameters &&
                    method.ReturnType == valueType &&
                    method.GetParameters().Length == 1 &&
                    method.GetParameters()[0].ParameterType == valueType;

@@ -63,6 +63,8 @@ namespace ShelteredAPI.Adapters
                         count += fm.Rations;
                     else if (itemType == ItemManager.ItemType.Meat)
                         count += fm.Meat;
+                    else if (itemType == ItemManager.ItemType.DesperateMeat)
+                        count += fm.DesperateMeat;
                 }
             }
             catch { }
