@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using UnityEngine;
 
 namespace ModAPI.Core
 {
@@ -174,7 +173,7 @@ namespace ModAPI.Core
             banner.AppendLine(string.Format("Build Target:    {0}", buildTarget));
             banner.AppendLine(string.Format("Game Version:    {0}", gameVersion));
             banner.AppendLine(string.Format("Unity Version:   {0}", unityVersion));
-            banner.AppendLine(string.Format("Data Path:       {0}", Application.dataPath));
+            banner.AppendLine(string.Format("Data Path:       {0}", RuntimeCompat.DataPath));
             banner.AppendLine(string.Format("Log Level:       {0}", _minLevel));
             if (_minLevel == LogLevel.Debug)
                 banner.AppendLine(string.Format("Debug Scope:     {0}", _debugLogScope));

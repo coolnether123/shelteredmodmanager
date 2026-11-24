@@ -34,6 +34,11 @@ namespace ModAPI.Core
             }
         }
 
+        internal static string DataPath
+        {
+            get { return TryGetAppStringProperty("dataPath") ?? "unavailable"; }
+        }
+
         public static string ModApiVersion
         {
             get

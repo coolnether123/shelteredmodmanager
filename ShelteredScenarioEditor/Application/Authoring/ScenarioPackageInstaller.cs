@@ -1,9 +1,9 @@
 using ShelteredScenarioEditor.Application.Runtime;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using ModAPI.Core;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Public;
 
 namespace ShelteredScenarioEditor.Application.Authoring
 {
@@ -20,6 +20,7 @@ namespace ShelteredScenarioEditor.Application.Authoring
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly IScenarioDefinitionCatalogService _catalog;
         private readonly string _installScenariosRoot;
+        private readonly ScenarioPackageContents _packageContents;
 
         public ScenarioPackageInstaller(IScenarioDefinitionSerializer serializer, IScenarioDefinitionCatalogService catalog)
             : this(serializer, catalog, ModApiPaths.ScenarioPackagesRoot)
@@ -29,22 +30,47 @@ namespace ShelteredScenarioEditor.Application.Authoring
         internal ScenarioPackageInstaller(
             IScenarioDefinitionSerializer serializer,
             IScenarioDefinitionCatalogService catalog,
-            string installScenariosRoot)
+            string installScenariosRoot,
+            Action<ScenarioPackageStep, string> beforePackageStep = null)
         {
             if (serializer == null) throw new ArgumentNullException("serializer");
             if (string.IsNullOrEmpty(installScenariosRoot)) throw new ArgumentException("A scenario package root is required.", "installScenariosRoot");
             _serializer = serializer;
             _catalog = catalog;
-            _installScenariosRoot = Path.GetFullPath(installScenariosRoot);
+            _installScenariosRoot = Path.GetFullPath(installScenariosRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            _packageContents = new ScenarioPackageContents(serializer, new ScenarioEditorDefinitionValidator(), beforePackageStep);
         }
 
         public ScenarioPackageOperationResult Install(string exportRoot, bool overwriteConfirmed)
         {
+            try
+            {
+                ScenarioPackageOperationResult result = ShelteredScenarioPackages.RunLocked(
+                    delegate { return InstallPackage(exportRoot, overwriteConfirmed); });
+                if (result.Success && _catalog != null)
+                {
+                    try { _catalog.RefreshDefinitionCatalog(); }
+                    catch (Exception ex) { MMLog.WriteWarning("[Scenario package catalog refresh] " + ex.Message); }
+                }
+                return result;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[Scenario package install] " + ex.Message);
+                return Failed("Could not complete the scenario install. Check that the package files are available and try again.");
+            }
+        }
+
+        private ScenarioPackageOperationResult InstallPackage(string exportRoot, bool overwriteConfirmed)
+        {
             string sourceScenario = !string.IsNullOrEmpty(exportRoot) ? Path.Combine(exportRoot, ScenarioEditorDefinitionSerializer.DefaultFileName) : null;
             if (string.IsNullOrEmpty(sourceScenario) || !File.Exists(sourceScenario)) return Failed("Export scenario.xml was not found.");
             ScenarioDefinition definition = _serializer.Load(sourceScenario);
-            string safeId = BuildSafeFolderName(definition.Id);
+            if (definition == null || string.IsNullOrEmpty(definition.Id))
+                return Failed("The export has no scenario identity.");
+            string safeId = ScenarioPackageContents.SafeFolderName(definition.Id);
             string destination = Path.Combine(_installScenariosRoot, safeId);
+            ShelteredScenarioPackages.Recover(destination);
             string existingScenario = Path.Combine(destination, ScenarioEditorDefinitionSerializer.DefaultFileName);
             if (File.Exists(existingScenario) && !FilesEqual(sourceScenario, existingScenario) && !overwriteConfirmed)
             {
@@ -56,8 +82,7 @@ namespace ShelteredScenarioEditor.Application.Authoring
                 };
             }
 
-            CopyDirectory(exportRoot, destination);
-            if (_catalog != null) _catalog.RefreshDefinitionCatalog();
+            _packageContents.Replace(destination, definition.Id, delegate { return ScenarioPackageContents.ReadDirectory(exportRoot); });
             return new ScenarioPackageOperationResult
             {
                 Success = true,
@@ -68,6 +93,11 @@ namespace ShelteredScenarioEditor.Application.Authoring
 
         public ScenarioPackageOperationResult Uninstall(string expectedScenarioId, string installPath)
         {
+            return ShelteredScenarioPackages.RunLocked(delegate { return UninstallPackage(expectedScenarioId, installPath); });
+        }
+
+        private ScenarioPackageOperationResult UninstallPackage(string expectedScenarioId, string installPath)
+        {
             if (string.IsNullOrEmpty(expectedScenarioId) || string.IsNullOrEmpty(installPath))
                 return Failed("Choose an installed scenario package to uninstall.", installPath);
 
@@ -76,10 +106,16 @@ namespace ShelteredScenarioEditor.Application.Authoring
             catch (Exception ex) { return Failed("Uninstall refused an invalid package path: " + ex.Message, installPath); }
 
             if (!string.Equals(Path.GetDirectoryName(normalizedInstallPath), _installScenariosRoot, StringComparison.OrdinalIgnoreCase)
-                || !Directory.Exists(normalizedInstallPath))
+                || ShelteredScenarioPackages.IsWorkDirectory(normalizedInstallPath))
             {
                 return Failed("Uninstall refused a package outside the user scenario package root.", normalizedInstallPath);
             }
+
+            try { ShelteredScenarioPackages.Recover(normalizedInstallPath); }
+            catch (IOException) { return Failed("Uninstall could not finish recovering the installed package. Try again after closing files in use.", installPath); }
+            catch (UnauthorizedAccessException) { return Failed("Uninstall could not access the installed package.", installPath); }
+            if (!Directory.Exists(normalizedInstallPath))
+                return Failed("The installed package was not found.", installPath);
 
             string installedScenarioPath = Path.Combine(normalizedInstallPath, ScenarioEditorDefinitionSerializer.DefaultFileName);
             ScenarioDefinition installedDefinition;
@@ -115,29 +151,6 @@ namespace ShelteredScenarioEditor.Application.Authoring
             }
         }
 
-        private static void CopyDirectory(string source, string destination)
-        {
-            if (!Directory.Exists(destination)) Directory.CreateDirectory(destination);
-            string sourceRoot = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar);
-            string destinationRoot = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar);
-            string[] existing = Directory.GetFiles(destinationRoot, "*", SearchOption.AllDirectories);
-            for (int i = 0; i < existing.Length; i++)
-            {
-                string relative = existing[i].Substring(destinationRoot.Length + 1);
-                string correspondingSource = ScenarioPackagePlan.ResolveContainedPath(sourceRoot, relative);
-                if (string.IsNullOrEmpty(correspondingSource) || !File.Exists(correspondingSource)) File.Delete(existing[i]);
-            }
-            string[] files = Directory.GetFiles(source, "*", SearchOption.AllDirectories);
-            for (int i = 0; i < files.Length; i++)
-            {
-                string relative = files[i].Substring(sourceRoot.Length + 1);
-                string target = ScenarioPackagePlan.ResolveContainedPath(destinationRoot, relative);
-                string directory = Path.GetDirectoryName(target);
-                if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-                File.Copy(files[i], target, true);
-            }
-        }
-
         private static bool FilesEqual(string left, string right)
         {
             byte[] a = File.ReadAllBytes(left); byte[] b = File.ReadAllBytes(right);
@@ -146,15 +159,6 @@ namespace ShelteredScenarioEditor.Application.Authoring
             return true;
         }
 
-        private static string BuildSafeFolderName(string value)
-        {
-            string raw = string.IsNullOrEmpty(value) ? "scenario" : value.Trim();
-            char[] invalid = Path.GetInvalidFileNameChars(); List<char> result = new List<char>();
-            for (int i = 0; i < raw.Length; i++) result.Add(IsInvalid(raw[i], invalid) || char.IsWhiteSpace(raw[i]) ? '_' : raw[i]);
-            string safe = new string(result.ToArray()).Trim('_', '.'); return string.IsNullOrEmpty(safe) ? "scenario" : safe;
-        }
-
-        private static bool IsInvalid(char value, char[] invalid) { for (int i = 0; i < invalid.Length; i++) if (invalid[i] == value) return true; return false; }
         private static ScenarioPackageOperationResult Failed(string message) { return Failed(message, null); }
         private static ScenarioPackageOperationResult Failed(string message, string path)
         {

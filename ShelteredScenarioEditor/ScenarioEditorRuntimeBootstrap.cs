@@ -3,6 +3,7 @@ using ModAPI.Harmony;
 using ShelteredScenarioEditor.Shared;
 using ShelteredScenarioEditor.Composition;
 using ShelteredScenarioEditor.Infrastructure.Unity;
+using ShelteredScenarioEditor.Application.Authoring;
 
 namespace ShelteredScenarioEditor
 {
@@ -37,6 +38,7 @@ namespace ShelteredScenarioEditor
                 enabled = Enabled;
                 if (enabled)
                 {
+                    ScenarioPublishExportService.RecoverExports();
                     ScenarioCompositionRoot.EnsureAuthoringInitialized();
                     ScenarioAuthoringRuntimeDriver.EnsureCreated();
                     HarmonyBootstrap.ApplyDeferredPatchGroup(
