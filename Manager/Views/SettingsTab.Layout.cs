@@ -123,13 +123,23 @@ namespace Manager.Views
             _enableNexusCheckBox.Location = new Point(x + 10, y);
             y += 32;
 
+            if (!_nexusOAuthRegistrationAvailable)
+            {
+                _nexusApiKeyPageLink.Location = new Point(x + 10, y);
+                _nexusApiKeyTextBox.Location = new Point(x + 10, y + 24);
+                y += 54;
+            }
+
             _nexusOAuthSignInButton.Location = new Point(x + 10, y);
             _nexusOAuthSignOutButton.Location = new Point(x + 170, y);
             y += 34;
 
-            _nexusOAuthStatusLabel.Location = new Point(x + 10, y);
-            _nexusOAuthStatusLabel.Width = summaryWidth;
-            y += 42;
+            if (_nexusOAuthRegistrationAvailable)
+            {
+                _nexusOAuthStatusLabel.Location = new Point(x + 10, y);
+                _nexusOAuthStatusLabel.Width = summaryWidth;
+                y += 42;
+            }
 
             _nexusAccountSummaryLabel.Location = new Point(x + 10, y);
             _nexusAccountSummaryLabel.Width = summaryWidth;

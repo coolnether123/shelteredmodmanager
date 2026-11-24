@@ -75,6 +75,8 @@ namespace Manager.Core.Services
             _v3Client = new NexusV3RestClient(_credentialProvider, _rateLimits, null);
         }
 
+        internal bool HasConfiguredCredential { get { return _credentialProvider.HasConfiguredCredential; } }
+
         public void ClearCachedResponses()
         {
             lock (_cacheLock)
@@ -406,6 +408,12 @@ namespace Manager.Core.Services
             if (!string.IsNullOrEmpty(errorMessage) || data == null)
                 return NexusAccountStatus.CreateUnavailable(errorMessage);
 
+            if (ReadInt(data, "user_id") <= 0)
+            {
+                errorMessage = "Nexus did not return a valid account.";
+                return NexusAccountStatus.CreateUnavailable(errorMessage);
+            }
+
             var status = new NexusAccountStatus();
             status.IsConfigured = true;
             status.IsConnected = true;
@@ -421,7 +429,7 @@ namespace Manager.Core.Services
                 status.MembershipRoles = new[] { "member" };
 
             status.Summary = "Connected to Nexus as " +
-                (!string.IsNullOrEmpty(status.UserName) ? status.UserName : "user " + status.UserId.ToString()) +
+                (!string.IsNullOrEmpty(status.UserName) ? status.UserName : "your account") +
                 " (" + status.GetMembershipLabel() + ").";
 
             if (isPremium)
@@ -490,6 +498,7 @@ namespace Manager.Core.Services
             errorMessage = null;
             NexusRateLimitTracker.Lease rateLimitLease = null;
             bool requestSubmitted = false;
+            bool usesApiKey = false;
             try
             {
                 string url = BuildLegacyUrl(relativePath, query);
@@ -511,6 +520,7 @@ namespace Manager.Core.Services
                 if (!_rateLimits.TryAcquire(credentialScope, out rateLimitLease, out errorMessage))
                     return null;
 
+                usesApiKey = credential != null && !string.IsNullOrEmpty(credential.ApiKey);
                 NexusRequestHeaders.ApplyJsonHeaders(request, credential);
 
                 requestSubmitted = true;
@@ -552,13 +562,17 @@ namespace Manager.Core.Services
                         if (response.StatusCode == HttpStatusCode.Unauthorized)
                         {
                             _credentialProvider.InvalidateCredential();
-                            errorMessage = "Your Nexus sign-in expired. Sign in again.";
+                            errorMessage = usesApiKey
+                                ? "Nexus rejected this API key. It may be invalid, expired, or revoked. Copy a current key from Nexus and try again."
+                                : "Your Nexus sign-in expired. Sign in again.";
                             return null;
                         }
 
                         if (response.StatusCode == HttpStatusCode.Forbidden)
                         {
-                            errorMessage = "Nexus denied this request for the current account, file, or app.";
+                            errorMessage = usesApiKey && relativePath == "/users/validate"
+                                ? "Nexus denied this API key. Check that you copied your personal key and that it is still active."
+                                : "Nexus denied this request for the current account, file, or app.";
                             return null;
                         }
 

@@ -1725,7 +1725,7 @@ namespace Manager.Views
             return (DateTime.UtcNow - _lastNexusRemoteSyncUtc) < NexusSyncCooldown;
         }
 
-        private static string BuildNexusCacheSignature(AppSettings settings)
+        private string BuildNexusCacheSignature(AppSettings settings)
         {
             if (settings == null)
                 return string.Empty;
@@ -1734,7 +1734,7 @@ namespace Manager.Views
                 (settings.NexusGameDomain ?? string.Empty).Trim().ToLowerInvariant() + "|" +
                 settings.IncludeNexusPrereleaseFiles.ToString() + "|" +
                 (settings.ModsPath ?? string.Empty).Trim().ToLowerInvariant() + "|" +
-                settings.HasNexusOAuthSession.ToString();
+                (_nexusService != null && _nexusService.HasConfiguredCredential).ToString();
         }
 
         private static int CountModsWithUpdates(List<ModItem> mods)

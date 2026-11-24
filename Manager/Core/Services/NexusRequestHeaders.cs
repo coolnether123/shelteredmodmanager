@@ -10,6 +10,8 @@ namespace Manager.Core.Services
             if (request == null)
                 return;
 
+            // Custom credential headers must never be forwarded to a redirect target.
+            request.AllowAutoRedirect = false;
             request.Accept = "application/json";
             request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
             ApplyApplicationHeaders(request);
@@ -19,6 +21,8 @@ namespace Manager.Core.Services
 
             if (!string.IsNullOrEmpty(credential.BearerToken))
                 request.Headers["Authorization"] = "Bearer " + credential.BearerToken;
+            else if (!string.IsNullOrEmpty(credential.ApiKey))
+                request.Headers["apikey"] = credential.ApiKey;
         }
 
         internal static void ApplyApplicationHeaders(HttpWebRequest request)

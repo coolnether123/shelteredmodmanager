@@ -194,6 +194,10 @@ namespace ManagerUpdater
                 Path.Combine(options.CurrentDirectory, @"bin\mod_manager.ini"),
                 log);
             CopyFileIfPresent(
+                Path.Combine(options.BackupDirectory, @"bin\nexus_api_key.dpapi"),
+                Path.Combine(options.CurrentDirectory, @"bin\nexus_api_key.dpapi"),
+                log);
+            CopyFileIfPresent(
                 Path.Combine(options.BackupDirectory, @"bin\manager_options.json"),
                 Path.Combine(options.CurrentDirectory, @"bin\manager_options.json"),
                 log);

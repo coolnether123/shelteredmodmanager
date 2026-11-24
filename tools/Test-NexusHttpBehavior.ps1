@@ -12,6 +12,9 @@ $output = Join-Path ([IO.Path]::GetTempPath()) ("NexusHttpBehavior-" + [Guid]::N
 $sources = @(
     'Manager\Core\AppVersionInfo.cs',
     'Manager\Core\Services\NexusRequestCredential.cs',
+    'Manager\Core\Services\NexusApiKeyService.cs',
+    'Manager\Core\Services\AtomicFile.cs',
+    'Manager\Core\Security\DpapiSecretProtector.cs',
     'Manager\Core\Services\NexusRequestFailurePolicy.cs',
     'Manager\Core\Services\NexusRequestHeaders.cs',
     'Manager\Core\Services\NexusRateLimitTracker.cs',
@@ -32,7 +35,7 @@ $sources = @(
 ) | ForEach-Object { Join-Path $RepoRoot $_ }
 
 try {
-    & $compiler /nologo /nowarn:0649 /target:exe /out:$output /r:System.dll /r:System.Core.dll /r:System.Web.Extensions.dll $sources
+    & $compiler /nologo /nowarn:0649 /target:exe /out:$output /r:System.dll /r:System.Core.dll /r:System.Web.Extensions.dll /r:System.Security.dll $sources
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $output
     exit $LASTEXITCODE

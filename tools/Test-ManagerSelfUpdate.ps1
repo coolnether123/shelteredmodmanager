@@ -223,6 +223,7 @@ public static class FakeHealthyManager
     New-TestTree -Root $staged
     Set-Content -LiteralPath (Join-Path $current 'old-stale.dll') -Value 'old' -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $staged 'new-version.dll') -Value 'new' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $current 'bin\nexus_api_key.dpapi') -Value 'synthetic-protected-key' -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $current 'bin\mod_manager.ini') -Value 'private-key-data' -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $current 'bin\manager_options.json') -Value '{"dark":true}' -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $current 'mod_manager.log') -Value 'existing-log' -Encoding ASCII
@@ -244,6 +245,7 @@ public static class FakeHealthyManager
     if ($exitCode -ne 0) { throw "Successful update returned exit code $exitCode." }
     if (-not (Test-Path -LiteralPath (Join-Path $current 'new-version.dll'))) { throw 'Staged payload was not promoted.' }
     if (Test-Path -LiteralPath (Join-Path $current 'old-stale.dll')) { throw 'Stale binaries survived the directory replacement.' }
+    if ((Get-Content -LiteralPath (Join-Path $current 'bin\nexus_api_key.dpapi') -Raw).Trim() -ne 'synthetic-protected-key') { throw 'Protected Nexus API key was not preserved.' }
     if ((Get-Content -LiteralPath (Join-Path $current 'bin\mod_manager.ini') -Raw).Trim() -ne 'private-key-data') { throw 'INI settings were not preserved.' }
     if ((Get-Content -LiteralPath (Join-Path $current 'bin\manager_options.json') -Raw).Trim() -ne '{"dark":true}') { throw 'Manager options were not preserved.' }
     if ((Get-Content -LiteralPath (Join-Path $current 'mod_manager.log') -Raw).Trim() -ne 'existing-log') { throw 'Manager log was not preserved.' }

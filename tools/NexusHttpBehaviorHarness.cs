@@ -25,6 +25,7 @@ namespace Manager.Core.Services
             TestPublishingDisabledAtServiceBoundary();
             TestV3ApplicationHeaders();
             TestLegacyV1OAuthAuthentication();
+            TestApiKeySignIn();
             TestUnauthorizedOAuthInvalidation();
             TestOAuthAuthorizationCodeExchange();
             TestOAuthRateLimitHandling();
@@ -37,6 +38,61 @@ namespace Manager.Core.Services
             }
 
             Console.WriteLine("Nexus HTTP behavior checks passed.");
+        }
+
+        private static void TestApiKeySignIn()
+        {
+            string path = Path.Combine(Path.GetTempPath(), "smm-test-key-" + Guid.NewGuid().ToString("N"));
+            const string sample = "synthetic-personal-key";
+            var tracker = new NexusRateLimitTracker();
+            try
+            {
+                using (var server = new ScriptedServer(Response.Unauthorized(), Response.LegacyUserOk(),
+                    Response.DownloadLink(), Response.DownloadLink(), Response.RateLimited(0, 50, DateTime.UtcNow)))
+                {
+                    var service = new NexusApiKeyService(path, tracker, server.Url + "v1");
+                    string error;
+                    NexusAccountStatus rejected = service.SignIn("synthetic-invalid", out error);
+                    Assert(!rejected.IsConnected && error.IndexOf("invalid", StringComparison.OrdinalIgnoreCase) >= 0
+                        && !File.Exists(path), "An invalid key must produce a clear rejection and never be saved.");
+                    NexusAccountStatus connected = service.SignIn(" " + sample + " ", out error);
+                    Assert(connected.IsConnected && connected.HasRole("premium") && string.IsNullOrEmpty(error),
+                        "Valid personal key did not connect.");
+                    Assert(server.Header(1, ":request-line") == "GET /v1/users/validate HTTP/1.1",
+                        "Key sign-in must validate through Nexus v1.");
+                    Assert(server.Header(1, "apikey") == sample && string.IsNullOrEmpty(server.Header(1, "Authorization")),
+                        "Validation must send only API-key authentication.");
+                    string persisted = File.ReadAllText(path);
+                    Assert(!persisted.Contains(sample), "The saved API key must be protected.");
+
+                    var restored = new NexusApiKeyService(path, tracker, server.Url + "v1");
+                    Assert(restored.GetCredential(out error).ApiKey == sample, "DPAPI should restore the key for the current Windows user.");
+                    var nexus = new NexusModsService(restored, tracker, server.Url + "v1");
+                    Assert(nexus.GetDownloadUrl("sheltered", 1, 2, out error) == "https://example.invalid/update.zip"
+                        && server.Header(2, ":request-line") == "GET /v1/games/sheltered/mods/1/files/2/download_link HTTP/1.1",
+                        "Premium direct downloads must use the saved API key without website authorization.");
+                    Assert(nexus.GetDownloadUrlWithAuthorization("sheltered", 1, 2, "synthetic-nxm", 123, out error)
+                        == "https://example.invalid/update.zip" && server.Header(3, "apikey") == sample
+                        && server.Header(3, ":request-line").Contains("key=synthetic-nxm")
+                        && server.Header(3, ":request-line").Contains("expires=123"),
+                        "Website-authorized downloads must send the NXM authorization and saved API key together.");
+                    NexusAccountStatus limited = restored.SignIn(sample, out error);
+                    Assert(!limited.IsConnected && error.IndexOf("rate limit", StringComparison.OrdinalIgnoreCase) >= 0,
+                        "Rate limiting must be explained to the player.");
+                    restored.SignIn(sample, out error);
+                    Assert(server.AcceptedCount == 5 && File.ReadAllText(path) == persisted,
+                        "A rate-limited retry should stay local and preserve the saved key.");
+
+                    restored.Clear();
+                    var cleared = new NexusApiKeyService(path, tracker, server.Url);
+                    Assert(!restored.HasConfiguredCredential && !cleared.HasConfiguredCredential && !File.Exists(path),
+                        "Clearing the API key must remove it from memory and disk.");
+                }
+            }
+            finally
+            {
+                File.Delete(path);
+            }
         }
 
         private static void TestApplicationHeaders()
@@ -506,6 +562,17 @@ namespace Manager.Core.Services
                 return new Response { StatusCode = 200, Reason = "OK", Body = "{\"data\":{\"id\":1}}", HourlyRemaining = 5, DailyRemaining = 50, DateUtc = DateTime.UtcNow };
             }
 
+            internal static Response DownloadLink()
+            {
+                return new Response
+                {
+                    StatusCode = 200,
+                    Reason = "OK",
+                    Body = "[{\"URI\":\"https://example.invalid/update.zip\"}]",
+                    DateUtc = DateTime.UtcNow
+                };
+            }
+
             internal static Response LegacyUserOk()
             {
                 return new Response
@@ -665,6 +732,7 @@ namespace Manager.Core.Services
                 string headerText = Encoding.ASCII.GetString(bytes.ToArray());
                 string[] lines = headerText.Split(new[] { "\r\n" }, StringSplitOptions.None);
                 var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                headers[":request-line"] = lines[0];
                 int contentLength = 0;
                 for (int i = 1; i < lines.Length; i++)
                 {

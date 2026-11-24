@@ -188,7 +188,7 @@ namespace Manager.Views
                 FinishInstallWithError("Nexus authorization failed: Nexus features are disabled or unavailable.", null);
                 return;
             }
-            if (!settings.HasNexusOAuthSession)
+            if (!nexusService.HasConfiguredCredential)
             {
                 FinishInstallWithError("Sign in to Nexus before installing mods directly.", null);
                 return;
@@ -568,7 +568,7 @@ namespace Manager.Views
 
         /// <summary>
         /// Enables the in-tab sign-in shortcut. Sign-in itself always runs the
-        /// shared OAuth flow owned by the main window.
+        /// shared Nexus sign-in flow owned by the main window.
         /// </summary>
         public void SetSignInAvailable(bool available)
         {
@@ -1055,8 +1055,8 @@ namespace Manager.Views
         {
             if (IsBatchBusy())
                 return;
-            // Signed-out users are routed to the shared OAuth sign-in instead of a dead end.
-            if (_settings != null && _settings.EnableNexusIntegration && !_settings.HasNexusOAuthSession)
+            // Send signed-out players to the shared Nexus sign-in controls.
+            if (_settings != null && _settings.EnableNexusIntegration && (_nexusService == null || !_nexusService.HasConfiguredCredential))
             {
                 if (_signInAvailable && SignInRequested != null)
                     SignInRequested(this, EventArgs.Empty);
@@ -1108,7 +1108,7 @@ namespace Manager.Views
                 _detailsPanel.ShowMessage("Install failed", "The mods folder is not set. Choose the game in Game setup first.");
                 return;
             }
-            if (!settings.HasNexusOAuthSession)
+            if (!nexusService.HasConfiguredCredential)
             {
                 _detailsPanel.ShowMessage("Sign in to install", "Sign in to Nexus to install mods directly.");
                 return;
@@ -1556,7 +1556,7 @@ namespace Manager.Views
                 _detailsPanel.ShowMessage("Set up the game first", "Choose the game in Game setup so SMM knows where your mods folder is.");
                 return false;
             }
-            if (!_settings.HasNexusOAuthSession)
+            if (_nexusService == null || !_nexusService.HasConfiguredCredential)
             {
                 _detailsPanel.ShowMessage("Sign in to install", "Sign in to Nexus to install mods directly.");
                 if (_signInAvailable && SignInRequested != null)
@@ -1732,7 +1732,7 @@ namespace Manager.Views
                 return;
             }
             _managerUpdateInProgress = true;
-            if (!_settings.HasNexusOAuthSession)
+            if (_nexusService == null || !_nexusService.HasConfiguredCredential)
             {
                 _managerUpdateInProgress = false;
                 BeginManualManagerUpdate(remote, replacement);
@@ -2282,8 +2282,8 @@ namespace Manager.Views
             else if (item != null && item.LocalMod != null && item.LocalMod.HasNexusReference)
                 _installSelectedButton.Text = "Reinstall from Nexus";
 
-            // Installing needs an OAuth session; offer sign-in rather than a button that fails.
-            if (canInstall && !_settings.HasNexusOAuthSession)
+            // Offer Nexus sign-in when installing requires a credential.
+            if (canInstall && (_nexusService == null || !_nexusService.HasConfiguredCredential))
             {
                 _installSelectedButton.Text = "Sign in to install";
                 _installSelectedButton.Enabled = _signInAvailable;
@@ -2318,7 +2318,7 @@ namespace Manager.Views
             {
                 title = "Not signed in, browsing only";
                 detail = _signInAvailable
-                    ? "You can browse and check for updates. Sign in with your Nexus account to install mods directly."
+                    ? "You can browse and check for updates. Sign in to install mods from Nexus."
                     : "You can browse and check for updates. Nexus sign-in is not available in this build.";
                 dot = ThemeRole.Warning;
                 action = _signInAvailable ? NexusAccountAction.SignIn : NexusAccountAction.None;

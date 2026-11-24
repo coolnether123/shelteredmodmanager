@@ -858,7 +858,7 @@ foreach ($plan in $plans.Values) {
     if ($plan.kind -eq 'manager' -and $plan.package) {
         [void]$gates.Add([pscustomobject]@{ id = 'package.shelteredmodmanager'; phase = 'packaging'; kind = 'package'; owner = $plan.id; scope = 'manager'; script = 'shelteredmodmanager/tools/New-ReleasePackages.ps1'; heavy = $false; detail = 'Rebuild Manager Release archives only after selected Manager gates pass.' })
         [void]$gates.Add([pscustomobject]@{ id = 'promotion.manager-rc'; phase = 'promotion'; kind = 'promotion'; owner = $plan.id; scope = 'manager-rc'; heavy = $false; detail = 'Verify RC artifacts and release provenance; no GitHub publication.' })
-        if ($Stable) { [void]$gates.Add([pscustomobject]@{ id = 'promotion.manager-stable-live'; phase = 'promotion'; kind = 'promotion'; owner = $plan.id; scope = 'manager-stable-live'; heavy = $false; detail = 'Requires issued Nexus client ID/slug and real-account OAuth/download/rate-limit evidence; publication is intentionally not automated.' }) }
+        if ($Stable) { [void]$gates.Add([pscustomobject]@{ id = 'promotion.manager-stable-live'; phase = 'promotion'; kind = 'promotion'; owner = $plan.id; scope = 'manager-stable-live'; heavy = $false; detail = 'Requires real-account API-key sign-in, download, update, and rate-limit evidence; publication is intentionally not automated.' }) }
     }
 }
 if ($modPackageOwners.Count -gt 0) {
@@ -909,7 +909,7 @@ $report = [ordered]@{
     reusedScopes = $reused.ToArray()
     execution = $execution.ToArray()
     succeeded = -not $executionBlocked
-    policy = [ordered]@{ unrelatedStateHeavyMatrices = 'not selected'; manualClicks = 'not used; harness routes are completion-backed'; publication = 'never performed by this tool'; stableOAuth = 'external live gate' }
+    policy = [ordered]@{ unrelatedStateHeavyMatrices = 'not selected'; manualClicks = 'not used; harness routes are completion-backed'; publication = 'never performed by this tool'; stableNexus = 'external live gate' }
 }
 $json = $report | ConvertTo-Json -Depth 12
 if ($OutputPath) { Set-Content -LiteralPath $OutputPath -Value $json -Encoding UTF8 }

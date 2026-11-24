@@ -52,6 +52,8 @@ namespace Manager
         private LoadOrderService _orderService;
         private NexusModsService _nexusService;
         private NexusOAuthService _nexusOAuthService;
+        private NexusApiKeyService _nexusApiKeyService;
+        private readonly NexusRateLimitTracker _nexusRateLimits = new NexusRateLimitTracker();
 
         // State
         private AppSettings _settings;
@@ -213,8 +215,7 @@ namespace Manager
             ApplyInstalledApiVersions(_settings, installedApiVersions);
 
             _discoveryService = new ModDiscoveryService(installedApiVersions);
-            _nexusOAuthService = new NexusOAuthService(_settingsService, _settings);
-            _nexusService = new NexusModsService(_nexusOAuthService);
+            RecreateNexusService();
         }
 
         private static Dictionary<string, string> DetectInstalledApiVersions(AppSettings settings)
@@ -251,7 +252,12 @@ namespace Manager
                 _nexusOAuthService = new NexusOAuthService(_settingsService, _settings);
             else
                 _nexusOAuthService.UpdateSettings(_settings);
-            _nexusService = new NexusModsService(_nexusOAuthService);
+            if (_nexusApiKeyService == null)
+                _nexusApiKeyService = new NexusApiKeyService(_settingsService.NexusCredentialPath, _nexusRateLimits, null);
+            INexusCredentialProvider credentials = _nexusOAuthService.IsRegistrationAvailable
+                ? (INexusCredentialProvider)_nexusOAuthService : _nexusApiKeyService;
+            _nexusService = new NexusModsService(credentials, _nexusRateLimits, null);
+            _nexusAccountRequestToken++;
         }
 
         private void ApplyNexusAccountStatus(NexusAccountStatus status)
@@ -278,7 +284,7 @@ namespace Manager
                 return;
             }
 
-            if (!_settings.HasNexusOAuthSession)
+            if (_nexusService != null && !_nexusService.HasConfiguredCredential)
             {
                 ApplyNexusAccountStatus(NexusAccountStatus.CreateNotConfigured());
                 return;
@@ -679,6 +685,7 @@ namespace Manager
             _settingsTab.ResetWindowRequested += SettingsTab_ResetWindowRequested;
             _settingsTab.NexusOAuthSignInRequested += SettingsTab_NexusOAuthSignInRequested;
             _settingsTab.NexusOAuthSignOutRequested += SettingsTab_NexusOAuthSignOutRequested;
+            _settingsTab.NexusApiKeySubmitted += SettingsTab_NexusApiKeySubmitted;
             _settingsService.SettingsChanged += SettingsService_SettingsChanged;
 
             // Tab change
@@ -708,8 +715,14 @@ namespace Manager
                 _nexusTab.ShowUpdates();
             };
 
-            // The Nexus tab reuses the Settings OAuth flow; it never handles credentials itself.
-            _nexusTab.SignInRequested += delegate { SettingsTab_NexusOAuthSignInRequested(); };
+            // The Nexus tab sends players to Settings for personal API-key login.
+            _nexusTab.SignInRequested += delegate
+            {
+                if (_nexusOAuthService.IsRegistrationAvailable)
+                    SettingsTab_NexusOAuthSignInRequested();
+                else
+                    _tabControl.SelectedTab = _settingsPage;
+            };
             _nexusTab.OpenSettingsRequested += delegate { _tabControl.SelectedTab = _settingsPage; };
             _nexusTab.AccountRefreshRequested += delegate { RefreshNexusAccountStatusAsync(true); };
             this.HandleCreated += delegate { ManagerTheme.ApplyTitleBar(this); };
@@ -767,7 +780,7 @@ namespace Manager
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
-            _nexusTab.SetSignInAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
+            _settingsTab.SetNexusApiKeyStored(_nexusApiKeyService.HasConfiguredCredential);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             ApplyDeveloperMode();
@@ -2163,7 +2176,7 @@ namespace Manager
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
-            _nexusTab.SetSignInAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
+            _settingsTab.SetNexusApiKeyStored(_nexusApiKeyService.HasConfiguredCredential);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
             ApplyPublishTabVisibility();
             ApplyDeveloperMode();
@@ -2218,13 +2231,7 @@ namespace Manager
                     {
                         if (signedIn)
                         {
-                            RecreateNexusService();
-                            _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
-                            _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
-                            _nexusUploadTab.Initialize(_nexusService, _settings);
-                            _settingsTab.Initialize(_settings);
-                            _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
-                            _nexusTab.SetSignInAvailable(_nexusOAuthService.IsRegistrationAvailable);
+                            ReloadNexusAccountControls();
                             RefreshNexusAccountStatusAsync(true);
                             _gameSetupTab.Log("Signed in to Nexus.");
                         }
@@ -2245,21 +2252,69 @@ namespace Manager
             });
         }
 
+        private void SettingsTab_NexusApiKeySubmitted(string key)
+        {
+            _settingsTab.SetNexusApiKeyBusy(true);
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                string error;
+                NexusAccountStatus status = _nexusApiKeyService.SignIn(key, out error);
+                if (IsDisposed || Disposing)
+                    return;
+
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        _settingsTab.SetNexusApiKeyBusy(false);
+                        if (status == null || !status.IsConnected)
+                        {
+                            ShowNexusKeyError(error ?? "Nexus could not verify this API key.");
+                            return;
+                        }
+
+                        ReloadNexusAccountControls();
+                        ApplyNexusAccountStatus(_settings.EnableNexusIntegration ? status : null);
+                        if (_settings.EnableNexusIntegration)
+                            _nexusTab.CheckManagerUpdateAsync(false);
+                    });
+                }
+                catch (InvalidOperationException) { }
+            });
+        }
+
+        private void ShowNexusKeyError(string message)
+        {
+            MessageBox.Show(this, message, "Nexus API key", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         private void SettingsTab_NexusOAuthSignOutRequested()
         {
             if (_nexusOAuthService == null)
                 return;
 
-            _nexusOAuthService.SignOut();
+            if (_nexusOAuthService.IsRegistrationAvailable)
+                _nexusOAuthService.SignOut();
+            else
+            {
+                try { _nexusApiKeyService.Clear(); }
+                catch (System.IO.IOException) { ShowNexusKeyError("The saved Nexus API key could not be removed."); return; }
+                catch (UnauthorizedAccessException) { ShowNexusKeyError("The saved Nexus API key could not be removed."); return; }
+            }
+            ReloadNexusAccountControls();
+            RefreshNexusAccountStatusAsync(true);
+            _gameSetupTab.Log("Signed out of Nexus.");
+        }
+
+        private void ReloadNexusAccountControls()
+        {
             RecreateNexusService();
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService.IsRegistrationAvailable);
-            _nexusTab.SetSignInAvailable(_nexusOAuthService.IsRegistrationAvailable);
-            RefreshNexusAccountStatusAsync(true);
-            _gameSetupTab.Log("Signed out of Nexus.");
+            _settingsTab.SetNexusApiKeyStored(_nexusApiKeyService.HasConfiguredCredential);
         }
 
         private void SettingsTab_ResetWindowRequested()

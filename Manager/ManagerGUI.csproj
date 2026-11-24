@@ -188,6 +188,7 @@
     <Compile Include="Core\Services\NexusRequestFailurePolicy.cs" />
     <Compile Include="Core\Services\NexusRateLimitTracker.cs" />
     <Compile Include="Core\Services\NexusRequestCredential.cs" />
+    <Compile Include="Core\Services\NexusApiKeyService.cs" />
     <Compile Include="Core\Services\NexusOAuthConfiguration.cs" />
     <Compile Include="Core\Services\NexusOAuthProtocol.cs" />
     <Compile Include="Core\Services\NexusLoopbackCallbackListener.cs" />

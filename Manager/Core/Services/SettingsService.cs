@@ -20,6 +20,7 @@ namespace Manager.Core.Services
         private const string ProtectedNexusOAuthRefreshTokenKey = "NexusOAuthRefreshTokenProtected";
         private const string NexusOAuthExpiresAtUtcKey = "NexusOAuthExpiresAtUtc";
         private readonly string _iniPath;
+        internal string NexusCredentialPath { get { return Path.Combine(Path.GetDirectoryName(_iniPath), "nexus_api_key.dpapi"); } }
         private FileSystemWatcher _watcher;
         private DateTime _lastRead = DateTime.MinValue;
         private bool _suppressWatcher = false;
