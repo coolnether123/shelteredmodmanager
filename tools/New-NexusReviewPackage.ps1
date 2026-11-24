@@ -35,7 +35,16 @@ if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'Dist\SMM\ManagerUpdater.e
 
 if (Test-Path -LiteralPath $stageRoot) { Remove-Item -LiteralPath $stageRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $stageRoot | Out-Null
-Copy-Item -LiteralPath (Join-Path $repoRoot 'Dist\SMM') -Destination (Join-Path $stageRoot 'SMM') -Recurse
+$distSmm = Join-Path $repoRoot 'Dist\SMM'
+$smmStage = Join-Path $stageRoot 'SMM'
+Get-ChildItem -LiteralPath $distSmm -Recurse -File |
+    Where-Object { $_.Extension -ne '.dpapi' } |
+    ForEach-Object {
+        $relative = $_.FullName.Substring($distSmm.Length).TrimStart('\')
+        $target = Join-Path $smmStage $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        Copy-Item -LiteralPath $_.FullName -Destination $target
+    }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'documentation\Nexus_Registration_Submission.md') -Destination (Join-Path $stageRoot 'NEXUS_REVIEW.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'documentation\Nexus_OAuth_Implementation.md') -Destination (Join-Path $stageRoot 'NEXUS_OAUTH.md')
 
@@ -48,7 +57,6 @@ if ($forbiddenTestArtifacts) {
     throw "Nexus review package contains test-only artifacts: $($relativePaths -join ', ')"
 }
 
-$smmStage = Join-Path $stageRoot 'SMM'
 Get-ChildItem -LiteralPath $smmStage -Recurse -File | Where-Object {
     $_.Extension -in @('.pdb', '.log', '.nxm') -or
     $_.Name -in @('mod_manager.ini', 'manager_options.json')

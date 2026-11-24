@@ -56,9 +56,12 @@ Upload the same neutral Update ZIP to Nexus as the manager update file. Put
 same-version replacement when the advertised hash differs from the installed
 package's hash, then verifies the ZIP before staging it.
 
-## Nexus limitation
+## Nexus sign-in
 
-Nexus verified SMM and issued the public OAuth client ID. Stable promotion stays blocked until real-account sign-in, token refresh and revocation, and authorized downloads are verified.
+In Manager, open **Settings**, enable Nexus features and paste your [personal Nexus API key](https://www.nexusmods.com/users/myaccount?tab=api).
+Select **Save API key** to verify it. The key is protected for your Windows user. Use **Clear key** to sign out.
+Premium members can download directly. Other members approve each download on Nexus using **Mod Manager Download**.
+These steps also apply to Manager updates from Nexus.
 
 ## Build release packages
 

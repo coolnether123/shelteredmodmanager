@@ -32,6 +32,6 @@ The menu gate still requires three consecutive matches at the configured RMSE th
 
 ## Preserve the live acceptance gate
 
-Run the documented build and API boundary checks, then verify the exact package hashes, provenance and packaged Manager OAuth-only contracts. Keep account acceptance separate from those checks.
+Run the documented build and API boundary checks, then verify the exact package hashes, provenance and packaged Manager Nexus authentication contracts. Keep account acceptance separate from those checks.
 
 A real acceptance session needs the user's participation for OAuth and a separately authorized, snapshot-backed storefront test. Public listing access proves neither account authentication nor download authorization. A stable release needs current account, storefront and save evidence against the exact candidate. Publication remains a separate decision.

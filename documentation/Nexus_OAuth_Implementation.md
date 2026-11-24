@@ -1,17 +1,17 @@
 # Nexus OAuth implementation
 
-Sheltered Mod Manager is a public Windows desktop OAuth client. It uses the authorization-code flow with PKCE and does not have a client secret.
+Version 2.0 uses personal Nexus API keys. The dormant OAuth implementation uses the authorization-code flow with PKCE for a public Windows desktop client.
 
 ## Registration values
 
 - Application: `Sheltered Mod Manager`
-- Public client ID: `sheltered_mod_manager`
+- Public client ID: pending Nexus approval
 - Callback URI: `http://127.0.0.1:52147/callback`
 - Authorization endpoint: `https://users.nexusmods.com/oauth/authorize`
 - Token endpoint: `https://users.nexusmods.com/oauth/token`
 - PKCE method: `S256`
 
-Nexus verified the manager and issued the public client ID. `NexusOAuthConfiguration.ClientId` contains it. The Manager enables sign-in when the ID is present. The desktop app does not use a client secret.
+The Manager enables OAuth when `NexusOAuthConfiguration.ClientId` contains a Nexus-issued ID. The desktop app does not use a client secret.
 
 ## Sign-in sequence
 
@@ -29,14 +29,13 @@ The listener is active only during sign-in and stops after success, an error, or
 
 ## API authentication
 
-All Nexus clients share one credential provider. It:
+With an issued client ID, all Nexus clients share the OAuth credential provider. It:
 
 - returns a usable OAuth bearer token when available;
 - refreshes shortly before expiry and persists the rotated tokens;
-- clears the session and requires reconnection when refresh fails or Nexus rejects authorization;
-- returns no credential for public metadata requests when OAuth is not configured.
+- clears the session and requires reconnection when refresh fails or Nexus rejects authorization.
 
-Nexus API requests include the application name, version, and user agent. Authenticated requests use `Authorization: Bearer`. Presigned upload requests omit Nexus authentication and application headers. Production request code has no personal-key header, constructor, override, or fallback branch.
+Nexus API requests include the application name, version, and user agent. Authenticated requests use `Authorization: Bearer`. Presigned upload requests omit Nexus authentication and application headers. With OAuth disabled, 2.0 uses the `apikey` header.
 
 The v1, v2 GraphQL, and v3 clients share credential-scoped rate-limit state inside the active Nexus service. They consume the hourly and daily remaining-request response headers, reserve known capacity across concurrent requests, and stop locally when Nexus reports an exhausted quota. OAuth token-endpoint throttling is handled separately and preserves `Retry-After` guidance rather than mixing user-service limits into API quota state.
 
