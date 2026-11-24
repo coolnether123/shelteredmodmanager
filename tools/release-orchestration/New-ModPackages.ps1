@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+. (Join-Path $scriptRoot '..\ReleaseZip.ps1')
 if ([string]::IsNullOrWhiteSpace($ShelteredRoot)) { $ShelteredRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..\..\..')) }
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) { $OutputRoot = Join-Path $ShelteredRoot 'release\2.0\artifacts\mods' }
 $stageRoot = Join-Path $OutputRoot '_stage'
@@ -131,7 +132,7 @@ foreach ($mod in $selectedMods) {
         $zipPath = Join-Path $OutputRoot $zipName
         if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
         # Zip the mod FOLDER so extraction into mods\ yields mods\<Name>\About...
-        Compress-Archive -Path $pkgStage -DestinationPath $zipPath -CompressionLevel Optimal
+        New-ReleaseZip -SourceDirectory $pkgStage -DestinationPath $zipPath -IncludeRoot
         $hash = (Get-FileHash $zipPath -Algorithm SHA256).Hash
         Set-Content ($zipPath + '.sha256') "$hash  $zipName" -Encoding ASCII
         $commit = (& git -C $repoPath rev-parse HEAD 2>$null)

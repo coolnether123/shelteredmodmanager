@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'ReleaseZip.ps1')
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrEmpty($OutputRoot)) {
     $OutputRoot = Join-Path $repoRoot 'artifacts\release-packages'
@@ -178,7 +179,7 @@ foreach ($pkg in $packages) {
     }
     $zipPath = Join-Path $OutputRoot $pkg.Name
     if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
-    Compress-Archive -Path (Join-Path $pkgStage '*') -DestinationPath $zipPath -CompressionLevel Optimal
+    New-ReleaseZip -SourceDirectory $pkgStage -DestinationPath $zipPath
     $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
     if ($pkg.Kind -eq 'update') {
         $md5 = (Get-FileHash -LiteralPath $zipPath -Algorithm MD5).Hash
