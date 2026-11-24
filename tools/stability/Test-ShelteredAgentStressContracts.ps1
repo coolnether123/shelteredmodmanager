@@ -44,7 +44,9 @@ Invoke-Contract 'dual storefront and supported-mod defaults are preserved' {
 }
 
 Invoke-Contract 'isolated stability sessions cannot auto-load a user save' {
-    Assert-Contract ($runnerSource -match "if \(\`$harnessEnabled\)[\s\S]*AutoLoadSaveSlot=0") 'Shared harness sessions do not disable manager-driven save auto-load after snapshotting and before launch.'
+    $session = [regex]::Match($runnerSource, '(?ms)^function Start-ShelteredPlatformSession \{.*?(?=^function )').Value
+    $disableAutoLoad = '\$session\.Snapshot\s*=\s*New-InstallStateSnapshot[\s\S]*?if\s*\(\$harnessEnabled\)\s*\{[^}]*Set-ShelteredManagerIniValues[^\r\n]*AutoLoadSaveSlot\s*=\s*''0''[^\r\n]*[\s\S]*?\$session\.Process\s*=\s*Start-Process'
+    Assert-Contract ($session -match $disableAutoLoad) 'Shared harness sessions do not disable manager-driven save auto-load after snapshotting and before launch.'
 }
 
 Invoke-Contract 'default stress profile deploys and enables the standalone editor' {
