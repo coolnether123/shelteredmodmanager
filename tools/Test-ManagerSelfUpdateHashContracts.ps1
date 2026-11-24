@@ -1,5 +1,6 @@
 param(
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$StageProbeRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,6 +44,67 @@ function Get-MethodBody([string]$Source, [string]$Pattern) {
     }
 
     return $Source.Substring($start, $bodyEnd - $start)
+}
+
+function Test-Staging([string]$testRoot) {
+    $install = Join-Path $testRoot 'installed\SMM'
+    New-Item -ItemType Directory -Path $install -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'Dist\SMM\Manager.exe') -Destination $install
+    Set-Content -LiteralPath (Join-Path $install 'ManagerUpdater.exe') -Value 'detached updater fixture'
+    $managerAssembly = [Reflection.Assembly]::LoadFile((Join-Path $install 'Manager.exe'))
+    $builtService = $managerAssembly.GetType('Manager.Core.Services.ManagerSelfUpdateService', $true)
+    $builtExpectation = $managerAssembly.GetType('Manager.Core.Services.ManagerUpdateArchiveHashExpectation', $true)
+    $stage = [Activator]::CreateInstance($builtService)
+    $isOffered = $builtService.GetMethod('IsSameVersionUpdateAvailable', [Reflection.BindingFlags]'Static, NonPublic')
+    $receipt = Join-Path $install 'manager-update.hashes'
+    Set-Content -LiteralPath $receipt -Encoding ASCII -Value ('sha256:' + ('a' * 64))
+
+    $package = Join-Path $testRoot 'payload\SMM'
+    Copy-Item -LiteralPath $install -Destination (New-Item -ItemType Directory (Split-Path -Parent $package)).FullName -Recurse
+    Remove-Item -LiteralPath (Join-Path $package 'manager-update.hashes')
+    foreach ($relative in @('ModAPI.dll', 'bin\ShelteredAPI.dll', 'bin\Doorstop.dll', 'bin\0Harmony.dll',
+        'Doorstop\x86\winhttp.dll', 'Doorstop\x64\winhttp.dll')) {
+        $file = Join-Path $package $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
+        Set-Content -LiteralPath $file -Value 'required package file fixture'
+    }
+    $candidate = Join-Path $testRoot 'candidate.zip'
+    Compress-Archive -LiteralPath $package -DestinationPath $candidate
+    $candidateHash = Get-HashHex $candidate 'SHA256'
+    $candidateHashes = [Activator]::CreateInstance($builtExpectation)
+    $candidateHashes.ReleaseMetadata = "sha256:$candidateHash"
+
+    Assert-True ([bool]$isOffered.Invoke($null, @('2.0.0', $candidateHashes))) 'Offer a same-version ZIP with a different advertised hash.'
+    $stageError = $null
+    $result = $stage.StageLocalPackage($candidate, '2.0.0', $candidateHashes, [ref]$stageError)
+    Assert-True ($null -ne $result) "A verified same-version update must stage. $stageError"
+    if ($result) {
+        $stagedReceipt = Get-Content -LiteralPath (Join-Path $result.StagedSmmPath 'manager-update.hashes')
+        Assert-True ($stagedReceipt -contains "sha256:$candidateHash") 'Promote the accepted hash with the staged binaries.'
+    }
+    $result = $stage.StageLocalPackage($candidate, '2.0.0', [ref]$stageError)
+    Assert-True ($null -eq $result -and $stageError -match 'verified package hash') 'Require a verified hash for a same-version local ZIP.'
+    Set-Content -LiteralPath $receipt -Encoding ASCII -Value "sha256:$candidateHash"
+    Assert-True (-not [bool]$isOffered.Invoke($null, @('2.0.0', $candidateHashes))) 'Do not offer an already installed package.'
+    $result = $stage.StageLocalPackage($candidate, '2.0.0', $candidateHashes, [ref]$stageError)
+    Assert-True ($null -eq $result -and $stageError -match 'different from the installed package') 'Reject staging the already installed archive.'
+
+    $oldManager = Join-Path $testRoot 'OlderManager.dll'
+    Add-Type -TypeDefinition '[assembly: System.Reflection.AssemblyVersion("1.9.0.0")] public class OlderManager {}' -OutputAssembly $oldManager
+    Copy-Item -LiteralPath $oldManager -Destination (Join-Path $package 'Manager.exe') -Force
+    $older = Join-Path $testRoot 'older.zip'
+    Compress-Archive -LiteralPath $package -DestinationPath $older
+    $candidateHashes.ReleaseMetadata = 'sha256:' + (Get-HashHex $older 'SHA256')
+    Assert-True (-not [bool]$isOffered.Invoke($null, @('1.9.0', $candidateHashes))) 'Never offer a verified older version as a same-version update.'
+    $result = $stage.StageLocalPackage($older, '1.9.0', $candidateHashes, [ref]$stageError)
+    Assert-True ($null -eq $result -and $stageError -match 'is older than') 'Reject a verified older version before promotion.'
+}
+
+if ($StageProbeRoot) {
+    Test-Staging $StageProbeRoot
+    if ($failures.Count) { throw ($failures -join [Environment]::NewLine) }
+    Write-Host 'Manager same-version offer and staging checks passed.'
+    exit 0
 }
 
 $sourcePaths = @(
@@ -128,6 +190,10 @@ try {
     Assert-True ($downloadIndex -ge 0 -and $verifyIndex -ge 0 -and $extractIndex -ge 0) 'Downloaded manager archive pipeline must include download, verify, and extraction calls.'
     Assert-True ($downloadIndex -lt $verifyIndex -and $verifyIndex -lt $extractIndex) 'Downloaded manager archives must be hash-verified before extraction.'
     Assert-True ($verifyIndex -lt $deleteIndex -and $deleteIndex -ge 0) 'Hash verification failures must delete the staged download before returning.'
+
+    & (Join-Path $PSHOME 'powershell.exe') -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File $PSCommandPath -RepoRoot $repoRoot -StageProbeRoot $testRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Same-version staging checks failed.' }
+
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) {

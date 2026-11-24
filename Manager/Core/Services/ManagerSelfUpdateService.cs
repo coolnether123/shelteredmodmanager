@@ -32,6 +32,7 @@ namespace Manager.Core.Services
     public sealed class ManagerSelfUpdateService
     {
         private const long MaximumDownloadBytes = 512L * 1024L * 1024L;
+        private const string PackageHashReceipt = "manager-update.hashes";
         private readonly IArchiveExtractor _archiveExtractor;
 
         private sealed class StageContext
@@ -108,7 +109,7 @@ namespace Manager.Core.Services
                     DeleteStagedArchive(context.ArchivePath);
                     return null;
                 }
-                return ExtractAndValidateStage(context, expectedVersion, out errorMessage);
+                return ExtractAndValidateStage(context, expectedVersion, hashExpectation, out errorMessage);
             }
             catch (Exception ex)
             {
@@ -120,6 +121,15 @@ namespace Manager.Core.Services
         public ManagerUpdateStage StageLocalPackage(
             string packagePath,
             string expectedVersion,
+            out string errorMessage)
+        {
+            return StageLocalPackage(packagePath, expectedVersion, null, out errorMessage);
+        }
+
+        public ManagerUpdateStage StageLocalPackage(
+            string packagePath,
+            string expectedVersion,
+            ManagerUpdateArchiveHashExpectation hashExpectation,
             out string errorMessage)
         {
             errorMessage = null;
@@ -150,7 +160,13 @@ namespace Manager.Core.Services
             try
             {
                 File.Copy(packagePath, context.ArchivePath, false);
-                return ExtractAndValidateStage(context, expectedVersion, out errorMessage);
+                if (hashExpectation != null &&
+                    !VerifyDownloadedArchiveHashes(context.ArchivePath, hashExpectation, out errorMessage))
+                {
+                    DeleteStagedArchive(context.ArchivePath);
+                    return null;
+                }
+                return ExtractAndValidateStage(context, expectedVersion, hashExpectation, out errorMessage);
             }
             catch (Exception ex)
             {
@@ -205,6 +221,7 @@ namespace Manager.Core.Services
         private ManagerUpdateStage ExtractAndValidateStage(
             StageContext context,
             string expectedVersion,
+            ManagerUpdateArchiveHashExpectation verifiedHashes,
             out string errorMessage)
         {
             errorMessage = null;
@@ -220,6 +237,18 @@ namespace Manager.Core.Services
             string stagedVersion;
             if (!ValidateStagedPackage(stagedSmmPath, expectedVersion, out stagedVersion, out errorMessage))
                 return null;
+
+            if (NexusVersionComparer.CompareVersions(stagedVersion, InstalledAssemblyVersion) == 0 &&
+                !HasDifferentPackageHash(ReadInstalledPackageHashes(context.CurrentSmmPath), verifiedHashes))
+            {
+                errorMessage = "A same-version update needs a verified package hash different from the installed package.";
+                return null;
+            }
+
+            // Promote the receipt together with the binaries so rollback restores both.
+            File.WriteAllText(Path.Combine(stagedSmmPath, PackageHashReceipt),
+                "sha256:" + ComputeFileHash(context.ArchivePath, SHA256.Create()) + Environment.NewLine +
+                "md5:" + ComputeFileHash(context.ArchivePath, MD5.Create()) + Environment.NewLine);
 
             string installedUpdater = Path.Combine(context.CurrentSmmPath, "ManagerUpdater.exe");
             if (!File.Exists(installedUpdater))
@@ -409,6 +438,61 @@ namespace Manager.Core.Services
             return match.Success ? match.Groups[1].Value.ToLowerInvariant() : string.Empty;
         }
 
+        private static string InstalledAssemblyVersion
+        {
+            get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(); }
+        }
+
+        internal static bool IsSameVersionUpdateAvailable(string candidateVersion, ManagerUpdateArchiveHashExpectation expectation)
+        {
+            return !string.IsNullOrEmpty(candidateVersion) &&
+                NexusVersionComparer.CompareVersions(candidateVersion, InstalledAssemblyVersion) == 0 &&
+                HasDifferentPackageHash(
+                    ReadInstalledPackageHashes(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)),
+                    expectation);
+        }
+
+        private static ManagerUpdateArchiveHashExpectation ReadInstalledPackageHashes(string root)
+        {
+            try
+            {
+                string path = Path.Combine(root, PackageHashReceipt);
+                if (File.Exists(path))
+                {
+                    string metadata = File.ReadAllText(path);
+                    Match md5 = Regex.Match(metadata, @"(?m)^md5:([0-9a-fA-F]{32})\r?$");
+                    return new ManagerUpdateArchiveHashExpectation
+                    {
+                        ExpectedMd5 = md5.Success ? md5.Groups[1].Value : null,
+                        ReleaseMetadata = metadata
+                    };
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return null;
+        }
+
+        private static bool HasDifferentPackageHash(
+            ManagerUpdateArchiveHashExpectation installed,
+            ManagerUpdateArchiveHashExpectation candidate)
+        {
+            if (installed == null || candidate == null)
+                return false;
+
+            string candidateMd5 = NormalizeHexHash(candidate.ExpectedMd5, 32);
+            if (!string.IsNullOrEmpty(candidate.ExpectedMd5) && string.IsNullOrEmpty(candidateMd5))
+                return false;
+
+            string installedSha256 = ExtractSha256Expectation(installed.ReleaseMetadata);
+            string candidateSha256 = ExtractSha256Expectation(candidate.ReleaseMetadata);
+            if (installedSha256.Length > 0 && candidateSha256.Length > 0)
+                return installedSha256 != candidateSha256;
+
+            string installedMd5 = NormalizeHexHash(installed.ExpectedMd5, 32);
+            return installedMd5.Length > 0 && candidateMd5.Length > 0 && installedMd5 != candidateMd5;
+        }
+
         private static string NormalizeHexHash(string value, int length)
         {
             if (string.IsNullOrEmpty(value))
@@ -480,11 +564,11 @@ namespace Manager.Core.Services
                     ") does not match the Nexus file version (" + expectedVersion + ").";
                 return false;
             }
-            string installedVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-            if (NexusVersionComparer.CompareVersions(stagedVersion, installedVersion) <= 0)
+            string installedVersion = InstalledAssemblyVersion;
+            if (NexusVersionComparer.CompareVersions(stagedVersion, installedVersion) < 0)
             {
                 errorMessage = "The staged manager version (" + stagedVersion +
-                    ") is not newer than the installed version (" + installedVersion + ").";
+                    ") is older than the installed version (" + installedVersion + ").";
                 return false;
             }
 

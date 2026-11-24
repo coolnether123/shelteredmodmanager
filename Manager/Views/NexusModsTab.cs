@@ -715,6 +715,19 @@ namespace Manager.Views
             {
                 string error;
                 var remote = _nexusService.GetModByDomainAndId(domain, _settings.ManagerNexusModId, out error);
+                NexusRemoteModFile replacement = null;
+                if (remote != null && string.IsNullOrEmpty(error) &&
+                    NexusVersionComparer.CompareVersions(_managerVersion, remote.Version) == 0)
+                {
+                    var files = _nexusService.GetModFiles(domain, remote.ModId, out error);
+                    if (files != null && string.IsNullOrEmpty(error))
+                    {
+                        var file = SelectManagerUpdateFile(remote, files);
+                        if (file != null && ManagerSelfUpdateService.IsSameVersionUpdateAvailable(
+                            file.Version, BuildManagerUpdateHashExpectation(file, null)))
+                            replacement = file;
+                    }
+                }
                 if (IsDisposed || Disposing)
                     return;
 
@@ -740,10 +753,10 @@ namespace Manager.Views
                         string remoteVersion = FormatVersion(remote.Version);
                         string remoteChannel = FormatReleaseChannelSuffix(remote.Version);
                         string localChannel = FormatReleaseChannelSuffix(_managerVersion);
-                        if (comparison < 0)
+                        if (comparison < 0 || replacement != null)
                         {
                             _managerStatusLabel.Text = "SMM: update available (" + remoteVersion + remoteChannel + ")";
-                            PromptForManagerUpdate(remote, userInitiated);
+                            PromptForManagerUpdate(remote, userInitiated, replacement);
                         }
                         else if (comparison == 0)
                             _managerStatusLabel.Text = "SMM: current (" + localVersion + localChannel + ")";
@@ -1677,7 +1690,7 @@ namespace Manager.Views
             return null;
         }
 
-        private void PromptForManagerUpdate(NexusRemoteMod remote, bool userInitiated)
+        private void PromptForManagerUpdate(NexusRemoteMod remote, bool userInitiated, NexusRemoteModFile replacement)
         {
             if (remote == null)
                 return;
@@ -1697,12 +1710,19 @@ namespace Manager.Views
             DialogResult choice = MessageBox.Show(this, message, "SMM update available",
                 MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
             if (choice == DialogResult.Yes)
-                BeginManagerUpdate(remote);
+                BeginManagerUpdate(remote, replacement);
             else if (choice == DialogResult.No)
-                BeginManualManagerUpdate(remote);
+                BeginManualManagerUpdate(remote, replacement);
         }
 
-        private void BeginManagerUpdate(NexusRemoteMod remote)
+        private NexusRemoteModFile SelectManagerUpdateFile(NexusRemoteMod remote, List<NexusRemoteModFile> files)
+        {
+            return NexusReleaseClassifier.IsPrerelease(remote.Version) && _settings.IncludeNexusPrereleaseFiles
+                ? _nexusService.SelectPreferredPrereleaseInstallFile(files)
+                : _nexusService.SelectPreferredInstallFile(files, false);
+        }
+
+        private void BeginManagerUpdate(NexusRemoteMod remote, NexusRemoteModFile replacement)
         {
             if (remote == null || _settings == null || _nexusService == null)
                 return;
@@ -1715,7 +1735,7 @@ namespace Manager.Views
             if (!_settings.HasNexusOAuthSession)
             {
                 _managerUpdateInProgress = false;
-                BeginManualManagerUpdate(remote);
+                BeginManualManagerUpdate(remote, replacement);
                 return;
             }
             string gameProcessName = !string.IsNullOrEmpty(_settings.GamePath)
@@ -1734,30 +1754,31 @@ namespace Manager.Views
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string error;
-                List<NexusRemoteModFile> files = _nexusService.GetModFiles(
-                    remote.GameDomain, remote.ModId, out error);
-                if (!string.IsNullOrEmpty(error) || files == null || files.Count == 0)
+                NexusRemoteModFile file = replacement;
+                if (file == null)
                 {
-                    FinishManagerUpdateError(!string.IsNullOrEmpty(error)
-                        ? error
-                        : "Nexus did not return a manager update file.");
-                    return;
+                    List<NexusRemoteModFile> files = _nexusService.GetModFiles(
+                        remote.GameDomain, remote.ModId, out error);
+                    if (!string.IsNullOrEmpty(error) || files == null || files.Count == 0)
+                    {
+                        FinishManagerUpdateError(!string.IsNullOrEmpty(error)
+                            ? error
+                            : "Nexus did not return a manager update file.");
+                        return;
+                    }
+                    file = SelectManagerUpdateFile(remote, files);
                 }
-
-                bool allowPrerelease = _settings.IncludeNexusPrereleaseFiles;
-                NexusRemoteModFile file = NexusReleaseClassifier.IsPrerelease(remote.Version) && allowPrerelease
-                    ? _nexusService.SelectPreferredPrereleaseInstallFile(files)
-                    : _nexusService.SelectPreferredInstallFile(files, false);
                 if (file == null)
                 {
                     FinishManagerUpdateError("No eligible manager update file was found for the selected release channel.");
                     return;
                 }
 
+                var hashes = BuildManagerUpdateHashExpectation(file, replacement == null ? remote : null);
                 if (_accountStatus != null &&
                     _accountStatus.DirectDownloadAvailability == NexusDirectDownloadAvailability.Limited)
                 {
-                    BeginManagerWebsiteAuthorization(remote, file);
+                    BeginManagerWebsiteAuthorization(remote, file, hashes);
                     return;
                 }
 
@@ -1772,11 +1793,12 @@ namespace Manager.Views
                 DownloadAndApplyManagerUpdate(
                     downloadUrl,
                     file.Version ?? remote.Version,
-                    BuildManagerUpdateHashExpectation(file, remote));
+                    hashes);
             });
         }
 
-        private void BeginManagerWebsiteAuthorization(NexusRemoteMod remote, NexusRemoteModFile file)
+        private void BeginManagerWebsiteAuthorization(
+            NexusRemoteMod remote, NexusRemoteModFile file, ManagerUpdateArchiveHashExpectation hashes)
         {
             try
             {
@@ -1785,7 +1807,7 @@ namespace Manager.Views
                     _pendingManagerUpdateDomain = remote.GameDomain ?? string.Empty;
                     _pendingManagerUpdateFileId = file.FileId;
                     _pendingManagerUpdateVersion = file.Version ?? remote.Version ?? string.Empty;
-                    _pendingManagerUpdateHashExpectation = BuildManagerUpdateHashExpectation(file, remote);
+                    _pendingManagerUpdateHashExpectation = hashes;
                     _pendingManagerUpdateExpiresUtc = DateTime.UtcNow.AddMinutes(15);
 
                     string registrationError;
@@ -1978,7 +2000,7 @@ namespace Manager.Views
             catch { }
         }
 
-        private void BeginManualManagerUpdate(NexusRemoteMod remote)
+        private void BeginManualManagerUpdate(NexusRemoteMod remote, NexusRemoteModFile replacement)
         {
             if (remote == null)
                 return;
@@ -2015,7 +2037,8 @@ namespace Manager.Views
                     string error;
                     ManagerUpdateStage stage = _managerUpdateService.StageLocalPackage(
                         packagePath,
-                        remote.Version,
+                        replacement != null ? replacement.Version : remote.Version,
+                        replacement != null ? BuildManagerUpdateHashExpectation(replacement, null) : null,
                         out error);
                     if (stage == null || !string.IsNullOrEmpty(error))
                     {

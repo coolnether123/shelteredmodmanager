@@ -155,9 +155,9 @@ Assert-PEArchitecture -Path (Join-Path $smmStage 'Doorstop\x86\winhttp.dll') -Ex
 Assert-PEArchitecture -Path (Join-Path $smmStage 'Doorstop\x64\winhttp.dll') -Expected 'x64'
 
 $packages = @(
+    @{ Name = "ShelteredModManager-$version-Update.zip";        Proxy = $null;      ProxyArch = 'neutral'; Kind = 'update'; Storefronts = @('Steam','GOG','Epic') },
     @{ Name = "ShelteredModManager-$version-Steam-GOG-x86.zip"; Proxy = $proxyX86; ProxyArch = 'x86'; Kind = 'first-install'; Storefronts = @('Steam','GOG') },
-    @{ Name = "ShelteredModManager-$version-Epic-x64.zip";      Proxy = $proxyX64; ProxyArch = 'x64'; Kind = 'first-install'; Storefronts = @('Epic') },
-    @{ Name = "ShelteredModManager-$version-Update.zip";        Proxy = $null;      ProxyArch = 'neutral'; Kind = 'update'; Storefronts = @('Steam','GOG','Epic') }
+    @{ Name = "ShelteredModManager-$version-Epic-x64.zip";      Proxy = $proxyX64; ProxyArch = 'x64'; Kind = 'first-install'; Storefronts = @('Epic') }
 )
 
 $commit = (& git -C $repoRoot rev-parse HEAD 2>$null)
@@ -169,6 +169,9 @@ foreach ($pkg in $packages) {
     New-Item -ItemType Directory -Path $pkgStage -Force | Out-Null
     Copy-Item -LiteralPath $smmStage -Destination (Join-Path $pkgStage 'SMM') -Recurse
     if ($pkg.Kind -eq 'first-install') {
+        # Nexus distributes the platform-neutral update archive. Remember its
+        # hash even when the same payload is installed from a storefront ZIP.
+        Set-Content -LiteralPath (Join-Path $pkgStage 'SMM\manager-update.hashes') -Value $updateHashes -Encoding ASCII
         Copy-Item -LiteralPath $pkg.Proxy -Destination (Join-Path $pkgStage 'winhttp.dll')
         Copy-Item -LiteralPath $doorstopConfig -Destination (Join-Path $pkgStage 'doorstop_config.ini')
         Assert-PEArchitecture -Path (Join-Path $pkgStage 'winhttp.dll') -Expected $pkg.ProxyArch
@@ -177,6 +180,10 @@ foreach ($pkg in $packages) {
     if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
     Compress-Archive -Path (Join-Path $pkgStage '*') -DestinationPath $zipPath -CompressionLevel Optimal
     $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+    if ($pkg.Kind -eq 'update') {
+        $md5 = (Get-FileHash -LiteralPath $zipPath -Algorithm MD5).Hash
+        $updateHashes = @("sha256:$hash", "md5:$md5")
+    }
     Set-Content -LiteralPath ($zipPath + '.sha256') -Value "$hash  $($pkg.Name)" -Encoding ASCII
     $size = (Get-Item -LiteralPath $zipPath).Length
     $manifest.Add([pscustomobject]@{
