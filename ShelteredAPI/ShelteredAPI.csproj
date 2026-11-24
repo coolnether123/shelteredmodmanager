@@ -408,6 +408,7 @@
     <Compile Include="Scenarios\Application\Runtime\Preview\ScenarioRuntimeFacadeMappers.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioCharacterRuntimeNameRegistry.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioAuthoring.cs" />
+    <Compile Include="Scenarios\Public\ShelteredScenarioPackages.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarios.cs" />
     <Compile Include="Scenarios\Public\ShelteredScenarioRuntime.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioTriggerRuntime.cs" />

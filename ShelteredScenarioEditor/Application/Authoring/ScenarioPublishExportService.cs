@@ -1,11 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredScenarioEditor.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Public;
 
 namespace ShelteredScenarioEditor.Application.Authoring{
     internal sealed class ScenarioPublishExportService
@@ -16,9 +16,11 @@ namespace ShelteredScenarioEditor.Application.Authoring{
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly IScenarioDefinitionValidator _validator;
         private readonly ScenarioPackagePlanner _planner;
+        private readonly ScenarioPackageContents _packageContents;
         private readonly ScenarioPackageInstaller _installer;
         private readonly ScenarioAuthorTestChecklistService _testChecklistService;
         private readonly IScenarioEditorSessionStore _sessionStore;
+        private readonly string _exportsRoot;
         private readonly object _sync = new object();
         private ScenarioPublishExportResult _lastResult;
         private ScenarioPackageOperationResult _lastInstallResult;
@@ -29,7 +31,9 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             IScenarioDefinitionValidator validator,
             ScenarioPackageInstaller installer,
             ScenarioAuthorTestChecklistService testChecklistService,
-            IScenarioEditorSessionStore sessionStore)
+            IScenarioEditorSessionStore sessionStore,
+            Action<ScenarioPackageStep, string> beforePackageStep = null,
+            string exportsRoot = null)
         {
             if (installer == null) throw new ArgumentNullException("installer");
             _editorService = editorService;
@@ -37,7 +41,9 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             _validator = validator;
             _testChecklistService = testChecklistService;
             _sessionStore = sessionStore;
+            _exportsRoot = exportsRoot;
             _planner = new ScenarioPackagePlanner(serializer, testChecklistService);
+            _packageContents = new ScenarioPackageContents(serializer, validator, beforePackageStep);
             _installer = installer;
         }
 
@@ -67,50 +73,27 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             if (errorCount > 0)
                 return Remember(ScenarioPublishExportResult.BlockedResult(errorCount, FirstIssueMessage(validation)));
 
-            string exportFilePath;
-            string exportRoot;
-            DateTime? replacedTimestampUtc = null;
             try
             {
-                exportRoot = ResolveExportRoot(definition);
-                exportFilePath = Path.Combine(exportRoot, ScenarioEditorDefinitionSerializer.DefaultFileName);
-                if (File.Exists(exportFilePath))
-                    replacedTimestampUtc = File.GetLastWriteTimeUtc(exportFilePath);
-                ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(_sessionStore.CurrentFilePath);
-                ScenarioPackagePlan plan = _planner.Build(
-                    definition,
-                    _sessionStore.CurrentFilePath,
-                    exportRoot,
-                    preferences.IncludeReadme,
-                    validation,
-                    _editorService != null ? _editorService.CurrentSession : null);
-                plan.Write();
+                string exportRoot = ResolveExportRoot(definition);
+                string exportFilePath = Path.Combine(exportRoot, ScenarioEditorDefinitionSerializer.DefaultFileName);
+                DateTime? replacedTimestampUtc = null;
+                ScenarioValidationResult exportedValidation = _packageContents.Replace(exportRoot, definition.Id, delegate
+                {
+                    if (File.Exists(exportFilePath))
+                        replacedTimestampUtc = File.GetLastWriteTimeUtc(exportFilePath);
+                    ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(_sessionStore.CurrentFilePath);
+                    return _planner.Build(definition, _sessionStore.CurrentFilePath, exportRoot, preferences.IncludeReadme,
+                        validation, _editorService.CurrentSession).Entries;
+                });
+                return Remember(ScenarioPublishExportResult.Succeeded(exportFilePath, exportRoot,
+                    CountWarnings(exportedValidation), replacedTimestampUtc));
             }
             catch (Exception ex)
             {
-                return Remember(ScenarioPublishExportResult.Failed("Export failed: " + ex.Message));
+                MMLog.WriteWarning("[Scenario package export] " + ex.Message);
+                return Remember(ScenarioPublishExportResult.Failed("Could not complete the scenario export. Check that the package files are available and try again."));
             }
-
-            ScenarioDefinition exported;
-            try
-            {
-                exported = _serializer.Load(exportFilePath);
-            }
-            catch (Exception ex)
-            {
-                return Remember(ScenarioPublishExportResult.Failed("Post-export load failed: " + ex.Message, exportFilePath));
-            }
-
-            ScenarioValidationResult exportedValidation = Validate(exported, exportFilePath);
-            int exportedErrors = CountErrors(exportedValidation);
-            if (exportedValidation == null || exportedErrors > 0)
-            {
-                return Remember(ScenarioPublishExportResult.Failed(
-                    "Post-export validation failed: " + FirstIssueMessage(exportedValidation),
-                    exportFilePath));
-            }
-
-            return Remember(ScenarioPublishExportResult.Succeeded(exportFilePath, exportRoot, CountWarnings(exportedValidation), replacedTimestampUtc));
         }
 
         public ScenarioPackagePlan PreviewActiveDraft(ScenarioAuthoringState state)
@@ -121,13 +104,15 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             string scenarioPath = _sessionStore.CurrentFilePath;
             ScenarioValidationResult validation = Validate(definition, scenarioPath);
             ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(scenarioPath);
-            return _planner.Build(
+            ScenarioPackagePlan plan = _planner.Build(
                 definition,
                 scenarioPath,
                 ResolveExportRoot(definition),
                 preferences.IncludeReadme,
                 validation,
                 _editorService != null ? _editorService.CurrentSession : null);
+            ScenarioPackagePlanner.FindOrphans(plan);
+            return plan;
         }
 
         public ScenarioPackageOperationResult InstallLastExport(bool overwriteConfirmed)
@@ -198,9 +183,8 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             lastWriteUtc = DateTime.MinValue;
             try
             {
-                string modRoot = ResolveExportModRoot();
-                string scenarioFolder = BuildSafeFolderName(!string.IsNullOrEmpty(scenarioId) ? scenarioId : displayName);
-                exportRoot = Path.Combine(Path.Combine(modRoot, ExportRootFolder), scenarioFolder);
+                string scenarioFolder = ScenarioPackageContents.SafeFolderName(!string.IsNullOrEmpty(scenarioId) ? scenarioId : displayName);
+                exportRoot = Path.Combine(GetExportsRoot(), scenarioFolder);
                 string exportFilePath = Path.Combine(exportRoot, ScenarioEditorDefinitionSerializer.DefaultFileName);
                 if (File.Exists(exportFilePath))
                 {
@@ -215,41 +199,22 @@ namespace ShelteredScenarioEditor.Application.Authoring{
             return false;
         }
 
-        private static string ResolveExportRoot(ScenarioDefinition definition)
+        private string ResolveExportRoot(ScenarioDefinition definition)
         {
-            string modRoot = ResolveExportModRoot();
-            string scenarioFolder = BuildSafeFolderName(!string.IsNullOrEmpty(definition.Id) ? definition.Id : definition.DisplayName);
-            return Path.Combine(Path.Combine(modRoot, ExportRootFolder), scenarioFolder);
+            string scenarioFolder = ScenarioPackageContents.SafeFolderName(!string.IsNullOrEmpty(definition.Id) ? definition.Id : definition.DisplayName);
+            return Path.Combine(_exportsRoot ?? GetExportsRoot(), scenarioFolder);
         }
 
-        private static string ResolveExportModRoot()
+        private static string GetExportsRoot()
         {
-            return ModApiPaths.UserRoot;
+            return Path.Combine(ModApiPaths.UserRoot, ExportRootFolder);
         }
 
-        private static string BuildSafeFolderName(string value)
+        internal static void RecoverExports()
         {
-            string raw = string.IsNullOrEmpty(value) ? "scenario" : value.Trim();
-            char[] invalid = Path.GetInvalidFileNameChars();
-            List<char> chars = new List<char>();
-            for (int i = 0; i < raw.Length; i++)
-            {
-                char c = raw[i];
-                bool bad = false;
-                for (int j = 0; j < invalid.Length; j++)
-                {
-                    if (c == invalid[j])
-                    {
-                        bad = true;
-                        break;
-                    }
-                }
-
-                chars.Add(bad || char.IsWhiteSpace(c) ? '_' : c);
-            }
-
-            string safe = new string(chars.ToArray()).Trim('_', '.');
-            return string.IsNullOrEmpty(safe) ? "scenario" : safe;
+            try { ShelteredScenarioPackages.RecoverRoot(GetExportsRoot()); }
+            catch (IOException ex) { MMLog.WriteWarning("[Scenario package export recovery] " + ex.Message); }
+            catch (UnauthorizedAccessException ex) { MMLog.WriteWarning("[Scenario package export recovery] " + ex.Message); }
         }
 
         private static int CountErrors(ScenarioValidationResult validation)

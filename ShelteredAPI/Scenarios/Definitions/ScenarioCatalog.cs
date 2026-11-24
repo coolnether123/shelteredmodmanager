@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using ShelteredAPI.Scenarios.Public;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
@@ -99,10 +100,22 @@ namespace ShelteredAPI.Scenarios.Definitions{
         {
             _modFolderSource = modFolderSource;
             _serializer = serializer ?? new ScenarioDefinitionSerializer();
-            _userScenarioPackagesRoot = userScenarioPackagesRoot;
+            _userScenarioPackagesRoot = string.IsNullOrEmpty(userScenarioPackagesRoot)
+                ? null : ScenarioCatalogDiskStamp.NormalizePath(userScenarioPackagesRoot);
         }
 
         public void Refresh()
+        {
+            ShelteredScenarioPackages.RunLocked(delegate
+            {
+                if (!string.IsNullOrEmpty(_userScenarioPackagesRoot))
+                    ShelteredScenarioPackages.RecoverRoot(_userScenarioPackagesRoot);
+                RefreshCatalog();
+                return true;
+            });
+        }
+
+        private void RefreshCatalog()
         {
             ScenarioModFolder[] folders = _modFolderSource != null ? _modFolderSource.GetLoadedModFolders() : new ScenarioModFolder[0];
             Dictionary<string, string> roots = BuildScenarioRoots(folders, _userScenarioPackagesRoot);
@@ -123,15 +136,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
                     if (!Directory.Exists(scenariosRoot))
                         continue;
 
-                    string[] discoveredDirectories;
-                    string[] discoveredDefinitions;
+                    List<string> discoveredDirectories = new List<string>();
+                    List<string> discoveredDefinitions = new List<string>();
                     try
                     {
-                        discoveredDirectories = Directory.GetDirectories(scenariosRoot, "*", SearchOption.AllDirectories);
-                        discoveredDefinitions = Directory.GetFiles(
-                            scenariosRoot,
-                            ScenarioDefinitionSerializer.DefaultFileName,
-                            SearchOption.AllDirectories);
+                        bool userPackages = string.Equals(scenariosRoot, _userScenarioPackagesRoot, StringComparison.OrdinalIgnoreCase);
+                        DiscoverDefinitions(scenariosRoot, userPackages, discoveredDirectories, discoveredDefinitions);
                     }
                     catch (Exception ex)
                     {
@@ -139,10 +149,10 @@ namespace ShelteredAPI.Scenarios.Definitions{
                         continue;
                     }
 
-                    for (int i = 0; i < discoveredDirectories.Length; i++)
+                    for (int i = 0; i < discoveredDirectories.Count; i++)
                         directories[ScenarioCatalogDiskStamp.NormalizePath(discoveredDirectories[i])] = ScenarioCatalogDiskStamp.ReadDirectory(discoveredDirectories[i]);
 
-                    for (int i = 0; i < discoveredDefinitions.Length; i++)
+                    for (int i = 0; i < discoveredDefinitions.Count; i++)
                     {
                         string filePath = ScenarioCatalogDiskStamp.NormalizePath(discoveredDefinitions[i]);
                         files[filePath] = ScenarioCatalogDiskStamp.ReadFile(filePath);
@@ -155,6 +165,26 @@ namespace ShelteredAPI.Scenarios.Definitions{
                 _watchedDirectories = directories;
                 _watchedFiles = files;
                 _scanned = true;
+            }
+        }
+
+        private static void DiscoverDefinitions(string root, bool skipWorkDirectories, List<string> directories, List<string> definitions)
+        {
+            if (!skipWorkDirectories)
+            {
+                directories.AddRange(Directory.GetDirectories(root, "*", SearchOption.AllDirectories));
+                definitions.AddRange(Directory.GetFiles(root, ScenarioDefinitionSerializer.DefaultFileName, SearchOption.AllDirectories));
+                return;
+            }
+
+            definitions.AddRange(Directory.GetFiles(root, ScenarioDefinitionSerializer.DefaultFileName));
+            foreach (string directory in Directory.GetDirectories(root))
+            {
+                if (ShelteredScenarioPackages.IsWorkDirectory(directory))
+                    continue;
+                directories.Add(directory);
+                directories.AddRange(Directory.GetDirectories(directory, "*", SearchOption.AllDirectories));
+                definitions.AddRange(Directory.GetFiles(directory, ScenarioDefinitionSerializer.DefaultFileName, SearchOption.AllDirectories));
             }
         }
 

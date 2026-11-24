@@ -36,34 +36,10 @@ namespace ShelteredScenarioEditor.Application.Authoring
         public List<string> DeclaredMods { get; private set; }
         public long TotalSize { get; set; }
 
-        public void Write()
-        {
-            if (string.IsNullOrEmpty(PackageRoot))
-                throw new InvalidOperationException("Package root is required.");
-
-            if (!Directory.Exists(PackageRoot))
-                Directory.CreateDirectory(PackageRoot);
-            RemoveOrphans(PackageRoot, Entries);
-
-            for (int i = 0; i < Entries.Count; i++)
-            {
-                ScenarioPackageEntry entry = Entries[i];
-                string destination = ResolveContainedPath(PackageRoot, entry.RelativePath);
-                if (string.IsNullOrEmpty(destination))
-                    throw new InvalidOperationException("Package entry escapes its root: " + entry.RelativePath);
-                string directory = Path.GetDirectoryName(destination);
-                if (!Directory.Exists(directory))
-                    Directory.CreateDirectory(directory);
-                if (entry.Content != null)
-                    File.WriteAllBytes(destination, entry.Content);
-                else
-                    File.Copy(entry.SourcePath, destination, true);
-            }
-        }
-
         internal static string ResolveContainedPath(string root, string relativePath)
         {
-            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(relativePath) || Path.IsPathRooted(relativePath))
+            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(relativePath)
+                || Path.IsPathRooted(relativePath) || relativePath.IndexOf(':') >= 0)
                 return null;
             string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             string fullPath = Path.GetFullPath(Path.Combine(fullRoot, relativePath));
@@ -71,30 +47,6 @@ namespace ShelteredScenarioEditor.Application.Authoring
             return fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? fullPath : null;
         }
 
-        private static void RemoveOrphans(string root, List<ScenarioPackageEntry> entries)
-        {
-            string[] files = Directory.GetFiles(root, "*", SearchOption.AllDirectories);
-            for (int i = 0; i < files.Length; i++)
-            {
-                string relative = files[i].Substring(Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar).Length + 1);
-                bool expected = false;
-                for (int e = 0; e < entries.Count; e++)
-                {
-                    if (string.Equals(Normalize(relative), Normalize(entries[e].RelativePath), StringComparison.OrdinalIgnoreCase))
-                    {
-                        expected = true;
-                        break;
-                    }
-                }
-                if (!expected)
-                    File.Delete(files[i]);
-            }
-        }
-
-        private static string Normalize(string path)
-        {
-            return (path ?? string.Empty).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-        }
     }
 
     internal sealed class ScenarioPackagePlanner
@@ -138,7 +90,6 @@ namespace ShelteredScenarioEditor.Application.Authoring
             if (includeReadme)
                 AddGenerated(plan, ReadmeFileName, Encoding.UTF8.GetBytes(BuildReadme(definition, plan.RequiredMods, limitations, editorSession)));
             AddGenerated(plan, ManifestFileName, Encoding.UTF8.GetBytes(BuildManifest(definition, plan.RequiredMods, limitations)));
-            FindOrphans(plan);
             return plan;
         }
 
@@ -161,10 +112,9 @@ namespace ShelteredScenarioEditor.Application.Authoring
         {
             List<string> paths = CollectAssetPaths(definition);
             string draftRoot = !string.IsNullOrEmpty(draftScenarioPath) ? Path.GetDirectoryName(draftScenarioPath) : null;
-            string assetsRoot = ScenarioAuthoringStoragePaths.GetAssetsRootPath();
             for (int i = 0; i < paths.Count; i++)
             {
-                string source = ResolveSource(paths[i], draftRoot, assetsRoot);
+                string source = ResolveSource(paths[i], draftRoot);
                 if (string.IsNullOrEmpty(source))
                 {
                     plan.Problems.Add("Referenced asset is missing: " + paths[i]);
@@ -351,11 +301,11 @@ namespace ShelteredScenarioEditor.Application.Authoring
             paths.Add(relativePath);
         }
 
-        private static string ResolveSource(string relativePath, string draftRoot, string assetsRoot)
+        private static string ResolveSource(string relativePath, string draftRoot)
         {
             string source = ScenarioPackagePlan.ResolveContainedPath(draftRoot, relativePath);
             if (!string.IsNullOrEmpty(source) && File.Exists(source)) return source;
-            source = ScenarioPackagePlan.ResolveContainedPath(assetsRoot, relativePath);
+            source = ScenarioPackagePlan.ResolveContainedPath(ScenarioAuthoringStoragePaths.GetAssetsRootPath(), relativePath);
             return !string.IsNullOrEmpty(source) && File.Exists(source) ? source : null;
         }
 
@@ -372,7 +322,7 @@ namespace ShelteredScenarioEditor.Application.Authoring
             plan.TotalSize += size;
         }
 
-        private static void FindOrphans(ScenarioPackagePlan plan)
+        internal static void FindOrphans(ScenarioPackagePlan plan)
         {
             if (string.IsNullOrEmpty(plan.PackageRoot) || !Directory.Exists(plan.PackageRoot)) return;
             string root = Path.GetFullPath(plan.PackageRoot).TrimEnd(Path.DirectorySeparatorChar);
@@ -382,7 +332,7 @@ namespace ShelteredScenarioEditor.Application.Authoring
                 string relative = files[i].Substring(root.Length + 1);
                 bool expected = false;
                 for (int e = 0; e < plan.Entries.Count; e++) if (string.Equals(relative.Replace('/', '\\'), plan.Entries[e].RelativePath.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase)) { expected = true; break; }
-                if (!expected) plan.Problems.Add("Orphan staging file will be removed on export: " + relative);
+                if (!expected) plan.Problems.Add("Old package file will be removed on export: " + relative);
             }
         }
     }
