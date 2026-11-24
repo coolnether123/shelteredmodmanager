@@ -5,12 +5,15 @@ param(
     [string]$Lane,
 
     [Parameter(Mandatory = $true)]
-    [string]$EvidenceRoot
+    [string]$EvidenceRoot,
+
+    [Parameter(Mandatory = $true)]
+    [string]$GameRoot
 )
 
 $ErrorActionPreference = 'Stop'
-$gameRoot = if ($Lane -eq 'Steam') { 'H:\SteamLibrary\steamapps\common\Sheltered' } else { 'D:\Epic Games Games\Sheltered' }
-$gameRoot = [IO.Path]::GetFullPath($gameRoot).TrimEnd('\')
+. (Join-Path $PSScriptRoot 'Resolve-IsolatedGameRoot.ps1')
+$gameRoot = Resolve-IsolatedGameRoot -Path $GameRoot
 $gameExe = if ($Lane -eq 'Steam') { 'Sheltered.exe' } else { 'ShelteredWindows64_EOS.exe' }
 $gameExePath = [IO.Path]::GetFullPath((Join-Path $gameRoot $gameExe))
 $gameProcessName = [IO.Path]::GetFileNameWithoutExtension($gameExe)
@@ -63,7 +66,7 @@ $verification = foreach ($record in $saveRecords) {
     $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
     [pscustomobject]@{ relativeBase=$record.relativeBase; name=$record.name; expected=$record.sha256; actual=$hash; match=($hash -eq $record.sha256) }
 }
-$verification | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'restore-save-verification.json') -Encoding UTF8
+ConvertTo-Json -InputObject @($verification) -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'restore-save-verification.json') -Encoding UTF8
 if (@($verification | Where-Object { -not $_.match }).Count -gt 0) { throw 'One or more restored save hashes do not match.' }
 
 Write-Host "Restored runtime lane: $Lane"

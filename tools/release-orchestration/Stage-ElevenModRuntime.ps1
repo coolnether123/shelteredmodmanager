@@ -7,6 +7,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$EvidenceRoot,
 
+    [Parameter(Mandatory = $true)]
+    [string]$GameRoot,
+
     [string]$WorkspaceRoot,
     [switch]$DeployCurrentManager
 )
@@ -15,19 +18,8 @@ $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) { $WorkspaceRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..\..\..')) }
 
-$gameRoot = if ($Lane -eq 'Steam') {
-    'H:\SteamLibrary\steamapps\common\Sheltered'
-} else {
-    'D:\Epic Games Games\Sheltered'
-}
-$gameRoot = [IO.Path]::GetFullPath($gameRoot).TrimEnd('\')
-$allowedRoots = @(
-    'H:\SteamLibrary\steamapps\common\Sheltered',
-    'D:\Epic Games Games\Sheltered'
-)
-if ($allowedRoots -notcontains $gameRoot) {
-    throw "Refusing unapproved game root: $gameRoot"
-}
+. (Join-Path $scriptRoot 'Resolve-IsolatedGameRoot.ps1')
+$gameRoot = Resolve-IsolatedGameRoot -Path $GameRoot
 
 $gameExe = if ($Lane -eq 'Steam') { 'Sheltered.exe' } else { 'ShelteredWindows64_EOS.exe' }
 if (-not (Test-Path -LiteralPath (Join-Path $gameRoot $gameExe))) {
@@ -113,7 +105,7 @@ foreach ($saveBase in @($gameRoot, (Join-Path $gameRoot 'Saves'))) {
         }
     }
 }
-$saveRecords | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $original 'save-hashes-before.json') -Encoding UTF8
+ConvertTo-Json -InputObject $saveRecords -Depth 5 | Set-Content -LiteralPath (Join-Path $original 'save-hashes-before.json') -Encoding UTF8
 
 $exactOrder = @('com.harmony.0harmony', 'coolnether123.shelteredagentinterface') + @($specs.Id)
 [pscustomobject]@{

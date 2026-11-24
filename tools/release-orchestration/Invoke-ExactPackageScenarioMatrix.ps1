@@ -10,6 +10,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$EvidenceRoot,
 
+    [Parameter(Mandatory = $true)]
+    [string]$GameRoot,
+
     [string]$ShelteredRoot,
     [string]$HarnessRepo,
     [int]$TimeoutSeconds = 180
@@ -18,6 +21,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+. (Join-Path $scriptRoot 'Resolve-IsolatedGameRoot.ps1')
+$gameRoot = Resolve-IsolatedGameRoot -Path $GameRoot
 if ([string]::IsNullOrWhiteSpace($ShelteredRoot)) { $ShelteredRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..\..\..')) }
 if ([string]::IsNullOrWhiteSpace($HarnessRepo)) {
     $environmentHarness = [Environment]::GetEnvironmentVariable('SHELTERED_AGENT_INTERFACE_ROOT')
@@ -42,7 +47,6 @@ foreach ($required in @($graphPath, $stageScript, $restoreScript, $transactionRu
 
 $evidence = [IO.Path]::GetFullPath($EvidenceRoot)
 if (Test-Path -LiteralPath $evidence) { throw "Evidence root already exists; refusing to overwrite it: $evidence" }
-$gameRoot = if ($Lane -eq 'Steam') { 'H:\SteamLibrary\steamapps\common\Sheltered' } else { 'D:\Epic Games Games\Sheltered' }
 $graph = Get-Content -LiteralPath $graphPath -Raw | ConvertFrom-Json
 $selectedScenarios = New-Object System.Collections.Generic.List[object]
 foreach ($scenarioId in $scenarioIds) {
@@ -66,7 +70,7 @@ $failure = $null
 $restoreFailure = $null
 $statePath = Join-Path $evidence 'deployment-state.json'
 try {
-    $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $stageScript -Lane $Lane -EvidenceRoot $evidence -WorkspaceRoot $ShelteredRoot
+    $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $stageScript -Lane $Lane -GameRoot $gameRoot -EvidenceRoot $evidence -WorkspaceRoot $ShelteredRoot
     if ($LASTEXITCODE -ne 0) { throw "Exact eleven-package staging exited $LASTEXITCODE." }
 
     foreach ($scenario in $selectedScenarios) {
@@ -92,7 +96,7 @@ try {
 } finally {
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
         try {
-            $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $restoreScript -Lane $Lane -EvidenceRoot $evidence
+            $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $restoreScript -Lane $Lane -GameRoot $gameRoot -EvidenceRoot $evidence
             if ($LASTEXITCODE -ne 0) { throw "Exact eleven-package restoration exited $LASTEXITCODE." }
         } catch {
             $restoreFailure = $_

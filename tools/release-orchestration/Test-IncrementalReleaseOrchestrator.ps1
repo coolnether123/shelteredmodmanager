@@ -234,6 +234,24 @@ Assert-True ($stageSource.Contains("state='backup-complete'")) 'Eleven-package s
 Assert-True ($stageSource.Contains('refusing to replace live mod folders')) 'Eleven-package staging must reject a running game.'
 Assert-True ($restoreSource.Contains('refusing to restore live mod folders')) 'Eleven-package restoration must reject a running game.'
 
+. (Join-Path $PSScriptRoot 'Resolve-IsolatedGameRoot.ps1')
+foreach ($unsafeRoot in @(
+    'H:\SteamLibrary\steamapps\common\Sheltered',
+    'D:\Epic Games Games\Sheltered',
+    'A:\Dev\Worktrees\..\..\SteamLibrary\Sheltered',
+    'F:\Dev\Worktrees\library\steamapps\common\Sheltered',
+    'sheltered-livecopy'
+)) {
+    $rejected = $false
+    try { $null = Resolve-IsolatedGameRoot -Path $unsafeRoot }
+    catch { $rejected = $_.Exception.Message -match 'absolute game copy path|Refusing game root' }
+    Assert-True $rejected "Exact-package runtime must reject game root '$unsafeRoot' before filesystem access."
+}
+foreach ($runtimeSource in @($exactMatrixSource, $stageSource, $restoreSource)) {
+    Assert-True ($runtimeSource.Contains('Resolve-IsolatedGameRoot -Path $GameRoot')) 'Every exact-package write path must validate its target.'
+}
+Assert-True (([regex]::Matches($exactMatrixSource, '-GameRoot \$gameRoot\b')).Count -eq 3) 'Staging, scenarios and restoration must all receive the isolated game root.'
+
 $unmappedOutput = Join-Path ([IO.Path]::GetTempPath()) ('sheltered-release-unmapped-' + [Guid]::NewGuid().ToString('N') + '.json')
 try {
     $unmappedExit = 0
@@ -252,3 +270,4 @@ Write-Output 'PASS: Manager OAuth changes select Manager contracts/platform smok
 Write-Output 'PASS: release-layer changes select graph self-tests without selecting mod gameplay.'
 Write-Output 'PASS: file-to-scenario rules avoid rerunning unrelated heavy matrices after a focused late change.'
 Write-Output 'PASS: execution is fail-closed and passed evidence is content- and live-runtime-bound before reuse.'
+Write-Output 'PASS: exact-package staging, scenarios and restoration require an isolated game root.'
