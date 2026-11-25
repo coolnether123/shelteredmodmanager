@@ -54,6 +54,7 @@ namespace Manager.Core.Models
         public DateTime? NexusRemoteUpdatedAtUtc { get; set; }
         public string NexusRemoteSummary { get; set; }
         public bool HasUpdateAvailable { get; set; }
+        public bool NeedsApiMigration { get; set; }
 
         public bool HasNexusReference
         {

@@ -11,6 +11,11 @@ namespace Manager.Core.Services
     {
         private static readonly Regex PrereleaseTokenPattern = new Regex(@"(^|[^a-z0-9])(?:rc|release[\s._-]*candidate|beta|alpha|preview|experimental|nightly|dev(?:elopment)?|test|pre[\s._-]*release|prerelease|pre)(?:[\s._-]*\d+)?($|[^a-z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        public static bool IsUpdateAvailable(string localVersion, string remoteVersion, bool needsApiMigration)
+        {
+            return needsApiMigration || IsRemoteNewer(localVersion, remoteVersion);
+        }
+
         /// <summary>
         /// Compares local and remote versions.
         /// Returns -1 when local is older, 0 when equal/unknown, 1 when local is newer.

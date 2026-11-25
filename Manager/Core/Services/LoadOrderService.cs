@@ -77,6 +77,30 @@ namespace Manager.Core.Services
             }
         }
 
+        internal void ReplaceModId(string modsPath, string oldId, string newId)
+        {
+            string[] current = ReadOrder(modsPath);
+            var updated = new List<string>(current.Length);
+            bool replaced = false;
+            foreach (string id in current)
+            {
+                if (string.Equals(id, oldId, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!replaced)
+                        updated.Add(newId);
+                    replaced = true;
+                }
+                else if (!string.Equals(id, newId, StringComparison.OrdinalIgnoreCase))
+                {
+                    updated.Add(id);
+                }
+            }
+            // The old ID's presence is the enabled flag. Drop stale copies of
+            // the replacement ID so they cannot enable a disabled mod.
+            if (replaced || updated.Count != current.Length)
+                SaveOrder(modsPath, updated);
+        }
+
         /// <summary>
         /// Get enabled mods (those in load order) from all discovered mods
         /// </summary>

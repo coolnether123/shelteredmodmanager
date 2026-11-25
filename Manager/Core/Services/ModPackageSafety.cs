@@ -63,7 +63,8 @@ namespace Manager.Core.Services
             string targetPath,
             string sourceModId,
             NexusInstallTargetContext targetContext,
-            out string errorMessage)
+            out string errorMessage,
+            string replacementId = null)
         {
             errorMessage = null;
 
@@ -95,9 +96,9 @@ namespace Manager.Core.Services
             }
 
             if (targetContext != null && targetContext.HasExpectedLocalMod &&
-                !string.Equals(NormalizeModId(sourceModId), NormalizeModId(targetContext.ExpectedLocalModId), StringComparison.OrdinalIgnoreCase))
+                !string.Equals(NormalizeModId(sourceModId), NormalizeModId(replacementId ?? targetContext.ExpectedLocalModId), StringComparison.OrdinalIgnoreCase))
             {
-                errorMessage = "Downloaded mod id '" + sourceModId + "' does not match selected installed mod id '" + targetContext.ExpectedLocalModId + "'.";
+                errorMessage = "This download does not match the selected mod.";
                 return false;
             }
 
@@ -106,10 +107,14 @@ namespace Manager.Core.Services
                 global::Manager.ModTypes.ModAboutInfo existingAbout;
                 string existingId;
                 string readError;
-                if (TryReadRequiredAbout(fullTargetPath, out existingAbout, out existingId, out readError) &&
-                    !string.Equals(existingId, NormalizeModId(sourceModId), StringComparison.OrdinalIgnoreCase))
+                bool hasExistingAbout = TryReadRequiredAbout(fullTargetPath, out existingAbout, out existingId, out readError);
+                string expectedExistingId = targetContext != null && targetContext.HasExpectedLocalMod
+                    ? NormalizeModId(targetContext.ExpectedLocalModId)
+                    : NormalizeModId(sourceModId);
+                if ((targetContext != null && targetContext.HasExpectedLocalMod && !hasExistingAbout) ||
+                    (hasExistingAbout && !string.Equals(existingId, expectedExistingId, StringComparison.OrdinalIgnoreCase)))
                 {
-                    errorMessage = "Install target already contains a different mod id '" + existingAbout.id + "'.";
+                    errorMessage = "The selected installation changed. Refresh the mod list and try again.";
                     return false;
                 }
             }

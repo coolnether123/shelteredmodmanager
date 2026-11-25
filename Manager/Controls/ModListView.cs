@@ -254,7 +254,12 @@ namespace Manager.Controls
             // coloured dot and a word, so the state never depends on colour alone.
             string status = null;
             Color statusColor = palette.TextMuted;
-            if (_hardIssueIds.Contains(mod.Id) || mod.Status == ModStatus.Error || mod.Status == ModStatus.MissingDependency)
+            if (mod.NeedsApiMigration)
+            {
+                status = "Needs 2.0";
+                statusColor = palette.AccentText;
+            }
+            else if (_hardIssueIds.Contains(mod.Id) || mod.Status == ModStatus.Error || mod.Status == ModStatus.MissingDependency)
             {
                 status = "Problem";
                 statusColor = palette.Danger;

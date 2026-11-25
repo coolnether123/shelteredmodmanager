@@ -1218,16 +1218,17 @@ query modFiles($modId: ID!, $gameId: ID!){
             return files;
         }
 
-        private static bool IsInstallCandidate(NexusRemoteModFile file)
+        internal static bool IsInstallCandidate(NexusRemoteModFile file)
         {
             if (file == null || file.FileId <= 0)
                 return false;
 
-            string category = (file.Category ?? string.Empty).Trim();
+            string category = (file.Category ?? string.Empty).Trim().Replace('_', ' ').Replace('-', ' ');
             return !string.Equals(category, "archived", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(category, "deleted", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(category, "old_version", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(category, "old version", StringComparison.OrdinalIgnoreCase);
+                && !string.Equals(category, "old", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(category, "old version", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(category, "old versions", StringComparison.OrdinalIgnoreCase);
         }
 
         private static List<NexusModReference> GetDistinctReferences(IEnumerable<NexusModReference> references)

@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using AssemblyBuilderAccess = System.Reflection.Emit.AssemblyBuilderAccess;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -48,6 +49,11 @@ internal static class ModManagerBehaviorHarness
             Run("missing configured game path is retained", MissingConfiguredGame);
             Run("mod updates preserve runtime files and prune verified backups", RuntimeFilesAndBackups);
             Run("Nexus display versions do not reject verified packages", NexusDisplayVersion);
+            Run("Nexus migration uses manifest IDs and respects explicit Nexus metadata", NexusMigrationMapping);
+            Run("Nexus migration offers Lifespan 2.0 even when the mod version is lower", NexusLifespanUpgrade);
+            Run("Nexus migration rejects old categories and old API references", NexusRejectsLegacyArchives);
+            Run("Nexus migration replaces aliases without moving or enabling mods", NexusAliasKeepsOrder);
+            Run("Nexus migration rolls back the package if the alias order cannot be saved", NexusAliasRollback);
             Run("profiles keep undiscovered IDs when switching", ProfileKeepsUndiscoveredIds);
             Run("failed settings reads prevent overwrites", FailedSettingsRead);
             Run("unreadable options are never replaced with defaults", FailedOptionsRead);
@@ -830,17 +836,184 @@ internal static class ModManagerBehaviorHarness
 
     private static void NexusDisplayVersion()
     {
-        string source = NewDir("nexus-source");
-        string target = NewDir("nexus-target");
-        WriteModFolder(source, "tester.version", "Version", "1.0", null);
-        WriteModFolder(target, "tester.version", "Version", "1.0", null);
-        Directory.CreateDirectory(Path.Combine(target, "About"));
-        File.WriteAllText(Path.Combine(target, "About/Nexus.json"), "{}");
-        NexusRemoteModFile file = new NexusRemoteModFile();
-        file.Version = "Release 2026 optional patch";
-        object[] args = new object[] { source, target, null, file, null, null, null };
-        bool valid = (bool)typeof(NexusInstallService).GetMethod("VerifyInstalledMod", AnyMember).Invoke(null, args);
-        Check(valid, "verified package rejected for display version: " + args[6]);
+        string mods = NewDir("nexus-display-version");
+        string zip = Path.Combine(_root, "nexus-display-version.zip");
+        WriteZip(zip, false, "About/About.json", AboutJson("tester.version", "Version", "1.0"));
+        string error;
+        var result = NexusFixtureInstaller().DownloadAndInstall(zip, mods,
+            new NexusRemoteMod { GameDomain = "sheltered", ModId = 42 },
+            new NexusRemoteModFile { FileId = 1, Version = "Release 2026 optional patch" }, out error);
+        Check(result != null, "verified package rejected for display version: " + error);
+    }
+
+    private static void NexusMigrationMapping()
+    {
+        string[] ids = { "Coolnether123.FourPersonExpeditions", "Coolnether123.TradingAmount", "coolnether123.Lifespan",
+            "coolnether123.BunkerRandomLocation", "com.procreation.framework", "Coolnether123.ShelteredVanillaFixes",
+            "coolnether123.betteraiqueue", "coolnether123.deepexpansion", "coolnether123.ShelteredSystemsExpansion" };
+        NexusMigrationRegistry.Entry entry;
+        for (int i = 0; i < ids.Length; i++)
+            Check(NexusMigrationRegistry.TryGet(ids[i].ToUpperInvariant(), out entry) &&
+                entry.ModId == i + 2 && entry.GameDomain == "sheltered" && entry.PackageId == ids[i], "mapping for " + ids[i]);
+        Check(NexusMigrationRegistry.TryGet("coolnether123.FamilyExpansion", out entry) && entry.PackageId == ids[4], "Family alias");
+        Check(NexusMigrationRegistry.TryGet("deepexpansion.researchdepth", out entry) && entry.PackageId == ids[7], "Deep alias");
+        Check(!NexusMigrationRegistry.TryGet("expandedmapsizes", out entry) &&
+            !NexusMigrationRegistry.TryGet("Coolnether123.ShelteredDisplayFixes", out entry), "unpublished mapping");
+
+        string root = NewDir("nexus-manifest");
+        var resolver = new NexusReferenceResolver();
+        var local = new ModItem("coolnether123.Lifespan", "Lifespan", root);
+        Check(resolver.Resolve(local, "sheltered") == null, "folder-derived identity was mapped");
+        local.HasValidAbout = true;
+        Check(resolver.Resolve(local, "sheltered").ModId == 4, "manifest identity was not mapped");
+        Directory.CreateDirectory(Path.Combine(root, "About"));
+        File.WriteAllText(Path.Combine(root, "About/Nexus.json"), "{\"gameDomain\":\"sheltered\",\"modId\":41}");
+        Check(resolver.Resolve(local, "sheltered").ModId == 41, "sidecar did not take precedence");
+        local.NexusGameDomain = "sheltered";
+        local.NexusModId = 42;
+        Check(resolver.Resolve(local, "sheltered").ModId == 42, "About.json did not take precedence");
+    }
+
+    private static void NexusLifespanUpgrade()
+    {
+        string root = NewDir("nexus-lifespan");
+        WriteApiAbout(root, "coolnether123.Lifespan", "1.2 beta", "1.3.0.0");
+        ModItem mod = new ModDiscoveryService("2.0.0.0").DiscoverMod(root);
+        bool legacy = (bool)Call(typeof(ApiCompatibilityService), "TargetsLegacyLine", mod);
+        Check(!NexusVersionComparer.IsRemoteNewer(mod.Version, "1.1.5"), "fixture must sort higher than the port");
+        Check(legacy && NexusVersionComparer.IsUpdateAvailable(mod.Version, "1.1.5", legacy), "the port was suppressed");
+        Check(!NexusVersionComparer.IsUpdateAvailable(mod.Version, "1.1.5", false), "a 2.0 package was offered a downgrade");
+    }
+
+    private static void NexusRejectsLegacyArchives()
+    {
+        const string id = "coolnether123.Lifespan";
+        string mods = NewDir("nexus-reject");
+        string old = Path.Combine(mods, "renamed-install");
+        WriteApiAbout(old, id, "1.2 beta", "1.3.0.0");
+        string before = TreeSignature(old);
+        string zip = Path.Combine(_root, "legacy-lifespan.zip");
+        WriteZip(zip, false, "About/About.json", ApiAbout(id, "1.1.2", "1.2.2.0"));
+
+        string error;
+        var remote = new NexusRemoteMod { GameDomain = "sheltered", ModId = 4 };
+        var installer = NexusFixtureInstaller();
+        foreach (string category in new string[] { "OLD", "OLD_VERSION", "Old Versions" })
+        {
+            var oldFile = new NexusRemoteModFile { FileId = 1, Category = category };
+            Check(installer.DownloadAndInstall("must not download", mods, remote, oldFile, out error) == null &&
+                error.Contains("old version"), "old category accepted: " + category);
+        }
+
+        var file = new NexusRemoteModFile { FileId = 2, Category = "MAIN" };
+        Check(installer.DownloadAndInstall(zip, mods, remote, file, out error) == null && error.Contains("older version"),
+            "legacy About.json accepted: " + error);
+
+        byte[] legacyPlugin = LegacyPluginBytes();
+        WriteZipBytes(zip, false, new string[] { "About/About.json", "Assemblies/LegacyFixture.dll" },
+            new byte[][] { Encoding.UTF8.GetBytes(ApiAbout(id, "1.1.5", "2.0.0.0")), legacyPlugin });
+        Check(installer.DownloadAndInstall(zip, mods, remote, file, out error) == null && error.Contains("older version"),
+            "legacy DLL under a 2.0 About.json was accepted: " + error);
+        SameText(before, TreeSignature(old), "legacy install changed after refusal");
+
+        WriteZip(zip, false, "About/About.json", AboutJson(id, "Lifespan", "1.1.5"));
+        Check(installer.DownloadAndInstall(zip, mods, remote, file, out error) == null && error.Contains("does not declare"),
+            "migration without a 2.0 declaration was accepted: " + error);
+    }
+
+    private static void NexusAliasKeepsOrder()
+    {
+        const string familyAlias = "coolnether123.FamilyExpansion";
+        const string familyId = "com.procreation.framework";
+        const string deepAlias = "deepexpansion.researchdepth";
+        const string deepId = "coolnether123.deepexpansion";
+        string mods = NewDir("nexus-order");
+        string family = Path.Combine(mods, "old-family");
+        string deep = Path.Combine(mods, "old-deep");
+        WriteApiAbout(family, familyAlias, "1.0.1", "1.2.2.0");
+        WriteApiAbout(deep, deepAlias, "1.0", "1.3.0.0");
+        Directory.CreateDirectory(Path.Combine(family, "Assemblies"));
+        File.WriteAllBytes(Path.Combine(family, "Assemblies/LegacyFixture.dll"), LegacyPluginBytes());
+        File.WriteAllText(Path.Combine(family, "player-data.txt"), "keep me");
+
+        var order = new LoadOrderService();
+        order.SaveOrder(mods, new string[] { "first", familyAlias, "last", deepId });
+        string zip = Path.Combine(_root, "alias-port.zip");
+        WriteZip(zip, false, "About/About.json", ApiAbout(familyId, "1.0.2", "2.0.0.0"),
+            "About/Nexus.json", "{\"modId\":6}");
+        string error;
+        var installer = NexusFixtureInstaller();
+        var file = new NexusRemoteModFile { FileId = 1, Category = "MAIN" };
+        var familyPage = new NexusRemoteMod { GameDomain = "sheltered", ModId = 6 };
+        var target = NexusInstallTargetContext.FromInstalledMod(new ModDiscoveryService("2.0.0.0").DiscoverMod(family));
+        var result = installer.DownloadAndInstall(zip, mods, familyPage, file, target, out error);
+        Check(result != null && result.InstalledPath == family && Directory.Exists(result.BackupPath), "alias replacement failed: " + error);
+        Same(new string[] { "first", familyId, "last", deepId }, order.ReadOrder(mods), "enabled alias slot");
+        Check(File.Exists(Path.Combine(family, "player-data.txt")) && !File.Exists(Path.Combine(family, "Assemblies/LegacyFixture.dll")) &&
+            File.Exists(Path.Combine(result.BackupPath, "Assemblies/LegacyFixture.dll")), "runtime data or old DLL retention");
+
+        WriteZip(zip, false, "About/About.json", ApiAbout(deepId, "1.0.1", "2.0.0.0"));
+        var deepPage = new NexusRemoteMod { GameDomain = "sheltered", ModId = 9 };
+        result = installer.DownloadAndInstall(zip, mods, deepPage, file, out error);
+        Check(result != null && result.InstalledPath == deep, "alias discoverable before UI sync: " + error);
+        Same(new string[] { "first", familyId, "last" }, order.ReadOrder(mods), "disabled alias stayed disabled");
+    }
+
+    private static void NexusAliasRollback()
+    {
+        string mods = NewDir("nexus-rollback-order");
+        string old = Path.Combine(mods, "family");
+        WriteApiAbout(old, "coolnether123.FamilyExpansion", "1.0.1", "1.2.2.0");
+        string before = TreeSignature(old);
+        string orderPath = Path.Combine(mods, "loadorder.json");
+        File.WriteAllText(orderPath, "{invalid order");
+        string zip = Path.Combine(_root, "rollback-port.zip");
+        WriteZip(zip, false, "About/About.json", ApiAbout("com.procreation.framework", "1.0.2", "2.0.0.0"));
+        string error;
+        var result = NexusFixtureInstaller().DownloadAndInstall(zip, mods,
+            new NexusRemoteMod { GameDomain = "sheltered", ModId = 6 }, new NexusRemoteModFile { FileId = 1 }, out error);
+        Check(result == null && error.Contains("Backup restored"), "failed load order update did not roll back: " + error);
+        SameText(before, TreeSignature(old), "old package restored");
+        SameText("{invalid order", File.ReadAllText(orderPath), "load order bytes preserved");
+    }
+
+    private static NexusInstallService NexusFixtureInstaller()
+    {
+        var constructor = typeof(NexusInstallService).GetConstructor(AnyMember, null,
+            new Type[] { ManagerType("Manager.Core.Services.IArchiveExtractor"), typeof(Action<string, string>) }, null);
+        return (NexusInstallService)constructor.Invoke(new object[] { null,
+            new Action<string, string>(delegate(string source, string archive) { File.Copy(source, archive); }) });
+    }
+
+    private static string ApiAbout(string id, string version, string apiVersion)
+    {
+        return new JavaScriptSerializer().Serialize(new { id = id, name = "Fixture", version = version, requiredModApiVersion = apiVersion });
+    }
+
+    private static void WriteApiAbout(string root, string id, string version, string apiVersion)
+    {
+        Directory.CreateDirectory(Path.Combine(root, "About"));
+        File.WriteAllText(Path.Combine(root, "About/About.json"), ApiAbout(id, version, apiVersion));
+    }
+
+    private static byte[] _legacyPlugin;
+
+    private static byte[] LegacyPluginBytes()
+    {
+        if (_legacyPlugin != null)
+            return _legacyPlugin;
+        string root = NewDir("synthetic-legacy-plugin");
+        var apiName = new AssemblyName("ModAPI") { Version = new Version(1, 2, 2, 0) };
+        var apiAssembly = AppDomain.CurrentDomain.DefineDynamicAssembly(apiName, AssemblyBuilderAccess.RunAndSave, root);
+        Type apiType = apiAssembly.DefineDynamicModule("FixtureApi", "ModAPI.dll")
+            .DefineType("ModAPI.FixtureBase", TypeAttributes.Public).CreateType();
+        apiAssembly.Save("ModAPI.dll");
+        var plugin = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName("LegacyFixture"), AssemblyBuilderAccess.RunAndSave, root);
+        plugin.DefineDynamicModule("FixturePlugin", "LegacyFixture.dll")
+            .DefineType("LegacyFixture", TypeAttributes.Public, apiType).CreateType();
+        plugin.Save("LegacyFixture.dll");
+        _legacyPlugin = File.ReadAllBytes(Path.Combine(root, "LegacyFixture.dll"));
+        return _legacyPlugin;
     }
 
     private static void FailedOrderRead()
@@ -2709,10 +2882,7 @@ internal static class ModManagerBehaviorHarness
 
     private static void FailInstall(NexusModsTab tab, object origin, string error)
     {
-        if (typeof(NexusModsTab).GetMethod("FinishInstallWithError", AnyMember).GetParameters().Length == 2)
-            Call(tab, "FinishInstallWithError", error, origin);
-        else
-            Call(tab, "FinishInstallWithError", error);
+        Call(tab, "FinishInstallWithError", error, origin, null);
     }
 
     private static void NexusRestartIgnoresStaleResults()
@@ -2824,7 +2994,7 @@ internal static class ModManagerBehaviorHarness
             // The empty URL is rejected locally before any download or filesystem work.
             object[] refused = new object[] { Installer(), "", NewDir("nexus-refused"),
                 new NexusRemoteMod { GameDomain = "sheltered", ModId = 5 }, new NexusRemoteModFile { FileId = 8 },
-                null, null, null, null };
+                null, null, null, null, null };
             Check(Call(tab, "DownloadAndInstallWithLease", refused) == null && !string.IsNullOrEmpty((string)refused[7]) && refused[8].ToString() == "Acquired",
                 "a refused install did not return its failure");
             Application.DoEvents();

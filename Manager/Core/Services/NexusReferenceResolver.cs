@@ -66,6 +66,10 @@ namespace Manager.Core.Services
                 };
             }
 
+            NexusMigrationRegistry.Entry entry;
+            if (mod.HasValidAbout && NexusMigrationRegistry.TryGet(mod.Id, out entry))
+                return new NexusModReference { GameDomain = entry.GameDomain, ModId = entry.ModId };
+
             return null;
         }
 

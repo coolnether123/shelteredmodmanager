@@ -227,7 +227,7 @@ namespace Manager.Views
 
             ModItem localMod;
             _installedByNexusKey.TryGetValue(BuildNexusKey(link.GameDomain, link.ModId), out localMod);
-            NexusInstallTargetContext targetContext = NexusInstallTargetContext.FromInstalledMod(localMod);
+            NexusInstallTargetContext targetContext = NexusInstallTargetContext.FromInstalledMod(batch != null ? batch.Local : localMod);
             string modsPath = settings.ModsPath;
             NexusInstallService installService = _installService;
             _installSelectedButton.Enabled = false;
@@ -259,6 +259,12 @@ namespace Manager.Views
                     return;
                 }
 
+                if (!NexusModsService.IsInstallCandidate(requestedFile))
+                {
+                    FinishInstallWithError("This Nexus file is an old version or is no longer available. Choose a current file.", batch, mod);
+                    return;
+                }
+
                 string downloadUrl = nexusService.GetDownloadUrlWithAuthorization(
                     link.GameDomain,
                     link.ModId,
@@ -273,6 +279,7 @@ namespace Manager.Views
                 }
 
                 InstallWorkLeaseResult leaseResult;
+                bool fileRejected;
                 NexusInstallResult result = DownloadAndInstallWithLease(
                     installService,
                     downloadUrl,
@@ -282,7 +289,8 @@ namespace Manager.Views
                     targetContext,
                     batch,
                     out error,
-                    out leaseResult);
+                    out leaseResult,
+                    out fileRejected);
                 if (leaseResult == InstallWorkLeaseResult.StaleBatch ||
                     leaseResult == InstallWorkLeaseResult.AlreadyOwnedByBatch)
                     return;
@@ -293,7 +301,8 @@ namespace Manager.Views
                 }
                 if (result == null || !string.IsNullOrEmpty(error))
                 {
-                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown install error."), batch);
+                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown install error."), batch,
+                        fileRejected ? mod : null);
                     return;
                 }
 
@@ -882,12 +891,12 @@ namespace Manager.Views
             item.RemoteMod = BuildRemoteFromLocal(mod);
             item.State = state;
             item.PrimaryText = mod.DisplayName;
-            item.SecondaryText = state == NexusItemState.UpdateAvailable
+            item.SecondaryText = mod.NeedsApiMigration ? "Needs an SMM 2.0 update" : state == NexusItemState.UpdateAvailable
                 ? FormatVersionWithChannel(mod.Version) + "  →  " + FormatVersionWithChannel(mod.NexusRemoteVersion)
                 : FormatVersionWithChannel(mod.Version) + (mod.HasNexusReference ? " linked to Nexus" : " not linked");
             if (HasApiIssue(mod))
                 item.SecondaryText += " | " + GetApiIssueText(mod);
-            item.BadgeText = GetBadgeText(state);
+            item.BadgeText = mod.NeedsApiMigration ? "NEEDS 2.0" : GetBadgeText(state);
             return item;
         }
 
@@ -899,7 +908,7 @@ namespace Manager.Views
             item.State = state;
             item.PrimaryText = remote.Name;
             item.SecondaryText = FormatVersionWithChannel(remote.Version) + (local != null ? (" | installed as " + local.DisplayName) : " | not installed");
-            item.BadgeText = GetBadgeText(state);
+            item.BadgeText = local != null && local.NeedsApiMigration ? "NEEDS 2.0" : GetBadgeText(state);
             return item;
         }
 
@@ -1158,7 +1167,7 @@ namespace Manager.Views
 
                 if (file == null)
                 {
-                    FinishInstallWithError(BuildMissingFileMessage(resolvedChoice, includePrereleaseFiles), batch);
+                    FinishInstallWithError(BuildMissingFileMessage(resolvedChoice, includePrereleaseFiles), batch, selected);
                     return;
                 }
 
@@ -1227,39 +1236,46 @@ namespace Manager.Views
                     return;
                 }
 
-                string downloadUrl = nexusService.GetDownloadUrl(selected.GameDomain, selected.ModId, file.FileId, out error);
-                if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
+                bool usePrerelease = NexusReleaseClassifier.IsPrerelease(file);
+                while (file != null)
                 {
-                    FinishInstallWithError(RewriteDirectDownloadError(error), batch);
-                    return;
-                }
+                    string downloadUrl = nexusService.GetDownloadUrl(selected.GameDomain, selected.ModId, file.FileId, out error);
+                    if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
+                    {
+                        FinishInstallWithError(RewriteDirectDownloadError(error), batch);
+                        return;
+                    }
 
-                InstallWorkLeaseResult leaseResult;
-                var result = DownloadAndInstallWithLease(
-                    installService,
-                    downloadUrl,
-                    modsPath,
-                    selected,
-                    file,
-                    targetContext,
-                    batch,
-                    out error,
-                    out leaseResult);
-                if (leaseResult == InstallWorkLeaseResult.StaleBatch ||
-                    leaseResult == InstallWorkLeaseResult.AlreadyOwnedByBatch)
-                    return;
-                if (leaseResult == InstallWorkLeaseResult.Busy)
-                {
-                    FinishInstallWithError("A Nexus install is already in progress.", batch);
-                    return;
-                }
-                if (result == null || !string.IsNullOrEmpty(error))
-                {
-                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown install error."), batch);
-                    return;
-                }
+                    InstallWorkLeaseResult leaseResult;
+                    bool fileRejected;
+                    var result = DownloadAndInstallWithLease(installService, downloadUrl, modsPath, selected, file,
+                        targetContext, batch, out error, out leaseResult, out fileRejected);
+                    if (leaseResult == InstallWorkLeaseResult.StaleBatch ||
+                        leaseResult == InstallWorkLeaseResult.AlreadyOwnedByBatch)
+                        return;
+                    if (leaseResult == InstallWorkLeaseResult.Busy)
+                    {
+                        FinishInstallWithError("A Nexus install is already in progress.", batch);
+                        return;
+                    }
+                    if (result != null)
+                    {
+                        FinishInstallSuccess(selected, result, batch);
+                        return;
+                    }
+                    if (!fileRejected)
+                    {
+                        FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown install error."), batch);
+                        return;
+                    }
 
-                FinishInstallSuccess(selected, result, batch);
+                    EmitActivity(error);
+                    int rejectedFileId = file.FileId;
+                    files.RemoveAll(candidate => candidate != null && candidate.FileId == rejectedFileId);
+                    file = usePrerelease ? nexusService.SelectPreferredPrereleaseInstallFile(files) :
+                        nexusService.SelectPreferredInstallFile(files, false);
+                }
+                FinishInstallWithError(error, batch, selected);
             });
         }
 
@@ -1272,11 +1288,13 @@ namespace Manager.Views
             NexusInstallTargetContext targetContext,
             BatchInstall batch,
             out string errorMessage,
-            out InstallWorkLeaseResult leaseResult)
+            out InstallWorkLeaseResult leaseResult,
+            out bool fileRejected)
         {
             Guid leaseToken;
             leaseResult = TryAcquireInstallWorkLease(batch, out leaseToken);
             errorMessage = null;
+            fileRejected = false;
             if (leaseResult != InstallWorkLeaseResult.Acquired)
                 return null;
 
@@ -1288,7 +1306,8 @@ namespace Manager.Views
                     mod,
                     file,
                     targetContext,
-                    out errorMessage);
+                    out errorMessage,
+                    out fileRejected);
             }
             catch (Exception ex)
             {
@@ -2200,7 +2219,7 @@ namespace Manager.Views
             catch { }
         }
 
-        private void FinishInstallWithError(string message, BatchInstall batch)
+        private void FinishInstallWithError(string message, BatchInstall batch, NexusRemoteMod filesPage = null)
         {
             if (IsDisposed || Disposing)
                 return;
@@ -2221,7 +2240,15 @@ namespace Manager.Views
                     UpdateActionButtons();
                     EmitActivity(message);
                     if (showInstallError)
+                    {
                         _detailsPanel.ShowMessage("Install failed", message);
+                        if (filesPage != null && MessageBox.Show(this, message + Environment.NewLine + Environment.NewLine +
+                            "Open the Nexus files page?", "Choose a Nexus file", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                        {
+                            try { System.Diagnostics.Process.Start(filesPage.GetPageUrl() + "?tab=files"); }
+                            catch { _detailsPanel.ShowMessage("Could not open Nexus", "Use the Nexus page button to open the file list."); }
+                        }
+                    }
                     OnBatchInstallFinished(batch, false, null, message);
                 });
             }
@@ -2518,6 +2545,7 @@ namespace Manager.Views
             details.NexusRemoteUpdatedAtUtc = local.NexusRemoteUpdatedAtUtc;
             details.NexusRemoteSummary = local.NexusRemoteSummary;
             details.HasUpdateAvailable = local.HasUpdateAvailable;
+            details.NeedsApiMigration = local.NeedsApiMigration;
             if (local.DependsOn != null) details.DependsOn = local.DependsOn;
             if (local.LoadAfter != null) details.LoadAfter = local.LoadAfter;
             if (local.LoadBefore != null) details.LoadBefore = local.LoadBefore;

@@ -182,6 +182,7 @@
     <Compile Include="Core\Services\NexusGraphQlClient.cs" />
     <Compile Include="Core\Services\NexusV3RestClient.cs" />
     <Compile Include="Core\Services\NexusReferenceResolver.cs" />
+    <Compile Include="Core\Services\NexusMigrationRegistry.cs" />
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
     <Compile Include="Core\Services\NexusRequestHeaders.cs" />
