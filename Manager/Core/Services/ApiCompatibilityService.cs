@@ -13,6 +13,7 @@ namespace Manager.Core.Services
     {
         private const string ModApiName = "ModAPI";
         private const string ShelteredApiName = "ShelteredAPI";
+        private const int BreakingTwoPointZeroMajor = 2;
 
         private readonly Dictionary<string, string> _installedVersions;
         public ApiCompatibilityService(Dictionary<string, string> installedVersions)
