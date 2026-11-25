@@ -188,6 +188,7 @@ class	ShelteredAPI.Scenarios.Infrastructure.Unity	ShelteredScenarioDefBuilder	Sh
 class	ShelteredAPI.Scenarios.Infrastructure.Unity	ShelteredScenarioDefBuilderCompatibility	ShelteredAPI/Scenarios/Infrastructure/Unity/ShelteredScenarioDefBuilder.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Scenarios.Public	ShelteredCustomScenarioBase	ShelteredAPI/Scenarios/Public/IShelteredCustomScenario.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Scenarios.Public	ShelteredScenarioAuthoring	ShelteredAPI/Scenarios/Public/ShelteredScenarioAuthoring.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Scenarios.Public	ShelteredScenarioPackages	ShelteredAPI/Scenarios/Public/ShelteredScenarioPackages.cs	Shared locking, replacement, and recovery for the runtime catalog and optional editor.
 class	ShelteredAPI.Scenarios.Public	ShelteredScenarioRuntime	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Scenarios.Public	ShelteredScenarios	ShelteredAPI/Scenarios/Public/ShelteredScenarios.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.UI	UICloneOptions	ShelteredAPI/UI/UIExtensionContracts.cs	Options DTO for focused safe Unity/NGUI visual-template cloning through ShelteredUI.
@@ -329,6 +330,7 @@ class	ShelteredAPI.Scenarios.Public	ScenarioStationUpgradePathSnapshot	Sheltered
 class	ShelteredAPI.Scenarios.Public	ScenarioStationUpgradeSnapshot	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Aggregate station authoring state returned through an owned preview session while reflection remains internal.
 class	ShelteredAPI.Scenarios.Public	ScenarioWorldLaunchRequest	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Typed managed scenario-world launch request shared by mods and the optional editor.
 class	ShelteredAPI.Scenarios.Shared	ScenarioPropertyBag	ShelteredAPI/Scenarios/Shared/ScenarioPropertyBag.cs	Canonical property-list utility for public scenario definition schema.
+enum	ShelteredAPI.Scenarios.Public	ScenarioPackageStep	ShelteredAPI/Scenarios/Public/ShelteredScenarioPackages.cs	Typed replacement step shared with the editor and its recovery checks.
 enum	ShelteredAPI.Scenarios.Public	ScenarioPreviewRefreshScope	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Typed refresh scope for the disposable scenario preview lifecycle.
 enum	ShelteredAPI.Scenarios.Public	ScenarioRuntimeIdentityKind	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Stable authored-runtime identity categories returned instead of public Unity marker types.
 interface	ShelteredAPI.Scenarios.Public	IScenarioPreviewSession	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Coarse disposable runtime preview boundary usable without the editor assembly.
