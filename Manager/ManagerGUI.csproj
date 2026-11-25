@@ -169,6 +169,9 @@
     <Compile Include="Core\Security\NexusOAuthTokenProtector.cs" />
     <Compile Include="Core\Services\SettingsService.cs" />
     <Compile Include="Core\Services\ApiCompatibilityService.cs" />
+    <Compile Include="..\Shared\ModAssemblyMetadata.cs">
+      <Link>Shared\ModAssemblyMetadata.cs</Link>
+    </Compile>
     <Compile Include="Core\Services\ManagerBooleanOptionsService.cs" />
     <Compile Include="Core\Services\ContentWorkshopProjectService.cs" />
     <Compile Include="Core\Services\ModDiscoveryService.cs" />

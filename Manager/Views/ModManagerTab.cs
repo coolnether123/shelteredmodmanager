@@ -453,7 +453,7 @@ namespace Manager.Views
 
         private void ModList_ToggleRequested(object sender, ModItem mod, bool turnOn)
         {
-            if (mod == null || _settings == null)
+            if (mod == null || mod.RequiresSmm2Update || _settings == null)
                 return;
             List<string> order = CurrentOrder();
             order.RemoveAll(delegate(string id) { return string.Equals(id, mod.Id, StringComparison.OrdinalIgnoreCase); });
@@ -464,7 +464,7 @@ namespace Manager.Views
 
         private void ModList_MoveRequested(object sender, ModItem mod, int activeIndex)
         {
-            if (mod == null || _settings == null)
+            if (mod == null || mod.RequiresSmm2Update || _settings == null)
                 return;
             List<string> order = CurrentOrder();
             bool wasActive = order.RemoveAll(delegate(string id) { return string.Equals(id, mod.Id, StringComparison.OrdinalIgnoreCase); }) > 0;
@@ -503,12 +503,8 @@ namespace Manager.Views
             HashSet<string> installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (ModItem mod in _allMods)
                 installed.Add(mod.Id);
-            // Each ID once: two folders can share an ID, and the file lists mods, not folders.
-            List<string> next = new List<string>();
-            HashSet<string> listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string id in activeIds)
-                if (!string.IsNullOrEmpty(id) && listed.Add(id))
-                    next.Add(id);
+            List<string> next = LoadOrderService.KeepLegacySlots(_allMods, previous, activeIds);
+            var listed = new HashSet<string>(next, StringComparer.OrdinalIgnoreCase);
             foreach (string id in previous)
                 if (!installed.Contains(id) && listed.Add(id))
                     next.Add(id);
@@ -607,7 +603,7 @@ namespace Manager.Views
 
             RefreshMods();
             ModItem mod = FindMod(modId);
-            if (mod == null)
+            if (mod == null || mod.RequiresSmm2Update)
                 return false;
             if (_enabledMods.Contains(mod))
                 return true;
@@ -653,6 +649,10 @@ namespace Manager.Views
                         actionText = "Update all";
                         action = delegate { RequestUpdateAll(); };
                     }
+                }
+                else if (needed != null && needed.RequiresSmm2Update)
+                {
+                    message = ownerName + " needs a 2.0 update for " + needed.DisplayName + ".";
                 }
                 else if (needed != null)
                 {
@@ -721,6 +721,8 @@ namespace Manager.Views
         /// <summary>Turns a dependency on just ahead of the first mod that needs it.</summary>
         private void TurnOnDependency(ModItem dependency)
         {
+            if (dependency.RequiresSmm2Update)
+                return;
             List<string> order = CurrentOrder();
             int insertAt = order.Count;
             foreach (DependencyProblem problem in _validation.DependencyProblems)
@@ -994,7 +996,7 @@ namespace Manager.Views
             SyncActiveProfile();
             List<string> order = InstalledOrderOf(profile);
             string[] previousOrder = _orderService.ReadOrder(_settings.ModsPath);
-            if (!SaveOrder(order))
+            if (!SaveOrder(LoadOrderService.KeepLegacySlots(_allMods, previousOrder, order)))
                 return;
             PushUndo(previousOrder, "Switched to the profile “" + name + "”.");
             _listService.SetActiveProfile(_settings.ModsPath, name);
@@ -1341,6 +1343,7 @@ namespace Manager.Views
             {
                 if (mod == null) continue;
 
+                // The same lookup supplies the Find update link, including registry mappings.
                 var reference = _nexusResolver.Resolve(mod, fallbackDomain);
                 if (reference != null && reference.IsValid)
                 {

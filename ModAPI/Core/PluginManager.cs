@@ -8,6 +8,7 @@ using ModAPI.Loading;
 using ModAPI.Persistence;
 using ModAPI.Spine;
 using ModAPI.Actors;
+using Smm.Shared;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -47,6 +48,7 @@ namespace ModAPI.Core
         {
             public ModEntry Entry;
             public List<PreparedPluginAssembly> Assemblies = new List<PreparedPluginAssembly>();
+            public bool HasAssemblyLoadErrors;
         }
 
         private sealed class PreparedModActivationState
@@ -60,6 +62,7 @@ namespace ModAPI.Core
         /// Mods that were discovered and accepted by load-order filtering for this session.
         /// </summary>
         public static List<ModEntry> LoadedMods { get; private set; }
+        internal static readonly List<ModEntry> SuccessfullyLoadedMods = new List<ModEntry>();
         public static bool PluginsActivated { get; private set; }
 
         public static event Action OnSessionStartedEvent;
@@ -108,6 +111,8 @@ namespace ModAPI.Core
             _startupStopwatch = Stopwatch.StartNew();
             _loadErrors = 0;
             PluginsActivated = false;
+            lock (SuccessfullyLoadedMods)
+                SuccessfullyLoadedMods.Clear();
 
             MeasureStartupPhase("InitializeLoader", delegate { InitializeLoader(doorstepGameObject); });
             MeasureStartupPhase("LogAssemblyResolution", LogAssemblyResolution);
@@ -360,14 +365,19 @@ namespace ModAPI.Core
                 string compatibilityReason;
                 if (!IsRuntimeApiCompatible(entry, out compatibilityReason))
                 {
-                    MMLog.WriteError("PrepareModLoads: blocked incompatible mod '" + SafeEntryId(entry) + "': " + compatibilityReason);
+                    MMLog.WriteError("PrepareModLoads: blocked incompatible mod '" + SafeEntryId(entry) + "' before assembly load: " + compatibilityReason);
                     _loadErrors++;
                     continue;
                 }
 
                 var modLoad = new PreparedModLoad();
                 modLoad.Entry = entry;
-                modLoad.Assemblies = PrepareAssemblies(entry);
+                if (!TryPrepareAssemblies(modLoad, out compatibilityReason))
+                {
+                    MMLog.WriteError("PrepareModLoads: blocked mod '" + SafeEntryId(entry) + "': " + compatibilityReason);
+                    _loadErrors++;
+                    continue;
+                }
                 prepared.Add(modLoad);
             }
 
@@ -375,65 +385,90 @@ namespace ModAPI.Core
             return prepared;
         }
 
-        private static List<PreparedPluginAssembly> PrepareAssemblies(ModEntry entry)
+        private static bool TryPrepareAssemblies(PreparedModLoad prepared, out string reason)
         {
             var timer = Stopwatch.StartNew();
-            var assemblies = new List<PreparedPluginAssembly>();
-            if (entry == null || string.IsNullOrEmpty(entry.AssembliesPath) || !Directory.Exists(entry.AssembliesPath))
-            {
-                LogStartupTiming("PrepareAssemblies " + SafeEntryId(entry), timer);
-                return assemblies;
-            }
+            var entry = prepared.Entry;
+            // Inspect the whole package before loading any of its assemblies.
+            // Keep the checked bytes so a changed file can't bypass the check.
+            var images = new List<KeyValuePair<string, byte[]>>();
+            if (!TryInspectAssemblies(entry, images, out reason))
+                return false;
 
-            string[] dllFiles = new string[0];
-            try
+            foreach (var image in images)
             {
-                dllFiles = Directory.GetFiles(entry.AssembliesPath, "*.dll", SearchOption.AllDirectories);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("PrepareAssemblies failed to enumerate DLLs for '" + entry.Id + "': " + ex.Message);
-                LogStartupTiming("PrepareAssemblies " + SafeEntryId(entry), timer);
-                return assemblies;
-            }
-
-            for (int i = 0; i < dllFiles.Length; i++)
-            {
-                string dllPath = dllFiles[i];
-                if (SharedAssemblyResolver.ShouldSkipModAssembly(dllPath))
-                {
-                    MMLog.WriteInfo("PrepareAssemblies: skipping shared runtime assembly '" + dllPath + "'.");
-                    continue;
-                }
-
                 try
                 {
-                    byte[] assemblyBytes = File.ReadAllBytes(dllPath);
-                    var asm = Assembly.Load(assemblyBytes);
-
-                    Type[] types = null;
-                    try { types = asm.GetTypes(); }
-                    catch (ReflectionTypeLoadException rtle)
+                    var asm = Assembly.Load(image.Value);
+                    var types = GetLoadableTypes(asm, entry);
+                    prepared.HasAssemblyLoadErrors |= types == null || Array.IndexOf(types, null) >= 0;
+                    prepared.Assemblies.Add(new PreparedPluginAssembly
                     {
-                        MMLog.WritePluginError(entry.Id, "type discovery", rtle);
-                        types = rtle.Types;
-                    }
-
-                    assemblies.Add(new PreparedPluginAssembly
-                    {
-                        Path = dllPath,
+                        Path = image.Key,
                         Assembly = asm,
                         Types = types
                     });
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError("PrepareAssemblies failed to load assembly '" + dllPath + "' for mod '" + entry.Id + "': " + ex);
+                    prepared.HasAssemblyLoadErrors = true;
+                    MMLog.WriteError("PrepareAssemblies failed to load assembly '" + image.Key + "' for mod '" + entry.Id + "': " + ex);
                 }
             }
 
             LogStartupTiming("PrepareAssemblies " + SafeEntryId(entry), timer);
-            return assemblies;
+            return true;
+        }
+
+        internal static bool CanPrepareMod(ModEntry entry)
+        {
+            string reason;
+            return IsRuntimeApiCompatible(entry, out reason) && TryInspectAssemblies(entry, null, out reason);
+        }
+
+        private static bool TryInspectAssemblies(ModEntry entry, List<KeyValuePair<string, byte[]>> images, out string reason)
+        {
+            reason = null;
+            string path = entry.AssembliesPath;
+            try
+            {
+                string[] dllFiles;
+                try { dllFiles = Directory.GetFiles(path, "*.dll", SearchOption.AllDirectories); }
+                catch (DirectoryNotFoundException) { return true; } // Data-only mod.
+
+                foreach (string dllPath in dllFiles)
+                {
+                    path = dllPath;
+                    if (SharedAssemblyResolver.ShouldSkipModAssembly(dllPath))
+                    {
+                        if (images != null)
+                            MMLog.WriteInfo("PrepareAssemblies: skipping shared runtime assembly '" + dllPath + "'.");
+                        continue;
+                    }
+
+                    byte[] image = File.ReadAllBytes(dllPath);
+                    var references = new List<AssemblyName>();
+                    if (!ModAssemblyMetadata.ReadReferences(image, references))
+                        continue; // Native dependency; the CLR does not load it as a managed assembly.
+                    foreach (AssemblyName reference in references)
+                    {
+                        if (!ModAssemblyMetadata.IsLegacyReference(reference.Name, reference.Version.Major))
+                            continue;
+                        reason = ModAssemblyMetadata.LegacyUpdateMessage + " (" + Path.GetFileName(dllPath)
+                            + " references " + reference.Name + " " + reference.Version + ").";
+                        return false;
+                    }
+                    if (images != null)
+                        images.Add(new KeyValuePair<string, byte[]>(dllPath, image));
+                }
+            }
+            catch (Exception ex)
+            {
+                reason = "Could not inspect assembly metadata at '" + path + "': " + ex.Message;
+                return false;
+            }
+
+            return true;
         }
 
         private void DiscoverAndOrderMods(List<string> orderedModIds)
@@ -481,64 +516,7 @@ namespace ModAPI.Core
         /// </summary>
         private void LoadAndInitializePlugins(List<ModEntry> orderedMods)
         {
-            MMLog.WriteDebug(string.Format("LoadAndInitializePlugins: Starting with {0} mods", orderedMods.Count));
-            var preparedMods = new List<PreparedModLoad>();
-
-            foreach (var entry in orderedMods)
-            {
-                MMLog.WriteDebug($"Processing mod: {entry.Id}");
-
-                string compatibilityReason;
-                if (!IsRuntimeApiCompatible(entry, out compatibilityReason))
-                {
-                    MMLog.WriteError("Blocked incompatible mod '" + SafeEntryId(entry) + "' before assembly load: " + compatibilityReason);
-                    _loadErrors++;
-                    continue;
-                }
-
-                List<Assembly> modAssemblies = null;
-                try
-                {
-                    MMLog.WriteDebug($"Loading assemblies for {entry.Id} from {entry.AssembliesPath}");
-                    modAssemblies = ModDiscovery.LoadAssemblies(entry);
-                    MMLog.WriteDebug($"Loaded {modAssemblies.Count} assemblies for {entry.Id}");
-                }
-                catch (Exception ex)
-                {
-                    MMLog.Write($"failed to load assemblies for '{entry.Id}': {ex.Message}");
-                    _loadErrors++;
-                    continue;
-                }
-
-                preparedMods.Add(BuildPreparedModLoad(entry, modAssemblies));
-            }
-
-            ActivatePreparedMods(preparedMods);
-        }
-
-        private PreparedModLoad BuildPreparedModLoad(ModEntry entry, List<Assembly> modAssemblies)
-        {
-            var prepared = new PreparedModLoad();
-            prepared.Entry = entry;
-
-            if (modAssemblies == null)
-                return prepared;
-
-            for (int i = 0; i < modAssemblies.Count; i++)
-            {
-                var asm = modAssemblies[i];
-                if (asm == null)
-                    continue;
-
-                prepared.Assemblies.Add(new PreparedPluginAssembly
-                {
-                    Path = SafeAssemblyPath(asm),
-                    Assembly = asm,
-                    Types = GetLoadableTypes(asm, entry)
-                });
-            }
-
-            return prepared;
+            ActivatePreparedMods(PrepareModLoads(orderedMods));
         }
 
         private void ActivatePreparedMods(List<PreparedModLoad> preparedMods)
@@ -698,14 +676,21 @@ namespace ModAPI.Core
 
             ModRuntime.NotifyModActivating(entry);
 
+            bool isLibrary = prepared.Assemblies.Count > 0 && !prepared.HasAssemblyLoadErrors;
             for (int j = 0; j < prepared.Assemblies.Count; j++)
             {
                 var preparedAssembly = prepared.Assemblies[j];
                 if (preparedAssembly == null || preparedAssembly.Assembly == null)
                     continue;
 
+                if (isLibrary)
+                    isLibrary = !Array.Exists(preparedAssembly.Types, type => IsPluginType(type) || IsGameRuntimeBootstrapType(type));
                 ActivatePluginTypes(entry, preparedAssembly.Types);
             }
+            if (isLibrary || (prepared.Assemblies.Count == 0 && !prepared.HasAssemblyLoadErrors
+                && string.Equals(entry.Id, "com.harmony.0harmony", StringComparison.OrdinalIgnoreCase)
+                && FindLoadedRuntimeAssembly("0Harmony") != null))
+                ModRuntime.RecordSuccessfulLoad(entry);
         }
 
         private void LogPluginActivationComplete()
@@ -755,7 +740,7 @@ namespace ModAPI.Core
                     if (preparedAssembly == null)
                         continue;
 
-                    InitializeGameRuntimeBootstraps(preparedAssembly.Types);
+                    InitializeGameRuntimeBootstraps(preparedAssembly.Types, prepared.Entry);
                 }
             }
         }
@@ -768,11 +753,11 @@ namespace ModAPI.Core
                 if (!IsGameRuntimeAssemblyCandidate(assemblies[i]))
                     continue;
 
-                InitializeGameRuntimeBootstraps(GetLoadableTypes(assemblies[i], null));
+                InitializeGameRuntimeBootstraps(GetLoadableTypes(assemblies[i], null), null);
             }
         }
 
-        private void InitializeGameRuntimeBootstraps(Type[] types)
+        private void InitializeGameRuntimeBootstraps(Type[] types, ModEntry entry)
         {
             if (types == null)
                 return;
@@ -792,6 +777,7 @@ namespace ModAPI.Core
                 {
                     var bootstrap = (IGameRuntimeBootstrap)Activator.CreateInstance(type);
                     bootstrap.Initialize();
+                    ModRuntime.RecordSuccessfulLoad(entry);
                     MMLog.WriteInfo("Initialized game runtime bootstrap: " + type.FullName);
                 }
                 catch (Exception ex)
@@ -922,6 +908,7 @@ namespace ModAPI.Core
 
                     MMLog.WriteDebug("Starting plugin: " + type.FullName);
                     MeasureStartupPhase("Plugin " + type.FullName + " Start", delegate { plugin.Start(ctx); });
+                    ModRuntime.RecordSuccessfulLoad(entry);
                     ctx.Log.Info("Started.");
                 }
                 catch (Exception ex)

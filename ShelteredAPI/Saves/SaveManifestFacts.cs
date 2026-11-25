@@ -19,7 +19,7 @@ namespace ShelteredAPI.Saves
         internal static SlotManifest CaptureCurrent(SaveInfo info)
         {
             List<LoadedModInfo> currentMods = new List<LoadedModInfo>();
-            foreach (ModEntry mod in ModRuntime.GetLoadedModsSnapshot())
+            foreach (ModEntry mod in ModRuntime.GetSuccessfullyLoadedModsSnapshot())
             {
                 if (mod == null)
                     continue;

@@ -199,7 +199,7 @@ namespace ShelteredAPI.Saves.Paging
                 });
             
             // === ANALYZE MODS ===
-            var activeMods = ModRuntime.GetLoadedModsSnapshot();
+            var activeMods = ModRuntime.GetSuccessfullyLoadedModsSnapshot();
             var savedMods = manifest?.lastLoadedMods ?? new LoadedModInfo[0];
             var discovered = ModRuntime.DiscoverAllMods();
             var comparison = SaveVerification.BuildModComparison(activeMods, savedMods, options.IncludeExtraMods);
@@ -385,17 +385,18 @@ namespace ShelteredAPI.Saves.Paging
             bool canReload = options.AllowAutoLoad && !allMatch && !hasUnknownState;
             if (canReload && hasMissing)
             {
+                var attempted = ModRuntime.GetLoadedModsSnapshot();
                 var missingEntries = comparison.Where(c => c.status == SaveVerification.ModCompareStatus.Missing);
-                bool allMissingAvailable = true;
-                foreach(var m in missingEntries)
+                foreach (var missing in missingEntries)
                 {
-                    if (m.savedId != null && !discovered.Exists(d => d.Id.Equals(m.savedId, StringComparison.OrdinalIgnoreCase)))
+                    var installed = discovered.Find(d => string.Equals(d.Id, missing.savedId, StringComparison.OrdinalIgnoreCase));
+                    if (installed == null || attempted.Exists(d => string.Equals(d.Id, missing.savedId, StringComparison.OrdinalIgnoreCase))
+                        || !PluginManager.CanPrepareMod(installed))
                     {
-                        allMissingAvailable = false;
+                        canReload = false;
                         break;
                     }
                 }
-                if (!allMissingAvailable) canReload = false;
             }
             
             // RELOAD WITH SAVE MODS button

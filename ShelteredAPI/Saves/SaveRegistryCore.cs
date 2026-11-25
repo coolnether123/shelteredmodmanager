@@ -658,7 +658,8 @@ namespace ShelteredAPI.Saves
                 }
             }
 
-            root.Set("lastLoadedMods", ManualJsonValue.Array(mods));
+            if (manifest.lastLoadedMods != null)
+                root.Set("lastLoadedMods", ManualJsonValue.Array(mods));
             return ManualJson.Serialize(root, true);
         }
 
@@ -760,7 +761,7 @@ namespace ShelteredAPI.Saves
         {
             if (modsJson == null)
             {
-                return new LoadedModInfo[0];
+                return null;
             }
 
             List<LoadedModInfo> mods = new List<LoadedModInfo>();

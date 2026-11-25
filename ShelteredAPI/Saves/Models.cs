@@ -228,7 +228,7 @@ namespace ShelteredAPI.Saves
         public string queueSummary;
         public string restoreFactsStatus = "unknown";
         public string restoreLineageId;
-        public LoadedModInfo[] lastLoadedMods = new LoadedModInfo[0];
+        public LoadedModInfo[] lastLoadedMods;
     }
 }
 

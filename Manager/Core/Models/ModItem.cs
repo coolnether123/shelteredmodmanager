@@ -38,6 +38,7 @@ namespace Manager.Core.Models
         
         // Runtime state
         public bool IsEnabled { get; set; }
+        public bool RequiresSmm2Update { get { return ApiCompatibility.RequiresSmm2Update; } }
         public ModStatus Status { get; set; }
         public string StatusMessage { get; set; }
         public string RequiredModApiVersion { get; set; }

@@ -90,7 +90,7 @@ namespace Manager.Core.Services
             var enabled = new List<ModItem>();
             foreach (var m in allMods)
             {
-                if (orderSet.Contains(m.Id))
+                if (orderSet.Contains(m.Id) && !m.RequiresSmm2Update)
                     enabled.Add(m);
             }
             
@@ -129,7 +129,7 @@ namespace Manager.Core.Services
             var disabled = new List<ModItem>();
             foreach (var m in allMods)
             {
-                if (!orderSet.Contains(m.Id))
+                if (!orderSet.Contains(m.Id) || m.RequiresSmm2Update)
                 {
                     m.IsEnabled = false;
                     disabled.Add(m);
@@ -139,6 +139,28 @@ namespace Manager.Core.Services
             disabled.Sort(CompareByNameThenIdentity);
 
             return disabled;
+        }
+
+        public static List<string> KeepLegacySlots(
+            IEnumerable<ModItem> installed, IList<string> previous, IEnumerable<string> requested)
+        {
+            var legacyIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ModItem mod in installed)
+                if (mod.RequiresSmm2Update)
+                    legacyIds.Add(mod.Id);
+
+            var order = new List<string>();
+            var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string id in requested)
+                if (!string.IsNullOrEmpty(id) && !legacyIds.Contains(id) && listed.Add(id))
+                    order.Add(id);
+
+            // Retain previously enabled legacy entries for same-ID replacements.
+            for (int i = 0; i < previous.Count; i++)
+                if (legacyIds.Contains(previous[i]) && listed.Add(previous[i]))
+                    order.Insert(Math.Min(i, order.Count), previous[i]);
+
+            return order;
         }
 
         /// <summary>

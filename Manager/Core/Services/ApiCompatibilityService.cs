@@ -1,4 +1,5 @@
 using System;
+using Smm.Shared;
 using System.Collections.Generic;
 using System.Text;
 using Manager.Core.Models;
@@ -12,7 +13,6 @@ namespace Manager.Core.Services
     {
         private const string ModApiName = "ModAPI";
         private const string ShelteredApiName = "ShelteredAPI";
-        private const int BreakingTwoPointZeroMajor = 2;
 
         private readonly Dictionary<string, string> _installedVersions;
         public ApiCompatibilityService(Dictionary<string, string> installedVersions)
@@ -39,6 +39,14 @@ namespace Manager.Core.Services
                         continue;
 
                     var requirement = EvaluateRequirement(reference.ApiName, reference.ApiVersion, reference.DllName);
+                    int majorVersion;
+                    if (TryGetMajorVersion(reference.ApiVersion, out majorVersion) &&
+                        ModAssemblyMetadata.IsLegacyReference(reference.ApiName, majorVersion))
+                    {
+                        report.RequiresSmm2Update = true;
+                        requirement.Severity = ApiCompatibilitySeverity.Error;
+                        requirement.Message = string.Empty;
+                    }
                     distinct[key] = requirement;
                     report.Requirements.Add(requirement);
                     if (!string.IsNullOrEmpty(requirement.Message))
@@ -106,13 +114,6 @@ namespace Manager.Core.Services
                 return requirement;
             }
 
-            if (IsOlderBreakingApiLine(requirement.RequiredVersion, installed))
-            {
-                requirement.Severity = ApiCompatibilitySeverity.Warning;
-                requirement.Message = "This mod was built for the older SMM API line. SMM 2.0 moved Sheltered APIs into ShelteredAPI.dll; use a 2.0 version of the mod before loading important saves.";
-                return requirement;
-            }
-
             if (IsOlderThan(requirement.RequiredVersion, installed))
             {
                 requirement.Severity = ApiCompatibilitySeverity.Info;
@@ -131,6 +132,13 @@ namespace Manager.Core.Services
                 return;
 
             report.RequirementSummary = BuildRequirementSummary(report.Requirements);
+
+            if (report.RequiresSmm2Update)
+            {
+                report.Severity = ApiCompatibilitySeverity.Error;
+                report.Summary = ModAssemblyMetadata.LegacyUpdateMessage;
+                return;
+            }
 
             if (report.Requirements.Count == 0)
             {
@@ -209,16 +217,6 @@ namespace Manager.Core.Services
             {
                 return string.Compare(left, right, StringComparison.OrdinalIgnoreCase) < 0;
             }
-        }
-
-        private static bool IsOlderBreakingApiLine(string requiredVersion, string installedVersion)
-        {
-            int requiredMajor;
-            int installedMajor;
-            if (!TryGetMajorVersion(requiredVersion, out requiredMajor) || !TryGetMajorVersion(installedVersion, out installedMajor))
-                return false;
-
-            return installedMajor >= BreakingTwoPointZeroMajor && requiredMajor < installedMajor;
         }
 
         private static bool TryGetMajorVersion(string version, out int major)

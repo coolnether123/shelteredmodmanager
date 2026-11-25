@@ -22,6 +22,7 @@ namespace Manager.Controls
     {
         private const int HeaderHeight = 30;
         private const int RowHeight = 36;
+        private const int LegacyRowExtraHeight = 16;
         private const int SwitchWidth = 34;
         private const int SwitchHeight = 18;
 
@@ -354,6 +355,8 @@ namespace Manager.Controls
         {
             Row row = e.Index >= 0 && e.Index < _list.Items.Count ? (Row)_list.Items[e.Index] : null;
             e.ItemHeight = row != null && row.IsHeader ? HeaderHeight : RowHeight;
+            if (row != null && !row.IsHeader && row.Mod.RequiresSmm2Update)
+                e.ItemHeight += LegacyRowExtraHeight;
         }
 
         private void List_DrawItem(object sender, DrawItemEventArgs e)
@@ -421,14 +424,15 @@ namespace Manager.Controls
             }
             x += 36;
 
-            DrawSwitch(g, SwitchBounds(e.Bounds), row.Active, selected);
+            bool legacy = row.Mod.RequiresSmm2Update;
+            DrawSwitch(g, SwitchBounds(e.Bounds), row.Active, selected, legacy);
             x = SwitchBounds(e.Bounds).Right + 12;
 
             string status;
             Color statusColor;
             StatusFor(row.Mod, selected, out status, out statusColor);
             int right = e.Bounds.Right - 10;
-            if (status != null)
+            if (status != null && !legacy)
             {
                 Font statusFont = ManagerTheme.UiFont(8.5f, FontStyle.Bold);
                 Size size = TextRenderer.MeasureText(g, status, statusFont, Size.Empty, TextFormatFlags.NoPadding);
@@ -446,13 +450,21 @@ namespace Manager.Controls
             Font nameFont = ManagerTheme.UiFont(10f);
             int badgeWidth = isNew ? 38 : 0;
             int nameWidth = Math.Max(0, right - x - badgeWidth);
-            Size nameSize = TextRenderer.MeasureText(g, row.Mod.DisplayName, nameFont, new Size(nameWidth, e.Bounds.Height),
+            int nameHeight = legacy ? RowHeight - 5 : e.Bounds.Height;
+            Size nameSize = TextRenderer.MeasureText(g, row.Mod.DisplayName, nameFont, new Size(nameWidth, nameHeight),
                 TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
-            TextRenderer.DrawText(g, row.Mod.DisplayName, nameFont, new Rectangle(x, e.Bounds.Y, nameWidth, e.Bounds.Height), text,
+            TextRenderer.DrawText(g, row.Mod.DisplayName, nameFont, new Rectangle(x, e.Bounds.Y, nameWidth, nameHeight), text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            if (legacy)
+            {
+                TextRenderer.DrawText(g, row.Mod.StatusMessage, ManagerTheme.UiFont(8.5f),
+                    new Rectangle(x, e.Bounds.Y + nameHeight, Math.Max(0, right - x), LegacyRowExtraHeight),
+                    selected ? palette.SelectionText : palette.Warning,
+                    TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            }
             if (isNew)
             {
-                Rectangle badge = new Rectangle(x + Math.Min(nameSize.Width, nameWidth) + 8, cy - 8, 32, 16);
+                Rectangle badge = new Rectangle(x + Math.Min(nameSize.Width, nameWidth) + 8, e.Bounds.Y + nameHeight / 2 - 8, 32, 16);
                 Color badgeColor = selected ? palette.SelectionText : palette.AccentText;
                 using (GraphicsPath path = ManagerTheme.RoundedRectangle(badge, 3))
                 using (Pen pen = new Pen(badgeColor))
@@ -488,7 +500,7 @@ namespace Manager.Controls
             return new Rectangle(row.X + 46, row.Y + (row.Height - SwitchHeight) / 2, SwitchWidth, SwitchHeight);
         }
 
-        private static void DrawSwitch(Graphics g, Rectangle bounds, bool on, bool selected)
+        private static void DrawSwitch(Graphics g, Rectangle bounds, bool on, bool selected, bool blocked)
         {
             ThemePalette palette = ManagerTheme.Current;
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -501,7 +513,7 @@ namespace Manager.Controls
             }
             int knob = bounds.Height - 6;
             int knobX = on ? bounds.Right - knob - 4 : bounds.X + 3;
-            using (SolidBrush fill = new SolidBrush(on ? palette.OnAccent : palette.TextMuted))
+            using (SolidBrush fill = new SolidBrush(on ? palette.OnAccent : blocked ? palette.TextDisabled : palette.TextMuted))
                 g.FillEllipse(fill, knobX, bounds.Y + 3, knob, knob);
             g.SmoothingMode = SmoothingMode.Default;
         }
@@ -564,7 +576,7 @@ namespace Manager.Controls
             if (index < 0 || index >= _list.Items.Count)
                 return;
             Row row = (Row)_list.Items[index];
-            if (row.IsHeader)
+            if (row.IsHeader || row.Mod.RequiresSmm2Update)
                 return;
             Rectangle bounds = _list.GetItemRectangle(index);
             Rectangle hit = SwitchBounds(bounds);
@@ -658,7 +670,8 @@ namespace Manager.Controls
         {
             int index = _list.IndexFromPoint(location);
             Cursor cursor = Cursors.Default;
-            if (index >= 0 && index < _list.Items.Count && !((Row)_list.Items[index]).IsHeader)
+            Row row = index >= 0 && index < _list.Items.Count ? (Row)_list.Items[index] : null;
+            if (row != null && !row.IsHeader && !row.Mod.RequiresSmm2Update)
             {
                 Rectangle hit = SwitchBounds(_list.GetItemRectangle(index));
                 hit.Inflate(6, 8);
@@ -747,7 +760,7 @@ namespace Manager.Controls
 
         private void RaiseToggle(ModItem mod, bool turnOn)
         {
-            if (ToggleRequested != null)
+            if (!mod.RequiresSmm2Update && ToggleRequested != null)
                 ToggleRequested(this, mod, turnOn);
         }
 
