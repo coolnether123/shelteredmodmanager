@@ -108,10 +108,16 @@ public class FailedPlugin : IModPlugin {
     Invoke-Checked $compiler @('/nologo','/target:library','CurrentLibrary.cs') 'library.log'
     Invoke-Checked $compiler @('/nologo','/target:library','/r:UnityEngine.dll','/r:ModAPI.dll','CurrentPlugin.cs') 'neighbour.log'
     Invoke-Checked $compiler @('/nologo','/target:library','/r:UnityEngine.dll','/r:ModAPI.dll','FailedPlugin.cs') 'failed-plugin.log'
+    $replacement = Join-Path $work 'replacement'
+    New-Item -ItemType Directory -Path "$replacement\About","$replacement\Assemblies" | Out-Null
+    Set-Content -LiteralPath "$replacement\About\About.json" -Encoding ascii -Value '{"id":"com.procreation.framework","name":"Family Expansion","version":"2.0","modApiVersion":"2.0.0.0"}'
+    Copy-Item -LiteralPath 'CurrentPlugin.dll' -Destination "$replacement\Assemblies"
+    $replacementZip = Join-Path $work 'family-expansion-2.0.zip'
+    [IO.Compression.ZipFile]::CreateFromDirectory($replacement, $replacementZip)
     Invoke-Checked $compiler @('/nologo','/target:exe','/out:Fixture.exe','/r:Manager.exe','/r:ModAPI.dll','/r:UnityEngine.dll',
-        '/r:System.Core.dll',(Join-Path $PSScriptRoot 'LegacyModMigrationFixture.cs')) 'harness-build.log'
+        '/r:System.Core.dll','/r:System.Windows.Forms.dll',(Join-Path $PSScriptRoot 'LegacyModMigrationFixture.cs')) 'harness-build.log'
     Set-Content -LiteralPath 'Fixture.exe.config' -Value '<configuration><startup><supportedRuntime version="v4.0" /></startup></configuration>'
-    Invoke-Checked (Join-Path $work 'Fixture.exe') @() 'fixture.log'
+    Invoke-Checked (Join-Path $work 'Fixture.exe') @($LegacySmm, $replacementZip) 'fixture.log'
     Get-Content -LiteralPath 'fixture.log'
 }
 finally {

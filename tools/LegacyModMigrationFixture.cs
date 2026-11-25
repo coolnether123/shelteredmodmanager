@@ -3,8 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Windows.Forms;
 using Manager;
+using Manager.Controls;
+using Manager.Core.Models;
 using Manager.Core.Services;
+using Manager.Views;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -54,11 +58,78 @@ internal static class LegacyModMigrationFixture
         Check(actual == expected, "Save verification expected " + expected + ", got " + actual + " for " + manifestFields);
     }
 
+    private static void CheckImportedNexusUpgrade(string legacySmm, string replacementZip)
+    {
+        const string oldId = "coolnether123.FamilyExpansion";
+        const string newId = "com.procreation.framework";
+        string game = Path.GetFullPath("import-game");
+        string wrapper = Path.Combine(game, "SMM_Steam-GOG_v1.2.2");
+        string wrapperSmm = Path.Combine(wrapper, "SMM");
+        Directory.CreateDirectory(wrapperSmm);
+        foreach (string binary in new[] { "Manager.exe", "ModAPI.dll" })
+            File.Copy(Path.Combine(legacySmm, binary), Path.Combine(wrapperSmm, binary));
+        string oldMod = Path.Combine(Path.Combine(wrapper, "mods"), "FamilyExpansion");
+        Directory.CreateDirectory(Path.Combine(oldMod, "About"));
+        Directory.CreateDirectory(Path.Combine(oldMod, "Assemblies"));
+        File.WriteAllText(Path.Combine(oldMod, "About/About.json"),
+            "{\"id\":\"" + oldId + "\",\"name\":\"Family Expansion\",\"version\":\"1.0\"}");
+        File.Copy("LegacyPlugin.dll", Path.Combine(oldMod, "Assemblies/LegacyPlugin.dll"));
+        var order = new LoadOrderService();
+        order.SaveOrder(Path.Combine(wrapper, "mods"), new[] { "first", oldId, "last" });
+
+        var assembly = typeof(ModDiscoveryService).Assembly;
+        var importType = assembly.GetType("Manager.Core.Services.LegacyInstallMigration", true);
+        object import = Activator.CreateInstance(importType, Internal | BindingFlags.Instance, null,
+            new object[] { Path.Combine(game, "Sheltered.exe") }, null);
+        Check((bool)importType.GetMethod("Import", Internal | BindingFlags.Instance)
+            .Invoke(import, new object[] { wrapper, null }), "The verified 1.2.2 wrapper imports");
+
+        string modsPath = Path.Combine(game, "mods");
+        var scanner = new ModDiscoveryService("2.0.0.0");
+        var mods = scanner.DiscoverMods(modsPath);
+        var old = mods.Find(mod => string.Equals(mod.Id, oldId, StringComparison.OrdinalIgnoreCase));
+        Check(old != null, "The imported mod appears in the Manager");
+        Check(old.StatusMessage == UpdateMessage && order.GetDisabledMods(mods, modsPath).Contains(old),
+            "The imported mod is disabled and shown as needing a 2.0 update");
+        using (var tab = new ModManagerTab())
+        using (var details = new ModDetailsPanel())
+        {
+            typeof(ModManagerTab).GetField("_allMods", Internal | BindingFlags.Instance).SetValue(tab, mods);
+            typeof(ModManagerTab).GetMethod("RefreshNexusStatusAsync", Internal | BindingFlags.Instance, null,
+                new[] { typeof(bool) }, null).Invoke(tab, new object[] { false });
+            details.ShowMod(old);
+            var link = (LinkLabel)typeof(ModDetailsPanel).GetField("_nexusLink", Internal | BindingFlags.Instance).GetValue(details);
+            string url = null;
+            details.WebsiteClicked += delegate(object sender, string target) { url = target; };
+            typeof(ModDetailsPanel).GetMethod("NexusLink_LinkClicked", Internal | BindingFlags.Instance)
+                .Invoke(details, new object[] { link, null });
+            Check(link.Visible && link.Text == "Find update" && url == "https://www.nexusmods.com/sheltered/mods/6",
+                "Find update opens the registry's Family Expansion page");
+        }
+
+        var constructor = typeof(NexusInstallService).GetConstructor(Internal | BindingFlags.Instance, null,
+            new[] { assembly.GetType("Manager.Core.Services.IArchiveExtractor", true), typeof(Action<string, string>) }, null);
+        var installer = (NexusInstallService)constructor.Invoke(new object[] { null,
+            new Action<string, string>(delegate(string source, string archive) { File.Copy(source, archive); }) });
+        string error;
+        var result = installer.DownloadAndInstall(replacementZip, modsPath,
+            new NexusRemoteMod { GameDomain = old.NexusGameDomain, ModId = old.NexusModId },
+            new NexusRemoteModFile { FileId = 1, Category = "MAIN" },
+            NexusInstallTargetContext.FromInstalledMod(old), out error);
+        Check(result != null && result.InstalledPath == old.RootPath, "The Nexus port replaces the imported package: " + error);
+        mods = scanner.DiscoverMods(modsPath);
+        var enabled = order.GetEnabledMods(mods, modsPath);
+        Check(string.Join(",", order.ReadOrder(modsPath)) == "first," + newId + ",last" &&
+            enabled.Exists(mod => mod.Id == newId) && !mods.Exists(mod => string.Equals(mod.Id, oldId, StringComparison.OrdinalIgnoreCase)),
+            "The replacement occupies the imported slot and is enabled");
+    }
+
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         try
         {
+            CheckImportedNexusUpgrade(args[0], args[1]);
             var legacy = CreateMod("fixture.legacy", "Legacy Pantry");
             var split = CreateMod("fixture.split", "Legacy Storage");
             var broken = CreateMod("fixture.broken", "Truncated Package");
@@ -99,6 +170,15 @@ internal static class LegacyModMigrationFixture
             var manager = managerType.GetMethod("getInstance").Invoke(null, null);
             managerType.GetField("_loaderRoot", Internal | BindingFlags.Instance).SetValue(manager, new GameObject("fixture"));
             Assembly.LoadFrom("0Harmony.dll");
+            var sheltered = Assembly.LoadFrom("ShelteredAPI.dll");
+            Directory.CreateDirectory("saves");
+            File.WriteAllText(Path.Combine("saves", "slot.dat"), "fixture save");
+            var guard = sheltered.GetType("ShelteredAPI.Core.FirstRunSaveGuard", true);
+            guard.GetMethod("Initialize", Internal | BindingFlags.Static).Invoke(null, null);
+            var snapshots = Directory.GetDirectories(Path.Combine("SMM", "Backups"), "pre-2.0-*");
+            Check(snapshots.Length == 1 &&
+                File.ReadAllText(Path.Combine(snapshots[0], "saves/slot.dat")) == "fixture save",
+                "The runtime guard publishes a save snapshot before plugin loading");
             var entries = new List<ModEntry> { legacy, split, broken, locked, failed, current, library, harmony };
             managerType.GetProperty("LoadedMods").GetSetMethod(true).Invoke(null, new object[] { entries });
 
@@ -123,8 +203,8 @@ internal static class LegacyModMigrationFixture
             Check(log.Contains("blocked mod 'fixture.broken': Could not inspect assembly metadata") &&
                 log.Contains("blocked mod 'fixture.locked': Could not inspect assembly metadata"),
                 "Truncated and unreadable DLLs log their own errors");
+            Check(!log.Contains("The pre-2.0 save backup failed"), "A successful snapshot preserves startup diagnostics");
 
-            var sheltered = Assembly.LoadFrom("ShelteredAPI.dll");
             CheckSave(sheltered, "\"lastLoadedMods\":[{\"modId\":\"fixture.legacy\",\"version\":\"1.0\"}]", "Missing");
             CheckSave(sheltered, "\"lastLoadedMods\":[{\"modId\":\"fixture.failed\",\"version\":\"1.0\"}]", "Missing");
             CheckSave(sheltered, "\"lastLoadedMods\":[{\"modId\":\"fixture.absent\",\"version\":\"1.0\"}]", "Missing");
