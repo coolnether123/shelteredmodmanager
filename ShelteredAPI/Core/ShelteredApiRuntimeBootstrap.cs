@@ -41,6 +41,7 @@ namespace ShelteredAPI.Core
             {
                 if (_initialized) return;
 
+                MeasureStartupPhase("ShelteredAPI FirstRunSaveGuard", FirstRunSaveGuard.Initialize);
                 MeasureStartupPhase("ShelteredAPI ShelteredUnityLogNormalizers.Register", ShelteredUnityLogNormalizers.Register);
                 MeasureStartupPhase("ShelteredAPI ContentPackRuntimeBootstrap.EnsureSubscribed", ContentPackRuntimeBootstrap.EnsureSubscribed);
                 MeasureStartupPhase("ShelteredAPI ScenarioRuntimeCompositionRoot.EnsureInitialized", ScenarioRuntimeCompositionRoot.EnsureInitialized);

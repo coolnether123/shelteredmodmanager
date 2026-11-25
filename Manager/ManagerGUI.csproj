@@ -148,6 +148,12 @@
     <Compile Include="AssemblyVersionChecker.cs" />
     <Compile Include="Core\AppVersionInfo.cs" />
     <!-- New modular architecture -->
+    <Compile Include="..\Shared\FirstRun\FirstRunFiles.cs" />
+    <Compile Include="..\Shared\FirstRun\PreUpgradeSaveBackup.cs" />
+    <Compile Include="Core\Services\LegacyInstallMigration.cs" />
+    <Compile Include="MainForm.FirstRun.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>

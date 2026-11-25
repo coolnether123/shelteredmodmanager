@@ -151,6 +151,9 @@
     <Compile Include="Core\ShelteredSaveRuntimeAdapter.cs" />
     <Compile Include="Core\ServiceContainer.cs" />
     <Compile Include="Core\ShelteredApiIds.cs" />
+    <Compile Include="..\Shared\FirstRun\FirstRunFiles.cs" />
+    <Compile Include="..\Shared\FirstRun\PreUpgradeSaveBackup.cs" />
+    <Compile Include="Core\FirstRunSaveGuard.cs" />
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
     <Compile Include="Core\ShelteredUnityLogNormalizers.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />

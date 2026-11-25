@@ -8,6 +8,7 @@ using Manager.Core;
 using Manager.Core.Models;
 using Manager.Core.Services;
 using Manager.Views;
+using Smm.FirstRun;
 
 namespace Manager
 {
@@ -15,7 +16,7 @@ namespace Manager
     /// Main application window for Sheltered Mod Manager.
     /// Uses separation of concerns with dedicated services and custom controls.
     /// </summary>
-    public class MainForm : Form
+    public partial class MainForm : Form
     {
         // Header
         private PictureBox _logoBox;
@@ -686,7 +687,8 @@ namespace Manager
             _settingsTab.NexusOAuthSignInRequested += SettingsTab_NexusOAuthSignInRequested;
             _settingsTab.NexusOAuthSignOutRequested += SettingsTab_NexusOAuthSignOutRequested;
             _settingsTab.NexusApiKeySubmitted += SettingsTab_NexusApiKeySubmitted;
-            _settingsService.SettingsChanged += SettingsService_SettingsChanged;
+            _settingsTab.RestoreFirstRunRequested += RestoreFirstRunBackup;
+            _settingsTab.TidyOldInstallRequested += TidyOldInstall;
 
             // Tab change
             _tabControl.SelectedIndexChanged += TabControl_SelectedIndexChanged;
@@ -765,6 +767,8 @@ namespace Manager
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            PrepareFirstRun(false);
+            _settingsService.SettingsChanged += SettingsService_SettingsChanged;
             FitDefaultSizeToScreen();
             ApplySavedWindowPlacement();
             _windowPlacementInitialized = true;
@@ -779,6 +783,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            UpdateFirstRunActions();
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
             _settingsTab.SetNexusApiKeyStored(_nexusApiKeyService.HasConfiguredCredential);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
@@ -1032,6 +1037,8 @@ namespace Manager
                 
                 // Save and refresh
                 _settingsService.Save(_settings);
+                PrepareFirstRun(true);
+                UpdateFirstRunActions();
                 
                 if (_settings.IsModsPathValid)
                 {
@@ -1053,6 +1060,8 @@ namespace Manager
                 }
 
                 // The running game may have changed its remembered prompt choice.
+                if (!PrepareFirstRun(true)) return;
+                UpdateFirstRunActions();
                 RefreshRuntimeWritableSettings();
 
                 // Save settings before launch
@@ -2175,6 +2184,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            UpdateFirstRunActions();
             _settingsTab.SetNexusOAuthRegistrationAvailable(_nexusOAuthService != null && _nexusOAuthService.IsRegistrationAvailable);
             _settingsTab.SetNexusApiKeyStored(_nexusApiKeyService.HasConfiguredCredential);
             _contentWorkshopTab.ModsPath = _settings.ModsPath;
@@ -2593,6 +2603,13 @@ namespace Manager
                     // relaunch because the old game process is still alive.
                     if (CheckGameRunning())
                         return;
+                    if (!PreUpgradeSaveBackup.TryPrepare(Path.GetDirectoryName(_settings.GamePath), out var backupError))
+                    {
+                        _gameSetupTab.Log("Restart cancelled because the pre-2.0 backup could not be verified.");
+                        System.Diagnostics.Trace.TraceError("Restart backup check failed: " + backupError);
+                        File.Delete(restartPath);
+                        return;
+                    }
 
                     // Read Manifest
                     ManagerSlotManifest manifest = null;
