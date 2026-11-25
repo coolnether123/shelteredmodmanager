@@ -92,6 +92,64 @@ namespace Manager.Core.Services
             return _installedVersions.TryGetValue(apiName, out version) ? version : string.Empty;
         }
 
+        internal static bool TargetsLegacyLine(ModItem mod)
+        {
+            if (mod.RequiresSmm2Update || IsLegacyVersion(mod.DeclaredModApiVersion) || IsLegacyVersion(mod.DeclaredShelteredApiVersion))
+                return true;
+
+            foreach (ApiRequirement requirement in mod.ApiCompatibility.Requirements)
+                if (IsLegacyVersion(requirement.RequiredVersion))
+                    return true;
+
+            return false;
+        }
+
+        internal static bool ValidateNexusPackage(string root, ModTypes.ModAboutInfo about, bool migrating, out string error)
+        {
+            var mod = ModItem.FromAbout(about, root, null);
+            var references = AssemblyVersionChecker.ScanModAssemblies(root);
+            if (IsLegacyVersion(mod.DeclaredModApiVersion) || IsLegacyVersion(mod.DeclaredShelteredApiVersion) ||
+                references.Exists(reference => IsLegacyVersion(reference.ApiVersion)))
+            {
+                error = "This file was built for an older version of Sheltered Mod Manager. Choose a file built for SMM 2.0.";
+                return false;
+            }
+
+            if (IsFutureVersion(mod.DeclaredModApiVersion) || IsFutureVersion(mod.DeclaredShelteredApiVersion) ||
+                references.Exists(reference => IsFutureVersion(reference.ApiVersion)))
+            {
+                error = "This file requires a newer version of Sheltered Mod Manager. Choose a file built for SMM 2.0.";
+                return false;
+            }
+
+            if (migrating && !IsCurrentVersion(mod.DeclaredModApiVersion) && !IsCurrentVersion(mod.DeclaredShelteredApiVersion))
+            {
+                error = "This file does not declare SMM 2.0 support. Choose a file built for SMM 2.0.";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        private static bool IsLegacyVersion(string version)
+        {
+            int major;
+            return TryGetMajorVersion(version, out major) && major < BreakingTwoPointZeroMajor;
+        }
+
+        private static bool IsCurrentVersion(string version)
+        {
+            int major;
+            return TryGetMajorVersion(version, out major) && major == BreakingTwoPointZeroMajor;
+        }
+
+        private static bool IsFutureVersion(string version)
+        {
+            int major;
+            return TryGetMajorVersion(version, out major) && major > BreakingTwoPointZeroMajor;
+        }
+
         private ApiRequirement EvaluateRequirement(string apiName, string requiredVersion, string sourceAssembly)
         {
             var requirement = new ApiRequirement();

@@ -551,11 +551,12 @@ namespace Manager.Controls
                 string channelLabel = channel == NexusReleaseChannel.Stable
                     ? "Update"
                     : ToTitleCase(NexusReleaseClassifier.GetDisplayLabel(channel)) + " update";
-                _nexusStatusLabel.Text = "Nexus: " + channelLabel + " available (" + latest + ")";
+                _nexusStatusLabel.Text = mod.NeedsApiMigration ? "Needs an SMM 2.0 update" :
+                    "Nexus: " + channelLabel + " available (" + latest + ")";
                 _nexusStatusLabel.ForeColor = ManagerTheme.Current.AccentText;
                 if (_showNexusActionButtons)
                 {
-                    _nexusUpdateButton.Text = channel == NexusReleaseChannel.Stable
+                    _nexusUpdateButton.Text = mod.NeedsApiMigration ? "Get SMM 2.0 update" : channel == NexusReleaseChannel.Stable
                         ? "Update from Nexus"
                         : "Update to " + ToTitleCase(NexusReleaseClassifier.GetDisplayLabel(channel));
                     _nexusUpdateButton.Visible = true;

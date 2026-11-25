@@ -47,6 +47,7 @@ namespace Manager.Core.Services
     public class NexusInstallService
     {
         private readonly IArchiveExtractor _archiveExtractor;
+        private readonly Action<string, string> _downloadArchive;
 
         // Archives a player drops on the manager come from anywhere, so extraction
         // is bounded: a crafted zip cannot fill the disk.
@@ -61,10 +62,11 @@ namespace Manager.Core.Services
         }
 
         /// <param name="archiveExtractor">Replaces both extractors (for tests); null keeps the defaults, with dropped files bounded.</param>
-        internal NexusInstallService(IArchiveExtractor archiveExtractor)
+        internal NexusInstallService(IArchiveExtractor archiveExtractor, Action<string, string> downloadArchive = null)
         {
             _archiveExtractor = archiveExtractor ?? new ZipArchiveExtractor();
             _localArchiveExtractor = archiveExtractor ?? new ZipArchiveExtractor(LocalMaximumEntries, LocalMaximumEntryBytes, LocalMaximumExpandedBytes);
+            _downloadArchive = downloadArchive ?? DownloadArchive;
         }
 
         public static void CleanupStartupArtifacts()
@@ -117,7 +119,21 @@ namespace Manager.Core.Services
             NexusInstallTargetContext targetContext,
             out string errorMessage)
         {
+            bool fileRejected;
+            return DownloadAndInstall(downloadUrl, modsPath, mod, file, targetContext, out errorMessage, out fileRejected);
+        }
+
+        internal NexusInstallResult DownloadAndInstall(
+            string downloadUrl,
+            string modsPath,
+            NexusRemoteMod mod,
+            NexusRemoteModFile file,
+            NexusInstallTargetContext targetContext,
+            out string errorMessage,
+            out bool fileRejected)
+        {
             errorMessage = null;
+            fileRejected = false;
 
             if (string.IsNullOrEmpty(downloadUrl))
             {
@@ -137,11 +153,17 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            if (file == null || file.FileId <= 0)
+            if (!NexusModsService.IsInstallCandidate(file))
             {
-                errorMessage = "Invalid Nexus file context.";
+                errorMessage = "This Nexus file is an old version or is no longer available. Choose a current file.";
+                fileRejected = true;
                 return null;
             }
+
+            var migration = NexusMigrationRegistry.FindPage(mod);
+            if (targetContext == null && migration != null &&
+                !TryFindMigrationTarget(modsPath, migration, out targetContext, out errorMessage))
+                return null;
 
             if (!ValidateTargetContext(modsPath, targetContext, out errorMessage))
                 return null;
@@ -165,14 +187,11 @@ namespace Manager.Core.Services
 
             try
             {
-                using (var web = new WebClient())
-                {
-                    web.Headers["User-Agent"] = AppVersionInfo.UserAgent;
-                    web.DownloadFile(downloadUrl, archivePath);
-                }
+                _downloadArchive(downloadUrl, archivePath);
             }
             catch (Exception ex)
             {
+                TryDeleteFile(archivePath);
                 errorMessage = "Download failed: " + ex.Message;
                 return null;
             }
@@ -181,6 +200,7 @@ namespace Manager.Core.Services
             {
                 TryDeleteFile(archivePath);
                 errorMessage = "Unsupported archive format. Direct Nexus install currently supports ZIP archives only; this downloaded file is not a ZIP archive.";
+                fileRejected = true;
                 return null;
             }
 
@@ -211,22 +231,53 @@ namespace Manager.Core.Services
             }
 
             string targetFolderName = ResolveInstallFolderName(sourceModRoot, extractPath, sourceAbout, mod);
-
             string targetPath = ResolveTargetPath(modsPath, targetContext, targetFolderName);
-            if (!ModPackageSafety.ValidateInstallTarget(modsPath, targetPath, sourceModId, targetContext, out errorMessage))
-            {
-                TryDeleteDirectory(extractPath);
-                TryDeleteFile(archivePath);
-                return null;
-            }
-
             string backupPath = null;
+            string stagedPath = null;
             bool movedToBackup = false;
+            bool published = false;
             string verificationSummary = string.Empty;
 
             try
             {
-                if (Directory.Exists(targetPath))
+                bool replacesAlias = migration != null && targetContext != null &&
+                    migration.MatchesAlias(targetContext.ExpectedLocalModId);
+                string replacementId = replacesAlias ? migration.PackageId : null;
+                if ((migration != null && !migration.MatchesPackageId(sourceModId)) ||
+                    (targetContext != null && targetContext.HasExpectedLocalMod &&
+                        !string.Equals(sourceModId, replacementId ?? targetContext.ExpectedLocalModId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    errorMessage = "This download does not match the selected mod.";
+                    fileRejected = true;
+                    return null;
+                }
+
+                if (!ModPackageSafety.ValidateInstallTarget(modsPath, targetPath, sourceModId, targetContext, out errorMessage, replacementId))
+                    return null;
+
+                bool hadInstalledMod = Directory.Exists(targetPath);
+                bool migrating = replacesAlias || (hadInstalledMod &&
+                    ApiCompatibilityService.TargetsLegacyLine(new ModDiscoveryService((string)null).DiscoverMod(targetPath)));
+                if (!ApiCompatibilityService.ValidateNexusPackage(sourceModRoot, sourceAbout, migrating, out errorMessage))
+                {
+                    fileRejected = true;
+                    return null;
+                }
+
+                // Stage and verify the complete replacement on the same volume
+                // before moving the player's installed package.
+                string stagingRoot = Path.Combine(modsPath, "_smm_staging");
+                stagedPath = Path.Combine(stagingRoot, attemptId);
+                CopyDirectoryRecursive(sourceModRoot, stagedPath);
+                PreserveRuntimeFiles(hadInstalledMod ? targetPath : null, stagedPath, migrating);
+                if (!VerifyInstalledMod(sourceModRoot, stagedPath, mod, file, sourceModId, out verificationSummary, out errorMessage))
+                {
+                    errorMessage = "Install verification failed: " + errorMessage;
+                    return null;
+                }
+                WritePackageInventory(sourceModRoot, stagedPath);
+
+                if (hadInstalledMod)
                 {
                     // Directory.Move is atomic only within one volume. Keep the
                     // rollback copy beside the configured mods so a Manager on
@@ -241,28 +292,21 @@ namespace Manager.Core.Services
                     movedToBackup = true;
                 }
 
-                CopyDirectoryRecursive(sourceModRoot, targetPath);
-                PreserveRuntimeFiles(backupPath, targetPath);
-                WriteNexusMetadata(targetPath, mod.GameDomain, mod.ModId);
-
-                if (!VerifyInstalledMod(sourceModRoot, targetPath, mod, file, targetContext, out verificationSummary, out errorMessage))
-                {
-                    errorMessage = "Install verification failed: " + errorMessage;
-                    RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
-                    return null;
-                }
-
-                WritePackageInventory(sourceModRoot, targetPath);
-                System.Diagnostics.Debug.WriteLine("Nexus install verification passed: " + verificationSummary);
+                Directory.Move(stagedPath, targetPath);
+                published = true;
+                if (replacesAlias)
+                    new LoadOrderService().ReplaceModId(modsPath, targetContext.ExpectedLocalModId, sourceModId);
             }
             catch (Exception ex)
             {
                 errorMessage = "Install failed: " + ex.Message;
-                RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
+                if (movedToBackup || published)
+                    RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
                 return null;
             }
             finally
             {
+                TryDeleteDirectory(stagedPath);
                 TryDeleteDirectory(extractPath);
                 TryDeleteFile(archivePath);
             }
@@ -275,6 +319,47 @@ namespace Manager.Core.Services
             result.DownloadedArchivePath = string.Empty;
             result.VerificationSummary = verificationSummary;
             return result;
+        }
+
+        private static void DownloadArchive(string url, string archivePath)
+        {
+            using (var web = new WebClient())
+            {
+                web.Headers["User-Agent"] = AppVersionInfo.UserAgent;
+                web.DownloadFile(url, archivePath);
+            }
+        }
+
+        private static bool TryFindMigrationTarget(string modsPath, NexusMigrationRegistry.Entry migration,
+            out NexusInstallTargetContext target, out string errorMessage)
+        {
+            target = null;
+            errorMessage = null;
+            var resolver = new NexusReferenceResolver();
+            foreach (string root in Directory.GetDirectories(modsPath))
+            {
+                if (ModPackageSafety.IsReservedModFolderName(Path.GetFileName(root)))
+                    continue;
+
+                ModTypes.ModAboutInfo about;
+                string id, readError;
+                if (!ModPackageSafety.TryReadRequiredAbout(root, out about, out id, out readError) ||
+                    (!migration.MatchesPackageId(id) && !migration.MatchesAlias(id)))
+                    continue;
+
+                var installed = ModItem.FromAbout(about, root, null);
+                var reference = resolver.Resolve(installed, migration.GameDomain);
+                if (reference == null || !migration.MatchesPage(reference.GameDomain, reference.ModId))
+                    continue;
+
+                if (target != null)
+                {
+                    errorMessage = "More than one installed mod matches this Nexus listing. Resolve the duplicate installations before updating.";
+                    return false;
+                }
+                target = NexusInstallTargetContext.FromInstalledMod(installed);
+            }
+            return true;
         }
 
         /// <summary>
@@ -641,7 +726,7 @@ namespace Manager.Core.Services
             string targetPath,
             NexusRemoteMod mod,
             NexusRemoteModFile file,
-            NexusInstallTargetContext targetContext,
+            string expectedModId,
             out string verificationSummary,
             out string errorMessage)
         {
@@ -659,13 +744,16 @@ namespace Manager.Core.Services
             if (!ModPackageSafety.TryReadRequiredAbout(targetPath, out about, out normalizedId, out errorMessage))
                 return false;
 
-            if (targetContext != null && targetContext.HasExpectedLocalMod &&
-                !string.Equals(NormalizeModId(about.id), NormalizeModId(targetContext.ExpectedLocalModId), StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(normalizedId, expectedModId, StringComparison.OrdinalIgnoreCase))
             {
-                errorMessage = "Installed mod id '" + about.id + "' does not match selected installed mod id '" + targetContext.ExpectedLocalModId + "'.";
+                errorMessage = "The copied package does not match the downloaded mod.";
                 return false;
             }
 
+            if (!VerifyCopiedFiles(sourceModRoot, targetPath, out errorMessage))
+                return false;
+
+            WriteNexusMetadata(targetPath, mod.GameDomain, mod.ModId);
             string nexusJson = Path.Combine(Path.Combine(targetPath, "About"), "Nexus.json");
             if (!File.Exists(nexusJson))
             {
@@ -673,20 +761,12 @@ namespace Manager.Core.Services
                 return false;
             }
 
-            if (!VerifyCopiedFiles(sourceModRoot, targetPath, out errorMessage))
-                return false;
-
             verificationSummary = "About.json id=" + about.id
                 + ", version=" + about.version
                 + ", copied file set verified"
                 + ", nexusModId=" + (mod != null ? mod.ModId.ToString() : "unknown")
                 + ", fileId=" + (file != null ? file.FileId.ToString() : "unknown") + ".";
             return true;
-        }
-
-        private static string NormalizeModId(string modId)
-        {
-            return ModPackageSafety.NormalizeModId(modId);
         }
 
         private static bool IsSupportedZipArchive(string archivePath)
@@ -893,7 +973,7 @@ namespace Manager.Core.Services
             AtomicFile.WriteAllText(Path.Combine(target, PackageInventory), new JavaScriptSerializer().Serialize(files));
         }
 
-        private static void PreserveRuntimeFiles(string backup, string target)
+        private static void PreserveRuntimeFiles(string backup, string target, bool migrating = false)
         {
             if (string.IsNullOrEmpty(backup))
                 return;
@@ -909,10 +989,10 @@ namespace Manager.Core.Services
                     shipped.Add(path.Replace('/', Path.DirectorySeparatorChar));
             }
             // Older installs have no inventory. Retain their unknown files conservatively.
-            PreserveRuntimeDirectory(backup, target, "", shipped);
+            PreserveRuntimeDirectory(backup, target, "", shipped, migrating);
         }
 
-        private static void PreserveRuntimeDirectory(string source, string target, string relative, HashSet<string> shipped)
+        private static void PreserveRuntimeDirectory(string source, string target, string relative, HashSet<string> shipped, bool migrating)
         {
             if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Cannot preserve runtime files through a directory link: " + source);
@@ -920,6 +1000,11 @@ namespace Manager.Core.Services
             {
                 string path = Path.Combine(relative, Path.GetFileName(file));
                 string destination = Path.Combine(target, path);
+                // Legacy installs usually lack an inventory. Their DLLs must
+                // stay in the backup even when the port renamed or removed them.
+                if (migrating && path.StartsWith("Assemblies" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(Path.GetExtension(path), ".dll", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 if (shipped.Contains(path) || path.Replace('\\', '/') == PackageInventory ||
                     File.Exists(destination) || Directory.Exists(destination))
                     continue;
@@ -932,7 +1017,7 @@ namespace Manager.Core.Services
             {
                 string path = Path.Combine(relative, Path.GetFileName(directory));
                 if (!File.Exists(Path.Combine(target, path)))
-                    PreserveRuntimeDirectory(directory, target, path, shipped);
+                    PreserveRuntimeDirectory(directory, target, path, shipped, migrating);
             }
         }
 

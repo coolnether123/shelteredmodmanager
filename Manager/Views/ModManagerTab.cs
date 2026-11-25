@@ -6,7 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Manager.Controls;
 using Manager.Core.Models;
@@ -1334,7 +1333,6 @@ namespace Manager.Views
 
             // Resolve local references immediately so details panel can show mapping info.
             var referencesByModId = new Dictionary<string, NexusModReference>(StringComparer.OrdinalIgnoreCase);
-            var unresolvedMods = new List<ModItem>();
             string fallbackDomain = (_settings != null && !string.IsNullOrEmpty(_settings.NexusGameDomain))
                 ? _settings.NexusGameDomain
                 : "sheltered";
@@ -1344,6 +1342,8 @@ namespace Manager.Views
                 if (mod == null) continue;
 
                 // The same lookup supplies the Find update link, including registry mappings.
+                mod.NeedsApiMigration = ApiCompatibilityService.TargetsLegacyLine(mod);
+                mod.HasUpdateAvailable = false;
                 var reference = _nexusResolver.Resolve(mod, fallbackDomain);
                 if (reference != null && reference.IsValid)
                 {
@@ -1358,7 +1358,6 @@ namespace Manager.Views
                     }
                     else
                     {
-                        mod.HasUpdateAvailable = false;
                         mod.NexusRemoteVersion = string.Empty;
                         mod.NexusRemoteSummary = string.Empty;
                         mod.NexusRemoteUpdatedAtUtc = null;
@@ -1369,14 +1368,13 @@ namespace Manager.Views
                     mod.NexusGameDomain = string.Empty;
                     mod.NexusModId = 0;
                     mod.NexusPageUrl = string.Empty;
-                    mod.HasUpdateAvailable = false;
                     mod.NexusRemoteVersion = string.Empty;
                     mod.NexusRemoteSummary = string.Empty;
                     mod.NexusRemoteUpdatedAtUtc = null;
                     _nexusStateByModId.Remove(mod.Id);
-                    unresolvedMods.Add(mod);
                 }
 
+                mod.HasUpdateAvailable |= mod.NeedsApiMigration && mod.HasNexusReference;
                 ApplyUpdateStatus(mod, mod.HasUpdateAvailable);
             }
 
@@ -1394,9 +1392,9 @@ namespace Manager.Views
             }
 
             bool nexusEnabled = _settings != null && _settings.EnableNexusIntegration;
-            if (!nexusEnabled || _nexusService == null || (referencesByModId.Count == 0 && unresolvedMods.Count == 0))
+            if (!nexusEnabled || _nexusService == null || referencesByModId.Count == 0)
             {
-                NotifyNexusSync(referencesByModId.Count, 0, null);
+                NotifyNexusSync(referencesByModId.Count, CountModsWithUpdates(_allMods), null);
                 return;
             }
 
@@ -1409,105 +1407,6 @@ namespace Manager.Views
                 string error;
                 var remoteByRef = _nexusService.GetModsByReferences(requestRefs, out error);
                 var prereleaseFilesByRef = GetPrereleaseFilesByReference(referencesByModId, remoteByRef, _settings != null && _settings.IncludeNexusPrereleaseFiles, ref error);
-
-                if (unresolvedMods.Count > 0)
-                {
-                    string feedError;
-                    var feed = _nexusService.GetLatestMods(fallbackDomain, 200, out feedError);
-
-                    if (feed != null && feed.Count > 0)
-                    {
-                        var nameBuckets = new Dictionary<string, List<NexusRemoteMod>>(StringComparer.OrdinalIgnoreCase);
-                        foreach (var remote in feed)
-                        {
-                            if (remote == null || remote.ModId <= 0) continue;
-                            string key = NormalizeNameKey(remote.Name);
-                            if (string.IsNullOrEmpty(key)) continue;
-
-                            List<NexusRemoteMod> bucket;
-                            if (!nameBuckets.TryGetValue(key, out bucket))
-                            {
-                                bucket = new List<NexusRemoteMod>();
-                                nameBuckets[key] = bucket;
-                            }
-                            bucket.Add(remote);
-                        }
-
-                        foreach (var local in unresolvedMods)
-                        {
-                            if (referencesByModId.ContainsKey(local.Id))
-                                continue;
-
-                            string localKey = NormalizeNameKey(local.DisplayName);
-                            if (string.IsNullOrEmpty(localKey))
-                                localKey = NormalizeNameKey(local.Id);
-                            if (string.IsNullOrEmpty(localKey))
-                                continue;
-
-                            List<NexusRemoteMod> candidates;
-                            if (!nameBuckets.TryGetValue(localKey, out candidates) || candidates.Count != 1)
-                                continue;
-
-                            var inferred = candidates[0];
-                            var inferredRef = new NexusModReference
-                            {
-                                GameDomain = inferred.GameDomain,
-                                ModId = inferred.ModId
-                            };
-
-                            referencesByModId[local.Id] = inferredRef;
-                            remoteByRef[inferredRef.Key] = inferred;
-                            TryAddPrereleaseFile(prereleaseFilesByRef, inferredRef, inferred, _settings != null && _settings.IncludeNexusPrereleaseFiles, ref error);
-                            TryPersistNexusSidecar(local, inferredRef);
-                        }
-                    }
-
-                    foreach (var local in unresolvedMods)
-                    {
-                        if (referencesByModId.ContainsKey(local.Id))
-                            continue;
-
-                        string searchName = !string.IsNullOrEmpty(local.DisplayName) ? local.DisplayName : local.Id;
-                        if (string.IsNullOrEmpty(searchName))
-                            continue;
-
-                        string searchError;
-                        var searchResults = _nexusService.FindModsByName(fallbackDomain, searchName, 10, out searchError);
-                        if (!string.IsNullOrEmpty(searchError))
-                            continue;
-
-                        if (searchResults == null || searchResults.Count == 0)
-                            continue;
-
-                        NexusRemoteMod exact = null;
-                        string localKey = NormalizeNameKey(searchName);
-                        int exactCount = 0;
-
-                        foreach (var candidate in searchResults)
-                        {
-                            if (candidate == null || candidate.ModId <= 0) continue;
-                            if (!string.Equals(NormalizeNameKey(candidate.Name), localKey, StringComparison.OrdinalIgnoreCase))
-                                continue;
-
-                            exact = candidate;
-                            exactCount++;
-                        }
-
-                        if (exactCount != 1 || exact == null)
-                            continue;
-
-                        var inferred = new NexusModReference
-                        {
-                            GameDomain = exact.GameDomain,
-                            ModId = exact.ModId
-                        };
-
-                        referencesByModId[local.Id] = inferred;
-                        remoteByRef[inferred.Key] = exact;
-                        TryAddPrereleaseFile(prereleaseFilesByRef, inferred, exact, _settings != null && _settings.IncludeNexusPrereleaseFiles, ref error);
-                        TryPersistNexusSidecar(local, inferred);
-                    }
-                }
 
                 if (IsDisposed || Disposing)
                     return;
@@ -1533,11 +1432,13 @@ namespace Manager.Views
                             NexusRemoteMod remote;
                             if (!remoteByRef.TryGetValue(reference.Key, out remote))
                             {
-                                mod.HasUpdateAvailable = false;
+                                mod.HasUpdateAvailable = mod.NeedsApiMigration;
+                                if (mod.HasUpdateAvailable)
+                                    updates++;
                                 mod.NexusRemoteVersion = string.Empty;
                                 mod.NexusRemoteSummary = string.Empty;
                                 mod.NexusRemoteUpdatedAtUtc = null;
-                                ApplyUpdateStatus(mod, false);
+                                ApplyUpdateStatus(mod, mod.HasUpdateAvailable);
                                 _nexusStateByModId.Remove(mod.Id);
                                 continue;
                             }
@@ -1550,7 +1451,7 @@ namespace Manager.Views
                             mod.NexusRemoteUpdatedAtUtc = GetEffectiveRemoteUpdatedAt(remote, prereleaseFile, mod.NexusRemoteVersion);
                             mod.NexusPageUrl = remote.GetPageUrl();
 
-                            bool updateAvailable = NexusVersionComparer.IsRemoteNewer(mod.Version, mod.NexusRemoteVersion);
+                            bool updateAvailable = NexusVersionComparer.IsUpdateAvailable(mod.Version, mod.NexusRemoteVersion, mod.NeedsApiMigration);
                             mod.HasUpdateAvailable = updateAvailable;
                             if (updateAvailable)
                             {
@@ -1685,22 +1586,6 @@ namespace Manager.Views
             UpdateProblemBanner();
         }
 
-        private static string NormalizeNameKey(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            var chars = (value ?? string.Empty).Trim().ToLowerInvariant().ToCharArray();
-            var filtered = new System.Text.StringBuilder(chars.Length);
-            for (int i = 0; i < chars.Length; i++)
-            {
-                char c = chars[i];
-                if (char.IsLetterOrDigit(c))
-                    filtered.Append(c);
-            }
-            return filtered.ToString();
-        }
-
         private static string FindMissingDependencyMessage(List<string> missingDependencies, string modId)
         {
             if (missingDependencies == null || string.IsNullOrEmpty(modId))
@@ -1775,9 +1660,7 @@ namespace Manager.Views
             mod.NexusPageUrl = !string.IsNullOrEmpty(cached.PageUrl)
                 ? cached.PageUrl
                 : "https://www.nexusmods.com/" + reference.GameDomain + "/mods/" + reference.ModId;
-            mod.HasUpdateAvailable = NexusVersionComparer.IsRemoteNewer(
-                mod.Version,
-                cached.RemoteVersion);
+            mod.HasUpdateAvailable = NexusVersionComparer.IsUpdateAvailable(mod.Version, cached.RemoteVersion, mod.NeedsApiMigration);
         }
 
         private void CacheNexusState(ModItem mod, NexusModReference reference)
@@ -1810,35 +1693,6 @@ namespace Manager.Views
             if (mod.Status == ModStatus.UpdateAvailable)
                 mod.Status = ModStatus.Ok;
         }
-
-        private static void TryPersistNexusSidecar(ModItem mod, NexusModReference reference)
-        {
-            if (mod == null || reference == null || !reference.IsValid)
-                return;
-
-            if (string.IsNullOrEmpty(mod.RootPath) || !Directory.Exists(mod.RootPath))
-                return;
-
-            try
-            {
-                string aboutPath = Path.Combine(mod.RootPath, "About");
-                if (!Directory.Exists(aboutPath))
-                    Directory.CreateDirectory(aboutPath);
-
-                string sidecarPath = Path.Combine(aboutPath, "Nexus.json");
-                var sidecar = new Dictionary<string, object>();
-                sidecar["gameDomain"] = reference.GameDomain;
-                sidecar["modId"] = reference.ModId;
-
-                string json = new JavaScriptSerializer().Serialize(sidecar);
-                File.WriteAllText(sidecarPath, json);
-            }
-            catch
-            {
-                // Ignore persistence errors; runtime mapping still works.
-            }
-        }
-
 
         /// <summary>
         /// Apply theme

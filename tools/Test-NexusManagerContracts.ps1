@@ -82,7 +82,7 @@ Assert-Contains $nexusTabPath 'BuildManagerUpdateHashExpectation' 'Manager updat
 Assert-Contains $nexusTabPath 'if\s*\(forceRefresh\)\s*_nexusService\.ClearCachedResponses' 'Manual Discover refresh must bypass service caches.'
 Assert-Contains $nexusTabPath 'if\s*\(userInitiated\)\s*_nexusService\.ClearCachedResponses' 'Manual manager update checks must bypass service caches.'
 $modManagerTabPath = Join-Path $RepoRoot 'Manager\Views\ModManagerTab.cs'
-Assert-Contains $modManagerTabPath 'NexusVersionComparer\.IsRemoteNewer\(\s*mod\.Version,\s*cached\.RemoteVersion\)' 'Disk refresh must recompute update state against the current local version.'
+Assert-Contains $modManagerTabPath 'NexusVersionComparer\.IsUpdateAvailable\(\s*mod\.Version,\s*cached\.RemoteVersion,\s*mod\.NeedsApiMigration\)' 'Disk refresh must recompute update state against the current local version and API line.'
 Assert-Contains $modManagerTabPath 'settings\.ModsPath' 'Nexus UI cache scope must include the active Mods path.'
 Assert-Contains $modManagerTabPath 'nexusServiceChanged' 'Replacing the Nexus service must invalidate UI cache state.'
 Assert-Contains $installPath 'Path\.Combine\(modsPath, "_smm_backup"\)' 'Installer backups must stay on the target mods volume.'

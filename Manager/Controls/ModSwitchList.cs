@@ -330,7 +330,12 @@ namespace Manager.Controls
             status = null;
             color = palette.TextMuted;
             bool hasUpdate = mod.HasUpdateAvailable || mod.Status == ModStatus.UpdateAvailable;
-            if (_hardIssues.Contains(mod.Id) || mod.Status == ModStatus.Error || mod.Status == ModStatus.MissingDependency)
+            if (mod.NeedsApiMigration)
+            {
+                status = "Needs 2.0";
+                color = palette.AccentText;
+            }
+            else if (_hardIssues.Contains(mod.Id) || mod.Status == ModStatus.Error || mod.Status == ModStatus.MissingDependency)
             {
                 status = "Problem";
                 color = palette.Danger;
