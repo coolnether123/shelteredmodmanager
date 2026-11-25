@@ -157,7 +157,7 @@ public static class FirstRunMigrationFixture
         string captured = backup.Ensure();
         Write(captured, "saves/slot.dat", "tampered");
         Write(game, "saves/slot.dat", "2.0 progress");
-        ExpectIOException(() => backup.Ensure());
+        Require(backup.Ensure() == captured, "Later damage to a published backup must not block launches or saving.");
         ExpectIOException(backup.Restore);
         Require(Read(game, "saves/slot.dat") == "2.0 progress", "A corrupt snapshot must not modify live saves.");
         Require(Read(captured, "saves/slot.dat") == "tampered", "A corrupt snapshot must not be replaced by current data.");

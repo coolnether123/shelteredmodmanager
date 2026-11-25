@@ -42,7 +42,11 @@ namespace Smm.FirstRun
                 string existing = FindBackup();
                 if (existing != null)
                 {
-                    Verify(existing);
+                    // The backup was hash-verified before it was published. Startup only checks that it
+                    // is still present. Later damage to the backup must not block saving on every
+                    // launch. Restore re-verifies the full content before it touches live saves.
+                    if (!File.Exists(Path.Combine(existing, Marker)))
+                        throw new IOException("The pre-2.0 backup is incomplete.");
                     return existing;
                 }
                 return Capture(Prefix);
