@@ -13,10 +13,16 @@ function New-ReleaseZip {
 
     $archive = [IO.Compression.ZipFile]::Open($DestinationPath, [IO.Compression.ZipArchiveMode]::Create)
     try {
-        foreach ($file in Get-ChildItem -LiteralPath $source.FullName -Recurse -File) {
-            $entryName = $file.FullName.Substring($basePath.Length + 1).Replace('\', '/')
+        foreach ($item in Get-ChildItem -LiteralPath $source.FullName -Recurse -Force) {
+            $entryName = $item.FullName.Substring($basePath.Length + 1).Replace('\', '/')
+            if ($item.PSIsContainer) {
+                if (-not (Get-ChildItem -LiteralPath $item.FullName -Force | Select-Object -First 1)) {
+                    $archive.CreateEntry($entryName + '/') | Out-Null
+                }
+                continue
+            }
             [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                $archive, $file.FullName, $entryName, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+                $archive, $item.FullName, $entryName, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
         }
     }
     finally {
