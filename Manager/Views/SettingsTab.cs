@@ -58,6 +58,9 @@ namespace Manager.Views
         private ComboBox _saveBackupRetentionCombo;
         private Label _saveBackupRetentionCountLabel;
         private NumericUpDown _saveBackupRetentionCountNumeric;
+        private Button _restoreFirstRunButton;
+        private Button _tidyOldInstallButton;
+        private bool _hasImportedFolders;
 
         // 3. Nexus
         private Label _nexusLabel;
@@ -118,6 +121,16 @@ namespace Manager.Views
         public event NexusOAuthRequestedHandler NexusOAuthSignInRequested;
         public event NexusOAuthRequestedHandler NexusOAuthSignOutRequested;
         public event Action<string> NexusApiKeySubmitted;
+        internal event Action RestoreFirstRunRequested;
+        internal event Action TidyOldInstallRequested;
+
+        internal void SetFirstRunActions(bool hasBackup, bool hasImportedFolders)
+        {
+            _hasImportedFolders = hasImportedFolders;
+            _restoreFirstRunButton.Enabled = hasBackup;
+            _tidyOldInstallButton.Visible = hasImportedFolders;
+            UpdateDynamicLayout();
+        }
 
         public SettingsTab()
         {
@@ -262,6 +275,13 @@ namespace Manager.Views
             _saveBackupRetentionCountNumeric.Value = AppSettings.DefaultSaveBackupRetention;
             _saveBackupRetentionCountNumeric.Width = 80;
             _helpToolTip.SetToolTip(_saveBackupRetentionCountNumeric, "Number of unpinned snapshots to keep for each save timeline.");
+
+            _restoreFirstRunButton = UiFactory.Button("Restore pre-2.0 backup", ActionButtonKind.Secondary,
+                delegate { RestoreFirstRunRequested?.Invoke(); });
+            _restoreFirstRunButton.Enabled = false;
+            _tidyOldInstallButton = UiFactory.Button("Tidy up old 1.2.2 files", ActionButtonKind.Secondary,
+                delegate { TidyOldInstallRequested?.Invoke(); });
+            _tidyOldInstallButton.Visible = false;
         }
 
         // 3. Nexus
@@ -512,6 +532,8 @@ namespace Manager.Views
             _contentPanel.Controls.Add(_saveBackupRetentionCombo);
             _contentPanel.Controls.Add(_saveBackupRetentionCountLabel);
             _contentPanel.Controls.Add(_saveBackupRetentionCountNumeric);
+            _contentPanel.Controls.Add(_restoreFirstRunButton);
+            _contentPanel.Controls.Add(_tidyOldInstallButton);
 
             // 3. Nexus
             _contentPanel.Controls.Add(_nexusLabel);

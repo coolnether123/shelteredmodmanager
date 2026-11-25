@@ -109,7 +109,10 @@ namespace Manager.Views
             _saveBackupRetentionCountLabel.Location = new Point(x + 270, y + 4);
             _saveBackupRetentionCountNumeric.Location = new Point(x + 405, y);
 
-            return y + 52;
+            _restoreFirstRunButton.Location = new Point(x + 10, y + 42);
+            y = _restoreFirstRunButton.Bottom + 10;
+            _tidyOldInstallButton.Location = new Point(x + 10, y);
+            return _hasImportedFolders ? _tidyOldInstallButton.Bottom + 14 : y + 4;
         }
 
         private int LayoutNexusSection(int x, int y, int contentWidth)
