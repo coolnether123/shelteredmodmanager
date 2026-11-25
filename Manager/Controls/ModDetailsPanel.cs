@@ -523,6 +523,7 @@ namespace Manager.Controls
 
         private void UpdateNexusStatus(ModItem mod)
         {
+            _nexusLink.Text = mod.RequiresSmm2Update ? "Find update" : "Open Nexus page";
             _nexusLink.Visible = false;
             _nexusUpdateButton.Visible = false;
             _nexusStableButton.Visible = false;

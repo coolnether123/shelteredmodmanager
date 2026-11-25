@@ -44,6 +44,24 @@ namespace ModAPI.Core
             }
         }
 
+        internal static List<ModEntry> GetSuccessfullyLoadedModsSnapshot()
+        {
+            var loaded = PluginManager.SuccessfullyLoadedMods;
+            lock (loaded)
+                return new List<ModEntry>(loaded);
+        }
+
+        internal static void RecordSuccessfulLoad(ModEntry entry)
+        {
+            if (entry == null)
+                return;
+
+            var loaded = PluginManager.SuccessfullyLoadedMods;
+            lock (loaded)
+                if (!loaded.Contains(entry))
+                    loaded.Add(entry);
+        }
+
         public static IEnumerable<IModPlugin> GetPlugins()
         {
             return PluginManager.getInstance().GetPlugins();

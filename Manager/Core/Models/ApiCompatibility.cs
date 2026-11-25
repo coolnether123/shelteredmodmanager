@@ -52,6 +52,7 @@ namespace Manager.Core.Models
         public ApiCompatibilitySeverity Severity { get; set; }
         public string RequirementSummary { get; set; }
         public string Summary { get; set; }
+        public bool RequiresSmm2Update { get; internal set; }
 
         public bool IsCompatible
         {

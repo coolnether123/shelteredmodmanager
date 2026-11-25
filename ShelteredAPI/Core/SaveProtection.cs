@@ -34,7 +34,7 @@ namespace ShelteredAPI.Core
         {
             var data = new ModManifestData();
             var list = new List<ModInfo>();
-            foreach (var modEntry in ModRuntime.LoadedMods)
+            foreach (var modEntry in ModRuntime.GetSuccessfullyLoadedModsSnapshot())
             {
                 list.Add(new ModInfo
                 {
@@ -262,7 +262,7 @@ namespace ShelteredAPI.Core
                         }
                     }
 
-                    // If still no data, imply unmodded save.
+                    // Native saves may never have been opened with SMM.
                     if (savedMods == null)
                     {
                         if (context.IsCustom)
@@ -273,7 +273,7 @@ namespace ShelteredAPI.Core
                             return false;
                         }
 
-                        MMLog.WriteDebug("[LoadGamePatch] No mod data found anywhere. Assuming clean/vanilla save.");
+                        MMLog.WriteDebug("[LoadGamePatch] Mod history is unknown for this native save.");
                         return true; 
                     }
 

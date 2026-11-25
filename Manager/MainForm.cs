@@ -2623,15 +2623,27 @@ namespace Manager
                         var newOrder = new System.Collections.Generic.List<string>();
                         foreach (var m in modsFromManifest)
                         {
-                            if (!string.IsNullOrEmpty(m.modId)) newOrder.Add(m.modId);
+                            if (m != null && !string.IsNullOrEmpty(m.modId)) newOrder.Add(m.modId);
                         }
 
                         bool hasManifestOrder = req.RequireExactManifest ? manifestIncludesModList : newOrder.Count > 0;
+                        var allMods = hasManifestOrder ? _discoveryService.DiscoverMods(_settings.ModsPath) : null;
 
                         // Write Load Order only if manifest explicitly provided mods.
                         if (hasManifestOrder && !string.IsNullOrEmpty(_settings.ModsPath))
                         {
-                            _orderService.SaveOrder(_settings.ModsPath, newOrder);
+                            var requestedIds = new HashSet<string>(newOrder, StringComparer.OrdinalIgnoreCase);
+                            var legacy = allMods.Find(mod => mod.RequiresSmm2Update && requestedIds.Contains(mod.Id));
+                            if (legacy != null)
+                            {
+                                try { File.Delete(restartPath); } catch { }
+                                MessageBox.Show(legacy.DisplayName + "\n\n" + legacy.StatusMessage,
+                                    "Restart Interrupted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                return;
+                            }
+
+                            var previousOrder = _orderService.ReadOrder(_settings.ModsPath);
+                            _orderService.SaveOrder(_settings.ModsPath, LoadOrderService.KeepLegacySlots(allMods, previousOrder, newOrder));
                             _modManagerTab.RefreshMods();
                             UpdateStatusCounts();
                         }
@@ -2645,7 +2657,6 @@ namespace Manager
 
                         if (hasManifestOrder)
                         {
-                            var allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
                             var enabledMods = _orderService.GetEnabledMods(allMods, _settings.ModsPath);
                             var validation = _orderService.ValidateOrder(enabledMods, _settings.ModsPath, _settings.SkipHarmonyDependencyCheck);
 

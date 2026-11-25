@@ -50,6 +50,7 @@ namespace ShelteredAPI.Content.Packs
             lock (Sync)
                 LoadedMods.Add(entry.Id);
 
+            ModRuntime.RecordSuccessfulLoad(entry);
             MMLog.WriteInfo("[ContentPack] Registered '" + entry.Id + "' with "
                 + result.ItemCount + " item(s) and " + result.RecipeCount + " recipe(s).");
         }

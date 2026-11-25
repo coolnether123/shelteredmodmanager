@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using UnityEngine;
 
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Scans the mods directory and loads mod assemblies from discovered entries.
+    /// Scans the mods directory for mod descriptors.
     /// </summary>
     internal static class ModDiscovery
     {
@@ -54,54 +52,6 @@ namespace ModAPI.Core
 
             MMLog.Write($"Total mods discovered: {results.Count}");
             return results;
-        }
-
-        /// <summary>
-        /// Loads all DLLs under a mod's Assemblies folder into the current AppDomain.
-        /// </summary>
-        /// <remarks>
-        /// Uses byte-loading to avoid file locks during iterative development.
-        /// </remarks>
-        public static List<Assembly> LoadAssemblies(ModEntry entry)
-        {
-            var assemblies = new List<Assembly>();
-            if (entry == null)
-            {
-                return assemblies;
-            }
-
-            if (!Directory.Exists(entry.AssembliesPath))
-            {
-                return assemblies;
-            }
-
-            var dllFiles = Directory.GetFiles(entry.AssembliesPath, "*.dll", SearchOption.AllDirectories);
-
-            // Register mod by ID (once per mod, before loading DLLs)
-            ModRegistry.RegisterModById(entry);
-            
-            foreach (var dllPath in dllFiles)
-            {
-                if (SharedAssemblyResolver.ShouldSkipModAssembly(dllPath))
-                {
-                    MMLog.WriteInfo("LoadAssemblies: skipping shared runtime assembly '" + dllPath + "'.");
-                    continue;
-                }
-
-                try
-                {
-                    // Load assembly bytes to avoid file locking (developer-friendly)
-                    byte[] assemblyBytes = File.ReadAllBytes(dllPath);
-                    var asm = Assembly.Load(assemblyBytes);
-                    assemblies.Add(asm);
-                    ModRegistry.RegisterAssemblyForMod(asm, entry);
-                }
-                catch (Exception ex)
-                {
-                    MMLog.WriteError($"LoadAssemblies failed to load assembly '{dllPath}' for mod '{entry.Id}': {ex}");
-                }
-            }
-            return assemblies;
         }
 
     }

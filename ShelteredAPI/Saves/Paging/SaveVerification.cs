@@ -578,7 +578,7 @@ namespace ShelteredAPI.Saves.Paging
             if (manifest == null) return VerificationState.Unknown; 
             if (manifest.lastLoadedMods == null) return VerificationState.Unknown;
 
-            var comparison = BuildModComparison(ModRuntime.GetLoadedModsSnapshot(), manifest.lastLoadedMods, includeExtraMods);
+            var comparison = BuildModComparison(ModRuntime.GetSuccessfullyLoadedModsSnapshot(), manifest.lastLoadedMods, includeExtraMods);
             if (comparison.Any(c => c.status == ModCompareStatus.Missing))
                 return VerificationState.Missing;
 

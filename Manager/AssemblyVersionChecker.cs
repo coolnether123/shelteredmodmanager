@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Collections.Generic;
+using Smm.Shared;
 
 namespace Manager
 {
@@ -100,10 +101,8 @@ namespace Manager
 
                 string dllName = Path.GetFileName(modDllPath);
 
-                // Load assembly bytes to avoid file locking
-                byte[] assemblyBytes = File.ReadAllBytes(modDllPath);
-                var assembly = Assembly.ReflectionOnlyLoad(assemblyBytes);
-                var references = assembly.GetReferencedAssemblies();
+                var references = new List<AssemblyName>();
+                ModAssemblyMetadata.ReadReferences(File.ReadAllBytes(modDllPath), references);
 
                 foreach (var reference in references)
                 {
