@@ -614,9 +614,10 @@ namespace Manager.Views
             var guard = DuplicateModGuard.Shared;
             foreach (var notice in guard.TakeNotices(root))
                 _duplicateNotices.Enqueue(notice);
-            if (guard.IsBlocked(root))
+            string blockMessage = guard.GetBlockMessage(root);
+            if (blockMessage != null)
             {
-                _duplicateBanner.Show(NoticeKind.Error, DuplicateModGuard.RetryMessage);
+                _duplicateBanner.Show(NoticeKind.Error, blockMessage);
                 return;
             }
 
@@ -634,14 +635,21 @@ namespace Manager.Views
                 current.Moved.Length == 1 ? "the other copy" : "the other copies");
             _duplicateBanner.Show(NoticeKind.Info, message, "Undo", delegate
             {
-                try { guard.Undo(current); }
+                bool restored;
+                try { restored = guard.Undo(current); }
                 catch (IOException ex)
                 {
-                    ShowAction(NoticeKind.Error, ex.Message, null, null);
+                    if (guard.IsBlocked(root))
+                        ShowDuplicateNotices();
+                    else
+                        ShowAction(NoticeKind.Error, ex.Message, null, null);
                     return;
                 }
                 _shownDuplicate = null;
-                RefreshMods();
+                if (restored)
+                    RefreshMods();
+                else
+                    ShowDuplicateNotices();
             });
         }
 

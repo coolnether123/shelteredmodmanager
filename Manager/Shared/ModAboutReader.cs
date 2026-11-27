@@ -10,7 +10,7 @@ namespace Manager
     /// </summary>
     internal static class ModAboutReader
     {
-        internal static bool TryLoad(string modDirectory, out ModTypes.ModAboutInfo about, out string normalizedId, out string displayName, out string previewPath)
+        internal static bool TryLoad(string modDirectory, out ModTypes.ModAboutInfo about, out string normalizedId, out string displayName, out string previewPath, bool propagateIoErrors = false)
         {
             about = null;
             normalizedId = null;
@@ -20,8 +20,7 @@ namespace Manager
             try
             {
                 var aboutJson = Path.Combine(modDirectory ?? string.Empty, "About\\About.json");
-                if (!File.Exists(aboutJson)) return false;
-
+                if (!propagateIoErrors && !File.Exists(aboutJson)) return false;
                 var text = File.ReadAllText(aboutJson);
                 about = new JavaScriptSerializer().Deserialize<ModTypes.ModAboutInfo>(text);
                 if (about == null) return false;
@@ -33,8 +32,11 @@ namespace Manager
                 if (File.Exists(preview)) previewPath = preview;
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                if (propagateIoErrors && ((ex is IOException && !(ex is FileNotFoundException) &&
+                    !(ex is DirectoryNotFoundException)) || ex is UnauthorizedAccessException))
+                    throw;
                 return false;
             }
         }
