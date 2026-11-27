@@ -2,7 +2,7 @@ param(
     [string]$ShelteredRoot,
     [string]$OutputRoot,
     [string]$Projects,
-    [switch]$AllowFolderChange,
+    [string[]]$AllowFolderChange = @(),
     [switch]$DryRun
 )
 
@@ -25,14 +25,14 @@ $previousFolders = Get-Content -Raw -LiteralPath (Join-Path $scriptRoot 'previou
 $mods = @(
     @{ Repo='ExpeditionFour'; Folder='Four Person Expeditions';               Mode='compose'; About='About';                                              Config=$null;                                   Dll='ExpeditionFour\bin\Release\ExpeditionFour.dll';                                        DllName='ExpeditionFour.dll' },
     @{ Repo='TradingAmount'; Folder='Trading Amount';                Mode='package'; Base='TradingAmount Mod\TradingAmount';                     Dll='TradingAmount Mod\TradingAmount\Assemblies\TradingAmount.dll';                        DllName='TradingAmount.dll' },
-    @{ Repo='Better-AI-Queue'; Folder='Better AI Queue'; Mode='package'; Base='Better AI Queue Mod\Better AI Queue'; SourceAbout='About\About.json'; Dll='Better AI Queue Mod\Better AI Queue\Assemblies\Better AI Queue.dll'; DllName='Better AI Queue.dll' },
+    @{ Repo='Better-AI-Queue'; Folder='Better AI Queue'; Mode='package'; Base='Better AI Queue Mod\Better AI Queue'; Dll='Better AI Queue Mod\Better AI Queue\Assemblies\Better AI Queue.dll'; DllName='Better AI Queue.dll' },
     @{ Repo='Lifespan'; Folder='Lifespan';                     Mode='package'; Base='Lifespan Mod\Lifespan';                              Dll='Lifespan\bin\Release\Lifespan.dll';                                                   DllName='Lifespan.dll' },
     @{ Repo='BunkerRandomLocation'; Folder='Bunker Random Location';         Mode='compose'; About='About';                                              Config='Config';                                Dll='BunkerRandomLocation\bin\Release\BunkerRandomLocation.dll';                            DllName='BunkerRandomLocation.dll' },
     @{ Repo='Procreation-Framework'; Folder='Family Expansion';        Mode='compose'; About='Procreation Framework\About';                        Config='Procreation Framework\Config';          Dll='Procreation Framework\bin\Release\Family Expansion.dll';                               DllName='Family Expansion.dll' },
     @{ Repo='Deep-Expansion'; Folder='Deep Expansion';               Mode='compose'; About='Deep Expansion\About';                               Config='Deep Expansion\Config';                 Dll='Deep Expansion\bin\Release\Deep Expansion.dll';                                        DllName='Deep Expansion.dll'; Extras=@(@{Src='Deep Expansion\Assets'; Dest='Assets'}) },
     @{ Repo='Sheltered-Vanilla-Fixes'; Folder='Sheltered Vanilla Fixes';      Mode='package'; Base='Sheltered Vanilla Fixes Mod\Sheltered Vanilla Fixes'; Dll='Sheltered Vanilla Fixes\bin\Release\Sheltered Vanilla Fixes.dll';                     DllName='Sheltered Vanilla Fixes.dll' },
     @{ Repo='Shelter-Systems-Expansion'; Folder='Shelter Systems Expansion';    Mode='package'; Base='ShelteredSystemsExpansion Mod\Shelter Systems Expansion'; Dll='ShelteredSystemsExpansion Mod\Shelter Systems Expansion\Assemblies\ShelteredSystemsExpansion.dll'; DllName='ShelteredSystemsExpansion.dll' },
-    @{ Repo='Sheltered-Expanded-Map-Sizes'; Folder='Expanded Map Sizes'; Mode='package'; Base='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes'; SourceAbout='ExpandedMapSizes\About\About.json'; Dll='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes\Assemblies\Expanded Map Sizes.dll'; DllName='Expanded Map Sizes.dll' },
+    @{ Repo='Sheltered-Expanded-Map-Sizes'; Folder='Expanded Map Sizes'; Mode='package'; Base='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes'; Dll='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes\Assemblies\Expanded Map Sizes.dll'; DllName='Expanded Map Sizes.dll' },
     @{ Repo='Sheltered-Display-Fixes'; Folder='Sheltered Display Fixes';      Mode='package'; Base='Sheltered Display Fixes Mod\Sheltered Display Fixes'; Dll='Sheltered Display Fixes Mod\Sheltered Display Fixes\Assemblies\Sheltered Display Fixes.dll'; DllName='Sheltered Display Fixes.dll' }
 )
 
@@ -47,7 +47,7 @@ if (-not [string]::IsNullOrWhiteSpace($Projects)) {
 }
 
 $knownProjects = @($mods | ForEach-Object { [string]$_.Repo })
-$unknownProjects = @($requestedProjects | Where-Object { $_ -notin $knownProjects })
+$unknownProjects = @(($requestedProjects + $AllowFolderChange) | Where-Object { $_ -notin $knownProjects })
 if ($unknownProjects.Count -gt 0) {
     throw "Unknown release project(s): $($unknownProjects -join ', '). Known projects: $($knownProjects -join ', ')."
 }
@@ -85,9 +85,6 @@ foreach ($mod in $selectedMods) {
         } else {
             $aboutPath = Join-Path (Join-Path $repoPath $mod.About) 'About.json'
         }
-        if ($DryRun -and $mod.SourceAbout) {
-            $aboutPath = Join-Path $repoPath $mod.SourceAbout
-        }
         if (-not (Test-Path -LiteralPath $aboutPath)) { throw "About.json not found: $aboutPath" }
         $about = Get-Content $aboutPath -Raw | ConvertFrom-Json
         $name = $about.name; $version = $about.version; $id = $about.id
@@ -101,9 +98,13 @@ foreach ($mod in $selectedMods) {
             throw "A valid Folder is required for '$($mod.Repo)'."
         }
         $previous = $previousFolders.PSObject.Properties[([string]$id).Trim()]
-        if (-not $AllowFolderChange -and ($null -eq $previous -or $previous.Value -cne $folderName)) {
+        if ($null -eq $previous -or $previous.Value -cne $folderName) {
             $previousName = if ($null -ne $previous) { $previous.Value } else { '(missing)' }
-            throw "Folder change for '$id': previous '$previousName', configured '$folderName'. Use -AllowFolderChange to override."
+            $mismatch = "Folder change for '$($mod.Repo)' ($id): previous '$previousName', configured '$folderName'."
+            if ($mod.Repo -notin $AllowFolderChange) {
+                throw "$mismatch Use -AllowFolderChange '$($mod.Repo)' to override."
+            }
+            Write-Warning $mismatch
         }
         if ($DryRun) {
             Write-Output ([pscustomobject]@{ Project = $mod.Repo; Id = $id; Folder = $folderName })
