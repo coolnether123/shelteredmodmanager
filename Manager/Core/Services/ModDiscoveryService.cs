@@ -7,8 +7,7 @@ using Manager.Core.Models;
 namespace Manager.Core.Services
 {
     /// <summary>
-    /// Discovers mods from the mods folder and creates ModItem objects.
-    /// Single responsibility: Mod discovery and parsing only.
+    /// Discovers active mod folders and creates ModItem objects.
     /// </summary>
     public class ModDiscoveryService
     {
@@ -39,15 +38,13 @@ namespace Manager.Core.Services
 
             try
             {
-                // Enumeration order is not guaranteed by Windows; sort so every run sees the same list.
-                string[] directories = Directory.GetDirectories(modsRootPath);
-                Array.Sort(directories, StringComparer.OrdinalIgnoreCase);
+                string[] directories = DuplicateModGuard.Shared.Scan(modsRootPath, false);
                 foreach (var dir in directories)
                 {
                     var folderName = Path.GetFileName(dir);
 
                     // Skip reserved/internal directories.
-                    if (IsReservedFolderName(folderName))
+                    if (ModPackageSafety.IsReservedModFolderName(folderName))
                         continue;
 
                     var mod = DiscoverMod(dir);
@@ -138,20 +135,6 @@ namespace Manager.Core.Services
                 }
             }
             catch { }
-        }
-
-        private static bool IsReservedFolderName(string folderName)
-        {
-            if (string.IsNullOrEmpty(folderName))
-                return true;
-
-            if (string.Equals(folderName, "disabled", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(folderName, "SMM", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(folderName, "ModAPI", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // Manager internal working directories should never appear as mods.
-            return folderName.StartsWith("_smm_", StringComparison.OrdinalIgnoreCase);
         }
 
     }

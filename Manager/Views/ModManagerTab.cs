@@ -39,6 +39,10 @@ namespace Manager.Views
         private ActionButton _shareButton;
         private ActionButton _refreshNexusButton;
         private NoticeBanner _problemBanner;
+        private NoticeBanner _duplicateBanner;
+        private string _duplicateNoticeRoot;
+        private DuplicateModGuard.Notice _shownDuplicate;
+        private readonly Queue<DuplicateModGuard.Notice> _duplicateNotices = new Queue<DuplicateModGuard.Notice>();
         private NoticeBanner _actionBanner;
         private ContextMenuStrip _profileMenu;
         private ContextMenuStrip _shareMenu;
@@ -204,6 +208,14 @@ namespace Manager.Views
             toolbar.Controls.Add(_refreshNexusButton, 3, 0);
 
             _problemBanner = new NoticeBanner { Dock = DockStyle.Top, Margin = new Padding(0, 0, 0, 8) };
+            _duplicateBanner = new NoticeBanner { Dock = DockStyle.Top, Margin = new Padding(0, 0, 0, 8) };
+            _duplicateBanner.Dismissed += delegate
+            {
+                if (_shownDuplicate == null || DuplicateModGuard.Shared.IsBlocked(_duplicateNoticeRoot))
+                    return;
+                _shownDuplicate = null;
+                ShowDuplicateNotices();
+            };
             _actionBanner = new NoticeBanner { Dock = DockStyle.Top, Margin = new Padding(0, 8, 0, 0) };
 
             _modList = new ModSwitchList
@@ -217,7 +229,7 @@ namespace Manager.Views
             TableLayoutPanel listColumn = new TableLayoutPanel
             {
                 ColumnCount = 1,
-                RowCount = 4,
+                RowCount = 5,
                 Dock = DockStyle.Fill,
                 Margin = new Padding(0),
                 Padding = new Padding(0)
@@ -225,12 +237,14 @@ namespace Manager.Views
             listColumn.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             listColumn.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             listColumn.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            listColumn.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             listColumn.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             listColumn.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             listColumn.Controls.Add(toolbar, 0, 0);
             listColumn.Controls.Add(_problemBanner, 0, 1);
-            listColumn.Controls.Add(_modList, 0, 2);
-            listColumn.Controls.Add(_actionBanner, 0, 3);
+            listColumn.Controls.Add(_duplicateBanner, 0, 2);
+            listColumn.Controls.Add(_modList, 0, 3);
+            listColumn.Controls.Add(_actionBanner, 0, 4);
             // The list is the first stop for the keyboard; Ctrl+F jumps to search.
             _modList.TabIndex = 0;
             toolbar.TabIndex = 1;
@@ -347,7 +361,10 @@ namespace Manager.Views
                 return;
 
             if (rediscover)
+            {
                 _allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
+                ShowDuplicateNotices();
+            }
 
             // Split into enabled/disabled
             var enabled = _orderService.GetEnabledMods(_allMods, _settings.ModsPath);
@@ -580,6 +597,52 @@ namespace Manager.Views
                 ShowAction(NoticeKind.Info, message, null, null);
             if (OrderSaved != null)
                 OrderSaved(_enabledMods.Select(m => m.Id).ToArray());
+        }
+
+        internal void ShowDuplicateNotices()
+        {
+            if (_settings == null || !_settings.IsModsPathValid)
+                return;
+            string root = DuplicateModGuard.RootKey(_settings.ModsPath);
+            if (!StringComparer.OrdinalIgnoreCase.Equals(root, _duplicateNoticeRoot))
+            {
+                _shownDuplicate = null;
+                _duplicateNotices.Clear();
+                _duplicateNoticeRoot = root;
+            }
+
+            var guard = DuplicateModGuard.Shared;
+            foreach (var notice in guard.TakeNotices(root))
+                _duplicateNotices.Enqueue(notice);
+            if (guard.IsBlocked(root))
+            {
+                _duplicateBanner.Show(NoticeKind.Error, DuplicateModGuard.RetryMessage);
+                return;
+            }
+
+            if (_shownDuplicate == null && _duplicateNotices.Count > 0)
+                _shownDuplicate = _duplicateNotices.Dequeue();
+            var current = _shownDuplicate;
+            if (current == null)
+            {
+                _duplicateBanner.Clear();
+                return;
+            }
+
+            string message = string.Format("Found {0} copies of {1}. Kept {2} and moved {3} to backup.",
+                current.Moved.Length + 1, current.Kept.About.name, current.Kept.About.version,
+                current.Moved.Length == 1 ? "the other copy" : "the other copies");
+            _duplicateBanner.Show(NoticeKind.Info, message, "Undo", delegate
+            {
+                try { guard.Undo(current); }
+                catch (IOException ex)
+                {
+                    ShowAction(NoticeKind.Error, ex.Message, null, null);
+                    return;
+                }
+                _shownDuplicate = null;
+                RefreshMods();
+            });
         }
 
         private void ShowAction(NoticeKind kind, string message, string actionText, EventHandler action)
@@ -1709,6 +1772,7 @@ namespace Manager.Views
             _searchBox.ApplyTheme(isDark);
             _detailsPanel.ApplyTheme(isDark);
             _problemBanner.ApplyTheme();
+            _duplicateBanner.ApplyTheme();
             _actionBanner.ApplyTheme();
             ThemedMenu.ApplyTheme(_shareMenu);
             ThemedMenu.ApplyTheme(_profileMenu);

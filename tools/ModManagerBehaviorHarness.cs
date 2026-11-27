@@ -72,6 +72,12 @@ internal static class ModManagerBehaviorHarness
             Run("fix order handles empty, null and duplicate input", FixOrderDegenerateInput);
             Run("enabled and disabled lists do not depend on discovery order", SplitIsDeterministic);
             Run("discovery returns the same order every time", DiscoveryIsSorted);
+            Run("duplicate copies compare declared versions and normalized IDs", DuplicateVersions);
+            Run("duplicate copies prefer 2.0 metadata then About write time", DuplicateTies);
+            Run("duplicate notice Undo swaps the best backup into Mods", DuplicateUndo);
+            Run("duplicate backup failure preserves both copies and the saved order", DuplicateFailure);
+            Run("duplicate copies move before writing the load order", DuplicateBeforeWrite);
+            Run("discovery of a single copy shows no duplicate notice", NoDuplicateNotice);
             Run("Harmony is treated as part of SMM", HarmonyIsBundled);
             Run("dependency problems name the mod and what it needs", DependencyProblems);
 
@@ -680,6 +686,114 @@ internal static class ModManagerBehaviorHarness
         Same(new List<string> { "alpha@alpha", "mid@Mid", "noabout@NoAbout", "zeta@Zeta" }, first, "discovered folders");
         for (int i = 0; i < 5; i++)
             Same(first, PathsOf(discovery.DiscoverMods(mods)), "discovery repeat");
+    }
+
+    private static string WriteDuplicateCopy(string root, string folder, string id, string version, string api, int age)
+    {
+        string path = Path.Combine(root, folder);
+        WriteModFolder(path, id, "Duplicate Sample", version, null);
+        string about = Path.Combine(path, "About\\About.json");
+        if (api != null)
+        {
+            var json = new JavaScriptSerializer();
+            var metadata = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(about));
+            metadata["requiredModApiVersion"] = api;
+            File.WriteAllText(about, json.Serialize(metadata));
+        }
+        File.SetLastWriteTimeUtc(about, DateTime.SpecifyKind(FixedTime.AddDays(-age), DateTimeKind.Utc));
+        return path;
+    }
+
+    private static void DuplicateVersions()
+    {
+        string root = NewDir("duplicate-versions");
+        string low = WriteDuplicateCopy(root, "Low", " TEST.SAMPLE ", "2.0.9", "2.0", 0);
+        string high = WriteDuplicateCopy(root, "High", "test.sample", "2.0.10", null, 2);
+        var mods = new ModDiscoveryService((string)null).DiscoverMods(root);
+        Check(mods.Count == 1 && mods[0].RootPath == high && !Directory.Exists(low), "the highest version must win");
+        Check(Directory.GetDirectories(Path.Combine(root, "_smm_backup\\duplicates")).Length == 1, "copy was not backed up");
+    }
+
+    private static void DuplicateTies()
+    {
+        string root = NewDir("duplicate-ties");
+        string legacy = WriteDuplicateCopy(root, "A", "test.sample", "1.2", "1.0", 0);
+        string old = WriteDuplicateCopy(root, "B", "test.sample", "1.2", "2.0", 4);
+        string newest = WriteDuplicateCopy(root, "C", "test.sample", "1.2", "2.0", 2);
+        var mods = new ModDiscoveryService((string)null).DiscoverMods(root);
+        Check(mods.Count == 1 && mods[0].RootPath == newest, "2.0 API line and latest About timestamp must win");
+        Check(!Directory.Exists(legacy) && !Directory.Exists(old), "both losing copies must move");
+        Check(Directory.GetDirectories(Path.Combine(root, "_smm_backup\\duplicates")).Length == 2, "both copies must be backed up");
+    }
+
+    private static void DuplicateUndo()
+    {
+        TabFixture fixture = NewTab(null);
+        string root = fixture.ModsPath;
+        string old = WriteDuplicateCopy(root, "Old", "test.sample", "1.0", "2.0", 0);
+        string middle = WriteDuplicateCopy(root, "Middle", "test.sample", "1.1", "2.0", 1);
+        string newest = WriteDuplicateCopy(root, "New", "test.sample", "1.2", "2.0", 2);
+        fixture.Tab.RefreshMods();
+        var banner = (NoticeBanner)Field(fixture.Tab, "_duplicateBanner");
+        Check(banner.Message.Contains("Found 3 copies") && banner.Message.Contains("Kept 1.2"), "wrong duplicate notice");
+        var undo = (EventHandler)Field(banner, "_actionHandler");
+        Directory.CreateDirectory(middle);
+        File.WriteAllText(Path.Combine(middle, "new-content.txt"), "must stay");
+        undo(banner, EventArgs.Empty);
+        Check(Directory.Exists(newest) && File.Exists(Path.Combine(middle, "new-content.txt")),
+            "failed Undo must roll back the winner and preserve the occupied path");
+        File.Delete(Path.Combine(middle, "new-content.txt"));
+        Directory.Delete(middle);
+        undo(banner, EventArgs.Empty);
+        fixture.Tab.RefreshMods();
+        Check(!Directory.Exists(newest) && !Directory.Exists(old) && Directory.Exists(middle),
+            "Undo should swap the winner with the highest-ranked backup");
+        Check(Field(banner, "_actionHandler") == null, "Undo should clear the notice");
+        Check(Directory.GetDirectories(Path.Combine(root, "_smm_backup\\duplicates")).Length == 2, "Undo should preserve every copy");
+    }
+
+    private static void DuplicateFailure()
+    {
+        TabFixture fixture = NewTab(null);
+        string root = fixture.ModsPath;
+        string high = WriteDuplicateCopy(root, "High", "test.sample", "2.0", "2.0", 0);
+        string low = WriteDuplicateCopy(root, "Low", "test.sample", "1.0", "2.0", 0);
+        File.WriteAllText(Path.Combine(root, "_smm_backup"), "fixture blocks the backup directory");
+        string orderPath = Path.Combine(root, "loadorder.json");
+        string previous = File.ReadAllText(orderPath);
+        fixture.Tab.RefreshMods();
+        var banner = (NoticeBanner)Field(fixture.Tab, "_duplicateBanner");
+        Check(banner.Message.Contains("Close the game and try again"), "missing retry message");
+        bool failed = false;
+        try { fixture.Order.SaveOrder(root, new[] { "test.sample" }); }
+        catch (IOException ex) { failed = ex.Message.Contains("Close the game and try again"); }
+        Check(failed && Directory.Exists(high) && Directory.Exists(low), "failed move should leave both copies in place");
+        SameText(previous, File.ReadAllText(orderPath), "failed move must leave order unchanged");
+    }
+
+    private static void DuplicateBeforeWrite()
+    {
+        string root = NewDir("duplicate-before-write");
+        string low = WriteDuplicateCopy(root, "Low", "test.sample", "1.0", "2.0", 0);
+        WriteDuplicateCopy(root, "High", "test.sample", "2.0", "2.0", 1);
+        string orderPath = Path.Combine(root, "loadorder.json");
+        new LoadOrderService().SaveOrder(root, CheckCopiesBeforeWrite(low, orderPath));
+        Check(File.Exists(orderPath), "order was not saved");
+    }
+
+    private static IEnumerable<string> CheckCopiesBeforeWrite(string loser, string orderPath)
+    {
+        Check(!Directory.Exists(loser) && !File.Exists(orderPath), "duplicate must move before order is written");
+        yield return "test.sample";
+    }
+
+    private static void NoDuplicateNotice()
+    {
+        TabFixture fixture = NewTab(null);
+        fixture.Tab.RefreshMods();
+        var banner = (NoticeBanner)Field(fixture.Tab, "_duplicateBanner");
+        Check(string.IsNullOrEmpty(banner.Message) && !Directory.Exists(Path.Combine(fixture.ModsPath, "_smm_backup")),
+            "single copies must not produce a notice or backup");
     }
 
     private static void HarmonyIsBundled()

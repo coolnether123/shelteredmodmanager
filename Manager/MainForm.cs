@@ -1095,6 +1095,9 @@ namespace Manager
                 return;
             }
 
+            try { DuplicateModGuard.Shared.Scan(_settings.ModsPath, true); }
+            finally { _modManagerTab.ShowDuplicateNotices(); }
+
             int enabledModCount = ReconcileLoadOrderForLaunch();
             _gameSetupTab.Log("Launching Sheltered with " + FormatCount(enabledModCount, "mod") + ".");
             SetupDoorstop();

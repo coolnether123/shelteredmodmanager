@@ -58,6 +58,7 @@ namespace Manager.Core.Services
             {
                 string orderPath = Path.Combine(modsPath, ORDER_FILENAME);
                 
+                DuplicateModGuard.Shared.Scan(modsPath, true);
                 var orderList = new List<string>(modIds);
                 var data = new LoadOrderData();
                 data.order = orderList.ToArray();

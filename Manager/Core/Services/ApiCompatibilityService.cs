@@ -278,7 +278,7 @@ namespace Manager.Core.Services
             }
         }
 
-        private static bool TryGetMajorVersion(string version, out int major)
+        internal static bool TryGetMajorVersion(string version, out int major)
         {
             major = 0;
             string text = (version ?? string.Empty).Trim();
