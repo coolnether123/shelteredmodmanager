@@ -1,7 +1,9 @@
 param(
     [string]$ShelteredRoot,
     [string]$OutputRoot,
-    [string]$Projects
+    [string]$Projects,
+    [switch]$AllowFolderChange,
+    [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,23 +12,28 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrWhiteSpace($ShelteredRoot)) { $ShelteredRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..\..\..')) }
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) { $OutputRoot = Join-Path $ShelteredRoot 'release\2.0\artifacts\mods' }
 $stageRoot = Join-Path $OutputRoot '_stage'
-if (Test-Path $stageRoot) { Remove-Item $stageRoot -Recurse -Force }
-New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
+if (-not $DryRun) {
+    if (Test-Path -LiteralPath $stageRoot) { Remove-Item -LiteralPath $stageRoot -Recurse -Force }
+    New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
+}
+
+# Folder roots recorded from the r3 and r2 packages, keyed by About.json ID.
+$previousFolders = Get-Content -Raw -LiteralPath (Join-Path $scriptRoot 'previous-mod-folders.json') | ConvertFrom-Json
 
 # Mode 'package': copy PackageBase wholesale (it already holds About/Config/Assemblies), then overwrite the DLL.
 # Mode 'compose': build the package from AboutDir + optional ConfigDir + DLL.
 $mods = @(
-    @{ Repo='ExpeditionFour';               Mode='compose'; About='About';                                              Config=$null;                                   Dll='ExpeditionFour\bin\Release\ExpeditionFour.dll';                                        DllName='ExpeditionFour.dll' },
-    @{ Repo='TradingAmount';                Mode='package'; Base='TradingAmount Mod\TradingAmount';                     Dll='TradingAmount Mod\TradingAmount\Assemblies\TradingAmount.dll';                        DllName='TradingAmount.dll' },
-    @{ Repo='Better-AI-Queue';              Mode='package'; Base='Better AI Queue Mod\Better AI Queue';                Dll='Better AI Queue Mod\Better AI Queue\Assemblies\Better AI Queue.dll';                  DllName='Better AI Queue.dll' },
-    @{ Repo='Lifespan';                     Mode='package'; Base='Lifespan Mod\Lifespan';                              Dll='Lifespan\bin\Release\Lifespan.dll';                                                   DllName='Lifespan.dll' },
-    @{ Repo='BunkerRandomLocation';         Mode='compose'; About='About';                                              Config='Config';                                Dll='BunkerRandomLocation\bin\Release\BunkerRandomLocation.dll';                            DllName='BunkerRandomLocation.dll' },
-    @{ Repo='Procreation-Framework';        Mode='compose'; About='Procreation Framework\About';                        Config='Procreation Framework\Config';          Dll='Procreation Framework\bin\Release\Family Expansion.dll';                               DllName='Family Expansion.dll' },
-    @{ Repo='Deep-Expansion';               Mode='compose'; About='Deep Expansion\About';                               Config='Deep Expansion\Config';                 Dll='Deep Expansion\bin\Release\Deep Expansion.dll';                                        DllName='Deep Expansion.dll'; Extras=@(@{Src='Deep Expansion\Assets'; Dest='Assets'}) },
-    @{ Repo='Sheltered-Vanilla-Fixes';      Mode='package'; Base='Sheltered Vanilla Fixes Mod\Sheltered Vanilla Fixes'; Dll='Sheltered Vanilla Fixes\bin\Release\Sheltered Vanilla Fixes.dll';                     DllName='Sheltered Vanilla Fixes.dll' },
-    @{ Repo='Shelter-Systems-Expansion';    Mode='package'; Base='ShelteredSystemsExpansion Mod\Shelter Systems Expansion'; Dll='ShelteredSystemsExpansion Mod\Shelter Systems Expansion\Assemblies\ShelteredSystemsExpansion.dll'; DllName='ShelteredSystemsExpansion.dll' },
-    @{ Repo='Sheltered-Expanded-Map-Sizes'; Mode='package'; Base='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes'; Dll='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes\Assemblies\Expanded Map Sizes.dll'; DllName='Expanded Map Sizes.dll' },
-    @{ Repo='Sheltered-Display-Fixes';      Mode='package'; Base='Sheltered Display Fixes Mod\Sheltered Display Fixes'; Dll='Sheltered Display Fixes Mod\Sheltered Display Fixes\Assemblies\Sheltered Display Fixes.dll'; DllName='Sheltered Display Fixes.dll' }
+    @{ Repo='ExpeditionFour'; Folder='Four Person Expeditions';               Mode='compose'; About='About';                                              Config=$null;                                   Dll='ExpeditionFour\bin\Release\ExpeditionFour.dll';                                        DllName='ExpeditionFour.dll' },
+    @{ Repo='TradingAmount'; Folder='Trading Amount';                Mode='package'; Base='TradingAmount Mod\TradingAmount';                     Dll='TradingAmount Mod\TradingAmount\Assemblies\TradingAmount.dll';                        DllName='TradingAmount.dll' },
+    @{ Repo='Better-AI-Queue'; Folder='Better AI Queue'; Mode='package'; Base='Better AI Queue Mod\Better AI Queue'; SourceAbout='About\About.json'; Dll='Better AI Queue Mod\Better AI Queue\Assemblies\Better AI Queue.dll'; DllName='Better AI Queue.dll' },
+    @{ Repo='Lifespan'; Folder='Lifespan';                     Mode='package'; Base='Lifespan Mod\Lifespan';                              Dll='Lifespan\bin\Release\Lifespan.dll';                                                   DllName='Lifespan.dll' },
+    @{ Repo='BunkerRandomLocation'; Folder='Bunker Random Location';         Mode='compose'; About='About';                                              Config='Config';                                Dll='BunkerRandomLocation\bin\Release\BunkerRandomLocation.dll';                            DllName='BunkerRandomLocation.dll' },
+    @{ Repo='Procreation-Framework'; Folder='Family Expansion';        Mode='compose'; About='Procreation Framework\About';                        Config='Procreation Framework\Config';          Dll='Procreation Framework\bin\Release\Family Expansion.dll';                               DllName='Family Expansion.dll' },
+    @{ Repo='Deep-Expansion'; Folder='Deep Expansion';               Mode='compose'; About='Deep Expansion\About';                               Config='Deep Expansion\Config';                 Dll='Deep Expansion\bin\Release\Deep Expansion.dll';                                        DllName='Deep Expansion.dll'; Extras=@(@{Src='Deep Expansion\Assets'; Dest='Assets'}) },
+    @{ Repo='Sheltered-Vanilla-Fixes'; Folder='Sheltered Vanilla Fixes';      Mode='package'; Base='Sheltered Vanilla Fixes Mod\Sheltered Vanilla Fixes'; Dll='Sheltered Vanilla Fixes\bin\Release\Sheltered Vanilla Fixes.dll';                     DllName='Sheltered Vanilla Fixes.dll' },
+    @{ Repo='Shelter-Systems-Expansion'; Folder='Shelter Systems Expansion';    Mode='package'; Base='ShelteredSystemsExpansion Mod\Shelter Systems Expansion'; Dll='ShelteredSystemsExpansion Mod\Shelter Systems Expansion\Assemblies\ShelteredSystemsExpansion.dll'; DllName='ShelteredSystemsExpansion.dll' },
+    @{ Repo='Sheltered-Expanded-Map-Sizes'; Folder='Expanded Map Sizes'; Mode='package'; Base='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes'; SourceAbout='ExpandedMapSizes\About\About.json'; Dll='Decompiled\Expanded Map Sizes Mod\Expanded Map Sizes\Assemblies\Expanded Map Sizes.dll'; DllName='Expanded Map Sizes.dll' },
+    @{ Repo='Sheltered-Display-Fixes'; Folder='Sheltered Display Fixes';      Mode='package'; Base='Sheltered Display Fixes Mod\Sheltered Display Fixes'; Dll='Sheltered Display Fixes Mod\Sheltered Display Fixes\Assemblies\Sheltered Display Fixes.dll'; DllName='Sheltered Display Fixes.dll' }
 )
 
 $requestedProjects = @()
@@ -53,7 +60,7 @@ $selectedMods = if ($requestedProjects.Count -eq 0) {
 
 $fragmentPath = Join-Path $OutputRoot 'mod-manifest.fragment.json'
 $existingEntries = @()
-if ($selectedMods.Count -lt $mods.Count) {
+if (-not $DryRun -and $selectedMods.Count -lt $mods.Count) {
     if (-not (Test-Path -LiteralPath $fragmentPath)) {
         throw "Selective packaging requires the existing canonical package fragment: $fragmentPath"
     }
@@ -78,11 +85,29 @@ foreach ($mod in $selectedMods) {
         } else {
             $aboutPath = Join-Path (Join-Path $repoPath $mod.About) 'About.json'
         }
-        if (-not (Test-Path $aboutPath)) { throw "About.json not found: $aboutPath" }
+        if ($DryRun -and $mod.SourceAbout) {
+            $aboutPath = Join-Path $repoPath $mod.SourceAbout
+        }
+        if (-not (Test-Path -LiteralPath $aboutPath)) { throw "About.json not found: $aboutPath" }
         $about = Get-Content $aboutPath -Raw | ConvertFrom-Json
         $name = $about.name; $version = $about.version; $id = $about.id
         if ([string]::IsNullOrEmpty($about.requiredModApiVersion) -or [string]::IsNullOrEmpty($about.requiredShelteredApiVersion)) {
             throw "About.json for '$name' lacks required 2.0 API version fields."
+        }
+
+        $folderName = [string]$mod.Folder
+        if ([string]::IsNullOrWhiteSpace($folderName) -or $folderName -in '.', '..' -or
+            $folderName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+            throw "A valid Folder is required for '$($mod.Repo)'."
+        }
+        $previous = $previousFolders.PSObject.Properties[([string]$id).Trim()]
+        if (-not $AllowFolderChange -and ($null -eq $previous -or $previous.Value -cne $folderName)) {
+            $previousName = if ($null -ne $previous) { $previous.Value } else { '(missing)' }
+            throw "Folder change for '$id': previous '$previousName', configured '$folderName'. Use -AllowFolderChange to override."
+        }
+        if ($DryRun) {
+            Write-Output ([pscustomobject]@{ Project = $mod.Repo; Id = $id; Folder = $folderName })
+            continue
         }
 
         $dllSource = Join-Path $repoPath $mod.Dll
@@ -97,7 +122,6 @@ foreach ($mod in $selectedMods) {
             throw "Version drift for '$name': About.json=$version but DLL FileVersion=$($dllInfo.FileVersion) ($dllSource)"
         }
 
-        $folderName = $name
         $pkgStage = Join-Path $stageRoot $folderName
         New-Item -ItemType Directory -Path $pkgStage -Force | Out-Null
         if ($mod.Mode -eq 'package') {
@@ -155,6 +179,8 @@ if ($failures.Count -gt 0) {
     Write-Host "`nFAILURES:"; $failures | ForEach-Object { Write-Host "  $_" }
     exit 1
 }
+
+if ($DryRun) { return }
 
 $manifest = New-Object System.Collections.Generic.List[object]
 foreach ($mod in $mods) {
