@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.IsolatedStorage;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -11,10 +12,13 @@ namespace Smm.FirstRun
         // Save and mod trees can contain junctions. Never copy through one or replace its target.
         internal static FileAttributes? Attributes(string path)
         {
+            if (!File.Exists(path) && !Directory.Exists(path)) return null;
+
             FileAttributes attributes;
             try { attributes = File.GetAttributes(path); }
             catch (FileNotFoundException) { return null; }
             catch (DirectoryNotFoundException) { return null; }
+            catch (IsolatedStorageException) { return null; }
             if ((attributes & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Migration cannot use a linked file or folder: " + path);
             return attributes;

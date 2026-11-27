@@ -1,5 +1,6 @@
 using System;
 using System.CodeDom.Compiler;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -19,6 +20,7 @@ public static class FirstRunMigrationFixture
         Action[] tests =
         {
             DetectFlatInstall, ImportWrapper, KeepCurrentOnConflict, UseOldOnConflict,
+            BackUpWithoutBackupsFolder, BackUpWithoutSmmParent, RejectBackupJunction,
             RetryInterruptedSnapshot, RefuseCorruptBackup, BlockSaveWithoutBackup, RestoreOriginalFiles
         };
 
@@ -127,6 +129,60 @@ public static class FirstRunMigrationFixture
         Require(Read(previous, "mods/loadorder.json") == "{\"order\":[\"current\"]}", "Archive the displaced enabled list.");
         Require(Read(previous, "mod_manager.ini").Contains("DarkMode=False"), "Archive the replaced preference.");
         Require(Read(game, "SMM/bin/mod_manager.ini").Contains("EnableNexusIntegration=False"), "Keep 2.0-only settings.");
+    }
+
+    private static void BackUpWithoutBackupsFolder()
+    {
+        string game = Game("missing-backups");
+        Directory.CreateDirectory(Path.Combine(game, "SMM"));
+        PrepareColdStartBackup(game);
+    }
+
+    private static void BackUpWithoutSmmParent()
+    {
+        PrepareColdStartBackup(Game("missing-smm"));
+    }
+
+    private static void PrepareColdStartBackup(string game)
+    {
+        Write(game, "saves/slot.dat", "original");
+        Exception error;
+        Require(PreUpgradeSaveBackup.TryPrepare(game, out error), "Cold-start preparation failed: " + error);
+        string backup = Directory.GetDirectories(Path.Combine(game, "SMM/Backups"), "pre-2.0-*").Single();
+        Require(Read(backup, "saves/slot.dat") == "original", "The first backup must contain the original save.");
+    }
+
+    private static void RejectBackupJunction()
+    {
+        string game = Game("linked-backups");
+        string smm = Path.Combine(game, "SMM");
+        string link = Path.Combine(smm, "Backups");
+        string target = Path.Combine(_root, "junction-target");
+        Directory.CreateDirectory(smm);
+        Directory.CreateDirectory(target);
+        var command = new ProcessStartInfo("cmd.exe", "/d /c mklink /J \"" + link + "\" \"" + target + "\"")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using (var process = Process.Start(command))
+        {
+            process.WaitForExit();
+            Require(process.ExitCode == 0, "Could not create the backup junction fixture.");
+        }
+
+        try
+        {
+            Exception error;
+            Require(!PreUpgradeSaveBackup.TryPrepare(game, out error)
+                && error is IOException && error.Message.Contains("linked file or folder"),
+                "Cold-start preparation must reject a backup junction.");
+            Require(Directory.GetFileSystemEntries(target).Length == 0, "The junction target must stay untouched.");
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
     }
 
     private static void RetryInterruptedSnapshot()
